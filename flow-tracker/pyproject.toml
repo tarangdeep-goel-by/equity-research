@@ -1,0 +1,23 @@
+[project]
+name = "flow-tracker"
+version = "0.1.0"
+description = "FII/DII institutional flow tracker for Indian markets"
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.9,<1",
+    "rich>=13,<14",
+    "pydantic>=2,<3",
+    "httpx>=0.27,<1",
+    "xlrd>=2,<3",
+    "openpyxl>=3,<4",
+]
+
+[project.scripts]
+flowtrack = "flowtracker.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["flowtracker"]
