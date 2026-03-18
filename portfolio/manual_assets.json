@@ -1,0 +1,24 @@
+{
+  "updated_at": "2026-02-09",
+  "currency": "INR",
+  "assets": [
+    {
+      "name": "HDFC Bank FDs",
+      "category": "Debt",
+      "sub_category": "Fixed Deposit",
+      "value": 517000
+    },
+    {
+      "name": "PPF Account",
+      "category": "Debt",
+      "sub_category": "PPF",
+      "value": 629000
+    },
+    {
+      "name": "ULIP",
+      "category": "Insurance",
+      "sub_category": "ULIP",
+      "value": 200000
+    }
+  ]
+}

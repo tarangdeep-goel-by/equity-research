@@ -1,0 +1,225 @@
+{
+  "source": "groww",
+  "currency": "INR",
+  "parsed_at": "2026-02-09T18:41:45.359939+00:00",
+  "source_file": "/Users/tarang/Downloads/Mutual Funds Oct 2 2026.xlsx",
+  "summary": {
+    "total_invested": 420979.85,
+    "total_current_value": 471548.14,
+    "total_pnl": 50568.29,
+    "total_pnl_percent": "12.01%",
+    "xirr": "8.67%"
+  },
+  "holdings_count": 19,
+  "holdings": [
+    {
+      "scheme_name": "Quant Small Cap Fund Direct Plan Growth",
+      "amc": "Quant Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Small Cap",
+      "units": 251.045,
+      "invested_value": 66996.94,
+      "current_value": 67198.7,
+      "pnl": 201.76,
+      "xirr": "0.31%"
+    },
+    {
+      "scheme_name": "Tata Digital India Fund Direct Growth",
+      "amc": "Tata Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Sectoral",
+      "units": 1211.511,
+      "invested_value": 55997.07,
+      "current_value": 64892.53,
+      "pnl": 8895.46,
+      "xirr": "8.03%"
+    },
+    {
+      "scheme_name": "Parag Parikh Flexi Cap Fund Direct Growth",
+      "amc": "PPFAS Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Flexi Cap",
+      "units": 586.383,
+      "invested_value": 51997.25,
+      "current_value": 54997.51,
+      "pnl": 3000.26,
+      "xirr": "6.68%"
+    },
+    {
+      "scheme_name": "Bandhan ELSS Tax Saver Fund Direct Plan Growth",
+      "amc": "Bandhan Mutual Fund",
+      "category": "Equity",
+      "sub_category": "ELSS",
+      "units": 254.664,
+      "invested_value": 28498.63,
+      "current_value": 46465.74,
+      "pnl": 17967.11,
+      "xirr": "16.61%"
+    },
+    {
+      "scheme_name": "Aditya Birla Sun Life PSU Equity Fund Direct Growth",
+      "amc": "Aditya Birla Sun Life Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Thematic",
+      "units": 913.645,
+      "invested_value": 31998.39,
+      "current_value": 36289.98,
+      "pnl": 4291.59,
+      "xirr": "12.72%"
+    },
+    {
+      "scheme_name": "Quant Mid Cap Fund Direct Growth",
+      "amc": "Quant Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Mid Cap",
+      "units": 125.991,
+      "invested_value": 29998.89,
+      "current_value": 28287.47,
+      "pnl": -1711.42,
+      "xirr": "-5.36%"
+    },
+    {
+      "scheme_name": "Canara Robeco ELSS Tax Saver Direct Growth",
+      "amc": "Canara Robeco Mutual Fund",
+      "category": "Equity",
+      "sub_category": "ELSS",
+      "units": 106.398,
+      "invested_value": 13499.52,
+      "current_value": 21528.57,
+      "pnl": 8029.06,
+      "xirr": "16.33%"
+    },
+    {
+      "scheme_name": "Motilal Oswal Large and Midcap Fund Direct Growth",
+      "amc": "Motilal Oswal Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Large & MidCap",
+      "units": 589.09,
+      "invested_value": 19999.07,
+      "current_value": 21334.54,
+      "pnl": 1335.47,
+      "xirr": "5.94%"
+    },
+    {
+      "scheme_name": "Motilal Oswal Midcap Fund Direct Growth",
+      "amc": "Motilal Oswal Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Mid Cap",
+      "units": 174.629,
+      "invested_value": 19999.08,
+      "current_value": 19200.18,
+      "pnl": -798.9,
+      "xirr": "-3.59%"
+    },
+    {
+      "scheme_name": "Mirae Asset Great Consumer Fund Direct Growth",
+      "amc": "Mirae Asset Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Thematic",
+      "units": 171.32,
+      "invested_value": 19999.04,
+      "current_value": 18849.14,
+      "pnl": -1149.9,
+      "xirr": "-13.17%"
+    },
+    {
+      "scheme_name": "Nippon India Small Cap Fund Direct Growth",
+      "amc": "Nippon India Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Small Cap",
+      "units": 99.123,
+      "invested_value": 17998.86,
+      "current_value": 18358.12,
+      "pnl": 359.27,
+      "xirr": "1.24%"
+    },
+    {
+      "scheme_name": "Mirae Asset ELSS Tax Saver Fund Direct Growth",
+      "amc": "Mirae Asset Mutual Fund",
+      "category": "Equity",
+      "sub_category": "ELSS",
+      "units": 235.425,
+      "invested_value": 7999.6,
+      "current_value": 13583.08,
+      "pnl": 5583.48,
+      "xirr": "19.4%"
+    },
+    {
+      "scheme_name": "SBI Gold Direct Plan Growth",
+      "amc": "SBI Mutual Fund",
+      "category": "Commodities",
+      "sub_category": "Gold",
+      "units": 270.751,
+      "invested_value": 9999.48,
+      "current_value": 12796.99,
+      "pnl": 2797.51,
+      "xirr": "148.3%"
+    },
+    {
+      "scheme_name": "HDFC Mid Cap Fund Direct Growth",
+      "amc": "HDFC Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Mid Cap",
+      "units": 46.847,
+      "invested_value": 9999.52,
+      "current_value": 10621.39,
+      "pnl": 621.86,
+      "xirr": "11.19%"
+    },
+    {
+      "scheme_name": "Nippon India Large Cap Fund Direct Growth",
+      "amc": "Nippon India Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Large Cap",
+      "units": 80.853,
+      "invested_value": 7999.57,
+      "current_value": 8481.46,
+      "pnl": 481.9,
+      "xirr": "4.27%"
+    },
+    {
+      "scheme_name": "Mirae Asset Large & Midcap Fund Direct Growth",
+      "amc": "Mirae Asset Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Large & MidCap",
+      "units": 47.872,
+      "invested_value": 7999.73,
+      "current_value": 8471.29,
+      "pnl": 471.56,
+      "xirr": "10.79%"
+    },
+    {
+      "scheme_name": "Edelweiss NIFTY Large Mid Cap 250 Index Fund Direct Growth",
+      "amc": "Edelweiss Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Large & MidCap",
+      "units": 472.068,
+      "invested_value": 7999.6,
+      "current_value": 8251.8,
+      "pnl": 252.19,
+      "xirr": "2.24%"
+    },
+    {
+      "scheme_name": "ICICI Prudential Infrastructure Direct Growth",
+      "amc": "ICICI Prudential Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Sectoral",
+      "units": 28.353,
+      "invested_value": 5999.8,
+      "current_value": 6104.4,
+      "pnl": 104.61,
+      "xirr": "3.09%"
+    },
+    {
+      "scheme_name": "UTI Healthcare Fund Direct Growth",
+      "amc": "UTI Mutual Fund",
+      "category": "Equity",
+      "sub_category": "Sectoral",
+      "units": 18.358,
+      "invested_value": 5999.82,
+      "current_value": 5835.26,
+      "pnl": -164.56,
+      "xirr": "-4.77%"
+    }
+  ]
+}

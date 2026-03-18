@@ -1,0 +1,292 @@
+{
+  "source": "indmoney",
+  "broker": "Alpaca",
+  "currency": "USD",
+  "parsed_at": "2026-02-09T18:11:01.811292+00:00",
+  "source_file": "/Users/tarang/Downloads/US Stocks Trade Report Jan 1 2019 to Feb 9 2026.xls",
+  "total_invested_usd": 2971.29,
+  "holdings_count": 11,
+  "holdings": [
+    {
+      "symbol": "GOOG",
+      "name": "Alphabet Inc. - Class C Shares",
+      "quantity": 3.204066,
+      "total_cost_usd": 897.35,
+      "avg_price_usd": 280.07,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.424510093,
+          "price": 176.156,
+          "amount": 74.779999942508,
+          "date": "01 Jul 2025, 10:52 PM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.413593715,
+          "price": 241.082,
+          "amount": 99.70999999962999,
+          "date": "30 Sep 2025, 09:13 PM"
+        },
+        {
+          "type": "SELL",
+          "quantity": 0.838103808,
+          "price": 252.668,
+          "amount": 211.762012959744,
+          "date": "22 Oct 2025, 12:10 AM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 1.964185808,
+          "price": 253.81,
+          "amount": 498.52999992848004,
+          "date": "23 Oct 2025, 07:00 PM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 1.239880619,
+          "price": 321.66,
+          "amount": 398.81999990754,
+          "date": "20 Jan 2026, 08:00 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "META",
+      "name": "Meta Platforms Inc",
+      "quantity": 0.666021,
+      "total_cost_usd": 498.53,
+      "avg_price_usd": 748.52,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.081698543,
+          "price": 610.17,
+          "amount": 49.849999982309996,
+          "date": "10 Jan 2025, 08:00 PM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.096727964,
+          "price": 721.508,
+          "amount": 69.789999849712,
+          "date": "01 Jul 2025, 10:49 PM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.135973249,
+          "price": 733.306,
+          "amount": 99.709999331194,
+          "date": "30 Sep 2025, 09:12 PM"
+        },
+        {
+          "type": "SELL",
+          "quantity": 0.314399756,
+          "price": 732.09,
+          "amount": 230.16891737004,
+          "date": "22 Oct 2025, 12:23 AM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.666020948,
+          "price": 748.52,
+          "amount": 498.52999999696,
+          "date": "29 Oct 2025, 11:23 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "MSFT",
+      "name": "Microsoft Corporation",
+      "quantity": 0.564122,
+      "total_cost_usd": 299.12,
+      "avg_price_usd": 530.24,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.079824809,
+          "price": 424.68,
+          "amount": 33.89999988612,
+          "date": "10 Jan 2025, 08:00 PM"
+        },
+        {
+          "type": "SELL",
+          "quantity": 0.079824809,
+          "price": 516.24,
+          "amount": 41.20875939816,
+          "date": "22 Oct 2025, 12:12 AM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.564121907,
+          "price": 530.24,
+          "amount": 299.11999996768,
+          "date": "30 Oct 2025, 07:00 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "ASML",
+      "name": "Asml Holding Nv",
+      "quantity": 0.303713,
+      "total_cost_usd": 299.11,
+      "avg_price_usd": 984.84,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.066378162,
+          "price": 751.0,
+          "amount": 49.849999662,
+          "date": "10 Jan 2025, 08:00 PM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.051428972,
+          "price": 969.298,
+          "amount": 49.849999701656,
+          "date": "30 Sep 2025, 09:25 PM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.185905802,
+          "price": 1072.64,
+          "amount": 199.40999945728004,
+          "date": "30 Oct 2025, 07:00 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "INTC",
+      "name": "Intel Corporation",
+      "quantity": 6.076548,
+      "total_cost_usd": 249.26,
+      "avg_price_usd": 41.02,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 6.076548025,
+          "price": 41.02,
+          "amount": 249.25999998550003,
+          "date": "30 Oct 2025, 07:00 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "TSM",
+      "name": "Taiwan Semiconductor Manufacturing Co.",
+      "quantity": 0.684082,
+      "total_cost_usd": 199.41,
+      "avg_price_usd": 291.5,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.241404358,
+          "price": 206.5,
+          "amount": 49.849999927000006,
+          "date": "10 Jan 2025, 08:00 PM"
+        },
+        {
+          "type": "SELL",
+          "quantity": 0.241404358,
+          "price": 294.094,
+          "amount": 70.995573261652,
+          "date": "22 Oct 2025, 12:11 AM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.684082332,
+          "price": 291.5,
+          "amount": 199.409999778,
+          "date": "11 Nov 2025, 08:00 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "HUBS",
+      "name": "Hubspot, Inc.",
+      "quantity": 0.598471,
+      "total_cost_usd": 199.41,
+      "avg_price_usd": 333.2,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.105491482,
+          "price": 472.55,
+          "amount": 49.8499998191,
+          "date": "01 Oct 2025, 07:00 PM"
+        },
+        {
+          "type": "BUY",
+          "quantity": 0.492979102,
+          "price": 303.38,
+          "amount": 149.55999996476,
+          "date": "20 Jan 2026, 08:00 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "ORCL",
+      "name": "Oracle Corp.",
+      "quantity": 0.812959,
+      "total_cost_usd": 149.56,
+      "avg_price_usd": 183.97,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.812958634,
+          "price": 183.97,
+          "amount": 149.55999989698,
+          "date": "20 Jan 2026, 08:02 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "PLTR",
+      "name": "Palantir Technologies Inc",
+      "quantity": 0.443121,
+      "total_cost_usd": 79.76,
+      "avg_price_usd": 180.0,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.443120958,
+          "price": 179.996,
+          "amount": 79.759999956168,
+          "date": "30 Sep 2025, 09:25 PM"
+        }
+      ]
+    },
+    {
+      "symbol": "VOO",
+      "name": "S&p 500 Vanguard Etf",
+      "quantity": 0.102047,
+      "total_cost_usd": 49.93,
+      "avg_price_usd": 489.28,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.102047072,
+          "price": 489.284,
+          "amount": 49.929999576448,
+          "date": "10 Aug 2024, 12:39 AM"
+        }
+      ]
+    },
+    {
+      "symbol": "BRK.B",
+      "name": "Berkshire Hathaway Inc. Hld B",
+      "quantity": 0.102298,
+      "total_cost_usd": 49.85,
+      "avg_price_usd": 487.3,
+      "trades": [
+        {
+          "type": "BUY",
+          "quantity": 0.102298378,
+          "price": 487.3,
+          "amount": 49.8499995994,
+          "date": "01 Jul 2025, 10:54 PM"
+        }
+      ]
+    }
+  ]
+}

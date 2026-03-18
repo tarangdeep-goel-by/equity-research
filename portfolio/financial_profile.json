@@ -1,0 +1,54 @@
+{
+  "updated_at": "2026-02-09",
+  "currency": "INR",
+  "income": {
+    "pre_tax_monthly": 242000,
+    "tax_monthly": 32000,
+    "tax_regime": "new_regime",
+    "tax_deductions": "none — no 80C/80CCD/10(10D) benefits",
+    "post_tax_monthly": 210000
+  },
+  "expenses_monthly": {
+    "rent_utilities": 30000,
+    "living_expenses": 30000,
+    "emis": 15000,
+    "travel_fund": 15000,
+    "buffer": 10000,
+    "total": 100000
+  },
+  "investments_monthly": {
+    "equity_sips": 56800,
+    "lump_sum_fund": 15000,
+    "gold_sip": 10000,
+    "silver_sip": 5000,
+    "ppf": 5000,
+    "nps": 17500,
+    "ulip": 0,
+    "term_insurance": 700,
+    "total": 110000,
+    "equity_sip_allocation": {
+      "niftybees_etf_sip": {"amount": 15000, "fund": "Nippon India ETF Nifty 50 BeES", "style": "Passive Large Cap", "expense_ratio": 0.04},
+      "ppfas_flexi_cap": {"amount": 12000, "fund": "Parag Parikh Flexi Cap Fund Direct Growth", "style": "Active Flexi Cap", "expense_ratio": 0.63},
+      "motilal_midcap": {"amount": 10000, "fund": "Motilal Oswal Midcap Fund Direct Growth", "style": "Active Mid Cap", "expense_ratio": 0.57},
+      "nippon_smallcap": {"amount": 10000, "fund": "Nippon India Small Cap Fund Direct Growth", "style": "Active Small Cap", "expense_ratio": 0.68},
+      "absl_defence_index": {"amount": 5500, "fund": "ABSL Nifty India Defence Index Fund Direct Growth", "style": "Passive Thematic", "expense_ratio": 0.30},
+      "navi_bank_index": {"amount": 4300, "fund": "Navi Nifty Bank Index Fund Direct Growth", "style": "Passive Thematic", "expense_ratio": 0.12}
+    },
+    "status": {
+      "equity_sips": "READY — 6 funds finalized, pending SIP setup on Groww",
+      "gold_sip": "ACTIVE — GOLDCASE (Zerodha Gold ETF)",
+      "silver_sip": "ACTIVE — SILVERCASE (Zerodha Silver ETF)",
+      "ppf": "ACTIVE — HDFC Bank (reduced from 12.5K to 5K)",
+      "nps": "ACTIVE — 17.5K/month",
+      "ulip": "STOPPING — redirect to term insurance",
+      "term_insurance": "PENDING — buy ₹1Cr plan (~700/month)"
+    }
+  },
+  "action_items": [
+    "Buy ₹1Cr term insurance plan (~700/month)",
+    "Stop ULIP premiums after term plan active",
+    "Set up 6 equity SIPs on Groww (same date each month)",
+    "Reduce PPF contribution from 12.5K to 5K/month",
+    "Consolidate duplicate ETFs (stop NEXT50IETF, pick one midcap ETF, consolidate gold/silver)"
+  ]
+}

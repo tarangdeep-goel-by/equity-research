@@ -1,0 +1,30 @@
+{
+  "source": "groww",
+  "currency": "INR",
+  "fetched_at": "2026-02-09T23:49:00+05:30",
+  "total_invested": 1271000,
+  "total_current_value": 1421000,
+  "total_pnl": 233000,
+  "total_pnl_percent": 18.36,
+  "holdings": [
+    {"symbol": "SWIGGY", "name": "Swiggy Ltd.", "type": "stock", "sector": "Tech / Food Delivery", "quantity": 28, "avg_price": 372.75, "current_value": 9340},
+    {"symbol": "HAL", "name": "Hindustan Aeronautics Ltd.", "type": "stock", "sector": "Defence", "quantity": 5, "avg_price": 4860.0, "current_value": 20660},
+    {"symbol": "URBANCO", "name": "Urban Company Ltd.", "type": "stock", "sector": "Tech / Services", "quantity": 100, "avg_price": 154.15, "current_value": 12320},
+    {"symbol": "GROWW", "name": "Billionbrains Garage Ventures Ltd.", "type": "stock", "sector": "Fintech", "quantity": 350, "avg_price": 117.71, "current_value": 58160},
+    {"symbol": "SHADOWFAX", "name": "Shadowfax Technologies Ltd.", "type": "stock", "sector": "Logistics", "quantity": 120, "avg_price": 124.0, "current_value": 13750},
+    {"symbol": "ETERNAL", "name": "Eternal Ltd. (Zomato)", "type": "stock", "sector": "Tech / Food Delivery", "quantity": 87, "avg_price": 232.58, "current_value": 25130},
+    {"symbol": "LIQUIDCASE", "name": "Zerodha Nifty 1D Rate Liquid ETF", "type": "etf", "sub_type": "liquid", "quantity": 268, "avg_price": 110.25, "current_value": 30190},
+    {"symbol": "GOLDCASE", "name": "Zerodha Gold ETF", "type": "etf", "sub_type": "gold", "quantity": 3986, "avg_price": 21.78, "current_value": 97020},
+    {"symbol": "SILVERCASE", "name": "Zerodha Silver ETF", "type": "etf", "sub_type": "silver", "quantity": 3671, "avg_price": 16.17, "current_value": 94710},
+    {"symbol": "NEXT50IETF", "name": "ICICI Prudential Nifty Next 50 ETF", "type": "etf", "sub_type": "index", "quantity": 926, "avg_price": 69.07, "current_value": 67730},
+    {"symbol": "HDFCSML250", "name": "HDFC NIFTY Smallcap 250 ETF", "type": "etf", "sub_type": "index", "quantity": 677, "avg_price": 163.13, "current_value": 111000},
+    {"symbol": "NIFTYBEES", "name": "Nippon India ETF Nifty 50 BeES", "type": "etf", "sub_type": "index", "quantity": 1274, "avg_price": 247.2, "current_value": 373000},
+    {"symbol": "GOLDBEES", "name": "Nippon India ETF Gold BeES", "type": "etf", "sub_type": "gold", "quantity": 1329, "avg_price": 99.27, "current_value": 170000},
+    {"symbol": "MID150BEES", "name": "Nippon India ETF Nifty Midcap 150", "type": "etf", "sub_type": "index", "quantity": 141, "avg_price": 226.72, "current_value": 32430},
+    {"symbol": "SILVERBEES", "name": "Nippon India Silver ETF", "type": "etf", "sub_type": "silver", "quantity": 395, "avg_price": 148.08, "current_value": 96260},
+    {"symbol": "MOM100", "name": "Motilal Oswal Nifty Midcap 100 Momentum ETF", "type": "etf", "sub_type": "index", "quantity": 1175, "avg_price": 60.42, "current_value": 70990},
+    {"symbol": "LIQUIDBEES", "name": "Nippon India ETF Nifty 1D Rate Liquid BeES", "type": "etf", "sub_type": "liquid", "quantity": 1, "avg_price": 781.81, "current_value": 1000},
+    {"symbol": "JUNIORBEES", "name": "Nippon India ETF Nifty Next 50 Junior BeES", "type": "etf", "sub_type": "index", "quantity": 279, "avg_price": 621.02, "current_value": 209000},
+    {"symbol": "EBBETF0430", "name": "Edelweiss Bharat Bond ETF Apr 2030", "type": "etf", "sub_type": "debt", "quantity": 9, "avg_price": 1316.19, "current_value": 11850}
+  ]
+}

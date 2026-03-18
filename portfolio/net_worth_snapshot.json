@@ -1,0 +1,362 @@
+{
+  "generated_at": "2026-02-09T18:44:38.974603+00:00",
+  "usdinr": 90.74,
+  "total_net_worth_inr": 3609569,
+  "buckets": {
+    "Indian Equity - Index ETFs": {
+      "value_inr": 864150,
+      "count": 6,
+      "items": [
+        {
+          "name": "NEXT50IETF",
+          "source": "groww",
+          "value_inr": 67730
+        },
+        {
+          "name": "HDFCSML250",
+          "source": "groww",
+          "value_inr": 111000
+        },
+        {
+          "name": "NIFTYBEES",
+          "source": "groww",
+          "value_inr": 373000
+        },
+        {
+          "name": "MID150BEES",
+          "source": "groww",
+          "value_inr": 32430
+        },
+        {
+          "name": "MOM100",
+          "source": "groww",
+          "value_inr": 70990
+        },
+        {
+          "name": "JUNIORBEES",
+          "source": "groww",
+          "value_inr": 209000
+        }
+      ]
+    },
+    "Indian Equity - Stocks": {
+      "value_inr": 139360,
+      "count": 6,
+      "items": [
+        {
+          "name": "SWIGGY",
+          "source": "groww",
+          "value_inr": 9340
+        },
+        {
+          "name": "HAL",
+          "source": "groww",
+          "value_inr": 20660
+        },
+        {
+          "name": "URBANCO",
+          "source": "groww",
+          "value_inr": 12320
+        },
+        {
+          "name": "GROWW",
+          "source": "groww",
+          "value_inr": 58160
+        },
+        {
+          "name": "SHADOWFAX",
+          "source": "groww",
+          "value_inr": 13750
+        },
+        {
+          "name": "ETERNAL",
+          "source": "groww",
+          "value_inr": 25130
+        }
+      ]
+    },
+    "Indian Equity - MF": {
+      "value_inr": 458751,
+      "count": 18,
+      "items": [
+        {
+          "name": "Quant Small Cap Fund Direct Plan Growth",
+          "source": "groww",
+          "value_inr": 67198.7,
+          "sub_category": "Small Cap"
+        },
+        {
+          "name": "Tata Digital India Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 64892.53,
+          "sub_category": "Sectoral"
+        },
+        {
+          "name": "Parag Parikh Flexi Cap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 54997.51,
+          "sub_category": "Flexi Cap"
+        },
+        {
+          "name": "Bandhan ELSS Tax Saver Fund Direct Plan Growth",
+          "source": "groww",
+          "value_inr": 46465.74,
+          "sub_category": "ELSS"
+        },
+        {
+          "name": "Aditya Birla Sun Life PSU Equity Fund Direct Growt",
+          "source": "groww",
+          "value_inr": 36289.98,
+          "sub_category": "Thematic"
+        },
+        {
+          "name": "Quant Mid Cap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 28287.47,
+          "sub_category": "Mid Cap"
+        },
+        {
+          "name": "Canara Robeco ELSS Tax Saver Direct Growth",
+          "source": "groww",
+          "value_inr": 21528.57,
+          "sub_category": "ELSS"
+        },
+        {
+          "name": "Motilal Oswal Large and Midcap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 21334.54,
+          "sub_category": "Large & MidCap"
+        },
+        {
+          "name": "Motilal Oswal Midcap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 19200.18,
+          "sub_category": "Mid Cap"
+        },
+        {
+          "name": "Mirae Asset Great Consumer Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 18849.14,
+          "sub_category": "Thematic"
+        },
+        {
+          "name": "Nippon India Small Cap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 18358.12,
+          "sub_category": "Small Cap"
+        },
+        {
+          "name": "Mirae Asset ELSS Tax Saver Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 13583.08,
+          "sub_category": "ELSS"
+        },
+        {
+          "name": "HDFC Mid Cap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 10621.39,
+          "sub_category": "Mid Cap"
+        },
+        {
+          "name": "Nippon India Large Cap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 8481.46,
+          "sub_category": "Large Cap"
+        },
+        {
+          "name": "Mirae Asset Large & Midcap Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 8471.29,
+          "sub_category": "Large & MidCap"
+        },
+        {
+          "name": "Edelweiss NIFTY Large Mid Cap 250 Index Fund Direc",
+          "source": "groww",
+          "value_inr": 8251.8,
+          "sub_category": "Large & MidCap"
+        },
+        {
+          "name": "ICICI Prudential Infrastructure Direct Growth",
+          "source": "groww",
+          "value_inr": 6104.4,
+          "sub_category": "Sectoral"
+        },
+        {
+          "name": "UTI Healthcare Fund Direct Growth",
+          "source": "groww",
+          "value_inr": 5835.26,
+          "sub_category": "Sectoral"
+        }
+      ]
+    },
+    "US Equity": {
+      "value_inr": 287481,
+      "count": 11,
+      "items": [
+        {
+          "name": "GOOG",
+          "source": "indmoney",
+          "value_usd": 1041.45,
+          "value_inr": 94501,
+          "ltp_usd": 325.04
+        },
+        {
+          "name": "META",
+          "source": "indmoney",
+          "value_usd": 452.91,
+          "value_inr": 41097,
+          "ltp_usd": 680.02
+        },
+        {
+          "name": "MSFT",
+          "source": "indmoney",
+          "value_usd": 232.99,
+          "value_inr": 21142,
+          "ltp_usd": 413.01
+        },
+        {
+          "name": "ASML",
+          "source": "indmoney",
+          "value_usd": 435.74,
+          "value_inr": 39539,
+          "ltp_usd": 1434.72
+        },
+        {
+          "name": "INTC",
+          "source": "indmoney",
+          "value_usd": 310.27,
+          "value_inr": 28154,
+          "ltp_usd": 51.06
+        },
+        {
+          "name": "TSM",
+          "source": "indmoney",
+          "value_usd": 245.02,
+          "value_inr": 22233,
+          "ltp_usd": 358.17
+        },
+        {
+          "name": "HUBS",
+          "source": "indmoney",
+          "value_usd": 140.1,
+          "value_inr": 12713,
+          "ltp_usd": 234.1
+        },
+        {
+          "name": "ORCL",
+          "source": "indmoney",
+          "value_usd": 129.45,
+          "value_inr": 11746,
+          "ltp_usd": 159.23
+        },
+        {
+          "name": "PLTR",
+          "source": "indmoney",
+          "value_usd": 63.86,
+          "value_inr": 5795,
+          "ltp_usd": 144.12
+        },
+        {
+          "name": "VOO",
+          "source": "indmoney",
+          "value_usd": 65.23,
+          "value_inr": 5919,
+          "ltp_usd": 639.26
+        },
+        {
+          "name": "BRK.B",
+          "source": "indmoney",
+          "value_usd": 51.16,
+          "value_inr": 4642,
+          "ltp_usd": 500.13
+        }
+      ]
+    },
+    "Gold": {
+      "value_inr": 279817,
+      "count": 3,
+      "items": [
+        {
+          "name": "GOLDCASE",
+          "source": "groww",
+          "value_inr": 97020
+        },
+        {
+          "name": "GOLDBEES",
+          "source": "groww",
+          "value_inr": 170000
+        },
+        {
+          "name": "SBI Gold Direct Plan Growth",
+          "source": "groww",
+          "value_inr": 12796.99,
+          "sub_category": "Gold"
+        }
+      ]
+    },
+    "Silver": {
+      "value_inr": 190970,
+      "count": 2,
+      "items": [
+        {
+          "name": "SILVERCASE",
+          "source": "groww",
+          "value_inr": 94710
+        },
+        {
+          "name": "SILVERBEES",
+          "source": "groww",
+          "value_inr": 96260
+        }
+      ]
+    },
+    "Debt": {
+      "value_inr": 1157850,
+      "count": 3,
+      "items": [
+        {
+          "name": "EBBETF0430",
+          "source": "groww",
+          "value_inr": 11850
+        },
+        {
+          "name": "HDFC Bank FDs",
+          "source": "manual",
+          "value_inr": 517000
+        },
+        {
+          "name": "PPF Account",
+          "source": "manual",
+          "value_inr": 629000
+        }
+      ]
+    },
+    "Liquid": {
+      "value_inr": 31190,
+      "count": 2,
+      "items": [
+        {
+          "name": "LIQUIDCASE",
+          "source": "groww",
+          "value_inr": 30190
+        },
+        {
+          "name": "LIQUIDBEES",
+          "source": "groww",
+          "value_inr": 1000
+        }
+      ]
+    },
+    "Insurance": {
+      "value_inr": 200000,
+      "count": 1,
+      "items": [
+        {
+          "name": "ULIP",
+          "source": "manual",
+          "value_inr": 200000
+        }
+      ]
+    }
+  }
+}
