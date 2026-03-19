@@ -173,6 +173,13 @@ class AnnualFinancials(BaseModel):
             return self.receivables / (self.revenue / 365)
         return None
 
+    @property
+    def capex_pct_cfo(self) -> float | None:
+        """Capex as % of CFO. Uses -CFI as proxy for capex (includes investments)."""
+        if self.cfo is not None and self.cfi is not None and self.cfo > 0:
+            return -self.cfi / self.cfo
+        return None
+
 
 class ValuationBand(BaseModel):
     """Computed from stored snapshots — not stored itself."""
