@@ -244,7 +244,39 @@ class NSEHoldingClient:
                 percentage=pct,
             ))
 
+        # Extract promoter pledge percentage
+        pledge_pct = self._parse_pledge_pct(root, is_decimal)
+        if pledge_pct is not None:
+            records.append(ShareholdingRecord(
+                symbol=symbol.upper(),
+                quarter_end=quarter_end,
+                category="PromoterPledge",
+                percentage=pledge_pct,
+            ))
+
         return records
+
+    def _parse_pledge_pct(self, root: ET.Element, is_decimal: bool) -> float | None:
+        """Extract promoter pledge % from XBRL.
+
+        Looks for EncumberedShareUnderPledgedAsPercentageOfTotalNumberOfShares
+        with context ShareholdingOfPromoterAndPromoterGroup_ContextI.
+        """
+        pledge_tag = "EncumberedShareUnderPledgedAsPercentageOfTotalNumberOfShares"
+        for elem in root.iter():
+            if _local_name(elem.tag) != pledge_tag:
+                continue
+            ctx = elem.get("contextRef", "")
+            if "ShareholdingOfPromoterAndPromoterGroup" in ctx:
+                try:
+                    val = float(elem.text.strip()) if elem.text else None
+                except (ValueError, AttributeError):
+                    return None
+                if val is None:
+                    return None
+                # Value is already a ratio (0.0081 = 0.81%)
+                return round(val * 100, 2)
+        return None
 
     def close(self) -> None:
         self._client.close()
