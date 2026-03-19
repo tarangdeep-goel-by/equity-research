@@ -21,6 +21,7 @@ from flowtracker.display import (
 from flowtracker.holding_commands import app as holding_app
 from flowtracker.mf_commands import app as mf_app
 from flowtracker.scan_commands import app as scan_app
+from flowtracker.commodity_commands import app as gold_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -33,6 +34,7 @@ app = typer.Typer(
 app.add_typer(mf_app)
 app.add_typer(holding_app)
 app.add_typer(scan_app)
+app.add_typer(gold_app)
 console = Console()
 
 

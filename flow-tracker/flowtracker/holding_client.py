@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from flowtracker.holding_models import NSEShareholdingMaster, ShareholdingRecord
+from flowtracker.holding_models import NSEShareholdingMaster, PromoterPledge, ShareholdingRecord
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,11 @@ _XBRL_CATEGORY_MAP = {
 
 # The XBRL element name we look for shareholding percentage
 _PERCENTAGE_TAG = "ShareholdingAsAPercentageOfTotalNumberOfShares"
+
+# XBRL element names for promoter pledge/encumbrance
+_PLEDGE_TAG = "EncumberedShareUnderPledgedAsPercentageOfTotalNumberOfShares"
+_ENCUMBERED_TAG = "EncumberedSharesHeldAsPercentageOfTotalNumberOfShares"
+_PROMOTER_CONTEXT = "ShareholdingOfPromoterAndPromoterGroup"
 
 
 class NSEHoldingError(Exception):
@@ -120,8 +125,8 @@ class NSEHoldingClient:
 
         raise NSEHoldingError(f"Failed to fetch master for {symbol}: {last_error}")
 
-    def fetch_shareholding(self, xbrl_url: str, symbol: str) -> list[ShareholdingRecord]:
-        """Download and parse XBRL XML to extract shareholding percentages.
+    def fetch_shareholding(self, xbrl_url: str, symbol: str) -> tuple[list[ShareholdingRecord], PromoterPledge | None]:
+        """Download and parse XBRL XML to extract shareholding percentages and pledge data.
 
         XBRL files at nsearchives.nseindia.com don't need auth — direct download.
         """
@@ -136,7 +141,7 @@ class NSEHoldingClient:
 
     def fetch_latest_quarters(
         self, symbol: str, num_quarters: int = 4,
-    ) -> list[ShareholdingRecord]:
+    ) -> tuple[list[ShareholdingRecord], list[PromoterPledge]]:
         """Convenience: fetch master + parse the N most recent XBRL filings."""
         master = self.fetch_master(symbol)
         if not master:
@@ -145,20 +150,23 @@ class NSEHoldingClient:
         # Take the most recent N filings
         filings = master[:num_quarters]
         all_records: list[ShareholdingRecord] = []
+        all_pledges: list[PromoterPledge] = []
 
         for filing in filings:
             try:
-                records = self.fetch_shareholding(filing.xbrl_url, symbol.upper())
+                records, pledge = self.fetch_shareholding(filing.xbrl_url, symbol.upper())
                 all_records.extend(records)
+                if pledge:
+                    all_pledges.append(pledge)
                 logger.info("Parsed %s %s: %d records", symbol, filing.quarter_end, len(records))
                 time.sleep(0.5)  # Be polite to NSE
             except NSEHoldingError as e:
                 logger.warning("Skipping %s %s: %s", symbol, filing.quarter_end, e)
 
-        return all_records
+        return all_records, all_pledges
 
-    def _parse_xbrl(self, content: bytes, symbol: str) -> list[ShareholdingRecord]:
-        """Parse XBRL XML and extract shareholding percentages.
+    def _parse_xbrl(self, content: bytes, symbol: str) -> tuple[list[ShareholdingRecord], PromoterPledge | None]:
+        """Parse XBRL XML and extract shareholding percentages and pledge data.
 
         Looks for elements with tag containing 'ShareholdingAsAPercentageOfTotalNumberOfShares'
         and context ID ending in '_ContextI' (which represents the "as of date" context).
@@ -189,7 +197,7 @@ class NSEHoldingClient:
 
         if not quarter_end:
             logger.warning("No quarter_end date found in XBRL for %s", symbol)
-            return []
+            return [], None
 
         # Now extract shareholding percentages
         # The tag name is always "ShareholdingAsAPercentageOfTotalNumberOfShares"
@@ -244,7 +252,58 @@ class NSEHoldingClient:
                 percentage=pct,
             ))
 
-        return records
+        # Extract promoter pledge/encumbrance data
+        pledge_pct_raw: float | None = None
+        encumbered_pct_raw: float | None = None
+
+        for elem in root.iter():
+            local = _local_name(elem.tag)
+            ctx_ref = elem.get("contextRef", "")
+
+            # Only care about promoter-level context
+            promoter_ctx = False
+            if ctx_ref.endswith("_ContextI"):
+                ctx_key = ctx_ref[: -len("_ContextI")]
+                promoter_ctx = ctx_key == _PROMOTER_CONTEXT
+            elif ctx_ref.endswith("I") and not ctx_ref.endswith("UTI"):
+                ctx_key = ctx_ref[:-1]
+                promoter_ctx = ctx_key == _PROMOTER_CONTEXT
+
+            if not promoter_ctx:
+                continue
+
+            try:
+                val = float(elem.text.strip()) if elem.text else None
+            except (ValueError, AttributeError):
+                continue
+
+            if val is None:
+                continue
+
+            if local == _PLEDGE_TAG:
+                pledge_pct_raw = val
+            elif local == _ENCUMBERED_TAG:
+                encumbered_pct_raw = val
+
+        pledge: PromoterPledge | None = None
+        if pledge_pct_raw is not None or encumbered_pct_raw is not None:
+            p_pct = pledge_pct_raw or 0.0
+            e_pct = encumbered_pct_raw or 0.0
+            # Apply same decimal detection
+            if is_decimal:
+                p_pct = round(p_pct * 100, 2)
+                e_pct = round(e_pct * 100, 2)
+            else:
+                p_pct = round(p_pct, 2)
+                e_pct = round(e_pct, 2)
+            pledge = PromoterPledge(
+                symbol=symbol.upper(),
+                quarter_end=quarter_end,
+                pledge_pct=p_pct,
+                encumbered_pct=e_pct,
+            )
+
+        return records, pledge
 
     def close(self) -> None:
         self._client.close()

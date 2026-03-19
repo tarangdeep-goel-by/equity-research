@@ -69,3 +69,11 @@ class NSEShareholdingMaster(BaseModel, extra="ignore"):
     company_name: str
     quarter_end: str  # date from API
     xbrl_url: str
+
+
+class PromoterPledge(BaseModel):
+    """Promoter share pledging/encumbrance for one quarter."""
+    symbol: str  # "RELIANCE"
+    quarter_end: str  # "2025-12-31"
+    pledge_pct: float  # shares pledged as % of total shares
+    encumbered_pct: float  # total encumbered (pledge + NDU + other) as % of total shares

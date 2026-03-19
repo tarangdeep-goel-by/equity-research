@@ -7,7 +7,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from flowtracker.holding_models import ShareholdingChange
+from flowtracker.holding_models import PromoterPledge, ShareholdingChange
 from flowtracker.scan_models import BatchFetchResult, IndexConstituent, ScanSummary
 
 console = Console()
@@ -143,3 +143,35 @@ def display_batch_result(result: BatchFetchResult) -> None:
             content += f"\n[red]{err}[/]"
 
     console.print(Panel(content, title="Batch Fetch Complete", border_style=border))
+
+
+def display_pledge_stocks(pledges: list[PromoterPledge]) -> None:
+    """Show stocks with high promoter pledging."""
+    if not pledges:
+        console.print("[yellow]No stocks with significant promoter pledging found.[/]")
+        return
+
+    table = Table(
+        title="Promoter Pledging — High Risk Stocks",
+        show_header=True,
+        header_style="bold cyan",
+    )
+    table.add_column("Symbol", style="bold", width=12)
+    table.add_column("Quarter", width=12)
+    table.add_column("Pledge %", justify="right", width=10)
+    table.add_column("Encumbered %", justify="right", width=12)
+    table.add_column("Risk", width=10)
+
+    for p in pledges:
+        risk_color = "red" if p.pledge_pct >= 20 else "yellow" if p.pledge_pct >= 5 else "dim"
+        risk_label = Text("HIGH", style="bold red") if p.pledge_pct >= 20 else Text("MEDIUM", style="bold yellow") if p.pledge_pct >= 5 else Text("LOW", style="dim")
+
+        table.add_row(
+            p.symbol,
+            p.quarter_end,
+            Text(f"{p.pledge_pct:.2f}%", style=risk_color),
+            f"{p.encumbered_pct:.2f}%",
+            risk_label,
+        )
+
+    console.print(table)

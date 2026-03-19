@@ -76,9 +76,11 @@ def fetch(
                 for sym in symbols:
                     console.print(f"[dim]Fetching {sym}...[/]")
                     try:
-                        records = client.fetch_latest_quarters(sym, quarters)
+                        records, pledges = client.fetch_latest_quarters(sym, quarters)
                         if records:
                             count = store.upsert_shareholding(records)
+                            if pledges:
+                                store.upsert_promoter_pledges(pledges)
                             display_holding_fetch_result(sym, records)
                         else:
                             console.print(f"[yellow]No data for {sym}.[/]")
