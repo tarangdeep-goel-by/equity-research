@@ -12,6 +12,7 @@ from flowtracker.mf_models import MFMonthlyFlow, MFAUMSummary
 from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, ShareholdingChange, PromoterPledge
 from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrelation
 from flowtracker.scan_models import IndexConstituent, ScanSummary
+from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
 _DEFAULT_DB_NAME = "flows.db"
@@ -123,6 +124,80 @@ CREATE TABLE IF NOT EXISTS audit_log (
     old_value TEXT,
     new_value TEXT,
     changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS quarterly_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    revenue REAL,
+    gross_profit REAL,
+    operating_income REAL,
+    net_income REAL,
+    ebitda REAL,
+    eps REAL,
+    eps_diluted REAL,
+    operating_margin REAL,
+    net_margin REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, quarter_end)
+);
+
+CREATE TABLE IF NOT EXISTS valuation_snapshot (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    price REAL,
+    market_cap REAL,
+    enterprise_value REAL,
+    pe_trailing REAL,
+    pe_forward REAL,
+    pb_ratio REAL,
+    ev_ebitda REAL,
+    dividend_yield REAL,
+    roe REAL,
+    roa REAL,
+    debt_to_equity REAL,
+    current_ratio REAL,
+    free_cash_flow REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, date)
+);
+
+CREATE TABLE IF NOT EXISTS annual_financials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    fiscal_year_end TEXT NOT NULL,
+    revenue REAL,
+    employee_cost REAL,
+    other_income REAL,
+    depreciation REAL,
+    interest REAL,
+    profit_before_tax REAL,
+    tax REAL,
+    net_income REAL,
+    eps REAL,
+    dividend_amount REAL,
+    equity_capital REAL,
+    reserves REAL,
+    borrowings REAL,
+    other_liabilities REAL,
+    total_assets REAL,
+    net_block REAL,
+    cwip REAL,
+    investments REAL,
+    other_assets REAL,
+    receivables REAL,
+    inventory REAL,
+    cash_and_bank REAL,
+    num_shares REAL,
+    cfo REAL,
+    cfi REAL,
+    cff REAL,
+    net_cash_flow REAL,
+    price REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, fiscal_year_end)
 );
 """
 
@@ -752,6 +827,222 @@ class FlowStore:
             latest_quarter=latest_quarter,
             missing_symbols=missing,
         )
+
+    # -- Fundamentals: Quarterly Results --
+
+    def upsert_quarterly_results(self, results: list[QuarterlyResult]) -> int:
+        """Insert or replace quarterly results. Logs changes to audit_log."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in results:
+            existing = self._conn.execute(
+                "SELECT revenue FROM quarterly_results WHERE symbol = ? AND quarter_end = ?",
+                (r.symbol, r.quarter_end),
+            ).fetchone()
+            if existing and existing["revenue"] != r.revenue:
+                cursor.execute(
+                    "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    ("quarterly_results", r.symbol, r.quarter_end,
+                     "revenue", str(existing["revenue"]), str(r.revenue)),
+                )
+            cursor.execute(
+                "INSERT OR REPLACE INTO quarterly_results "
+                "(symbol, quarter_end, revenue, gross_profit, operating_income, net_income, "
+                "ebitda, eps, eps_diluted, operating_margin, net_margin) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (r.symbol, r.quarter_end, r.revenue, r.gross_profit, r.operating_income,
+                 r.net_income, r.ebitda, r.eps, r.eps_diluted, r.operating_margin, r.net_margin),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_quarterly_results(self, symbol: str, limit: int = 12) -> list[QuarterlyResult]:
+        """Get stored quarterly results, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM quarterly_results WHERE symbol = ? "
+            "ORDER BY quarter_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [QuarterlyResult(
+            symbol=r["symbol"], quarter_end=r["quarter_end"],
+            revenue=r["revenue"], gross_profit=r["gross_profit"],
+            operating_income=r["operating_income"], net_income=r["net_income"],
+            ebitda=r["ebitda"], eps=r["eps"], eps_diluted=r["eps_diluted"],
+            operating_margin=r["operating_margin"], net_margin=r["net_margin"],
+        ) for r in rows]
+
+    # -- Fundamentals: Valuation Snapshots --
+
+    def upsert_valuation_snapshot(self, snapshot: ValuationSnapshot) -> int:
+        """Insert or replace a valuation snapshot. Logs changes to audit_log."""
+        cursor = self._conn.cursor()
+        existing = self._conn.execute(
+            "SELECT pe_trailing FROM valuation_snapshot WHERE symbol = ? AND date = ?",
+            (snapshot.symbol, snapshot.date),
+        ).fetchone()
+        if existing and existing["pe_trailing"] != snapshot.pe_trailing:
+            cursor.execute(
+                "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("valuation_snapshot", snapshot.symbol, snapshot.date,
+                 "pe_trailing", str(existing["pe_trailing"]), str(snapshot.pe_trailing)),
+            )
+        cursor.execute(
+            "INSERT OR REPLACE INTO valuation_snapshot "
+            "(symbol, date, price, market_cap, enterprise_value, pe_trailing, pe_forward, "
+            "pb_ratio, ev_ebitda, dividend_yield, roe, roa, debt_to_equity, current_ratio, free_cash_flow) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (snapshot.symbol, snapshot.date, snapshot.price, snapshot.market_cap,
+             snapshot.enterprise_value, snapshot.pe_trailing, snapshot.pe_forward,
+             snapshot.pb_ratio, snapshot.ev_ebitda, snapshot.dividend_yield,
+             snapshot.roe, snapshot.roa, snapshot.debt_to_equity, snapshot.current_ratio,
+             snapshot.free_cash_flow),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def upsert_valuation_snapshots(self, snapshots: list[ValuationSnapshot]) -> int:
+        """Batch insert valuation snapshots."""
+        count = 0
+        for s in snapshots:
+            count += self.upsert_valuation_snapshot(s)
+        return count
+
+    def get_valuation_history(self, symbol: str, days: int = 365) -> list[ValuationSnapshot]:
+        """Get valuation snapshots for the last N days, oldest first."""
+        rows = self._conn.execute(
+            "SELECT * FROM valuation_snapshot "
+            "WHERE symbol = ? AND date >= date('now', ? || ' days') "
+            "ORDER BY date ASC",
+            (symbol.upper(), f"-{days}"),
+        ).fetchall()
+        return [ValuationSnapshot(
+            symbol=r["symbol"], date=r["date"], price=r["price"],
+            market_cap=r["market_cap"], enterprise_value=r["enterprise_value"],
+            pe_trailing=r["pe_trailing"], pe_forward=r["pe_forward"],
+            pb_ratio=r["pb_ratio"], ev_ebitda=r["ev_ebitda"],
+            dividend_yield=r["dividend_yield"], roe=r["roe"], roa=r["roa"],
+            debt_to_equity=r["debt_to_equity"], current_ratio=r["current_ratio"],
+            free_cash_flow=r["free_cash_flow"],
+        ) for r in rows]
+
+    def get_valuation_band(self, symbol: str, metric: str, days: int = 1095) -> ValuationBand | None:
+        """Compute min/max/median/percentile for a valuation metric over N days.
+
+        metric must be a column name in valuation_snapshot (e.g., 'pe_trailing', 'ev_ebitda', 'pb_ratio').
+        """
+        # Validate metric name to prevent SQL injection
+        valid_metrics = {"pe_trailing", "pe_forward", "pb_ratio", "ev_ebitda", "dividend_yield"}
+        if metric not in valid_metrics:
+            return None
+
+        rows = self._conn.execute(
+            f"SELECT {metric}, date FROM valuation_snapshot "
+            f"WHERE symbol = ? AND date >= date('now', ? || ' days') AND {metric} IS NOT NULL "
+            f"ORDER BY {metric} ASC",
+            (symbol.upper(), f"-{days}"),
+        ).fetchall()
+
+        if not rows:
+            return None
+
+        values = [r[metric] for r in rows]
+        n = len(values)
+        min_val = values[0]
+        max_val = values[-1]
+        median_val = values[n // 2] if n % 2 == 1 else (values[n // 2 - 1] + values[n // 2]) / 2
+
+        # Get current value (most recent)
+        latest = self._conn.execute(
+            f"SELECT {metric} FROM valuation_snapshot "
+            f"WHERE symbol = ? AND {metric} IS NOT NULL "
+            f"ORDER BY date DESC LIMIT 1",
+            (symbol.upper(),),
+        ).fetchone()
+        if latest is None:
+            return None
+        current_val = latest[metric]
+
+        # Compute percentile
+        below = sum(1 for v in values if v < current_val)
+        percentile = (below / n) * 100
+
+        dates = [r["date"] for r in rows]
+        return ValuationBand(
+            symbol=symbol.upper(),
+            metric=metric,
+            min_val=min_val,
+            max_val=max_val,
+            median_val=median_val,
+            current_val=current_val,
+            percentile=percentile,
+            num_observations=n,
+            period_start=min(dates),
+            period_end=max(dates),
+        )
+
+    # -- Fundamentals: Annual Financials --
+
+    def upsert_annual_financials(self, records: list) -> int:
+        """Insert or replace annual financials. Audit-logged."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            existing = self._conn.execute(
+                "SELECT revenue FROM annual_financials WHERE symbol = ? AND fiscal_year_end = ?",
+                (r.symbol, r.fiscal_year_end),
+            ).fetchone()
+            if existing and existing["revenue"] != r.revenue:
+                cursor.execute(
+                    "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    ("annual_financials", r.symbol, r.fiscal_year_end,
+                     "revenue", str(existing["revenue"]), str(r.revenue)),
+                )
+            cursor.execute(
+                "INSERT OR REPLACE INTO annual_financials "
+                "(symbol, fiscal_year_end, revenue, employee_cost, other_income, depreciation, "
+                "interest, profit_before_tax, tax, net_income, eps, dividend_amount, "
+                "equity_capital, reserves, borrowings, other_liabilities, total_assets, "
+                "net_block, cwip, investments, other_assets, receivables, inventory, "
+                "cash_and_bank, num_shares, cfo, cfi, cff, net_cash_flow, price) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (r.symbol, r.fiscal_year_end, r.revenue, r.employee_cost, r.other_income,
+                 r.depreciation, r.interest, r.profit_before_tax, r.tax, r.net_income,
+                 r.eps, r.dividend_amount, r.equity_capital, r.reserves, r.borrowings,
+                 r.other_liabilities, r.total_assets, r.net_block, r.cwip, r.investments,
+                 r.other_assets, r.receivables, r.inventory, r.cash_and_bank, r.num_shares,
+                 r.cfo, r.cfi, r.cff, r.net_cash_flow, r.price),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_annual_financials(self, symbol: str, limit: int = 10) -> list:
+        """Get stored annual financials, most recent first."""
+        from flowtracker.fund_models import AnnualFinancials
+        rows = self._conn.execute(
+            "SELECT * FROM annual_financials WHERE symbol = ? "
+            "ORDER BY fiscal_year_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [AnnualFinancials(
+            symbol=r["symbol"], fiscal_year_end=r["fiscal_year_end"],
+            revenue=r["revenue"], employee_cost=r["employee_cost"],
+            other_income=r["other_income"], depreciation=r["depreciation"],
+            interest=r["interest"], profit_before_tax=r["profit_before_tax"],
+            tax=r["tax"], net_income=r["net_income"], eps=r["eps"],
+            dividend_amount=r["dividend_amount"], equity_capital=r["equity_capital"],
+            reserves=r["reserves"], borrowings=r["borrowings"],
+            other_liabilities=r["other_liabilities"], total_assets=r["total_assets"],
+            net_block=r["net_block"], cwip=r["cwip"], investments=r["investments"],
+            other_assets=r["other_assets"], receivables=r["receivables"],
+            inventory=r["inventory"], cash_and_bank=r["cash_and_bank"],
+            num_shares=r["num_shares"], cfo=r["cfo"], cfi=r["cfi"],
+            cff=r["cff"], net_cash_flow=r["net_cash_flow"], price=r["price"],
+        ) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""
