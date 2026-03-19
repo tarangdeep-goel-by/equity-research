@@ -21,6 +21,7 @@ from flowtracker.scan_display import (
     display_batch_result,
     display_constituents,
     display_handoff_signals,
+    display_pledge_stocks,
     display_scan_deviations,
     display_scan_summary,
 )
@@ -117,9 +118,11 @@ def fetch(
                 for sym in to_fetch:
                     progress.update(task, description=f"[cyan]{sym}[/]")
                     try:
-                        records = client.fetch_latest_quarters(sym, quarters)
+                        records, pledges = client.fetch_latest_quarters(sym, quarters)
                         if records:
                             store.upsert_shareholding(records)
+                            if pledges:
+                                store.upsert_promoter_pledges(pledges)
                             result.fetched += 1
                         else:
                             result.skipped += 1
@@ -163,6 +166,23 @@ def deviations(
         else:
             data = store.get_scanner_deviations(category, limit, min_change)
             display_scan_deviations(data)
+
+
+@app.command()
+def pledges(
+    min_pct: Annotated[
+        float,
+        typer.Option("--min", help="Minimum pledge % to show"),
+    ] = 1.0,
+    limit: Annotated[
+        int,
+        typer.Option("-n", "--limit", help="Number of results"),
+    ] = 20,
+) -> None:
+    """Show stocks with high promoter pledging across Nifty 250."""
+    with FlowStore() as store:
+        data = store.get_high_pledge_stocks(min_pct, limit)
+    display_pledge_stocks(data)
 
 
 @app.command()

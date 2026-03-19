@@ -9,7 +9,8 @@ from pathlib import Path
 
 from flowtracker.models import DailyFlow, DailyFlowPair, StreakInfo
 from flowtracker.mf_models import MFMonthlyFlow, MFAUMSummary
-from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, ShareholdingChange
+from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, ShareholdingChange, PromoterPledge
+from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrelation
 from flowtracker.scan_models import IndexConstituent, ScanSummary
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
@@ -81,6 +82,36 @@ CREATE TABLE IF NOT EXISTS index_constituents (
     industry TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, index_name)
+);
+
+CREATE TABLE IF NOT EXISTS promoter_pledge (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    pledge_pct REAL NOT NULL DEFAULT 0,
+    encumbered_pct REAL NOT NULL DEFAULT 0,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, quarter_end)
+);
+
+CREATE TABLE IF NOT EXISTS commodity_prices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    price REAL NOT NULL,
+    unit TEXT NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, symbol)
+);
+
+CREATE TABLE IF NOT EXISTS gold_etf_nav (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    scheme_code TEXT NOT NULL,
+    scheme_name TEXT,
+    nav REAL NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, scheme_code)
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -551,6 +582,148 @@ class FlowStore:
         # Sort by FII selling magnitude
         handoffs.sort(key=lambda x: x[0].change_pct)
         return handoffs[:limit]
+
+    # -- Commodity Prices --
+
+    def upsert_commodity_prices(self, prices: list[CommodityPrice]) -> int:
+        """Insert or replace commodity price records."""
+        import math
+        cursor = self._conn.cursor()
+        count = 0
+        for p in prices:
+            if math.isnan(p.price):
+                continue
+            cursor.execute(
+                "INSERT OR REPLACE INTO commodity_prices (date, symbol, price, unit) "
+                "VALUES (?, ?, ?, ?)",
+                (p.date, p.symbol, p.price, p.unit),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def upsert_etf_navs(self, navs: list[GoldETFNav]) -> int:
+        """Insert or replace gold ETF NAV records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for n in navs:
+            cursor.execute(
+                "INSERT OR REPLACE INTO gold_etf_nav (date, scheme_code, scheme_name, nav) "
+                "VALUES (?, ?, ?, ?)",
+                (n.date, n.scheme_code, n.scheme_name, n.nav),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_commodity_prices(self, symbol: str, days: int = 30) -> list[CommodityPrice]:
+        """Get commodity prices for a symbol, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM commodity_prices WHERE symbol = ? "
+            "AND date >= date('now', ? || ' days') ORDER BY date DESC",
+            (symbol, f"-{days}"),
+        ).fetchall()
+        return [CommodityPrice(
+            date=r["date"], symbol=r["symbol"], price=r["price"], unit=r["unit"],
+        ) for r in rows]
+
+    def get_etf_navs(self, scheme_code: str, days: int = 365) -> list[GoldETFNav]:
+        """Get ETF NAVs for a scheme, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM gold_etf_nav WHERE scheme_code = ? "
+            "AND date >= date('now', ? || ' days') ORDER BY date DESC",
+            (scheme_code, f"-{days}"),
+        ).fetchall()
+        return [GoldETFNav(
+            date=r["date"], scheme_code=r["scheme_code"],
+            scheme_name=r["scheme_name"], nav=r["nav"],
+        ) for r in rows]
+
+    def get_gold_fii_correlation(self, days: int = 30) -> list[GoldCorrelation]:
+        """Get FII daily net flows aligned with gold price changes."""
+        rows = self._conn.execute(
+            "SELECT df.date, df.net_value AS fii_net, "
+            "cp_gold.price AS gold_close, cp_inr.price AS gold_inr "
+            "FROM daily_flows df "
+            "LEFT JOIN commodity_prices cp_gold ON df.date = cp_gold.date AND cp_gold.symbol = 'GOLD' "
+            "LEFT JOIN commodity_prices cp_inr ON df.date = cp_inr.date AND cp_inr.symbol = 'GOLD_INR' "
+            "WHERE df.category = 'FII' AND cp_gold.price IS NOT NULL "
+            "AND df.date >= date('now', ? || ' days') "
+            "ORDER BY df.date DESC",
+            (f"-{days}",),
+        ).fetchall()
+
+        results: list[GoldCorrelation] = []
+        for i, r in enumerate(rows):
+            # Calculate day-over-day gold change %
+            if i + 1 < len(rows) and rows[i + 1]["gold_close"]:
+                prev_gold = rows[i + 1]["gold_close"]
+                change_pct = round((r["gold_close"] - prev_gold) / prev_gold * 100, 2) if prev_gold else 0.0
+            else:
+                change_pct = 0.0
+
+            results.append(GoldCorrelation(
+                date=r["date"],
+                fii_net=r["fii_net"],
+                gold_close=r["gold_close"],
+                gold_change_pct=change_pct,
+                gold_inr=r["gold_inr"],
+            ))
+        return results
+
+    # -- Promoter Pledge --
+
+    def upsert_promoter_pledges(self, pledges: list[PromoterPledge]) -> int:
+        """Insert or replace promoter pledge records. Logs changes to audit_log."""
+        cursor = self._conn.cursor()
+        count = 0
+        for p in pledges:
+            existing = self._conn.execute(
+                "SELECT pledge_pct, encumbered_pct FROM promoter_pledge WHERE symbol = ? AND quarter_end = ?",
+                (p.symbol, p.quarter_end),
+            ).fetchone()
+            if existing and (existing["pledge_pct"] != p.pledge_pct or existing["encumbered_pct"] != p.encumbered_pct):
+                cursor.execute(
+                    "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    ("promoter_pledge", p.symbol, p.quarter_end,
+                     "pledge_pct", str(existing["pledge_pct"]), str(p.pledge_pct)),
+                )
+            cursor.execute(
+                "INSERT OR REPLACE INTO promoter_pledge (symbol, quarter_end, pledge_pct, encumbered_pct) "
+                "VALUES (?, ?, ?, ?)",
+                (p.symbol, p.quarter_end, p.pledge_pct, p.encumbered_pct),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_promoter_pledge(self, symbol: str, limit: int = 8) -> list[PromoterPledge]:
+        """Get promoter pledge history for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM promoter_pledge WHERE symbol = ? ORDER BY quarter_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [PromoterPledge(
+            symbol=r["symbol"], quarter_end=r["quarter_end"],
+            pledge_pct=r["pledge_pct"], encumbered_pct=r["encumbered_pct"],
+        ) for r in rows]
+
+    def get_high_pledge_stocks(self, min_pledge_pct: float = 1.0, limit: int = 20) -> list[PromoterPledge]:
+        """Get stocks with high promoter pledging from latest quarter, joined with scanner stocks."""
+        rows = self._conn.execute(
+            "SELECT pp.* FROM promoter_pledge pp "
+            "INNER JOIN index_constituents ic ON pp.symbol = ic.symbol "
+            "WHERE pp.quarter_end = ("
+            "  SELECT MAX(pp2.quarter_end) FROM promoter_pledge pp2 WHERE pp2.symbol = pp.symbol"
+            ") AND pp.pledge_pct >= ? "
+            "ORDER BY pp.pledge_pct DESC LIMIT ?",
+            (min_pledge_pct, limit),
+        ).fetchall()
+        return [PromoterPledge(
+            symbol=r["symbol"], quarter_end=r["quarter_end"],
+            pledge_pct=r["pledge_pct"], encumbered_pct=r["encumbered_pct"],
+        ) for r in rows]
 
     def get_scan_summary(self) -> ScanSummary:
         """Get aggregate stats for the scanner."""
