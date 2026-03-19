@@ -245,7 +245,7 @@ def backfill(
                     for sym in symbols:
                         progress.update(task, description=f"[cyan]{sym}[/]")
                         try:
-                            quarters, annual = sc.fetch_all_with_annual(sym)
+                            quarters, annual, annual_fin = sc.fetch_all_with_annual(sym)
 
                             with FlowStore() as store:
                                 if quarters:
@@ -274,7 +274,7 @@ def backfill(
             with ScreenerClient() as sc:
                 for sym in symbols:
                     try:
-                        _, annual = sc.fetch_all_with_annual(sym)
+                        _, annual, _ = sc.fetch_all_with_annual(sym)
                         annual_eps_cache[sym] = annual
                     except ScreenerError as e:
                         errors.append(f"{sym}: {e}")
