@@ -18,6 +18,7 @@ from flowtracker.display import (
     display_streak,
     display_summary,
 )
+from flowtracker.fund_commands import app as fund_app
 from flowtracker.holding_commands import app as holding_app
 from flowtracker.mf_commands import app as mf_app
 from flowtracker.scan_commands import app as scan_app
@@ -30,6 +31,7 @@ app = typer.Typer(
     help="FII/DII institutional flow tracker for Indian markets",
     no_args_is_help=True,
 )
+app.add_typer(fund_app)
 app.add_typer(mf_app)
 app.add_typer(holding_app)
 app.add_typer(scan_app)
