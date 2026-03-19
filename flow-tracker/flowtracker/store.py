@@ -11,7 +11,7 @@ from flowtracker.models import DailyFlow, DailyFlowPair, StreakInfo
 from flowtracker.mf_models import MFMonthlyFlow, MFAUMSummary
 from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, ShareholdingChange
 from flowtracker.scan_models import IndexConstituent, ScanSummary
-from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand
+from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
 _DEFAULT_DB_NAME = "flows.db"
@@ -131,6 +131,42 @@ CREATE TABLE IF NOT EXISTS valuation_snapshot (
     free_cash_flow REAL,
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, date)
+);
+
+CREATE TABLE IF NOT EXISTS annual_financials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    fiscal_year_end TEXT NOT NULL,
+    revenue REAL,
+    employee_cost REAL,
+    other_income REAL,
+    depreciation REAL,
+    interest REAL,
+    profit_before_tax REAL,
+    tax REAL,
+    net_income REAL,
+    eps REAL,
+    dividend_amount REAL,
+    equity_capital REAL,
+    reserves REAL,
+    borrowings REAL,
+    other_liabilities REAL,
+    total_assets REAL,
+    net_block REAL,
+    cwip REAL,
+    investments REAL,
+    other_assets REAL,
+    receivables REAL,
+    inventory REAL,
+    cash_and_bank REAL,
+    num_shares REAL,
+    cfo REAL,
+    cfi REAL,
+    cff REAL,
+    net_cash_flow REAL,
+    price REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, fiscal_year_end)
 );
 """
 
@@ -773,6 +809,67 @@ class FlowStore:
             period_start=min(dates),
             period_end=max(dates),
         )
+
+    # -- Fundamentals: Annual Financials --
+
+    def upsert_annual_financials(self, records: list) -> int:
+        """Insert or replace annual financials. Audit-logged."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            existing = self._conn.execute(
+                "SELECT revenue FROM annual_financials WHERE symbol = ? AND fiscal_year_end = ?",
+                (r.symbol, r.fiscal_year_end),
+            ).fetchone()
+            if existing and existing["revenue"] != r.revenue:
+                cursor.execute(
+                    "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    ("annual_financials", r.symbol, r.fiscal_year_end,
+                     "revenue", str(existing["revenue"]), str(r.revenue)),
+                )
+            cursor.execute(
+                "INSERT OR REPLACE INTO annual_financials "
+                "(symbol, fiscal_year_end, revenue, employee_cost, other_income, depreciation, "
+                "interest, profit_before_tax, tax, net_income, eps, dividend_amount, "
+                "equity_capital, reserves, borrowings, other_liabilities, total_assets, "
+                "net_block, cwip, investments, other_assets, receivables, inventory, "
+                "cash_and_bank, num_shares, cfo, cfi, cff, net_cash_flow, price) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (r.symbol, r.fiscal_year_end, r.revenue, r.employee_cost, r.other_income,
+                 r.depreciation, r.interest, r.profit_before_tax, r.tax, r.net_income,
+                 r.eps, r.dividend_amount, r.equity_capital, r.reserves, r.borrowings,
+                 r.other_liabilities, r.total_assets, r.net_block, r.cwip, r.investments,
+                 r.other_assets, r.receivables, r.inventory, r.cash_and_bank, r.num_shares,
+                 r.cfo, r.cfi, r.cff, r.net_cash_flow, r.price),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_annual_financials(self, symbol: str, limit: int = 10) -> list:
+        """Get stored annual financials, most recent first."""
+        from flowtracker.fund_models import AnnualFinancials
+        rows = self._conn.execute(
+            "SELECT * FROM annual_financials WHERE symbol = ? "
+            "ORDER BY fiscal_year_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [AnnualFinancials(
+            symbol=r["symbol"], fiscal_year_end=r["fiscal_year_end"],
+            revenue=r["revenue"], employee_cost=r["employee_cost"],
+            other_income=r["other_income"], depreciation=r["depreciation"],
+            interest=r["interest"], profit_before_tax=r["profit_before_tax"],
+            tax=r["tax"], net_income=r["net_income"], eps=r["eps"],
+            dividend_amount=r["dividend_amount"], equity_capital=r["equity_capital"],
+            reserves=r["reserves"], borrowings=r["borrowings"],
+            other_liabilities=r["other_liabilities"], total_assets=r["total_assets"],
+            net_block=r["net_block"], cwip=r["cwip"], investments=r["investments"],
+            other_assets=r["other_assets"], receivables=r["receivables"],
+            inventory=r["inventory"], cash_and_bank=r["cash_and_bank"],
+            num_shares=r["num_shares"], cfo=r["cfo"], cfi=r["cfi"],
+            cff=r["cff"], net_cash_flow=r["net_cash_flow"], price=r["price"],
+        ) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""
