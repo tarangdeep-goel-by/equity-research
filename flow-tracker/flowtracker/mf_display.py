@@ -7,7 +7,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from flowtracker.mf_models import AMFIReportRow, MFAUMSummary, MFMonthlyFlow
+from flowtracker.mf_models import AMFIReportRow, MFAUMSummary, MFDailyFlow, MFMonthlyFlow
 from flowtracker.utils import fmt_crores
 
 console = Console()
@@ -135,6 +135,72 @@ def display_mf_aum_trend(summaries: list[MFAUMSummary]) -> None:
             fmt_crores(s.debt_aum),
             fmt_crores(s.hybrid_aum),
             _colored_value(s.equity_net_flow),
+        )
+
+    console.print(table)
+
+
+def display_mf_daily_summary(flows: list[MFDailyFlow]) -> None:
+    """Show latest day's MF daily flows from SEBI (equity + debt)."""
+    if not flows:
+        console.print("[yellow]No daily MF data available. Run 'flowtrack mf daily fetch' first.[/]")
+        return
+
+    data_date = flows[0].date
+
+    table = Table(show_header=True, header_style="bold cyan", show_lines=False)
+    table.add_column("Category", style="bold", width=10)
+    table.add_column("Purchase (Cr)", justify="right", width=16)
+    table.add_column("Sale (Cr)", justify="right", width=16)
+    table.add_column("Net (Cr)", justify="right", width=16)
+
+    for f in flows:
+        table.add_row(
+            f.category,
+            fmt_crores(f.gross_purchase),
+            fmt_crores(f.gross_sale),
+            _colored_value(f.net_investment),
+        )
+
+    # Add total row
+    total_purchase = sum(f.gross_purchase for f in flows)
+    total_sale = sum(f.gross_sale for f in flows)
+    total_net = sum(f.net_investment for f in flows)
+    table.add_section()
+    table.add_row(
+        "[bold]Total[/]",
+        Text(fmt_crores(total_purchase), style="bold"),
+        Text(fmt_crores(total_sale), style="bold"),
+        _colored_value(total_net),
+    )
+
+    console.print(Panel(
+        table,
+        title=f"MF Daily Flows (SEBI) — {data_date}",
+        border_style="blue",
+    ))
+
+
+def display_mf_daily_trend(daily_data: list[dict]) -> None:
+    """Show daily MF equity/debt net investment trend."""
+    if not daily_data:
+        console.print("[yellow]No daily MF trend data available.[/]")
+        return
+
+    table = Table(
+        title="MF Daily Net Investment Trend",
+        show_header=True,
+        header_style="bold cyan",
+    )
+    table.add_column("Date", style="bold", width=12)
+    table.add_column("Equity Net (Cr)", justify="right", width=16)
+    table.add_column("Debt Net (Cr)", justify="right", width=16)
+
+    for row in daily_data:
+        table.add_row(
+            row["date"],
+            _colored_value(row["equity_net"]),
+            _colored_value(row["debt_net"]),
         )
 
     console.print(table)
