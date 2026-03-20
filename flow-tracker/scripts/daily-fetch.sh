@@ -1,5 +1,5 @@
 #!/bin/bash
-# Daily FII/DII + gold/silver fetch with retry (3 attempts, 5min backoff per step)
+# Daily FII/DII + gold/silver + MF daily fetch with retry (3 attempts, 5min backoff per step)
 set -o pipefail
 
 LOG="$HOME/.local/share/flowtracker/cron.log"
@@ -28,5 +28,6 @@ run_with_retry() {
 
 run_with_retry "flowtrack fetch" "FII/DII flows"
 run_with_retry "flowtrack gold fetch" "Gold/silver prices"
+run_with_retry "flowtrack mf daily fetch" "SEBI daily MF flows"
 
 echo "=== $(date) === Daily complete ===" >> "$LOG"

@@ -39,3 +39,12 @@ class MFAUMSummary(BaseModel):
     equity_net_flow: float
     debt_net_flow: float
     hybrid_net_flow: float
+
+
+class MFDailyFlow(BaseModel):
+    """Daily MF equity/debt flow from SEBI — one row per date per category."""
+    date: str  # "2026-03-19"
+    category: str  # "Equity" or "Debt"
+    gross_purchase: float  # crores
+    gross_sale: float  # crores
+    net_investment: float  # crores
