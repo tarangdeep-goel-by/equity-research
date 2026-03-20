@@ -11,11 +11,14 @@ from rich.console import Console
 from flowtracker.mf_client import AMFIClient, AMFIFetchError
 from flowtracker.mf_display import (
     display_mf_aum_trend,
+    display_mf_daily_summary,
+    display_mf_daily_trend,
     display_mf_fetch_result,
     display_mf_flows_table,
     display_mf_summary,
 )
 from flowtracker.mf_models import MFMonthlyFlow
+from flowtracker.sebi_client import SEBIClient, SEBIFetchError
 from flowtracker.store import FlowStore
 
 app = typer.Typer(
@@ -172,3 +175,55 @@ def backfill(
             console.print(f"  [dim]{month_str}:[/] {count} rows")
 
     console.print(f"\n[bold]Backfill complete:[/] {total_rows} rows across {len(results)} months")
+
+
+# -- Daily MF flows (SEBI) --
+
+daily_app = typer.Typer(
+    name="daily",
+    help="SEBI daily MF equity/debt purchase and sale data",
+    no_args_is_help=True,
+)
+app.add_typer(daily_app)
+
+
+@daily_app.command("fetch")
+def daily_fetch() -> None:
+    """Fetch current month's daily MF flows from SEBI."""
+    try:
+        with SEBIClient() as client:
+            flows = client.fetch_daily()
+    except SEBIFetchError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)
+
+    if not flows:
+        console.print("[yellow]No daily MF data found on SEBI page.[/]")
+        raise typer.Exit(1)
+
+    with FlowStore() as store:
+        count = store.upsert_mf_daily_flows(flows)
+
+    dates = sorted({f.date for f in flows})
+    console.print(f"Fetched {len(flows)} records ({len(dates)} trading days: {dates[0]} to {dates[-1]})")
+    console.print(f"Stored {count} records.")
+
+
+@daily_app.command("summary")
+def daily_summary() -> None:
+    """Show latest day's MF daily flows (equity + debt)."""
+    with FlowStore() as store:
+        flows = store.get_mf_daily_latest()
+
+    display_mf_daily_summary(flows)
+
+
+@daily_app.command("trend")
+def daily_trend(
+    days: Annotated[int, typer.Option("-d", "--days", help="Number of days")] = 30,
+) -> None:
+    """Show daily MF equity/debt net investment trend."""
+    with FlowStore() as store:
+        data = store.get_mf_daily_summary(days)
+
+    display_mf_daily_trend(data)

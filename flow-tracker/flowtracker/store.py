@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from flowtracker.models import DailyFlow, DailyFlowPair, StreakInfo
-from flowtracker.mf_models import MFMonthlyFlow, MFAUMSummary
+from flowtracker.mf_models import MFMonthlyFlow, MFAUMSummary, MFDailyFlow
 from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, ShareholdingChange, PromoterPledge
 from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrelation
 from flowtracker.scan_models import IndexConstituent, ScanSummary
@@ -198,6 +198,17 @@ CREATE TABLE IF NOT EXISTS annual_financials (
     price REAL,
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, fiscal_year_end)
+);
+
+CREATE TABLE IF NOT EXISTS mf_daily_flows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    category TEXT NOT NULL,
+    gross_purchase REAL NOT NULL,
+    gross_sale REAL NOT NULL,
+    net_investment REAL NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, category)
 );
 """
 
@@ -397,6 +408,71 @@ class FlowStore:
             equity_net_flow=row["equity_net_flow"], debt_net_flow=row["debt_net_flow"],
             hybrid_net_flow=row["hybrid_net_flow"],
         )
+
+    # -- MF Daily Flows (SEBI) --
+
+    def upsert_mf_daily_flows(self, flows: list[MFDailyFlow]) -> int:
+        """Insert or replace daily MF flow records from SEBI."""
+        cursor = self._conn.cursor()
+        count = 0
+        for f in flows:
+            cursor.execute(
+                "INSERT OR REPLACE INTO mf_daily_flows "
+                "(date, category, gross_purchase, gross_sale, net_investment) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (f.date, f.category, f.gross_purchase, f.gross_sale, f.net_investment),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_mf_daily_flows(self, days: int = 30, category: str | None = None) -> list[MFDailyFlow]:
+        """Get daily MF flows for the last N days, optionally filtered by category."""
+        if category:
+            rows = self._conn.execute(
+                "SELECT * FROM mf_daily_flows "
+                "WHERE date >= date('now', ? || ' days') AND category = ? "
+                "ORDER BY date DESC, category",
+                (f"-{days}", category),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM mf_daily_flows "
+                "WHERE date >= date('now', ? || ' days') "
+                "ORDER BY date DESC, category",
+                (f"-{days}",),
+            ).fetchall()
+        return [MFDailyFlow(
+            date=r["date"], category=r["category"],
+            gross_purchase=r["gross_purchase"], gross_sale=r["gross_sale"],
+            net_investment=r["net_investment"],
+        ) for r in rows]
+
+    def get_mf_daily_latest(self) -> list[MFDailyFlow]:
+        """Get the most recent day's MF flows (both equity and debt)."""
+        rows = self._conn.execute(
+            "SELECT * FROM mf_daily_flows "
+            "WHERE date = (SELECT MAX(date) FROM mf_daily_flows) "
+            "ORDER BY category"
+        ).fetchall()
+        return [MFDailyFlow(
+            date=r["date"], category=r["category"],
+            gross_purchase=r["gross_purchase"], gross_sale=r["gross_sale"],
+            net_investment=r["net_investment"],
+        ) for r in rows]
+
+    def get_mf_daily_summary(self, days: int = 30) -> list[dict]:
+        """Get daily MF equity net investment for trend display."""
+        rows = self._conn.execute(
+            "SELECT date, "
+            "SUM(CASE WHEN category = 'Equity' THEN net_investment ELSE 0 END) as equity_net, "
+            "SUM(CASE WHEN category = 'Debt' THEN net_investment ELSE 0 END) as debt_net "
+            "FROM mf_daily_flows "
+            "WHERE date >= date('now', ? || ' days') "
+            "GROUP BY date ORDER BY date DESC",
+            (f"-{days}",),
+        ).fetchall()
+        return [{"date": r["date"], "equity_net": r["equity_net"], "debt_net": r["debt_net"]} for r in rows]
 
     # -- Phase 4: Watchlist & Shareholding --
 
