@@ -1,0 +1,126 @@
+"""Macro indicator client — yfinance for VIX/FX/crude, CCIL for G-sec yield."""
+
+from __future__ import annotations
+
+import logging
+import math
+import re
+from datetime import date
+
+import httpx
+import yfinance as yf
+
+from flowtracker.macro_models import MacroSnapshot
+
+logger = logging.getLogger(__name__)
+
+_VIX_TICKER = "^INDIAVIX"
+_USDINR_TICKER = "USDINR=X"
+_BRENT_TICKER = "BZ=F"
+
+_CCIL_URL = "https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields"
+
+
+class MacroClient:
+    """Client for macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec."""
+
+    def __init__(self) -> None:
+        self._http = httpx.Client(
+            timeout=30.0,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+
+    def fetch_snapshot(self, days: int = 5) -> list[MacroSnapshot]:
+        """Fetch recent N days of macro data from yfinance + CCIL."""
+        period = f"{days}d"
+        tickers = [_VIX_TICKER, _USDINR_TICKER, _BRENT_TICKER]
+
+        data: dict[str, dict[str, float]] = {}
+
+        for ticker_sym in tickers:
+            try:
+                hist = yf.Ticker(ticker_sym).history(period=period)
+                for idx, row in hist.iterrows():
+                    d = idx.strftime("%Y-%m-%d")
+                    close = row["Close"]
+                    if math.isnan(close):
+                        continue
+                    data.setdefault(d, {})[ticker_sym] = round(close, 4)
+            except Exception as e:
+                logger.warning("Failed to fetch %s: %s", ticker_sym, e)
+
+        # Try to get today's G-sec yield
+        gsec = self._fetch_gsec_yield()
+
+        snapshots: list[MacroSnapshot] = []
+        for d in sorted(data.keys()):
+            vals = data[d]
+            snapshots.append(MacroSnapshot(
+                date=d,
+                india_vix=vals.get(_VIX_TICKER),
+                usd_inr=vals.get(_USDINR_TICKER),
+                brent_crude=vals.get(_BRENT_TICKER),
+                gsec_10y=gsec if d == date.today().isoformat() else None,
+            ))
+
+        return snapshots
+
+    def fetch_history(self, start: str = "2008-01-01") -> list[MacroSnapshot]:
+        """Fetch full history via yfinance. G-sec only for today."""
+        end = date.today().isoformat()
+        data: dict[str, dict[str, float]] = {}
+
+        for ticker_sym in [_VIX_TICKER, _USDINR_TICKER, _BRENT_TICKER]:
+            try:
+                hist = yf.Ticker(ticker_sym).history(start=start, end=end)
+                for idx, row in hist.iterrows():
+                    d = idx.strftime("%Y-%m-%d")
+                    close = row["Close"]
+                    if math.isnan(close):
+                        continue
+                    data.setdefault(d, {})[ticker_sym] = round(close, 4)
+            except Exception as e:
+                logger.warning("Failed to fetch history for %s: %s", ticker_sym, e)
+
+        snapshots: list[MacroSnapshot] = []
+        for d in sorted(data.keys()):
+            vals = data[d]
+            snapshots.append(MacroSnapshot(
+                date=d,
+                india_vix=vals.get(_VIX_TICKER),
+                usd_inr=vals.get(_USDINR_TICKER),
+                brent_crude=vals.get(_BRENT_TICKER),
+            ))
+
+        return snapshots
+
+    def _fetch_gsec_yield(self) -> float | None:
+        """Scrape CCIL for 10Y G-sec yield. Returns None on failure."""
+        try:
+            resp = self._http.get(_CCIL_URL)
+            resp.raise_for_status()
+            html = resp.text
+
+            # Look for the 9Y-10Y row and extract YTM value
+            # Table rows have tenor and YTM columns
+            match = re.search(
+                r'9\s*Y?\s*[-–]\s*10\s*Y.*?(\d+\.\d+)',
+                html, re.DOTALL | re.IGNORECASE,
+            )
+            if match:
+                return round(float(match.group(1)), 2)
+
+            logger.warning("Could not parse G-sec yield from CCIL page")
+            return None
+        except Exception as e:
+            logger.warning("Failed to fetch G-sec yield: %s", e)
+            return None
+
+    def close(self) -> None:
+        self._http.close()
+
+    def __enter__(self) -> MacroClient:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()

@@ -13,6 +13,11 @@ from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, Share
 from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrelation
 from flowtracker.scan_models import IndexConstituent, ScanSummary
 from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials
+from flowtracker.macro_models import MacroSnapshot
+from flowtracker.bhavcopy_models import DailyStockData
+from flowtracker.deals_models import BulkBlockDeal
+from flowtracker.insider_models import InsiderTransaction
+from flowtracker.estimates_models import ConsensusEstimate, EarningsSurprise
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
 _DEFAULT_DB_NAME = "flows.db"
@@ -209,6 +214,98 @@ CREATE TABLE IF NOT EXISTS mf_daily_flows (
     net_investment REAL NOT NULL,
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(date, category)
+);
+
+CREATE TABLE IF NOT EXISTS macro_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    india_vix REAL,
+    usd_inr REAL,
+    brent_crude REAL,
+    gsec_10y REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date)
+);
+
+CREATE TABLE IF NOT EXISTS daily_stock_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    open REAL NOT NULL,
+    high REAL NOT NULL,
+    low REAL NOT NULL,
+    close REAL NOT NULL,
+    prev_close REAL NOT NULL,
+    volume INTEGER NOT NULL,
+    turnover REAL NOT NULL,
+    delivery_qty INTEGER,
+    delivery_pct REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, symbol)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_stock_symbol ON daily_stock_data(symbol);
+CREATE INDEX IF NOT EXISTS idx_daily_stock_date ON daily_stock_data(date);
+
+CREATE TABLE IF NOT EXISTS bulk_block_deals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    deal_type TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    client_name TEXT,
+    buy_sell TEXT,
+    quantity INTEGER NOT NULL,
+    price REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, deal_type, symbol, client_name)
+);
+
+CREATE TABLE IF NOT EXISTS insider_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    person_name TEXT NOT NULL,
+    person_category TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    value REAL NOT NULL,
+    mode TEXT,
+    holding_before_pct REAL,
+    holding_after_pct REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, symbol, person_name, transaction_type, quantity)
+);
+
+CREATE TABLE IF NOT EXISTS consensus_estimates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    target_mean REAL,
+    target_median REAL,
+    target_high REAL,
+    target_low REAL,
+    num_analysts INTEGER,
+    recommendation TEXT,
+    recommendation_score REAL,
+    forward_pe REAL,
+    forward_eps REAL,
+    eps_current_year REAL,
+    eps_next_year REAL,
+    earnings_growth REAL,
+    current_price REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, date)
+);
+
+CREATE TABLE IF NOT EXISTS earnings_surprises (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    eps_actual REAL,
+    eps_estimate REAL,
+    surprise_pct REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, quarter_end)
 );
 """
 
@@ -1118,6 +1215,344 @@ class FlowStore:
             inventory=r["inventory"], cash_and_bank=r["cash_and_bank"],
             num_shares=r["num_shares"], cfo=r["cfo"], cfi=r["cfi"],
             cff=r["cff"], net_cash_flow=r["net_cash_flow"], price=r["price"],
+        ) for r in rows]
+
+    # -- Macro Indicators --
+
+    def upsert_macro_snapshots(self, snapshots: list[MacroSnapshot]) -> int:
+        """Insert or replace macro daily snapshots."""
+        cursor = self._conn.cursor()
+        count = 0
+        for s in snapshots:
+            cursor.execute(
+                "INSERT OR REPLACE INTO macro_daily "
+                "(date, india_vix, usd_inr, brent_crude, gsec_10y) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (s.date, s.india_vix, s.usd_inr, s.brent_crude, s.gsec_10y),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_macro_latest(self) -> MacroSnapshot | None:
+        """Get the most recent macro snapshot."""
+        row = self._conn.execute(
+            "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+        return MacroSnapshot(
+            date=row["date"], india_vix=row["india_vix"],
+            usd_inr=row["usd_inr"], brent_crude=row["brent_crude"],
+            gsec_10y=row["gsec_10y"],
+        )
+
+    def get_macro_previous(self) -> MacroSnapshot | None:
+        """Get the second most recent macro snapshot (for delta display)."""
+        row = self._conn.execute(
+            "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 1 OFFSET 1"
+        ).fetchone()
+        if not row:
+            return None
+        return MacroSnapshot(
+            date=row["date"], india_vix=row["india_vix"],
+            usd_inr=row["usd_inr"], brent_crude=row["brent_crude"],
+            gsec_10y=row["gsec_10y"],
+        )
+
+    def get_macro_trend(self, days: int = 30) -> list[MacroSnapshot]:
+        """Get macro snapshots for the last N days, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM macro_daily "
+            "WHERE date >= date('now', ? || ' days') "
+            "ORDER BY date DESC",
+            (f"-{days}",),
+        ).fetchall()
+        return [MacroSnapshot(
+            date=r["date"], india_vix=r["india_vix"],
+            usd_inr=r["usd_inr"], brent_crude=r["brent_crude"],
+            gsec_10y=r["gsec_10y"],
+        ) for r in rows]
+
+    # -- Bhavcopy + Delivery --
+
+    def upsert_daily_stock_data(self, records: list[DailyStockData]) -> int:
+        """Insert or replace daily stock data records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO daily_stock_data "
+                "(date, symbol, open, high, low, close, prev_close, volume, "
+                "turnover, delivery_qty, delivery_pct) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (r.date, r.symbol, r.open, r.high, r.low, r.close, r.prev_close,
+                 r.volume, r.turnover, r.delivery_qty, r.delivery_pct),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_top_delivery(self, date_str: str | None = None, limit: int = 20) -> list[DailyStockData]:
+        """Get stocks with highest delivery % for a date (default: latest)."""
+        if date_str is None:
+            row = self._conn.execute("SELECT MAX(date) as d FROM daily_stock_data").fetchone()
+            if not row or not row["d"]:
+                return []
+            date_str = row["d"]
+        rows = self._conn.execute(
+            "SELECT * FROM daily_stock_data WHERE date = ? AND delivery_pct IS NOT NULL "
+            "ORDER BY delivery_pct DESC LIMIT ?",
+            (date_str, limit),
+        ).fetchall()
+        return [DailyStockData(
+            date=r["date"], symbol=r["symbol"], open=r["open"], high=r["high"],
+            low=r["low"], close=r["close"], prev_close=r["prev_close"],
+            volume=r["volume"], turnover=r["turnover"],
+            delivery_qty=r["delivery_qty"], delivery_pct=r["delivery_pct"],
+        ) for r in rows]
+
+    def get_stock_delivery(self, symbol: str, days: int = 30) -> list[DailyStockData]:
+        """Get delivery trend for a specific stock."""
+        rows = self._conn.execute(
+            "SELECT * FROM daily_stock_data WHERE symbol = ? "
+            "AND date >= date('now', ? || ' days') ORDER BY date DESC",
+            (symbol, f"-{days}"),
+        ).fetchall()
+        return [DailyStockData(
+            date=r["date"], symbol=r["symbol"], open=r["open"], high=r["high"],
+            low=r["low"], close=r["close"], prev_close=r["prev_close"],
+            volume=r["volume"], turnover=r["turnover"],
+            delivery_qty=r["delivery_qty"], delivery_pct=r["delivery_pct"],
+        ) for r in rows]
+
+    # -- Bulk/Block Deals --
+
+    def upsert_deals(self, deals: list[BulkBlockDeal]) -> int:
+        """Insert or replace bulk/block deal records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for d in deals:
+            cursor.execute(
+                "INSERT OR REPLACE INTO bulk_block_deals "
+                "(date, deal_type, symbol, client_name, buy_sell, quantity, price) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (d.date, d.deal_type, d.symbol, d.client_name, d.buy_sell,
+                 d.quantity, d.price),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_deals_latest(self) -> list[BulkBlockDeal]:
+        """Get deals for the most recent day."""
+        row = self._conn.execute("SELECT MAX(date) as d FROM bulk_block_deals").fetchone()
+        if not row or not row["d"]:
+            return []
+        rows = self._conn.execute(
+            "SELECT * FROM bulk_block_deals WHERE date = ? ORDER BY deal_type, symbol",
+            (row["d"],),
+        ).fetchall()
+        return [BulkBlockDeal(
+            date=r["date"], deal_type=r["deal_type"], symbol=r["symbol"],
+            client_name=r["client_name"], buy_sell=r["buy_sell"],
+            quantity=r["quantity"], price=r["price"],
+        ) for r in rows]
+
+    def get_deals_by_symbol(self, symbol: str) -> list[BulkBlockDeal]:
+        """Get all deals for a specific symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM bulk_block_deals WHERE symbol = ? ORDER BY date DESC",
+            (symbol,),
+        ).fetchall()
+        return [BulkBlockDeal(
+            date=r["date"], deal_type=r["deal_type"], symbol=r["symbol"],
+            client_name=r["client_name"], buy_sell=r["buy_sell"],
+            quantity=r["quantity"], price=r["price"],
+        ) for r in rows]
+
+    def get_deals_top(self, days: int = 30, limit: int = 20) -> list[BulkBlockDeal]:
+        """Get biggest deals by value in the last N days."""
+        rows = self._conn.execute(
+            "SELECT * FROM bulk_block_deals "
+            "WHERE date >= date('now', ? || ' days') AND price IS NOT NULL "
+            "ORDER BY (quantity * price) DESC LIMIT ?",
+            (f"-{days}", limit),
+        ).fetchall()
+        return [BulkBlockDeal(
+            date=r["date"], deal_type=r["deal_type"], symbol=r["symbol"],
+            client_name=r["client_name"], buy_sell=r["buy_sell"],
+            quantity=r["quantity"], price=r["price"],
+        ) for r in rows]
+
+    # -- Insider/SAST Transactions --
+
+    def upsert_insider_transactions(self, trades: list[InsiderTransaction]) -> int:
+        """Insert or replace insider transaction records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for t in trades:
+            cursor.execute(
+                "INSERT OR REPLACE INTO insider_transactions "
+                "(date, symbol, person_name, person_category, transaction_type, "
+                "quantity, value, mode, holding_before_pct, holding_after_pct) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (t.date, t.symbol, t.person_name, t.person_category,
+                 t.transaction_type, t.quantity, t.value, t.mode,
+                 t.holding_before_pct, t.holding_after_pct),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_insider_by_symbol(self, symbol: str, days: int = 365) -> list[InsiderTransaction]:
+        """Get insider transactions for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM insider_transactions WHERE symbol = ? "
+            "AND date >= date('now', ? || ' days') ORDER BY date DESC",
+            (symbol, f"-{days}"),
+        ).fetchall()
+        return [InsiderTransaction(
+            date=r["date"], symbol=r["symbol"], person_name=r["person_name"],
+            person_category=r["person_category"], transaction_type=r["transaction_type"],
+            quantity=r["quantity"], value=r["value"], mode=r["mode"],
+            holding_before_pct=r["holding_before_pct"], holding_after_pct=r["holding_after_pct"],
+        ) for r in rows]
+
+    def get_promoter_buys(self, days: int = 30) -> list[InsiderTransaction]:
+        """Get promoter buying transactions."""
+        rows = self._conn.execute(
+            "SELECT * FROM insider_transactions "
+            "WHERE person_category LIKE '%Promoter%' "
+            "AND transaction_type = 'Buy' "
+            "AND date >= date('now', ? || ' days') "
+            "ORDER BY value DESC",
+            (f"-{days}",),
+        ).fetchall()
+        return [InsiderTransaction(
+            date=r["date"], symbol=r["symbol"], person_name=r["person_name"],
+            person_category=r["person_category"], transaction_type=r["transaction_type"],
+            quantity=r["quantity"], value=r["value"], mode=r["mode"],
+            holding_before_pct=r["holding_before_pct"], holding_after_pct=r["holding_after_pct"],
+        ) for r in rows]
+
+    def get_insider_recent(self, days: int = 7) -> list[InsiderTransaction]:
+        """Get all recent insider transactions."""
+        rows = self._conn.execute(
+            "SELECT * FROM insider_transactions "
+            "WHERE date >= date('now', ? || ' days') "
+            "ORDER BY date DESC, value DESC",
+            (f"-{days}",),
+        ).fetchall()
+        return [InsiderTransaction(
+            date=r["date"], symbol=r["symbol"], person_name=r["person_name"],
+            person_category=r["person_category"], transaction_type=r["transaction_type"],
+            quantity=r["quantity"], value=r["value"], mode=r["mode"],
+            holding_before_pct=r["holding_before_pct"], holding_after_pct=r["holding_after_pct"],
+        ) for r in rows]
+
+    # -- Consensus Estimates --
+
+    def upsert_consensus_estimates(self, estimates: list[ConsensusEstimate]) -> int:
+        """Insert or replace consensus estimate records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for e in estimates:
+            cursor.execute(
+                "INSERT OR REPLACE INTO consensus_estimates "
+                "(symbol, date, target_mean, target_median, target_high, target_low, "
+                "num_analysts, recommendation, recommendation_score, forward_pe, "
+                "forward_eps, eps_current_year, eps_next_year, earnings_growth, current_price) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (e.symbol, e.date, e.target_mean, e.target_median, e.target_high,
+                 e.target_low, e.num_analysts, e.recommendation, e.recommendation_score,
+                 e.forward_pe, e.forward_eps, e.eps_current_year, e.eps_next_year,
+                 e.earnings_growth, e.current_price),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def upsert_earnings_surprises(self, surprises: list[EarningsSurprise]) -> int:
+        """Insert or replace earnings surprise records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for s in surprises:
+            cursor.execute(
+                "INSERT OR REPLACE INTO earnings_surprises "
+                "(symbol, quarter_end, eps_actual, eps_estimate, surprise_pct) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (s.symbol, s.quarter_end, s.eps_actual, s.eps_estimate, s.surprise_pct),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_estimate_latest(self, symbol: str) -> ConsensusEstimate | None:
+        """Get the most recent estimate for a symbol."""
+        row = self._conn.execute(
+            "SELECT * FROM consensus_estimates WHERE symbol = ? ORDER BY date DESC LIMIT 1",
+            (symbol,),
+        ).fetchone()
+        if not row:
+            return None
+        return ConsensusEstimate(
+            symbol=row["symbol"], date=row["date"],
+            target_mean=row["target_mean"], target_median=row["target_median"],
+            target_high=row["target_high"], target_low=row["target_low"],
+            num_analysts=row["num_analysts"], recommendation=row["recommendation"],
+            recommendation_score=row["recommendation_score"],
+            forward_pe=row["forward_pe"], forward_eps=row["forward_eps"],
+            eps_current_year=row["eps_current_year"], eps_next_year=row["eps_next_year"],
+            earnings_growth=row["earnings_growth"], current_price=row["current_price"],
+        )
+
+    def get_all_latest_estimates(self) -> list[ConsensusEstimate]:
+        """Get latest estimate for each symbol, ranked by upside."""
+        rows = self._conn.execute(
+            "SELECT ce.* FROM consensus_estimates ce "
+            "INNER JOIN (SELECT symbol, MAX(date) as max_date FROM consensus_estimates "
+            "GROUP BY symbol) latest "
+            "ON ce.symbol = latest.symbol AND ce.date = latest.max_date "
+            "ORDER BY CASE WHEN ce.target_mean IS NOT NULL AND ce.current_price IS NOT NULL "
+            "AND ce.current_price > 0 "
+            "THEN (ce.target_mean - ce.current_price) / ce.current_price ELSE -999 END DESC"
+        ).fetchall()
+        return [ConsensusEstimate(
+            symbol=r["symbol"], date=r["date"],
+            target_mean=r["target_mean"], target_median=r["target_median"],
+            target_high=r["target_high"], target_low=r["target_low"],
+            num_analysts=r["num_analysts"], recommendation=r["recommendation"],
+            recommendation_score=r["recommendation_score"],
+            forward_pe=r["forward_pe"], forward_eps=r["forward_eps"],
+            eps_current_year=r["eps_current_year"], eps_next_year=r["eps_next_year"],
+            earnings_growth=r["earnings_growth"], current_price=r["current_price"],
+        ) for r in rows]
+
+    def get_surprises(self, symbol: str) -> list[EarningsSurprise]:
+        """Get earnings surprises for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM earnings_surprises WHERE symbol = ? ORDER BY quarter_end DESC",
+            (symbol,),
+        ).fetchall()
+        return [EarningsSurprise(
+            symbol=r["symbol"], quarter_end=r["quarter_end"],
+            eps_actual=r["eps_actual"], eps_estimate=r["eps_estimate"],
+            surprise_pct=r["surprise_pct"],
+        ) for r in rows]
+
+    def get_recent_surprises(self, days: int = 90) -> list[EarningsSurprise]:
+        """Get recent earnings surprises across all stocks."""
+        rows = self._conn.execute(
+            "SELECT * FROM earnings_surprises "
+            "WHERE quarter_end >= date('now', ? || ' days') "
+            "ORDER BY ABS(COALESCE(surprise_pct, 0)) DESC",
+            (f"-{days}",),
+        ).fetchall()
+        return [EarningsSurprise(
+            symbol=r["symbol"], quarter_end=r["quarter_end"],
+            eps_actual=r["eps_actual"], eps_estimate=r["eps_estimate"],
+            surprise_pct=r["surprise_pct"],
         ) for r in rows]
 
     def close(self) -> None:
