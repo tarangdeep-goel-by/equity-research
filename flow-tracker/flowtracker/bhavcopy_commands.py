@@ -52,13 +52,38 @@ def backfill(
     ] = None,
 ) -> None:
     """Bulk fetch historical bhavcopy data."""
+    import time
+    from datetime import timedelta
+
     start = _parse_date(from_date)
     end = _parse_date(to_date) if to_date else date.today()
     console.print(f"[dim]Backfilling bhavcopy from {start} to {end}...[/]")
+
+    total_count = 0
+    days_fetched = 0
+    current = start
+
     with BhavcopyClient() as client, FlowStore() as store:
-        records = client.fetch_range(start, end)
-        count = store.upsert_daily_stock_data(records)
-    display_backfill_result(count, start.isoformat(), end.isoformat())
+        while current <= end:
+            if current.weekday() >= 5:
+                current += timedelta(days=1)
+                continue
+
+            records = client.fetch_day(current)
+            if records:
+                count = store.upsert_daily_stock_data(records)
+                total_count += count
+                days_fetched += 1
+                if days_fetched % 10 == 0:
+                    console.print(
+                        f"[dim]  {current} — {days_fetched} days, "
+                        f"{total_count:,} records[/]"
+                    )
+
+            current += timedelta(days=1)
+            time.sleep(0.5)
+
+    display_backfill_result(total_count, start.isoformat(), end.isoformat())
 
 
 @app.command(name="top-delivery")
