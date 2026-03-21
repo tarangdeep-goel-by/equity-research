@@ -23,6 +23,11 @@ from flowtracker.holding_commands import app as holding_app
 from flowtracker.mf_commands import app as mf_app
 from flowtracker.scan_commands import app as scan_app
 from flowtracker.commodity_commands import app as gold_app
+from flowtracker.macro_commands import app as macro_app
+from flowtracker.bhavcopy_commands import app as bhavcopy_app
+from flowtracker.deals_commands import app as deals_app
+from flowtracker.insider_commands import app as insider_app
+from flowtracker.estimates_commands import app as estimates_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -37,6 +42,11 @@ app.add_typer(mf_app)
 app.add_typer(holding_app)
 app.add_typer(scan_app)
 app.add_typer(gold_app)
+app.add_typer(macro_app)
+app.add_typer(bhavcopy_app)
+app.add_typer(deals_app)
+app.add_typer(insider_app)
+app.add_typer(estimates_app)
 console = Console()
 
 
