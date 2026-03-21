@@ -18,6 +18,7 @@ from flowtracker.bhavcopy_models import DailyStockData
 from flowtracker.deals_models import BulkBlockDeal
 from flowtracker.insider_models import InsiderTransaction
 from flowtracker.estimates_models import ConsensusEstimate, EarningsSurprise
+from flowtracker.mfportfolio_models import MFSchemeHolding, MFHoldingChange
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
 _DEFAULT_DB_NAME = "flows.db"
@@ -307,6 +308,23 @@ CREATE TABLE IF NOT EXISTS earnings_surprises (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, quarter_end)
 );
+
+CREATE TABLE IF NOT EXISTS mf_scheme_holdings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    month TEXT NOT NULL,
+    amc TEXT NOT NULL,
+    scheme_name TEXT NOT NULL,
+    isin TEXT NOT NULL,
+    stock_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    market_value_lakhs REAL NOT NULL,
+    pct_of_nav REAL NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(month, amc, scheme_name, isin)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mf_holdings_isin ON mf_scheme_holdings(isin);
+CREATE INDEX IF NOT EXISTS idx_mf_holdings_month ON mf_scheme_holdings(month);
 """
 
 
@@ -1636,6 +1654,125 @@ class FlowStore:
             "WHERE industry IS NOT NULL ORDER BY industry"
         ).fetchall()
         return [r["industry"] for r in rows]
+
+    # -- MF Scheme Holdings --
+
+    def upsert_mf_scheme_holdings(self, holdings: list[MFSchemeHolding]) -> int:
+        """Insert or replace MF scheme holding records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for h in holdings:
+            cursor.execute(
+                "INSERT OR REPLACE INTO mf_scheme_holdings "
+                "(month, amc, scheme_name, isin, stock_name, quantity, market_value_lakhs, pct_of_nav) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (h.month, h.amc, h.scheme_name, h.isin, h.stock_name,
+                 h.quantity, h.market_value_lakhs, h.pct_of_nav),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_mf_stock_holdings(self, search: str) -> list[MFSchemeHolding]:
+        """Get MF holdings for a stock by name or ISIN."""
+        rows = self._conn.execute(
+            "SELECT * FROM mf_scheme_holdings "
+            "WHERE (UPPER(stock_name) LIKE ? OR isin = ?) "
+            "AND month = (SELECT MAX(month) FROM mf_scheme_holdings) "
+            "ORDER BY market_value_lakhs DESC",
+            (f"%{search}%", search),
+        ).fetchall()
+        return [MFSchemeHolding(
+            month=r["month"], amc=r["amc"], scheme_name=r["scheme_name"],
+            isin=r["isin"], stock_name=r["stock_name"], quantity=r["quantity"],
+            market_value_lakhs=r["market_value_lakhs"], pct_of_nav=r["pct_of_nav"],
+        ) for r in rows]
+
+    def get_mf_holding_changes(
+        self, month: str | None = None, change_type: str = "buy", limit: int = 30,
+    ) -> list[MFHoldingChange]:
+        """Get month-over-month MF holding changes.
+
+        change_type: "buy" for new+increased, "sell" for exits+decreased
+        """
+        if month is None:
+            row = self._conn.execute("SELECT MAX(month) as m FROM mf_scheme_holdings").fetchone()
+            if not row or not row["m"]:
+                return []
+            month = row["m"]
+
+        # Find previous month
+        year, mon = int(month[:4]), int(month[5:7])
+        if mon == 1:
+            prev_month = f"{year - 1}-12"
+        else:
+            prev_month = f"{year}-{mon - 1:02d}"
+
+        if change_type == "buy":
+            # New positions (in curr but not in prev) + increased positions
+            rows = self._conn.execute("""
+                SELECT c.stock_name, c.isin, c.amc, c.scheme_name,
+                    ? as prev_month, ? as curr_month,
+                    COALESCE(p.quantity, 0) as prev_qty, c.quantity as curr_qty,
+                    c.quantity - COALESCE(p.quantity, 0) as qty_change,
+                    COALESCE(p.market_value_lakhs, 0) as prev_value,
+                    c.market_value_lakhs as curr_value,
+                    CASE WHEN p.isin IS NULL THEN 'NEW' ELSE 'INCREASE' END as change_type
+                FROM mf_scheme_holdings c
+                LEFT JOIN mf_scheme_holdings p ON c.isin = p.isin
+                    AND c.amc = p.amc AND c.scheme_name = p.scheme_name
+                    AND p.month = ?
+                WHERE c.month = ?
+                    AND (p.isin IS NULL OR c.quantity > p.quantity)
+                ORDER BY c.market_value_lakhs - COALESCE(p.market_value_lakhs, 0) DESC
+                LIMIT ?
+            """, (prev_month, month, prev_month, month, limit)).fetchall()
+        else:
+            # Exits (in prev but not in curr) + decreased positions
+            rows = self._conn.execute("""
+                SELECT p.stock_name, p.isin, p.amc, p.scheme_name,
+                    ? as prev_month, ? as curr_month,
+                    p.quantity as prev_qty, COALESCE(c.quantity, 0) as curr_qty,
+                    COALESCE(c.quantity, 0) - p.quantity as qty_change,
+                    p.market_value_lakhs as prev_value,
+                    COALESCE(c.market_value_lakhs, 0) as curr_value,
+                    CASE WHEN c.isin IS NULL THEN 'EXIT' ELSE 'DECREASE' END as change_type
+                FROM mf_scheme_holdings p
+                LEFT JOIN mf_scheme_holdings c ON p.isin = c.isin
+                    AND p.amc = c.amc AND p.scheme_name = c.scheme_name
+                    AND c.month = ?
+                WHERE p.month = ?
+                    AND (c.isin IS NULL OR c.quantity < p.quantity)
+                ORDER BY p.market_value_lakhs - COALESCE(c.market_value_lakhs, 0) DESC
+                LIMIT ?
+            """, (prev_month, month, month, prev_month, limit)).fetchall()
+
+        return [MFHoldingChange(
+            stock_name=r["stock_name"], isin=r["isin"], amc=r["amc"],
+            scheme_name=r["scheme_name"], prev_month=r["prev_month"],
+            curr_month=r["curr_month"], prev_qty=r["prev_qty"],
+            curr_qty=r["curr_qty"], qty_change=r["qty_change"],
+            prev_value=r["prev_value"], curr_value=r["curr_value"],
+            change_type=r["change_type"],
+        ) for r in rows]
+
+    def get_mf_portfolio_summary(self, month: str | None = None) -> list[dict]:
+        """Get AMC-level portfolio summary for a month."""
+        if month is None:
+            row = self._conn.execute("SELECT MAX(month) as m FROM mf_scheme_holdings").fetchone()
+            if not row or not row["m"]:
+                return []
+            month = row["m"]
+
+        rows = self._conn.execute(
+            "SELECT amc, COUNT(DISTINCT scheme_name) as num_schemes, "
+            "COUNT(DISTINCT isin) as num_stocks, "
+            "SUM(market_value_lakhs) as total_value_lakhs "
+            "FROM mf_scheme_holdings WHERE month = ? "
+            "GROUP BY amc ORDER BY total_value_lakhs DESC",
+            (month,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""
