@@ -28,6 +28,7 @@ from flowtracker.bhavcopy_commands import app as bhavcopy_app
 from flowtracker.deals_commands import app as deals_app
 from flowtracker.insider_commands import app as insider_app
 from flowtracker.estimates_commands import app as estimates_app
+from flowtracker.sector_commands import app as sector_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -47,6 +48,7 @@ app.add_typer(bhavcopy_app)
 app.add_typer(deals_app)
 app.add_typer(insider_app)
 app.add_typer(estimates_app)
+app.add_typer(sector_app)
 console = Console()
 
 

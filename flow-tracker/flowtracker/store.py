@@ -1555,6 +1555,88 @@ class FlowStore:
             surprise_pct=r["surprise_pct"],
         ) for r in rows]
 
+    # -- Sector Aggregation --
+
+    def get_sector_overview(self) -> list[dict]:
+        """Get sector-level ownership shifts for the latest quarter.
+
+        Returns list of dicts with industry, num_stocks, avg changes per category.
+        """
+        rows = self._conn.execute("""
+            SELECT
+                ic.industry,
+                COUNT(DISTINCT ic.symbol) as num_stocks,
+                AVG(CASE WHEN s1.category = 'FII' THEN s1.percentage - s2.percentage END) as avg_fii_change,
+                AVG(CASE WHEN s1.category = 'MF' THEN s1.percentage - s2.percentage END) as avg_mf_change,
+                AVG(CASE WHEN s1.category = 'DII' THEN s1.percentage - s2.percentage END) as avg_dii_change,
+                AVG(CASE WHEN s1.category = 'Promoter' THEN s1.percentage - s2.percentage END) as avg_promoter_change
+            FROM index_constituents ic
+            INNER JOIN shareholding s1 ON ic.symbol = s1.symbol
+            INNER JOIN shareholding s2 ON s1.symbol = s2.symbol
+                AND s1.category = s2.category
+                AND s2.quarter_end = (
+                    SELECT MAX(s3.quarter_end) FROM shareholding s3
+                    WHERE s3.symbol = s1.symbol AND s3.category = s1.category
+                    AND s3.quarter_end < s1.quarter_end
+                )
+            WHERE ic.industry IS NOT NULL
+                AND s1.quarter_end = (
+                    SELECT MAX(s4.quarter_end) FROM shareholding s4
+                    WHERE s4.symbol = s1.symbol
+                )
+                AND s1.category IN ('FII', 'MF', 'DII', 'Promoter')
+            GROUP BY ic.industry
+            HAVING num_stocks >= 3
+            ORDER BY avg_mf_change DESC
+        """).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_sector_detail(self, industry: str) -> list[dict]:
+        """Get stock-level ownership data for a specific sector."""
+        rows = self._conn.execute("""
+            SELECT
+                ic.symbol,
+                MAX(CASE WHEN s1.category = 'FII' THEN s1.percentage END) as curr_fii,
+                MAX(CASE WHEN s1.category = 'MF' THEN s1.percentage END) as curr_mf,
+                MAX(CASE WHEN s1.category = 'FII' THEN s1.percentage - s2.percentage END) as fii_change,
+                MAX(CASE WHEN s1.category = 'MF' THEN s1.percentage - s2.percentage END) as mf_change,
+                MAX(CASE WHEN s1.category = 'DII' THEN s1.percentage - s2.percentage END) as dii_change,
+                MAX(CASE WHEN s1.category = 'Promoter' THEN s1.percentage - s2.percentage END) as promoter_change,
+                vs.pe_trailing
+            FROM index_constituents ic
+            INNER JOIN shareholding s1 ON ic.symbol = s1.symbol
+            INNER JOIN shareholding s2 ON s1.symbol = s2.symbol
+                AND s1.category = s2.category
+                AND s2.quarter_end = (
+                    SELECT MAX(s3.quarter_end) FROM shareholding s3
+                    WHERE s3.symbol = s1.symbol AND s3.category = s1.category
+                    AND s3.quarter_end < s1.quarter_end
+                )
+            LEFT JOIN (
+                SELECT symbol, pe_trailing FROM valuation_snapshot
+                WHERE (symbol, date) IN (
+                    SELECT symbol, MAX(date) FROM valuation_snapshot GROUP BY symbol
+                )
+            ) vs ON ic.symbol = vs.symbol
+            WHERE ic.industry = ?
+                AND s1.quarter_end = (
+                    SELECT MAX(s4.quarter_end) FROM shareholding s4
+                    WHERE s4.symbol = s1.symbol
+                )
+                AND s1.category IN ('FII', 'MF', 'DII', 'Promoter')
+            GROUP BY ic.symbol
+            ORDER BY mf_change DESC
+        """, (industry,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_sector_list(self) -> list[str]:
+        """Get distinct industry names from index constituents."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT industry FROM index_constituents "
+            "WHERE industry IS NOT NULL ORDER BY industry"
+        ).fetchall()
+        return [r["industry"] for r in rows]
+
     def close(self) -> None:
         """Close the database connection."""
         self._conn.close()
