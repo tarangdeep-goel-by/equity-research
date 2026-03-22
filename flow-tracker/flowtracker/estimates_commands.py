@@ -26,13 +26,12 @@ console = Console()
 
 @app.command()
 def fetch() -> None:
-    """Fetch estimates for all watchlist stocks."""
+    """Fetch estimates for all Nifty 500 stocks."""
     with FlowStore() as store:
-        watchlist = store.get_watchlist()
-        if not watchlist:
-            console.print("[yellow]Watchlist is empty. Add stocks with 'flowtrack holding watch SYMBOL'[/]")
+        symbols = store.get_all_scanner_symbols()
+        if not symbols:
+            console.print("[yellow]No index constituents. Run 'flowtrack scan refresh' first.[/]")
             raise typer.Exit(1)
-        symbols = [w.symbol for w in watchlist]
 
     console.print(f"[dim]Fetching estimates for {len(symbols)} stocks...[/]")
     client = EstimatesClient()
