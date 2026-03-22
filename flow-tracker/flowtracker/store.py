@@ -1576,9 +1576,10 @@ class FlowStore:
     # -- Sector Aggregation --
 
     def get_sector_overview(self) -> list[dict]:
-        """Get sector-level ownership shifts for the latest quarter.
+        """Get sector-level ownership shifts + delivery + price signals.
 
-        Returns list of dicts with industry, num_stocks, avg changes per category.
+        Returns list of dicts with industry, num_stocks, avg changes per category,
+        avg delivery %, avg price change %.
         """
         rows = self._conn.execute("""
             SELECT
@@ -1587,7 +1588,9 @@ class FlowStore:
                 AVG(CASE WHEN s1.category = 'FII' THEN s1.percentage - s2.percentage END) as avg_fii_change,
                 AVG(CASE WHEN s1.category = 'MF' THEN s1.percentage - s2.percentage END) as avg_mf_change,
                 AVG(CASE WHEN s1.category = 'DII' THEN s1.percentage - s2.percentage END) as avg_dii_change,
-                AVG(CASE WHEN s1.category = 'Promoter' THEN s1.percentage - s2.percentage END) as avg_promoter_change
+                AVG(CASE WHEN s1.category = 'Promoter' THEN s1.percentage - s2.percentage END) as avg_promoter_change,
+                del_stats.avg_delivery_pct,
+                del_stats.avg_price_change_pct
             FROM index_constituents ic
             INNER JOIN shareholding s1 ON ic.symbol = s1.symbol
             INNER JOIN shareholding s2 ON s1.symbol = s2.symbol
@@ -1597,6 +1600,16 @@ class FlowStore:
                     WHERE s3.symbol = s1.symbol AND s3.category = s1.category
                     AND s3.quarter_end < s1.quarter_end
                 )
+            LEFT JOIN (
+                SELECT ic2.industry,
+                    AVG(d.delivery_pct) as avg_delivery_pct,
+                    AVG((d.close - d.prev_close) / NULLIF(d.prev_close, 0) * 100) as avg_price_change_pct
+                FROM daily_stock_data d
+                INNER JOIN index_constituents ic2 ON d.symbol = ic2.symbol
+                WHERE d.date >= date('now', '-30 days')
+                    AND d.delivery_pct IS NOT NULL
+                GROUP BY ic2.industry
+            ) del_stats ON ic.industry = del_stats.industry
             WHERE ic.industry IS NOT NULL
                 AND s1.quarter_end = (
                     SELECT MAX(s4.quarter_end) FROM shareholding s4
@@ -1610,7 +1623,7 @@ class FlowStore:
         return [dict(r) for r in rows]
 
     def get_sector_detail(self, industry: str) -> list[dict]:
-        """Get stock-level ownership data for a specific sector."""
+        """Get stock-level ownership + delivery + price data for a sector."""
         rows = self._conn.execute("""
             SELECT
                 ic.symbol,
@@ -1620,7 +1633,9 @@ class FlowStore:
                 MAX(CASE WHEN s1.category = 'MF' THEN s1.percentage - s2.percentage END) as mf_change,
                 MAX(CASE WHEN s1.category = 'DII' THEN s1.percentage - s2.percentage END) as dii_change,
                 MAX(CASE WHEN s1.category = 'Promoter' THEN s1.percentage - s2.percentage END) as promoter_change,
-                vs.pe_trailing
+                vs.pe_trailing,
+                del_stats.avg_delivery_pct,
+                del_stats.avg_price_change_pct
             FROM index_constituents ic
             INNER JOIN shareholding s1 ON ic.symbol = s1.symbol
             INNER JOIN shareholding s2 ON s1.symbol = s2.symbol
@@ -1636,6 +1651,14 @@ class FlowStore:
                     SELECT symbol, MAX(date) FROM valuation_snapshot GROUP BY symbol
                 )
             ) vs ON ic.symbol = vs.symbol
+            LEFT JOIN (
+                SELECT symbol,
+                    AVG(delivery_pct) as avg_delivery_pct,
+                    AVG((close - prev_close) / NULLIF(prev_close, 0) * 100) as avg_price_change_pct
+                FROM daily_stock_data
+                WHERE date >= date('now', '-30 days') AND delivery_pct IS NOT NULL
+                GROUP BY symbol
+            ) del_stats ON ic.symbol = del_stats.symbol
             WHERE ic.industry = ?
                 AND s1.quarter_end = (
                     SELECT MAX(s4.quarter_end) FROM shareholding s4
