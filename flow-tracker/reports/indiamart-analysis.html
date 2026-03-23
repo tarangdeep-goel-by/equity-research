@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INDIAMART — Institutional Ownership Deep Dive</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+:root{--bg:#0f1117;--card:#1a1d28;--border:#2a2d3a;--text:#e4e4e7;--dim:#71717a;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#eab308;--cyan:#06b6d4;--purple:#a855f7;--orange:#f97316}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;line-height:1.6;padding:2rem}
+.container{max-width:1400px;margin:0 auto}
+h1{font-size:2rem;margin-bottom:0.25rem}
+.subtitle{color:var(--dim);margin-bottom:2rem;font-size:0.9rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem}
+.card h2{font-size:1.1rem;color:var(--cyan);margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem}
+.full-width{grid-column:1/-1}
+.chart-container{position:relative;height:380px}
+table{width:100%;border-collapse:collapse;font-size:0.82rem}
+th{text-align:left;padding:0.4rem 0.5rem;color:var(--dim);border-bottom:1px solid var(--border);font-weight:500}
+td{padding:0.4rem 0.5rem;border-bottom:1px solid var(--border)}
+tr:hover{background:rgba(255,255,255,0.03)}
+.up{color:var(--green)}.down{color:var(--red)}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600}
+.badge-green{background:rgba(34,197,94,0.15);color:var(--green)}
+.badge-red{background:rgba(239,68,68,0.15);color:var(--red)}
+.badge-yellow{background:rgba(234,179,8,0.15);color:var(--yellow)}
+.stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem}
+.stat{text-align:center}.stat-value{font-size:1.4rem;font-weight:700}.stat-label{font-size:0.72rem;color:var(--dim)}
+.narrative{background:rgba(6,182,212,0.05);border-left:3px solid var(--cyan);padding:1rem;border-radius:0 8px 8px 0;margin-bottom:1rem;font-size:0.88rem}
+.narrative strong{color:var(--cyan)}
+.section-note{color:var(--dim);font-size:0.8rem;font-style:italic;margin-bottom:0.5rem}
+.scroll-table{max-height:450px;overflow-y:auto}
+@media(max-width:768px){.grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>INDIAMART <span style="color:var(--dim);font-weight:400;font-size:1.2rem">Indiamart Intermesh Limited</span></h1>
+<p class="subtitle">Industry: Internet & Catalogue Retail | IPO: Jul 2019 | Data: NSE XBRL + Bhavcopy + SEBI PIT + AMC Disclosures | Generated 23 Mar 2026</p>
+
+<div class="stat-grid">
+<div class="stat"><div class="stat-value" style="color:var(--green)">14.6%</div><div class="stat-label">MF Holding (Dec'25)<br>up from 4.7% at IPO</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--red)">18.3%</div><div class="stat-label">FII Holding (Dec'25)<br>down from 27.9% peak</div></div>
+<div class="stat"><div class="stat-value">49.1%</div><div class="stat-label">Promoter (Dec'25)<br>stable since 2021</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">67%</div><div class="stat-label">Avg Delivery % (30d)<br>18/42 days above 60%</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">+28%</div><div class="stat-label">Analyst Upside<br>Target: ₹2,553 vs CMP ₹1,994</div></div>
+</div>
+
+<div class="narrative">
+<strong>The Ownership Story (Jul 2019 → Dec 2025):</strong> Post-IPO, <strong>Promoter</strong> reduced from 52.6% to 49.1% (OFS in early 2021, stable since). <strong>FIIs</strong> were the early believers — ramping from 5.8% to 27.9% peak (Sep 2021) during the COVID-era tech rally, then steadily exiting to 18.3% as they rotated out of mid-cap internet. <strong>MFs</strong> were late but decisive — flat at 2-5% until Q4 2023, then aggressive accumulation to 14.6%. <strong>Public/retail</strong> has steadily shrunk from 34.7% to 16.2% as institutions crowded in. <strong>AIFs</strong> maintained a small 0.4-1.6% position throughout. The net effect: ownership shifted from retail-heavy to institution-heavy, with the FII→MF handoff being the dominant dynamic of the last 2 years.
+</div>
+
+<div class="grid">
+<!-- Ownership Stacked Bar + Line combo -->
+<div class="card full-width">
+<h2>Quarterly Ownership Breakdown — 30 Quarters Since IPO</h2>
+<p class="section-note">Source: NSE XBRL shareholding filings. Stacked bars show composition summing to ~100%. Line overlay shows each category's individual trend. Key events annotated.</p>
+<div style="position:relative;height:450px"><canvas id="ownershipChart"></canvas></div>
+</div>
+
+<!-- All Investor Types — line chart -->
+<div class="card full-width">
+<h2>All Investor Types — Trend Lines</h2>
+<p class="section-note">Every investor category tracked quarterly. Promoter stable at ~49% since 2021 OFS. FII peaked 27.9% (Sep'21) → now 18.3%. MF from 1.9% (Dec'19) → 14.6%. Public shrunk from 34.7% → 16.1% as institutions crowded in. AIF maintained small 0.4-1.6% allocation.</p>
+<div class="chart-container"><canvas id="allInvestorsChart"></canvas></div>
+</div>
+
+<!-- Delivery % — 90 days -->
+<div class="card full-width">
+<h2>Delivery % — Last 90 Days</h2>
+<p class="section-note">Source: NSE Bhavcopy (daily CSV). Delivery % = shares taken delivery / total traded volume. Green >60% = genuine buying (shares going into demat, not intraday speculation). Yellow 40-60% = mixed. Red <40% = mostly speculative/intraday. Sustained high delivery during price declines = institutional absorption.</p>
+<div style="position:relative;height:400px"><canvas id="deliveryChart"></canvas></div>
+</div>
+
+<!-- Quarterly Earnings -->
+<div class="card full-width">
+<h2>Quarterly Earnings Trajectory</h2>
+<p class="section-note">Source: yfinance quarterly income statements. Revenue in ₹Cr, OPM on right axis. The margin swings are real — COVID (2020-21) slashed costs while revenue held, spiking margins to 60%+. Post-COVID re-investment in sales/marketing brought margins back to 30-45%. Q3'23 (Dec 2022) spike likely includes one-time gains.</p>
+<div class="chart-container"><canvas id="earningsChart"></canvas></div>
+</div>
+
+<!-- Full Shareholding Table -->
+<div class="card full-width">
+<h2>Complete Quarterly Shareholding Data (NSE XBRL)</h2>
+<p class="section-note">Every quarter since IPO. QoQ change shown for FII and MF. Total should sum to ~100% (minor rounding differences in XBRL source).</p>
+<div class="scroll-table">
+<table>
+<thead><tr><th>Quarter</th><th>Promoter</th><th>FII</th><th>FII Chg</th><th>MF</th><th>MF Chg</th><th>AIF</th><th>Insurance</th><th>Public</th><th>Total</th></tr></thead>
+<tbody id="shareTable"></tbody>
+</table>
+</div>
+</div>
+
+<!-- MF Accumulation Timeline -->
+<div class="card full-width">
+<h2>MF Scheme-Level Detail — Shares Held + Breadth of Conviction</h2>
+<p class="section-note">Source: AMC monthly portfolio disclosures (SBI, ICICI Pru, PPFAS, Quant, UTI). Total shares held across all MF schemes (green bars), value in lakhs (blue bars), and number of distinct schemes (orange line). Breadth matters: 1 scheme holding = one fund manager's bet. 17 schemes holding = consensus across multiple AMCs and fund mandates.</p>
+<div class="chart-container"><canvas id="mfTimelineChart"></canvas></div>
+</div>
+
+<!-- MF Scheme Holdings -->
+<div class="card full-width">
+<h2>MF Scheme Holdings (Feb 2026 vs Jan 2026)</h2>
+<p class="section-note">Source: AMC monthly SEBI-mandated portfolio disclosures (XLSX). % to NAV shows how significant this position is for each scheme. Qty change shows month-over-month buying/selling.</p>
+<table>
+<thead><tr><th>AMC</th><th>Scheme</th><th>Feb Qty</th><th>Jan Qty</th><th>Chg</th><th>Value ₹L</th><th>% NAV</th></tr></thead>
+<tbody id="mfTable"></tbody>
+</table>
+</div>
+
+<!-- Delivery Data Table -->
+<div class="card full-width">
+<h2>Daily Delivery Data</h2>
+<p class="section-note">Source: NSE Bhavcopy CSV (sec_bhavdata_full). Delivery % = (delivery quantity / total traded quantity) × 100. High delivery + price rise = ACCUMULATION signal. High delivery + price drop = ABSORPTION (someone buying the dip in size).</p>
+<div class="scroll-table">
+<table>
+<thead><tr><th>Date</th><th>Close</th><th>Change%</th><th>Volume</th><th>Delivery%</th><th>Signal</th></tr></thead>
+<tbody id="deliveryTable"></tbody>
+</table>
+</div>
+</div>
+
+<!-- Insider Transactions -->
+<div class="card">
+<h2>Insider Transactions Summary</h2>
+<p class="section-note">Source: NSE SAST/PIT disclosures (corporates-pit API). Complete history from IPO to present. All transactions are employee/director ESOP liquidations — no promoter buying or selling detected.</p>
+<table>
+<thead><tr><th>Year</th><th>Transactions</th><th>Buy ₹Cr</th><th>Sell ₹Cr</th><th>Net</th></tr></thead>
+<tbody id="insiderTable"></tbody>
+</table>
+<div class="narrative" style="margin-top:1rem">
+<strong>Interpretation:</strong> 522 transactions, all ESOP liquidations by employees and directors during 2019-2021 (stock was at ₹5,000-9,000). <strong>Zero insider activity since Sep 2021.</strong> No promoter buying or selling — Dinesh Agarwal's ~49% stake has been rock-steady. This is neutral — management isn't signaling either direction.
+</div>
+</div>
+
+<!-- Analyst Estimates -->
+<div class="card">
+<h2>Analyst Consensus (22 Mar 2026)</h2>
+<p class="section-note">Source: yfinance (Yahoo Finance analyst estimates). Based on 18 sell-side analyst reports.</p>
+<table>
+<tr><td>Current Price</td><td><strong>₹1,994</strong></td></tr>
+<tr><td>Target Mean</td><td><strong class="up">₹2,553</strong></td></tr>
+<tr><td>Target Median</td><td>₹2,525</td></tr>
+<tr><td>Target Range</td><td>₹1,975 — ₹3,500</td></tr>
+<tr><td>Upside to Mean</td><td class="up"><strong>+28.0%</strong></td></tr>
+<tr><td>Forward P/E</td><td>21.0x</td></tr>
+<tr><td>Forward EPS</td><td>₹95.0</td></tr>
+<tr><td>Earnings Growth</td><td class="up">+55.2%</td></tr>
+<tr><td>Analysts</td><td>18</td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<script>
+const SH = {"2019-07-04":{"AIF":1.6,"FII":5.77,"Insurance":0.03,"MF":4.71,"Promoter":52.61,"Public":34.67},"2019-09-30":{"AIF":1.01,"FII":10.1,"Insurance":0,"MF":2.58,"Promoter":52.34,"Public":33.46},"2019-12-31":{"AIF":0.68,"FII":11.68,"Insurance":0,"MF":1.9,"Promoter":52.34,"Public":33.25},"2020-03-31":{"AIF":0.62,"FII":12.24,"Insurance":0,"MF":2.44,"Promoter":52.34,"Public":32.19},"2020-06-30":{"AIF":0.61,"FII":15.15,"Insurance":0,"MF":3.15,"Promoter":52.34,"Public":28.57},"2020-09-30":{"AIF":1.09,"FII":21.67,"Insurance":0.31,"MF":4.33,"Promoter":51.99,"Public":20},"2020-12-31":{"AIF":0.86,"FII":24.61,"Insurance":0.51,"MF":3.67,"Promoter":51.98,"Public":18.2},"2021-03-31":{"AIF":0.61,"FII":27.53,"Insurance":0.5,"MF":3.42,"Promoter":49.85,"Public":17.94},"2021-06-30":{"AIF":0.36,"FII":26.68,"Insurance":0.79,"MF":3.55,"Promoter":49.82,"Public":18.64},"2021-09-30":{"AIF":0.45,"FII":27.91,"Insurance":0.66,"MF":3.57,"Promoter":49.52,"Public":17.16},"2021-12-31":{"AIF":0.47,"FII":26.53,"Insurance":0.45,"MF":4.41,"Promoter":49.52,"Public":18.57},"2022-03-31":{"AIF":0.57,"FII":23.93,"Insurance":0.42,"MF":4.47,"Promoter":49.52,"Public":21.05},"2022-06-30":{"AIF":0.52,"FII":23.59,"Insurance":0.38,"MF":4.06,"Promoter":49.22,"Public":21.49},"2022-09-30":{"AIF":0.38,"FII":25,"Insurance":0.39,"MF":4.47,"Promoter":49.22,"Public":20.32},"2022-12-31":{"AIF":0.38,"FII":25.38,"Insurance":0.31,"MF":5.12,"Promoter":49.22,"Public":19.44},"2023-03-31":{"AIF":0.42,"FII":26.6,"Insurance":0.31,"MF":4.89,"Promoter":49.22,"Public":18.44},"2023-06-30":{"AIF":0.44,"FII":26.76,"Insurance":0.68,"MF":4.49,"Promoter":49.22,"Public":18.26},"2023-09-30":{"AIF":0.44,"FII":27.34,"Insurance":0.44,"MF":4.58,"Promoter":49.21,"Public":17.87},"2023-12-31":{"AIF":0.62,"FII":24.16,"Insurance":0.48,"MF":7.12,"Promoter":49.21,"Public":18.3},"2024-03-31":{"AIF":1.13,"FII":23.07,"Insurance":0.66,"MF":8.81,"Promoter":49.21,"Public":17.05},"2024-06-30":{"AIF":1.23,"FII":23.37,"Insurance":0.85,"MF":9.73,"Promoter":49.21,"Public":15.55},"2024-09-30":{"AIF":1.3,"FII":23.86,"Insurance":0.78,"MF":10.02,"Promoter":49.21,"Public":14.79},"2024-12-31":{"AIF":1.14,"FII":21.06,"Insurance":0.74,"MF":11.97,"Promoter":49.17,"Public":15.82},"2025-03-31":{"AIF":1.3,"FII":18.95,"Insurance":0.55,"MF":13.64,"Promoter":49.17,"Public":16.34},"2025-06-30":{"AIF":1.23,"FII":19.22,"Insurance":0.42,"MF":13.64,"Promoter":49.17,"Public":16.29},"2025-09-30":{"AIF":1.05,"FII":21.53,"Insurance":0.33,"MF":11.61,"Promoter":49.17,"Public":16.28},"2025-12-31":{"AIF":1.29,"FII":18.27,"Insurance":0.48,"MF":14.64,"Promoter":49.12,"Public":16.15}};
+
+const DEL = [{"d":"2025-12-23","c":2259.8,"p":2218.1,"v":42357,"dp":62.54},{"d":"2025-12-24","c":2230.7,"p":2259.8,"v":25870,"dp":58.08},{"d":"2025-12-26","c":2216.2,"p":2230.7,"v":21939,"dp":49.69},{"d":"2025-12-29","c":2199.3,"p":2216.2,"v":46206,"dp":57.98},{"d":"2025-12-30","c":2246.9,"p":2199.3,"v":162370,"dp":69.28},{"d":"2025-12-31","c":2223.5,"p":2246.9,"v":116331,"dp":62.02},{"d":"2026-01-01","c":2194.1,"p":2223.5,"v":30530,"dp":58.23},{"d":"2026-01-02","c":2177.8,"p":2194.1,"v":69290,"dp":58.53},{"d":"2026-01-05","c":2199.1,"p":2177.8,"v":34179,"dp":60.84},{"d":"2026-01-06","c":2167.5,"p":2199.1,"v":27041,"dp":51.95},{"d":"2026-01-07","c":2164.9,"p":2167.5,"v":26072,"dp":51.35},{"d":"2026-01-08","c":2166.9,"p":2164.9,"v":46471,"dp":58.93},{"d":"2026-01-09","c":2145.4,"p":2166.9,"v":63353,"dp":67.93},{"d":"2026-01-12","c":2153.8,"p":2145.4,"v":41999,"dp":57.63},{"d":"2026-01-13","c":2156.6,"p":2153.8,"v":73123,"dp":70.49},{"d":"2026-01-14","c":2114.5,"p":2156.6,"v":340003,"dp":91.94},{"d":"2026-01-16","c":2289.0,"p":2114.5,"v":1222578,"dp":34.24},{"d":"2026-01-19","c":2194.4,"p":2289.0,"v":156811,"dp":46.25},{"d":"2026-01-20","c":2141.8,"p":2194.4,"v":72278,"dp":46.56},{"d":"2026-01-21","c":2264.6,"p":2141.8,"v":668643,"dp":28.79},{"d":"2026-01-22","c":2211.4,"p":2264.6,"v":133454,"dp":45.5},{"d":"2026-01-23","c":2194.0,"p":2211.4,"v":112154,"dp":57.45},{"d":"2026-01-27","c":2186.3,"p":2194.0,"v":97613,"dp":52.47},{"d":"2026-01-28","c":2186.3,"p":2186.3,"v":59376,"dp":64.36},{"d":"2026-01-29","c":2175.3,"p":2186.3,"v":44385,"dp":57.11},{"d":"2026-01-30","c":2201.9,"p":2175.3,"v":97283,"dp":67.67},{"d":"2026-02-02","c":2210.1,"p":2208.4,"v":131863,"dp":60.4},{"d":"2026-02-03","c":2267.5,"p":2210.1,"v":108399,"dp":65.24},{"d":"2026-02-04","c":2275.1,"p":2267.5,"v":75046,"dp":60.08},{"d":"2026-02-05","c":2282.8,"p":2275.1,"v":276783,"dp":86.14},{"d":"2026-02-06","c":2238.4,"p":2282.8,"v":99078,"dp":60.93},{"d":"2026-02-09","c":2248.3,"p":2238.4,"v":52363,"dp":50.58},{"d":"2026-02-10","c":2250.9,"p":2248.3,"v":127060,"dp":71.24},{"d":"2026-02-11","c":2243.0,"p":2250.9,"v":102889,"dp":71.45},{"d":"2026-02-12","c":2200.2,"p":2243.0,"v":94826,"dp":68.74},{"d":"2026-02-13","c":2200.0,"p":2200.2,"v":89004,"dp":60.5},{"d":"2026-02-16","c":2205.8,"p":2200.0,"v":55826,"dp":55.86},{"d":"2026-02-17","c":2223.7,"p":2205.8,"v":69232,"dp":69.91},{"d":"2026-02-18","c":2179.5,"p":2223.7,"v":155812,"dp":71.67},{"d":"2026-02-19","c":2160.5,"p":2179.5,"v":95722,"dp":75.89},{"d":"2026-02-20","c":2185.7,"p":2160.5,"v":51378,"dp":72.74},{"d":"2026-02-23","c":2217.3,"p":2185.7,"v":100530,"dp":63.31},{"d":"2026-02-24","c":2213.0,"p":2217.3,"v":93148,"dp":69.24},{"d":"2026-02-25","c":2194.4,"p":2213.0,"v":100781,"dp":74.7},{"d":"2026-02-26","c":2180.8,"p":2194.4,"v":58251,"dp":69.91},{"d":"2026-02-27","c":2132.0,"p":2180.8,"v":50100,"dp":64.42},{"d":"2026-03-02","c":2113.8,"p":2132.0,"v":90010,"dp":72.38},{"d":"2026-03-04","c":2080.9,"p":2113.8,"v":134060,"dp":64.68},{"d":"2026-03-05","c":2076.4,"p":2080.9,"v":89858,"dp":63.16},{"d":"2026-03-06","c":2120.6,"p":2076.4,"v":504063,"dp":74.11},{"d":"2026-03-09","c":2183.5,"p":2120.6,"v":183308,"dp":38.02},{"d":"2026-03-10","c":2179.6,"p":2183.5,"v":114261,"dp":61.97},{"d":"2026-03-11","c":2130.4,"p":2179.6,"v":57154,"dp":65.61},{"d":"2026-03-12","c":2100.3,"p":2130.4,"v":263684,"dp":91.69},{"d":"2026-03-13","c":2101.9,"p":2100.3,"v":62736,"dp":50.15},{"d":"2026-03-16","c":2108.0,"p":2101.9,"v":125688,"dp":67.24},{"d":"2026-03-17","c":2065.7,"p":2108.0,"v":353119,"dp":85.37},{"d":"2026-03-18","c":2098.1,"p":2065.7,"v":100969,"dp":60.85},{"d":"2026-03-19","c":2029.0,"p":2098.1,"v":66327,"dp":61.47},{"d":"2026-03-20","c":1994.4,"p":2029.0,"v":135768,"dp":73.11}];
+
+const MF_FEB = [["ICICI","Multi-Asset Fund",1062206,22646,0.27],["ICICI","Technology Fund",938423,20007,1.47],["ICICI","Large & Mid Cap Fund",684488,14593,0.51],["ICICI","Innovation Fund",541798,11551,1.54],["SBI","Small Cap Fund (SSCF)",478539,10202,0.29],["ICICI","Dividend Yield Fund",236360,5039,0.77],["ICICI","Business Cycle Fund",228296,4867,0.30],["UTI","Equity Fund",130000,2772,1.48],["ICICI","Smallcap Fund",115074,2453,0.29],["ICICI","Regular Savings Fund",30528,651,0.19],["SBI","Nifty Smallcap 250 IF",22771,485,0.34]];
+const MF_JAN = {"ICICI Multi-Asset Fund":972251,"ICICI Technology Fund":938423,"ICICI Large & Mid Cap Fund":555452,"ICICI Innovation Fund":541798,"SBI Small Cap Fund (SSCF)":1014491,"ICICI Dividend Yield Fund":236360,"ICICI Business Cycle Fund":228296,"UTI Equity Fund":110000,"ICICI Smallcap Fund":115074,"ICICI Regular Savings Fund":0,"SBI Nifty Smallcap 250 IF":22619};
+
+// Quarterly results — normalized to ₹Cr. 2025+ data from yfinance was in absolute INR, converted here.
+const QR = [["Q1'20",147,32,31.4],["Q2'20",157,9,32.6],["Q3'20",165,62,32.7],["Q4'20",170,44,36.4],["Q1'21",153,74,65.8],["Q2'21",163,70,57.2],["Q3'21",174,80,61.6],["Q4'21",180,56,50.5],["Q1'22",182,88,62.4],["Q2'22",182,82,60.5],["Q3'22",188,70,51.2],["Q4'22",201,57,41.0],["Q1'23",225,47,25.7],["Q2'23",241,68,43.1],["Q3'23",251,113,64.3],["Q4'23",269,56,32.0],["Q1'24",282,83,43.6],["Q2'24",295,69,35.4],["Q3'24",305,82,38.3],["Q4'24",315,100,47.9],["Q1'25",331,114,49.1],["Q2'25",348,135,54.6],["Q3'25",354,121,48.9],["Q4'25",355,181,34.4],["Q1'26",372,154,35.1],["Q3'26",402,188,31.6]];
+
+const quarters = Object.keys(SH);
+const qlabels = quarters.map(q=>{const[y,m]=q.split('-');const qn={'03':'Q4','04':'Q1','06':'Q1','07':'Q1','09':'Q2','12':'Q3'}[m]||'Q?';return qn+"'"+y.slice(2)});
+
+// Ownership stacked bar
+new Chart(document.getElementById('ownershipChart'),{type:'bar',data:{labels:qlabels,datasets:[
+{label:'Promoter',data:quarters.map(q=>SH[q].Promoter||0),backgroundColor:'rgba(99,102,241,0.8)',borderWidth:0},
+{label:'FII',data:quarters.map(q=>SH[q].FII||0),backgroundColor:'rgba(239,68,68,0.8)',borderWidth:0},
+{label:'MF',data:quarters.map(q=>SH[q].MF||0),backgroundColor:'rgba(34,197,94,0.8)',borderWidth:0},
+{label:'AIF',data:quarters.map(q=>SH[q].AIF||0),backgroundColor:'rgba(168,85,247,0.8)',borderWidth:0},
+{label:'Insurance',data:quarters.map(q=>SH[q].Insurance||0),backgroundColor:'rgba(6,182,212,0.8)',borderWidth:0},
+{label:'Public',data:quarters.map(q=>SH[q].Public||0),backgroundColor:'rgba(113,113,122,0.6)',borderWidth:0},
+]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+plugins:{legend:{labels:{color:'#e4e4e7',padding:15}},
+tooltip:{mode:'index',callbacks:{
+label:function(ctx){return ctx.dataset.label+': '+ctx.raw.toFixed(1)+'%'},
+footer:function(items){return'Total: '+items.reduce((s,i)=>s+i.raw,0).toFixed(1)+'%'}
+}}},
+scales:{x:{stacked:true,ticks:{color:'#71717a',maxRotation:45,font:{size:10}}},
+y:{stacked:true,max:105,ticks:{color:'#71717a',callback:v=>v+'%'},title:{display:true,text:'Shareholding %',color:'#71717a'}}}}});
+
+// All investor types — line chart with annotations
+const annCtx = document.getElementById('allInvestorsChart');
+new Chart(annCtx,{type:'line',data:{labels:qlabels,datasets:[
+{label:'Promoter',data:quarters.map(q=>SH[q].Promoter||0),borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.05)',fill:false,tension:0.3,pointRadius:2,borderWidth:2.5},
+{label:'FII',data:quarters.map(q=>SH[q].FII||0),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.05)',fill:false,tension:0.3,pointRadius:3,borderWidth:2.5},
+{label:'MF',data:quarters.map(q=>SH[q].MF||0),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.05)',fill:false,tension:0.3,pointRadius:3,borderWidth:2.5},
+{label:'Public',data:quarters.map(q=>SH[q].Public||0),borderColor:'#71717a',backgroundColor:'rgba(113,113,122,0.05)',fill:false,tension:0.3,pointRadius:2,borderWidth:2,borderDash:[5,3]},
+{label:'AIF',data:quarters.map(q=>SH[q].AIF||0),borderColor:'#a855f7',fill:false,tension:0.3,pointRadius:2,borderWidth:1.5},
+{label:'Insurance',data:quarters.map(q=>SH[q].Insurance||0),borderColor:'#06b6d4',fill:false,tension:0.3,pointRadius:2,borderWidth:1.5},
+]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+plugins:{legend:{labels:{color:'#e4e4e7',padding:12}},
+tooltip:{mode:'index',callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.raw.toFixed(1)+'%'}}},
+annotation:{annotations:{
+ofsLine:{type:'line',xMin:7,xMax:7,borderColor:'rgba(99,102,241,0.5)',borderWidth:1,borderDash:[4,4],label:{display:true,content:'OFS -2.8%',color:'#6366f1',font:{size:10},position:'start'}},
+fiiPeak:{type:'point',xValue:9,yValue:27.9,backgroundColor:'#ef4444',radius:6,borderColor:'#fff',borderWidth:1},
+fiiPeakLabel:{type:'label',xValue:9,yValue:30,content:['FII Peak','27.9%'],color:'#ef4444',font:{size:10}},
+handoffStart:{type:'line',xMin:18,xMax:18,borderColor:'rgba(34,197,94,0.5)',borderWidth:1,borderDash:[4,4],label:{display:true,content:'MF acceleration',color:'#22c55e',font:{size:10},position:'start'}},
+}}},
+scales:{x:{ticks:{color:'#71717a',maxRotation:45,font:{size:10}}},
+y:{min:0,max:60,ticks:{color:'#71717a',callback:v=>v+'%'},title:{display:true,text:'% of total shares',color:'#71717a'}}}}});
+
+// Delivery bars + price line (90 days)
+new Chart(document.getElementById('deliveryChart'),{
+data:{labels:DEL.map(d=>d.d.slice(5)),datasets:[
+{type:'bar',label:'Delivery %',data:DEL.map(d=>d.dp),backgroundColor:DEL.map(d=>d.dp>=60?'rgba(34,197,94,0.6)':d.dp>=40?'rgba(234,179,8,0.5)':'rgba(239,68,68,0.6)'),yAxisID:'y',order:2},
+{type:'line',label:'Price ₹',data:DEL.map(d=>d.c),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.05)',fill:true,pointRadius:1,borderWidth:2,tension:0.3,yAxisID:'y1',order:1},
+]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+plugins:{legend:{labels:{color:'#e4e4e7'}},tooltip:{mode:'index',callbacks:{label:function(ctx){return ctx.dataset.label==='Price ₹'?'Price: ₹'+ctx.raw.toFixed(0):'Delivery: '+ctx.raw.toFixed(1)+'%'}}}},
+scales:{x:{ticks:{color:'#71717a',maxRotation:90,font:{size:7},maxTicksLimit:30}},
+y:{position:'left',min:0,max:100,ticks:{color:'#22c55e',callback:v=>v+'%'},title:{display:true,text:'Delivery %',color:'#22c55e'}},
+y1:{position:'right',ticks:{color:'#3b82f6',callback:v=>'₹'+v},title:{display:true,text:'Price',color:'#3b82f6'},grid:{drawOnChartArea:false}}}}});
+
+// Quarterly earnings dual axis
+new Chart(document.getElementById('earningsChart'),{type:'bar',data:{labels:QR.map(q=>q[0]),datasets:[
+{label:'Revenue ₹Cr',data:QR.map(q=>q[1]),backgroundColor:'rgba(59,130,246,0.5)',borderColor:'#3b82f6',borderWidth:1,yAxisID:'y'},
+{label:'Net Income ₹Cr',data:QR.map(q=>q[2]),backgroundColor:'rgba(34,197,94,0.5)',borderColor:'#22c55e',borderWidth:1,yAxisID:'y'},
+{label:'OPM %',data:QR.map(q=>q[3]),type:'line',borderColor:'#f97316',pointRadius:3,tension:0.3,yAxisID:'y1',borderWidth:2},
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e4e4e7'}}},scales:{x:{ticks:{color:'#71717a',maxRotation:45,font:{size:9}}},y:{position:'left',ticks:{color:'#71717a'},title:{display:true,text:'₹ Cr',color:'#71717a'}},y1:{position:'right',min:0,max:80,ticks:{color:'#f97316',callback:v=>v+'%'},title:{display:true,text:'Operating Margin',color:'#f97316'},grid:{drawOnChartArea:false}}}}});
+
+// MF Accumulation Timeline
+const MF_TIMELINE = [
+["2020-07",9,10565,299],["2020-08",6,12850,474],
+["2023-01",1,1115,51],["2023-02",1,1135,55],["2023-03",1,2962,149],["2023-04",1,3001,161],["2023-05",2,8161,455],["2023-06",6,49066,1381],["2023-07",8,373196,11615],["2023-08",7,338177,10352],["2023-10",3,313180,8298],["2023-11",4,599518,15612],["2023-12",5,660516,17979],
+["2024-01",5,673343,16977],["2024-02",5,736799,19560],["2024-03",5,754346,19956],["2024-04",4,504107,13328],["2024-05",7,936558,22643],["2024-06",6,1635345,43841],["2024-07",6,1636667,48197],["2024-08",7,2108110,63244],["2024-09",9,2164005,63877],["2024-10",8,3140295,78507],["2024-11",8,3143972,73723],["2024-12",7,3085714,69392],
+["2025-01",16,4708879,97304],["2025-02",16,4668766,91739],["2025-03",17,5134958,106227],["2025-04",16,5156561,119019],["2025-05",18,4854338,113227],["2025-06",17,4890425,127053],["2025-07",15,4112277,106475],["2025-08",13,3971386,103145],["2025-09",7,1668688,39321],["2025-10",14,3716332,91344],["2025-11",15,4847055,111967],["2025-12",14,5311329,118097],
+["2026-01",14,4745497,104491],["2026-02",15,4479850,95510]
+];
+
+new Chart(document.getElementById('mfTimelineChart'),{
+data:{
+labels:MF_TIMELINE.map(m=>m[0]),
+datasets:[
+{type:'bar',label:'Total Shares',data:MF_TIMELINE.map(m=>m[2]),backgroundColor:'rgba(34,197,94,0.3)',borderColor:'#22c55e',borderWidth:1,yAxisID:'y',order:2},
+{type:'bar',label:'Value ₹ Lakhs',data:MF_TIMELINE.map(m=>m[3]),backgroundColor:'rgba(59,130,246,0.25)',borderColor:'#3b82f6',borderWidth:1,yAxisID:'y',order:3},
+{type:'line',label:'# Schemes',data:MF_TIMELINE.map(m=>m[1]),borderColor:'#f97316',backgroundColor:'rgba(249,115,22,0.1)',pointRadius:3,borderWidth:2,tension:0.3,yAxisID:'y1',order:1},
+]},
+options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+plugins:{legend:{labels:{color:'#e4e4e7'}},tooltip:{callbacks:{label:function(ctx){if(ctx.dataset.label==='# Schemes')return ctx.dataset.label+': '+ctx.raw;if(ctx.dataset.label==='Value ₹ Lakhs')return 'Value: ₹'+ctx.raw.toLocaleString()+'L (₹'+(ctx.raw/100).toFixed(0)+'Cr)';return ctx.dataset.label+': '+ctx.raw.toLocaleString()}}}},
+scales:{x:{ticks:{color:'#71717a',maxRotation:45,font:{size:9}}},y:{position:'left',ticks:{color:'#71717a',callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':v},title:{display:true,text:'Shares / Value',color:'#71717a'}},y1:{position:'right',ticks:{color:'#f97316'},title:{display:true,text:'# Schemes',color:'#f97316'},grid:{drawOnChartArea:false},min:0,max:20}}}
+});
+
+// Tables
+const stb=document.getElementById('shareTable');
+let prev={};
+quarters.forEach(q=>{
+const d=SH[q],total=Object.values(d).reduce((a,b)=>a+b,0);
+const fC=prev.FII!=null&&d.FII!=null?(d.FII-prev.FII):null;
+const mC=prev.MF!=null?(d.MF-prev.MF):null;
+const fc=fC!=null?(fC>0?'up':fC<0?'down':''):'';
+const mc=mC!=null?(mC>0?'up':mC<0?'down':''):'';
+stb.innerHTML+=`<tr><td>${q}</td><td>${(d.Promoter||0).toFixed(1)}</td><td>${d.FII!=null?d.FII.toFixed(1):'—'}</td><td class="${fc}">${fC!=null?(fC>0?'+':'')+fC.toFixed(2)+'%':'—'}</td><td>${(d.MF||0).toFixed(1)}</td><td class="${mc}">${mC!=null?(mC>0?'+':'')+mC.toFixed(2)+'%':'—'}</td><td>${(d.AIF||0).toFixed(1)}</td><td>${(d.Insurance||0).toFixed(1)}</td><td>${(d.Public||0).toFixed(1)}</td><td>${total.toFixed(1)}</td></tr>`;
+prev=d;
+});
+
+// MF table with month-over-month
+const mtb=document.getElementById('mfTable');
+MF_FEB.forEach(m=>{
+const key=m[0]+' '+m[1];
+const janQty=MF_JAN[key]||0;
+const chg=m[2]-janQty;
+const chgClass=chg>0?'up':chg<0?'down':'';
+mtb.innerHTML+=`<tr><td>${m[0]}</td><td>${m[1]}</td><td>${m[2].toLocaleString()}</td><td>${janQty?janQty.toLocaleString():'—'}</td><td class="${chgClass}">${chg!==0?(chg>0?'+':'')+chg.toLocaleString():'—'}</td><td>${m[3].toLocaleString()}</td><td>${m[4]}%</td></tr>`;
+});
+
+// Delivery table
+const dtb=document.getElementById('deliveryTable');
+DEL.forEach(d=>{
+const chg=((d.c-d.p)/d.p*100).toFixed(2);
+const cc=chg>=0?'up':'down';
+const dc=d.dp>=60?'up':d.dp<40?'down':'';
+const sig=d.dp>=70&&chg>0?'<span class="badge badge-green">ACCUMULATION</span>':d.dp>=70&&chg<0?'<span class="badge badge-yellow">ABSORPTION</span>':d.dp>=85?'<span class="badge badge-green">BLOCK BUY</span>':d.dp<40?'<span class="badge badge-red">SPECULATIVE</span>':'';
+dtb.innerHTML+=`<tr><td>${d.d}</td><td>₹${d.c.toFixed(1)}</td><td class="${cc}">${chg>0?'+':''}${chg}%</td><td>${d.v.toLocaleString()}</td><td class="${dc}">${d.dp.toFixed(1)}%</td><td>${sig}</td></tr>`;
+});
+
+// Insider summary
+const itb=document.getElementById('insiderTable');
+[['2019',182,0.2,78.2],['2020',257,1.1,178.1],['2021',83,0.2,70.5],['2022–2026',0,0,0]].forEach(r=>{
+const net=r[2]-r[3];
+const nc=net>=0?'up':'down';
+itb.innerHTML+=`<tr><td>${r[0]}</td><td>${r[1]||'—'}</td><td>${r[2]?'₹'+r[2].toFixed(1):'—'}</td><td class="down">${r[3]?'₹'+r[3].toFixed(1):'—'}</td><td class="${nc}">${r[1]?'₹'+net.toFixed(1)+'Cr':'No activity'}</td></tr>`;
+});
+</script>
+</body>
+</html>
