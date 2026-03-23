@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INDIAMART — Fundamentals Deep Dive</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+:root{--bg:#0f1117;--card:#1a1d28;--border:#2a2d3a;--text:#e4e4e7;--dim:#71717a;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#eab308;--cyan:#06b6d4;--purple:#a855f7;--orange:#f97316}
+*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;line-height:1.6;padding:2rem}
+.container{max-width:1400px;margin:0 auto}h1{font-size:2rem;margin-bottom:0.25rem}.subtitle{color:var(--dim);margin-bottom:2rem;font-size:0.9rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem}.card h2{font-size:1.05rem;color:var(--cyan);margin-bottom:0.8rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem}
+.full-width{grid-column:1/-1}table{width:100%;border-collapse:collapse;font-size:0.82rem}th{text-align:left;padding:0.35rem 0.5rem;color:var(--dim);border-bottom:1px solid var(--border);font-weight:500}td{padding:0.35rem 0.5rem;border-bottom:1px solid var(--border)}
+th.r,td.r{text-align:right}tr:hover{background:rgba(255,255,255,0.03)}.up{color:var(--green)}.down{color:var(--red)}.hl{color:var(--cyan);font-weight:600}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600}.bg{background:rgba(34,197,94,0.15);color:var(--green)}.br{background:rgba(239,68,68,0.15);color:var(--red)}.by{background:rgba(234,179,8,0.15);color:var(--yellow)}
+.stat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:0.8rem;margin-bottom:1.5rem}.stat{text-align:center}.stat-value{font-size:1.3rem;font-weight:700}.stat-label{font-size:0.7rem;color:var(--dim)}
+.narrative{background:rgba(6,182,212,0.05);border-left:3px solid var(--cyan);padding:1rem;border-radius:0 8px 8px 0;margin:1rem 0;font-size:0.85rem}.narrative strong{color:var(--cyan)}
+.callout{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:1rem;margin:1rem 0;font-size:0.85rem}
+.callout-warn{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.3)}
+.note{color:var(--dim);font-size:0.78rem;font-style:italic;margin-bottom:0.5rem}
+.chart-box{position:relative;height:380px}
+@media(max-width:768px){.grid,.grid-3{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>INDIAMART <span style="color:var(--dim);font-weight:400;font-size:1.1rem">Fundamentals & Valuation</span></h1>
+<p class="subtitle">B2B Marketplace | Market Cap ₹11,837 Cr | Data: yfinance + Screener.in | 24 Mar 2026</p>
+
+<!-- Key Stats -->
+<div class="stat-grid">
+<div class="stat"><div class="stat-value">₹1,970</div><div class="stat-label">CMP</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">19.6x</div><div class="stat-label">P/E (TTM)<br><strong>All-time low</strong></div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">+55%</div><div class="stat-label">Earnings Growth</div></div>
+<div class="stat"><div class="stat-value">0.20</div><div class="stat-label">Beta<br>Very low volatility</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">17.4%</div><div class="stat-label">ROCE (FY25)</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">+28%</div><div class="stat-label">Analyst Upside<br>Target ₹2,553</div></div>
+</div>
+
+<div class="card full-width" style="margin-bottom:1.5rem">
+<h2>How to Read This Report</h2>
+<table>
+<tr><td style="width:140px"><strong>P/E Ratio</strong></td><td>Price ÷ Earnings Per Share. If a stock earns ₹100/share and trades at ₹2,000, P/E = 20x. You're paying ₹20 for every ₹1 of annual profit. <strong>Lower = cheaper.</strong> But compare to its own history, not other companies — a tech platform will always trade at higher P/E than a bank.</td></tr>
+<tr><td><strong>PEG Ratio</strong></td><td>P/E ÷ Earnings Growth %. PEG < 1 means you're paying less for growth than it's delivering. PEG 0.36 means this stock's P/E (20x) is very low relative to its growth (55%). <strong>Below 1 = undervalued for growth.</strong></td></tr>
+<tr><td><strong>EV/EBITDA</strong></td><td>Enterprise Value ÷ Operating Profit (before depreciation, interest, tax). Removes the effect of debt/cash. Better than P/E for comparing companies with different capital structures. <strong>Lower = cheaper.</strong></td></tr>
+<tr><td><strong>P/Sales, EV/Revenue</strong></td><td>How much you pay per rupee of revenue. Useful for platform/SaaS companies where margins are still evolving. <strong>Lower = cheaper.</strong></td></tr>
+<tr><td><strong>ROCE</strong></td><td>Return on Capital Employed. How much profit the business generates per ₹1 invested in it. >15% = good business, >20% = excellent. <strong>Higher = better.</strong></td></tr>
+<tr><td><strong>ROE</strong></td><td>Return on Equity. Profit as % of shareholder money. Very high ROE (>40%) often means asset-light business with little equity needed. <strong>Higher = better.</strong></td></tr>
+<tr><td><strong>D/E Ratio</strong></td><td>Total Debt ÷ Total Equity. How leveraged the company is. <1 = comfortable, >2 = heavily indebted, near 0 = no debt (best). <strong>Lower = safer.</strong></td></tr>
+<tr><td><strong>CFO/NI</strong></td><td>Cash From Operations ÷ Net Income. Are profits real (backed by cash) or just accounting? >1.0x means the company collects more cash than it reports as profit. <strong>Above 1 = real profits.</strong></td></tr>
+<tr><td><strong>Operating Margin</strong></td><td>Operating Profit ÷ Revenue. What % of revenue becomes profit after running costs. 30% = for every ₹100 earned, ₹30 is profit. <strong>Higher = more profitable.</strong></td></tr>
+<tr><td><strong>Beta</strong></td><td>How much the stock moves vs the market (Nifty). Beta 1.0 = moves same as Nifty. Beta 0.2 = moves only 20% as much. <strong>Low beta = defensive, high beta = volatile.</strong></td></tr>
+<tr><td><strong>Book Value/Share</strong></td><td>Total equity (assets minus liabilities) ÷ shares. The "accounting value" of each share. If stock price < BVPS, you're buying assets at a discount.</td></tr>
+<tr><td><strong>Delivery %</strong></td><td>What % of daily trading volume was actually taken delivery of (transferred to demat accounts). High delivery (>60%) = people buying to hold. Low (<30%) = intraday speculation.</td></tr>
+</table>
+</div>
+
+<div class="callout">
+<strong style="color:var(--green);font-size:1.05rem">Trading at all-time lowest P/E (0th percentile)</strong><br>
+Trailing P/E 19.6x vs 6-year median of 48.9x. Stock traded at 60-200x during 2019-2021 and 38-55x during 2022-2024. This is an asset-light platform with 40% net margins, zero debt, and 55% earnings growth — at its cheapest ever valuation.
+</div>
+
+<div class="grid">
+
+<!-- Historical P/E -->
+<div class="card full-width">
+<h2>Historical P/E — 323 Weekly Observations (Jul 2019 → Mar 2026)</h2>
+<p class="note">Source: Weekly price (yfinance) / annual EPS (Screener.in). Green line = current 19.6x. Grey dashed = median 48.9x.</p>
+<div class="narrative"><strong>How to read:</strong> This chart shows what the market was willing to pay for INDIAMART's earnings over time. At IPO (2019), investors paid 160-200x earnings — extreme optimism for a new listing. During COVID (2020-21), the multiple ranged 40-190x. Since then it has steadily compressed. Today at 19.6x, the market values INDIAMART like a slow-growth bank, not a high-growth platform. Either the market is right (growth will stall) or this is mispriced.</div>
+<div class="chart-box"><canvas id="peChart"></canvas></div>
+</div>
+
+<!-- Price vs P/E -->
+<div class="card full-width">
+<h2>Price vs P/E — Earnings Grew Into The Multiple</h2>
+<p class="note">Price down ~50% from peak, but P/E compressed from 100x+ to 20x because EPS nearly doubled (₹49 → ₹92). The stock got cheaper even as the business got stronger.</p>
+<div class="chart-box"><canvas id="pricePeChart"></canvas></div>
+</div>
+
+<!-- Quarterly Earnings -->
+<div class="card full-width">
+<h2>Quarterly Revenue, Net Income & Operating Margin</h2>
+<p class="note">Source: Screener.in (Indian GAAP standalone). Revenue &amp; Net Income in ₹Cr (bars, left axis). Operating Margin % (orange line, right axis).</p>
+<div class="narrative"><strong>How to read:</strong> Blue bars = total revenue (should be growing). Green bars = net profit (what shareholders keep). Orange line = operating margin (what % of revenue becomes operating profit). <strong>What to look for:</strong> (1) Revenue bars getting taller each quarter = business growing. (2) Green bars growing faster than blue = margin expansion. (3) Orange line stable or rising = business becoming more efficient. Here you'll see margins were artificially high during COVID (costs dropped) then normalized to 25-35%, which is the sustainable range.</div>
+<div class="chart-box"><canvas id="earningsChart"></canvas></div>
+</div>
+
+<!-- Three-column: Valuation + Profitability + Balance Sheet -->
+</div>
+<div class="grid-3">
+
+<div class="card">
+<h2>Valuation Multiples</h2>
+<table>
+<tr><td>Trailing P/E</td><td class="r hl">19.6x <span class="badge bg">ATL</span></td></tr>
+<tr><td>Forward P/E</td><td class="r">20.7x</td></tr>
+<tr><td>P/B Ratio</td><td class="r">5.1x</td></tr>
+<tr><td>EV/EBITDA</td><td class="r">17.6x</td></tr>
+<tr><td>EV/Revenue</td><td class="r">5.9x</td></tr>
+<tr><td>P/Sales</td><td class="r">7.8x</td></tr>
+<tr><td>PEG Ratio</td><td class="r hl">0.36 <span class="badge bg">&lt;1</span></td></tr>
+<tr><td>Dividend Yield</td><td class="r">1.5%</td></tr>
+</table>
+<div class="narrative" style="margin-top:0.5rem">
+<strong>PEG 0.36</strong> = paying 36p per ₹1 of growth. Even at normalized 20% growth, PEG ~1.0. P/Sales 7.8x looks high but typical for platform businesses (Info Edge trades at ~12x).
+</div>
+</div>
+
+<div class="card">
+<h2>Profitability</h2>
+<table>
+<tr><td>Gross Margin</td><td class="r">55.1%</td></tr>
+<tr><td>Operating Margin</td><td class="r">31.6%</td></tr>
+<tr><td>Net Margin</td><td class="r up">39.8%</td></tr>
+<tr><td>ROE</td><td class="r">45.5% <span class="note">(FY25)</span></td></tr>
+<tr><td>ROA</td><td class="r">— <span class="note">(yfinance null)</span></td></tr>
+<tr><td>ROCE</td><td class="r up">17.4% <span class="note">(FY25, improving)</span></td></tr>
+<tr><td>Revenue Growth</td><td class="r up">+13.4%</td></tr>
+<tr><td>Earnings Growth</td><td class="r up">+55.2%</td></tr>
+<tr><td>Q-o-Q Earnings Growth</td><td class="r up">+55.6%</td></tr>
+</table>
+<div class="narrative" style="margin-top:0.5rem">
+<strong>40% net margin</strong> on a B2B marketplace is exceptional. Subscription revenue = high visibility. ROCE improving 11% → 17% over 3 years — capital efficiency getting better.
+</div>
+</div>
+
+<div class="card">
+<h2>Balance Sheet & Liquidity</h2>
+<table>
+<tr><td>Debt/Equity</td><td class="r up">0.01 <span class="badge bg">Zero debt</span></td></tr>
+<tr><td>Current Ratio</td><td class="r">2.39</td></tr>
+<tr><td>Total Cash</td><td class="r">₹2,893 Cr</td></tr>
+<tr><td>Total Debt</td><td class="r">₹26 Cr</td></tr>
+<tr><td>Net Cash</td><td class="r up">₹2,867 Cr</td></tr>
+<tr><td>Book Value/Share</td><td class="r">₹390</td></tr>
+<tr><td>Cash/Share</td><td class="r hl">₹482</td></tr>
+<tr><td>Revenue/Share</td><td class="r">₹253</td></tr>
+<tr><td>Operating Cashflow</td><td class="r">₹675 Cr</td></tr>
+</table>
+<div class="narrative" style="margin-top:0.5rem">
+<strong>Cash per share (₹482) &gt; book value (₹390).</strong> The company is sitting on ₹2,893 Cr of cash with only ₹26 Cr debt. Net cash = 24% of market cap. This is a fortress balance sheet.
+</div>
+</div>
+
+</div>
+<div class="grid">
+
+<!-- Price Context -->
+<div class="card">
+<h2>Price Context</h2>
+<table>
+<tr><td>Current Price</td><td class="r"><strong>₹1,970</strong></td></tr>
+<tr><td>52-Week High</td><td class="r">₹2,799 <span class="down">(-30%)</span></td></tr>
+<tr><td>52-Week Low</td><td class="r">₹1,900 <span class="up">(+4%)</span></td></tr>
+<tr><td>% from 52W High</td><td class="r down">-29.6%</td></tr>
+<tr><td>Beta</td><td class="r">0.20 <span class="badge bg">Very low</span></td></tr>
+<tr><td>Avg Daily Volume</td><td class="r">134,784</td></tr>
+<tr><td>Float Shares</td><td class="r">2.91 Cr</td></tr>
+<tr><td>Shares Outstanding</td><td class="r">6.01 Cr</td></tr>
+<tr><td>Promoter Hold</td><td class="r">49.1%</td></tr>
+<tr><td>Free Float %</td><td class="r">48.5%</td></tr>
+</table>
+<div class="narrative" style="margin-top:0.5rem">
+<strong>Beta 0.20</strong> — moves only 20% as much as Nifty. Ultra-defensive. Near 52-week low with 30% drawdown from high. Free float ~48.5% with decent daily volumes.
+</div>
+</div>
+
+<!-- Analyst Consensus -->
+<div class="card">
+<h2>Analyst Consensus (18 analysts)</h2>
+<table>
+<tr><td>Target Mean</td><td class="r up"><strong>₹2,553</strong></td></tr>
+<tr><td>Target Median</td><td class="r">₹2,525</td></tr>
+<tr><td>Target Range</td><td class="r">₹1,975 — ₹3,500</td></tr>
+<tr><td>Upside to Mean</td><td class="r up"><strong>+28%</strong></td></tr>
+<tr><td>Forward EPS</td><td class="r">₹95.0</td></tr>
+<tr><td>TTM EPS</td><td class="r">₹100.5</td></tr>
+<tr><td>Earnings Growth Est.</td><td class="r up">+55%</td></tr>
+</table>
+
+<h2 style="margin-top:1.5rem">Scenario Analysis</h2>
+<table>
+<thead><tr><th>Scenario</th><th class="r">P/E</th><th class="r">FY26E EPS</th><th class="r">Target</th><th class="r">Upside</th></tr></thead>
+<tr><td>Bear (growth slows)</td><td class="r">18x</td><td class="r">₹95</td><td class="r">₹1,710</td><td class="r down">-13%</td></tr>
+<tr><td>Base (normalized)</td><td class="r">25x</td><td class="r">₹95</td><td class="r up">₹2,375</td><td class="r up">+21%</td></tr>
+<tr><td>Bull (re-rating)</td><td class="r">35x</td><td class="r">₹100</td><td class="r up">₹3,500</td><td class="r up">+78%</td></tr>
+<tr><td>Mean reversion</td><td class="r">49x</td><td class="r">₹95</td><td class="r up">₹4,655</td><td class="r up">+136%</td></tr>
+</table>
+<div class="narrative" style="margin-top:0.5rem">
+Even in the bear case (P/E contracts to 18x), downside is only 13%. Base case at 25x (half the historical median) gives 21% upside. Risk-reward is asymmetric in your favor.
+</div>
+</div>
+
+<!-- Annual Financials with derived metrics -->
+<div class="card full-width">
+<h2>Annual Financials — 4 Year Trend (Screener.in)</h2>
+<p class="note">All values in ₹Cr. Derived metrics computed from raw financials.</p>
+<table>
+<thead><tr><th>Metric</th><th class="r">FY22</th><th class="r">FY23</th><th class="r">FY24</th><th class="r">FY25</th><th>Trend</th></tr></thead>
+<tbody>
+<tr style="background:rgba(59,130,246,0.05)"><td colspan="6" style="color:var(--blue);font-weight:600">Income Statement</td></tr>
+<tr><td>Revenue</td><td class="r">753</td><td class="r">985</td><td class="r">1,197</td><td class="r hl">1,388</td><td class="up">+22% CAGR</td></tr>
+<tr><td>Net Income</td><td class="r">298</td><td class="r">284</td><td class="r">334</td><td class="r hl">551</td><td class="up">+23% CAGR</td></tr>
+<tr><td>EPS</td><td class="r">48.9</td><td class="r">46.5</td><td class="r">55.2</td><td class="r hl">91.8</td><td class="up">+23% CAGR</td></tr>
+<tr><td>Profit Before Tax</td><td class="r">390</td><td class="r">371</td><td class="r">454</td><td class="r hl">706</td><td class="up">+22% CAGR</td></tr>
+<tr><td>Depreciation</td><td class="r">12</td><td class="r">31</td><td class="r">36</td><td class="r">33</td><td>Low (asset-light)</td></tr>
+<tr><td>Interest</td><td class="r">5</td><td class="r">8</td><td class="r">9</td><td class="r">7</td><td>Negligible</td></tr>
+<tr><td>Dividend</td><td class="r">46</td><td class="r">6</td><td class="r">61</td><td class="r hl">120</td><td class="up">Growing payouts</td></tr>
+
+<tr style="background:rgba(34,197,94,0.05)"><td colspan="6" style="color:var(--green);font-weight:600">Returns & Efficiency</td></tr>
+<tr><td>ROCE</td><td class="r">—</td><td class="r">11.0%</td><td class="r">13.5%</td><td class="r hl">17.4%</td><td class="up">Improving</td></tr>
+<tr><td>ROE</td><td class="r">92.5%</td><td class="r">59.2%</td><td class="r">42.8%</td><td class="r">45.5%</td><td>High (asset-light)</td></tr>
+<tr><td>Interest Coverage</td><td class="r">73x</td><td class="r">47x</td><td class="r">52x</td><td class="r hl">96x</td><td class="up">No stress</td></tr>
+<tr><td>Debtor Days</td><td class="r">0.6</td><td class="r">2.6</td><td class="r">1.5</td><td class="r">1.0</td><td class="up">Cash upfront</td></tr>
+
+<tr style="background:rgba(168,85,247,0.05)"><td colspan="6" style="color:var(--purple);font-weight:600">Balance Sheet</td></tr>
+<tr><td>Total Equity</td><td class="r">322</td><td class="r">480</td><td class="r">781</td><td class="r hl">1,211</td><td class="up">+55% CAGR</td></tr>
+<tr><td>Borrowings</td><td class="r">56</td><td class="r">46</td><td class="r">41</td><td class="r hl">33</td><td class="up">Deleveraging</td></tr>
+<tr><td>D/E Ratio</td><td class="r">0.17</td><td class="r">0.10</td><td class="r">0.05</td><td class="r hl">0.03</td><td class="up">Near zero</td></tr>
+<tr><td>Total Assets</td><td class="r">2,949</td><td class="r">3,445</td><td class="r">3,449</td><td class="r">4,134</td><td></td></tr>
+<tr><td>Cash & Bank</td><td class="r">50</td><td class="r">58</td><td class="r">85</td><td class="r">73</td><td></td></tr>
+
+<tr style="background:rgba(249,115,22,0.05)"><td colspan="6" style="color:var(--orange);font-weight:600">Cash Flow</td></tr>
+<tr><td>CFO</td><td class="r">402</td><td class="r">476</td><td class="r">559</td><td class="r hl">623</td><td class="up">+16% CAGR</td></tr>
+<tr><td>CFI</td><td class="r">-335</td><td class="r">-324</td><td class="r">+162</td><td class="r">-486</td><td>Investing in growth</td></tr>
+<tr><td>CFO/NI</td><td class="r">1.35x</td><td class="r">1.68x</td><td class="r">1.67x</td><td class="r">1.13x</td><td class="up">Consistently &gt;1x</td></tr>
+<tr><td>FCF (CFO+CFI)</td><td class="r">67</td><td class="r">152</td><td class="r hl">722</td><td class="r">137</td><td>Volatile (investments)</td></tr>
+<tr><td>Capex/CFO</td><td class="r">83%</td><td class="r">68%</td><td class="r">—</td><td class="r">78%</td><td>Capital allocation active</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- Business Quality Assessment -->
+<div class="card">
+<h2>Business Quality Scorecard</h2>
+<table>
+<tr><td>Business Model</td><td><span class="badge bg">B2B marketplace — subscription + lead gen</span></td></tr>
+<tr><td>Moat</td><td><span class="badge bg">Network effects — 20 Cr+ listings, 18 Cr+ buyers</span></td></tr>
+<tr><td>ROCE Trend</td><td><span class="badge bg">11% → 17.4% (3yr improvement)</span></td></tr>
+<tr><td>Cash Conversion</td><td><span class="badge bg">CFO/NI &gt; 1.0x every year</span></td></tr>
+<tr><td>Debt</td><td><span class="badge bg">D/E 0.03 — fortress balance sheet</span></td></tr>
+<tr><td>Working Capital</td><td><span class="badge bg">~1 day debtor days (cash upfront)</span></td></tr>
+<tr><td>Dividends</td><td><span class="badge bg">₹120 Cr FY25, 1.5% yield, growing</span></td></tr>
+<tr><td>Cash Richness</td><td><span class="badge bg">Cash/share ₹482 &gt; book value ₹390</span></td></tr>
+<tr><td>Revenue Growth</td><td><span class="badge bg">16-31% annually, consistent</span></td></tr>
+<tr><td>Margin Stability</td><td><span class="badge by">OPM 25-65% — volatile but normalizing</span></td></tr>
+<tr><td>Capital Allocation</td><td><span class="badge bg">Acquisitions (Livekeeping, accounting SaaS)</span></td></tr>
+</table>
+</div>
+
+<!-- Risk Factors -->
+<div class="card">
+<h2>Risk Factors</h2>
+<table>
+<tr><td><span class="badge br">Margin volatility</span></td><td>OPM swung 25-65% over 6 years. Normalized ~32-35%. Disappointing margins could compress P/E further.</td></tr>
+<tr><td><span class="badge by">Growth deceleration</span></td><td>Revenue growth slowed from 31% (FY23) to 16% (FY25). Single-digit growth would break the re-rating thesis.</td></tr>
+<tr><td><span class="badge by">Competition</span></td><td>Amazon Business, Udaan, JioMart B2B entering. INDIAMART's moat is SME discovery, not transactions — different game but risk exists.</td></tr>
+<tr><td><span class="badge by">FII overhang</span></td><td>FIIs at 18.3% and in exit mode. Further selling caps near-term upside.</td></tr>
+<tr><td><span class="badge bg">Low beta (0.20)</span></td><td>Stock moves very little with market — protects on downside, limits upside in rallies.</td></tr>
+<tr><td><span class="badge bg">Net cash position</span></td><td>₹2,867 Cr net cash = 24% of market cap. Floor under the stock.</td></tr>
+</table>
+</div>
+
+</div>
+</div>
+
+<script>
+// P/E data (323 weekly obs) — [year_frac, pe, price]
+const PE=[
+[2019.50,182.0,638],[2019.52,179.0,627],[2019.53,168.3,590],[2019.55,167.9,588],[2019.57,168.8,592],[2019.59,160.7,563],[2019.61,157.9,553],[2019.63,158.3,555],[2019.65,164.8,577],[2019.67,198.7,696],
+[2020.26,42.5,1085],[2020.28,42.4,1081],[2020.30,41.5,1057],[2020.32,42.6,1086],[2020.34,44.8,1141],[2020.36,43.5,1110],[2020.38,48.1,1227],[2020.40,46.9,1197],[2020.42,44.2,1126],[2020.44,43.1,1099],[2020.46,43.7,1115],[2020.48,45.4,1158],[2020.50,39.8,1014],[2020.52,42.2,1077],[2020.53,38.8,990],[2020.55,46.5,1186],[2020.57,53.6,1366],[2020.59,58.4,1490],[2020.61,55.3,1411],[2020.63,61.3,1562],[2020.65,66.9,1706],[2020.67,77.5,1977],[2020.69,90.3,2303],[2020.71,94.8,2418],[2020.73,99.5,2538],[2020.75,94.6,2412],[2020.76,94.7,2415],[2020.78,94.8,2416],[2020.80,94.7,2415],[2020.82,91.8,2341],[2020.84,93.8,2392],[2020.86,188.7,4811],[2020.88,94.6,2413],[2020.90,96.5,2460],[2020.92,97.0,2474],[2020.94,101.5,2588],[2020.96,115.1,2936],[2020.97,117.7,3000],[2020.99,133.3,3400],
+[2021.01,141.9,3618],[2021.03,147.5,3760],[2021.05,149.5,3813],[2021.07,147.8,3769],[2021.09,185.3,4724],[2021.11,174.5,4449],[2021.13,167.4,4268],[2021.14,162.8,4152],[2021.17,152.8,3896],[2021.19,160.8,4100],[2021.21,154.2,3931],[2021.23,147.7,3766],[2021.25,151.0,3851],[2021.26,88.0,4056],[2021.28,83.6,3854],[2021.30,86.5,3987],[2021.32,83.3,3839],[2021.34,78.2,3602],[2021.36,71.4,3289],[2021.38,80.4,3707],[2021.40,77.9,3592],[2021.42,72.6,3347],[2021.44,76.2,3510],[2021.46,76.3,3517],[2021.48,73.4,3383],[2021.50,76.1,3510],[2021.51,77.3,3564],[2021.53,75.8,3492],[2021.55,76.0,3502],[2021.57,74.9,3451],[2021.59,77.1,3552],[2021.61,75.9,3498],[2021.63,74.5,3434],[2021.65,74.9,3450],[2021.67,85.5,3939],[2021.69,93.3,4299],[2021.71,90.4,4167],[2021.73,89.3,4117],[2021.75,87.3,4023],[2021.76,92.5,4262],[2021.78,99.0,4564],[2021.80,83.1,3830],[2021.82,75.1,3459],[2021.84,77.0,3548],[2021.86,79.2,3652],[2021.88,80.1,3691],[2021.90,76.6,3532],[2021.92,75.2,3468],[2021.94,76.6,3529],[2021.96,73.2,3372],[2021.97,67.7,3121],[2021.99,68.0,3135],
+[2022.01,70.1,3229],[2022.03,71.1,3277],[2022.05,64.3,2962],[2022.07,50.7,2336],[2022.09,53.4,2459],[2022.11,53.0,2442],[2022.13,50.8,2340],[2022.14,51.1,2355],[2022.17,46.3,2133],[2022.19,47.0,2167],[2022.21,47.2,2176],[2022.23,46.8,2156],[2022.25,46.7,2155],[2022.26,48.9,2384],[2022.28,48.7,2370],[2022.30,47.9,2335],[2022.32,48.8,2379],[2022.34,43.9,2139],[2022.36,41.6,2027],[2022.38,42.5,2070],[2022.40,44.9,2186],[2022.42,44.8,2182],[2022.44,42.0,2048],[2022.46,39.5,1924],[2022.48,41.1,2004],[2022.50,37.9,1848],[2022.51,38.8,1892],[2022.53,39.5,1925],[2022.55,40.5,1972],[2022.57,42.3,2059],[2022.59,45.4,2214],[2022.61,42.5,2068],[2022.63,42.7,2080],[2022.65,43.5,2118],[2022.67,47.2,2300],[2022.69,47.4,2309],[2022.71,44.6,2173],[2022.73,43.8,2132],[2022.75,44.3,2159],[2022.76,44.6,2173],[2022.78,43.1,2100],[2022.80,43.4,2112],[2022.82,45.1,2199],[2022.84,46.7,2276],[2022.86,47.7,2322],[2022.88,44.7,2175],[2022.90,43.5,2121],[2022.92,44.4,2163],[2022.94,44.1,2148],[2022.96,43.1,2099],[2022.97,40.8,1990],[2022.99,42.9,2092],
+[2023.01,43.1,2101],[2023.03,44.3,2160],[2023.05,45.2,2203],[2023.07,44.1,2147],[2023.09,45.4,2212],[2023.11,47.6,2320],[2023.13,47.7,2323],[2023.14,47.4,2309],[2023.17,48.9,2380],[2023.19,47.3,2303],[2023.21,48.6,2370],[2023.23,49.5,2410],[2023.25,49.9,2431],[2023.26,52.2,2421],[2023.28,56.3,2611],[2023.30,54.8,2542],[2023.32,56.0,2599],[2023.34,62.1,2880],[2023.36,61.7,2862],[2023.38,58.6,2715],[2023.40,58.3,2702],[2023.42,59.7,2770],[2023.44,58.5,2715],[2023.46,61.9,2872],[2023.48,60.9,2824],[2023.50,59.0,2735],[2023.51,57.5,2668],[2023.53,59.7,2769],[2023.55,66.0,3062],[2023.57,64.8,3003],[2023.59,65.5,3037],[2023.61,65.7,3046],[2023.63,64.6,2994],[2023.65,63.2,2931],[2023.67,65.2,3024],[2023.69,67.5,3128],[2023.71,64.7,2999],[2023.73,62.7,2907],[2023.75,60.3,2795],[2023.76,60.1,2787],[2023.78,59.2,2746],[2023.80,57.0,2646],[2023.82,58.1,2693],[2023.84,54.3,2518],[2023.86,54.5,2528],[2023.88,54.6,2534],[2023.90,54.5,2526],[2023.92,54.4,2525],[2023.94,56.1,2602],[2023.96,58.5,2712],[2023.97,56.8,2635],[2023.99,57.0,2645],
+[2024.01,57.5,2666],[2024.03,54.3,2520],[2024.05,55.2,2559],[2024.07,51.3,2380],[2024.09,53.7,2490],[2024.11,56.5,2621],[2024.13,58.2,2697],[2024.14,56.0,2596],[2024.17,55.7,2581],[2024.19,54.7,2536],[2024.21,55.1,2554],[2024.23,56.0,2599],[2024.25,55.4,2571],[2024.26,44.4,2471],[2024.28,45.1,2508],[2024.30,44.1,2455],[2024.32,46.0,2560],[2024.34,48.9,2721],[2024.36,46.5,2591],[2024.38,46.0,2558],[2024.40,44.7,2488],[2024.42,42.2,2350],[2024.44,44.4,2471],[2024.46,45.4,2525],[2024.48,46.7,2601],[2024.50,47.2,2626],[2024.51,47.5,2643],[2024.53,49.5,2754],[2024.55,49.2,2741],[2024.57,53.4,2971],[2024.59,49.1,2732],[2024.61,48.9,2720],[2024.63,48.4,2692],[2024.65,51.0,2837],[2024.67,52.8,2939],[2024.69,52.5,2923],[2024.71,55.1,3065],[2024.73,53.8,2992],[2024.75,51.4,2858],[2024.76,50.0,2783],[2024.78,53.0,2950],[2024.80,53.0,2951],[2024.82,42.9,2389],[2024.84,44.9,2499],[2024.86,41.8,2325],[2024.88,40.2,2237],[2024.90,40.1,2232],[2024.92,41.3,2297],[2024.94,41.5,2309],[2024.96,42.0,2337],[2024.97,39.6,2204],[2024.99,39.7,2210],
+[2025.00,39.6,2204],[2025.02,40.9,2277],[2025.04,40.2,2236],[2025.06,36.7,2041],[2025.08,38.1,2122],[2025.10,38.2,2128],[2025.12,37.4,2081],[2025.13,35.6,1981],[2025.15,34.6,1925],[2025.18,35.4,1969],[2025.20,34.4,1916],[2025.22,37.7,2098],[2025.23,36.4,2026],[2025.25,22.1,2027],[2025.27,22.3,2051],[2025.29,23.4,2152],[2025.31,24.0,2202],[2025.33,24.2,2217],[2025.35,24.1,2209],[2025.37,25.1,2302],[2025.38,25.3,2320],[2025.40,24.9,2285],[2025.42,25.9,2378],[2025.44,26.9,2469],[2025.46,27.1,2490],[2025.48,28.4,2608],[2025.50,27.7,2547],[2025.51,28.4,2605],[2025.53,28.9,2653],[2025.55,27.9,2561],[2025.57,28.3,2599],[2025.59,27.9,2561],[2025.61,27.7,2546],[2025.63,29.1,2671],[2025.65,28.3,2597],[2025.67,27.8,2555],[2025.69,28.3,2601],[2025.71,26.9,2470],[2025.73,25.8,2367],[2025.75,25.8,2371],[2025.76,26.1,2391],[2025.78,25.5,2344],[2025.80,25.8,2371],[2025.82,26.8,2458],[2025.84,26.7,2448],[2025.86,26.7,2451],[2025.88,25.5,2342],[2025.90,25.2,2310],[2025.92,25.2,2312],[2025.94,24.3,2232],[2025.96,24.2,2217],[2025.97,24.1,2216],[2025.99,23.7,2178],
+[2026.01,23.4,2145],[2026.04,24.9,2289],[2026.06,23.9,2194],[2026.08,24.1,2208],[2026.10,24.4,2238],[2026.12,24.0,2200],[2026.13,23.8,2186],[2026.15,23.2,2132],[2026.18,23.1,2121],[2026.20,22.9,2102],[2026.22,21.7,1994],[2026.24,20.2,2029]
+];
+
+// Show quarter labels (Jan, Apr, Jul, Oct of each year)
+const peLabels=PE.map((d,i)=>{
+const y=Math.floor(d[0]);const frac=d[0]-y;
+const q=frac<0.25?'Jan':frac<0.5?'Apr':frac<0.75?'Jul':'Oct';
+// Show label at start of each quarter
+if(i===0)return q+' '+y;
+const prevY=Math.floor(PE[i-1][0]);const prevFrac=PE[i-1][0]-prevY;
+const prevQ=prevFrac<0.25?'Jan':prevFrac<0.5?'Apr':prevFrac<0.75?'Jul':'Oct';
+if(q!==prevQ)return(q==='Jan'?q+' '+y:q);
+return '';
+});
+
+// P/E Chart
+new Chart(document.getElementById('peChart'),{type:'line',data:{labels:peLabels,datasets:[{label:'P/E',data:PE.map(d=>d[1]),borderColor:'#f97316',backgroundColor:'rgba(249,115,22,0.06)',fill:true,pointRadius:0,borderWidth:2,tension:0.3}]},
+options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},annotation:{annotations:{
+median:{type:'line',yMin:48.9,yMax:48.9,borderColor:'rgba(113,113,122,0.5)',borderWidth:1,borderDash:[6,4],label:{display:true,content:'Median 48.9x',position:'start',color:'#71717a',font:{size:10}}},
+current:{type:'line',yMin:19.6,yMax:19.6,borderColor:'#22c55e',borderWidth:2,borderDash:[4,2],label:{display:true,content:'Current 19.6x — ALL-TIME LOW',position:'end',color:'#22c55e',font:{size:11,weight:'bold'}}},
+}}},scales:{x:{ticks:{color:'#71717a',maxRotation:0}},y:{min:0,max:200,ticks:{color:'#71717a',callback:v=>v+'x'}}}}});
+
+// Price vs P/E
+new Chart(document.getElementById('pricePeChart'),{type:'line',data:{labels:peLabels,datasets:[
+{label:'Price ₹',data:PE.map(d=>d[2]),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.05)',fill:true,pointRadius:0,borderWidth:2,tension:0.3,yAxisID:'y'},
+{label:'P/E',data:PE.map(d=>d[1]),borderColor:'#f97316',pointRadius:0,borderWidth:2,tension:0.3,yAxisID:'y1'},
+]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#e4e4e7'}}},
+scales:{x:{ticks:{color:'#71717a',maxRotation:0}},y:{position:'left',ticks:{color:'#3b82f6',callback:v=>'₹'+v.toLocaleString()}},y1:{position:'right',ticks:{color:'#f97316',callback:v=>v+'x'},grid:{drawOnChartArea:false}}}}});
+
+// Quarterly earnings
+// Corrected from Screener.in (Indian GAAP standalone). [label, revenue_cr, net_income_cr, opm%]
+const QR=[["Q1'20",147,32,31.4],["Q2'20",157,9,32.6],["Q3'20",165,62,32.7],["Q4'20",170,44,36.4],["Q1'21",153,74,65.8],["Q2'21",163,70,57.2],["Q3'21",174,80,61.6],["Q4'21",180,56,50.5],["Q1'22",182,88,62.4],["Q2'22",182,82,60.5],["Q3'22",188,70,51.2],["Q4'22",201,57,41.0],["Q1'23",225,47,25.7],["Q2'23",241,68,43.1],["Q3'23",251,113,64.3],["Q4'23",269,56,32.0],["Q1'24",282,83,43.6],["Q2'24",295,69,23.4],["Q3'24",305,82,25.7],["Q4'24",315,100,24.4],["Q1'25",331,114,32.7],["Q2'25",348,135,35.1],["Q3'25",354,121,35.1],["Q4'25",355,181,33.6],["Q1'26",372,154,32.1],["Q2'26",391,83,29.7],["Q3'26",402,188,29.8]];
+new Chart(document.getElementById('earningsChart'),{type:'bar',data:{labels:QR.map(q=>q[0]),datasets:[
+{label:'Revenue ₹Cr',data:QR.map(q=>q[1]),backgroundColor:'rgba(59,130,246,0.5)',borderColor:'#3b82f6',borderWidth:1,yAxisID:'y'},
+{label:'Net Income ₹Cr',data:QR.map(q=>q[2]),backgroundColor:'rgba(34,197,94,0.5)',borderColor:'#22c55e',borderWidth:1,yAxisID:'y'},
+{label:'OPM %',data:QR.map(q=>q[3]),type:'line',borderColor:'#f97316',pointRadius:3,tension:0.3,yAxisID:'y1',borderWidth:2},
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e4e4e7'}}},
+scales:{x:{ticks:{color:'#71717a',maxRotation:45,font:{size:9}}},y:{position:'left',ticks:{color:'#71717a'}},y1:{position:'right',min:0,max:80,ticks:{color:'#f97316',callback:v=>v+'%'},grid:{drawOnChartArea:false}}}}});
+</script>
+</body>
+</html>
