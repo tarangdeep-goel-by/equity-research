@@ -221,11 +221,33 @@ class FilingClient:
         else:
             url = f"{_BSE_ATTACH_HIS}/{filing.attachment_name}"
 
-        # Build local path
-        slug = re.sub(r'[^a-zA-Z0-9]+', '_', filing.headline[:60]).strip('_').lower()
-        dir_path = base_dir / filing.symbol / "filings" / _safe_dirname(filing.subcategory or filing.category)
+        # Determine file type from headline/subcategory
+        hl = filing.headline.lower()
+        sc = (filing.subcategory or "").lower()
+        if "transcript" in hl or "transcript" in sc:
+            ftype = "concall"
+        elif "investor presentation" in sc or "investor presentation" in hl:
+            ftype = "investor_deck"
+        elif "financial result" in sc or ("financial result" in hl and "newspaper" not in hl):
+            ftype = "results"
+        elif "press release" in sc:
+            ftype = "press_release"
+        elif "annual report" in hl:
+            ftype = "annual_report"
+        else:
+            ftype = _safe_dirname(filing.subcategory or filing.category)
+
+        # Determine FY quarter from filing date
+        fy_quarter = _filing_date_to_fy_quarter(filing.filing_date)
+
+        # Build local path: {base}/{symbol}/filings/{FY-Q}/{type}.pdf
+        dir_path = base_dir / filing.symbol / "filings" / fy_quarter
         dir_path.mkdir(parents=True, exist_ok=True)
-        file_path = dir_path / f"{filing.filing_date}_{slug}.pdf"
+        file_path = dir_path / f"{ftype}.pdf"
+
+        # If duplicate, append date
+        if file_path.exists() and file_path.stat().st_size > 0:
+            file_path = dir_path / f"{ftype}_{filing.filing_date}.pdf"
 
         # Skip if already downloaded
         if file_path.exists() and file_path.stat().st_size > 0:
@@ -252,7 +274,7 @@ class FilingClient:
         if base_dir is None:
             base_dir = _DEFAULT_FILING_DIR
 
-        dir_path = base_dir / symbol / "filings" / _safe_dirname(category)
+        dir_path = base_dir / symbol / "filings" / "annual"
         dir_path.mkdir(parents=True, exist_ok=True)
         file_path = dir_path / filename
 
@@ -318,3 +340,27 @@ class FilingClient:
 def _safe_dirname(name: str) -> str:
     """Convert a category name to a safe directory name."""
     return re.sub(r'[^a-zA-Z0-9_-]+', '_', name).strip('_').lower()
+
+
+def _filing_date_to_fy_quarter(date_str: str) -> str:
+    """Convert filing date to Indian FY quarter folder name.
+
+    Filing dates map to the quarter they report on:
+    Jan-Mar filing → Q3 results (Oct-Dec quarter)
+    Apr-Jun filing → Q4 results (Jan-Mar quarter)
+    Jul-Sep filing → Q1 results (Apr-Jun quarter)
+    Oct-Dec filing → Q2 results (Jul-Sep quarter)
+    """
+    try:
+        y, m = int(date_str[:4]), int(date_str[5:7])
+    except (ValueError, IndexError):
+        return "unknown"
+
+    if m in (1, 2, 3):
+        return f"FY{str(y)[2:]}-Q3"
+    elif m in (4, 5, 6):
+        return f"FY{str(y)[2:]}-Q4"
+    elif m in (7, 8, 9):
+        return f"FY{str(y + 1)[2:]}-Q1"
+    else:
+        return f"FY{str(y + 1)[2:]}-Q2"
