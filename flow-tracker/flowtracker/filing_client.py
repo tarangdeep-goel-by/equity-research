@@ -27,17 +27,21 @@ _HEADERS = {
     "Origin": "https://www.bseindia.com",
 }
 
-# Filing categories we care about for research
-_RESEARCH_CATEGORIES = {
+# Filing subcategories we care about for research (strict set — concalls, decks, results)
+_RESEARCH_SUBCATEGORIES = {
     "Investor Presentation",
     "Earnings Call Transcript",
-    "Analyst / Investor Meet",
-    "Press Release / Media Release",
+    "Analyst / Investor Meet",       # Often concall transcripts on BSE
     "Financial Results",
-    "Board Meeting",
-    "Acquisition",
-    "General",
 }
+
+# Keywords in headlines that indicate research-relevant filings
+_RESEARCH_KEYWORDS = [
+    "transcript", "concall", "earnings call",
+    "investor presentation", "investor deck",
+    "financial result", "quarterly result",
+    "analyst meet",
+]
 
 # Default PDF storage location — in vault alongside research
 _DEFAULT_FILING_DIR = Path.home() / "vault" / "stocks"
@@ -152,16 +156,17 @@ class FilingClient:
     def fetch_research_filings(
         self, symbol: str, from_date: date | None = None,
     ) -> list[CorporateFiling]:
-        """Fetch only research-relevant filings (investor decks, concalls, results)."""
+        """Fetch only research-relevant filings (concalls, investor decks, results).
+
+        Tighter filter than fetch_filings — excludes board meetings, press releases,
+        acquisitions, and general announcements to reduce noise.
+        """
         all_filings = self.fetch_filings(symbol, from_date=from_date)
         return [
             f for f in all_filings
-            if f.subcategory in _RESEARCH_CATEGORIES
-            or f.category in ("Result", "Board Meeting")
-            or any(kw in f.headline.lower() for kw in [
-                "investor", "concall", "earnings", "transcript",
-                "presentation", "analyst", "financial result",
-            ])
+            if f.subcategory in _RESEARCH_SUBCATEGORIES
+            or f.category == "Result"
+            or any(kw in f.headline.lower() for kw in _RESEARCH_KEYWORDS)
         ]
 
     def fetch_annual_reports(self, symbol: str) -> list[dict]:
@@ -224,14 +229,18 @@ class FilingClient:
         # Determine file type from headline/subcategory
         hl = filing.headline.lower()
         sc = (filing.subcategory or "").lower()
-        if "transcript" in hl or "transcript" in sc:
+        if "transcript" in hl or "transcript" in sc or "concall" in hl:
             ftype = "concall"
-        elif "investor presentation" in sc or "investor presentation" in hl:
+        elif "analyst" in sc and ("transcript" in hl or "concall" in hl or "earnings" in hl):
+            # "Analyst / Investor Meet" with transcript-like headline = concall
+            ftype = "concall"
+        elif "investor presentation" in sc or "investor presentation" in hl or "investor deck" in hl:
+            ftype = "investor_deck"
+        elif "analyst" in sc and ("presentation" in hl or "investor" in hl):
+            # "Analyst / Investor Meet" with presentation-like headline = investor deck
             ftype = "investor_deck"
         elif "financial result" in sc or ("financial result" in hl and "newspaper" not in hl):
             ftype = "results"
-        elif "press release" in sc:
-            ftype = "press_release"
         elif "annual report" in hl:
             ftype = "annual_report"
         else:
@@ -245,13 +254,15 @@ class FilingClient:
         dir_path.mkdir(parents=True, exist_ok=True)
         file_path = dir_path / f"{ftype}.pdf"
 
-        # If duplicate, append date
+        # Skip if primary file already exists (same type for this quarter)
         if file_path.exists() and file_path.stat().st_size > 0:
+            # Check if this is likely the same file (size-based dedup)
+            if filing.file_size and abs(file_path.stat().st_size - filing.file_size) < 1024:
+                return file_path
+            # Different file for same type+quarter — append date
             file_path = dir_path / f"{ftype}_{filing.filing_date}.pdf"
-
-        # Skip if already downloaded
-        if file_path.exists() and file_path.stat().st_size > 0:
-            return file_path
+            if file_path.exists() and file_path.stat().st_size > 0:
+                return file_path
 
         try:
             resp = self._client.get(url)
