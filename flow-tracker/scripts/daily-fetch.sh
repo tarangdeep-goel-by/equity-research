@@ -33,5 +33,6 @@ run_with_retry "flowtrack macro fetch" "Macro indicators"
 run_with_retry "flowtrack bhavcopy fetch" "Bhavcopy + delivery"
 run_with_retry "flowtrack deals fetch" "Bulk/block deals"
 run_with_retry "flowtrack insider fetch" "Insider transactions"
+run_with_retry "python -m flowtracker fund fetch --valuation-only" "Valuation snapshots"
 
 echo "=== $(date) === Daily complete ===" >> "$LOG"
