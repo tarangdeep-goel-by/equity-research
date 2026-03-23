@@ -8,7 +8,7 @@ UV="$HOME/.local/bin/uv"
 echo "=== $(date) === Weekly Valuation ===" >> "$LOG"
 cd "$PROJECT" || { echo "FAIL: cd $PROJECT" >> "$LOG"; exit 1; }
 
-$UV run python -m flowtracker fund fetch --valuation-only >> "$LOG" 2>&1
+# Valuation moved to daily-fetch.sh — estimates stay weekly (slow, ~3min)
 $UV run flowtrack estimates fetch >> "$LOG" 2>&1
 
-echo "=== $(date) === Weekly valuation complete ===" >> "$LOG"
+echo "=== $(date) === Weekly estimates complete ===" >> "$LOG"
