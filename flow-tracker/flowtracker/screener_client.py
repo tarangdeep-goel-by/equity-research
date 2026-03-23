@@ -10,7 +10,9 @@ from pathlib import Path
 import httpx
 import openpyxl
 
-from flowtracker.fund_models import AnnualEPS, AnnualFinancials, QuarterlyResult
+from bs4 import BeautifulSoup
+
+from flowtracker.fund_models import AnnualEPS, AnnualFinancials, QuarterlyResult, ScreenerRatios
 
 _SCREENER_BASE = "https://www.screener.in"
 _CRED_PATH = Path.home() / ".config" / "flowtracker" / "screener.env"
@@ -114,23 +116,23 @@ class ScreenerClient:
 
     def _get_warehouse_id(self, symbol: str) -> str:
         """Fetch company page and extract the Excel export warehouse ID."""
-        # Try consolidated first, fall back to standalone
+        html = self.fetch_company_page(symbol)
+        match = re.search(r'formaction="/user/company/export/(\d+)/"', html)
+        if not match:
+            match = re.search(r"/user/company/export/(\d+)/", html)
+        if not match:
+            raise ScreenerError(f"Could not find export warehouse ID for {symbol}")
+        return match.group(1)
+
+    def fetch_company_page(self, symbol: str) -> str:
+        """Fetch Screener.in company page HTML (consolidated preferred)."""
         for suffix in ["/consolidated/", "/"]:
             url = f"{_SCREENER_BASE}/company/{symbol}{suffix}"
             resp = self._client.get(url)
             if resp.status_code == 200:
-                break
-        else:
-            raise ScreenerError(f"Company page not found for {symbol}")
-
-        # Extract warehouse ID from export form action
-        match = re.search(r'formaction="/user/company/export/(\d+)/"', resp.text)
-        if not match:
-            # Try alternate pattern
-            match = re.search(r"/user/company/export/(\d+)/", resp.text)
-        if not match:
-            raise ScreenerError(f"Could not find export warehouse ID for {symbol}")
-        return match.group(1)
+                self._last_html = resp.text
+                return resp.text
+        raise ScreenerError(f"Company page not found for {symbol}")
 
     def download_excel(self, symbol: str) -> bytes:
         """Download the Excel export for a symbol."""
@@ -227,9 +229,16 @@ class ScreenerClient:
             return [None] * len(date_cols)
 
         revenue_vals = _get(["sales", "revenue", "total revenue"])
+        expenses_vals = _get(["expenses"])
         op_income_vals = _get(["operating profit"])
-        net_income_vals = _get(["net profit", "profit after tax", "pat"])
+        opm_vals = _get(["opm %", "opm%"])
+        other_income_vals = _get(["other income"])
+        interest_vals = _get(["interest"])
         depreciation_vals = _get(["depreciation"])
+        pbt_vals = _get(["profit before tax"])
+        tax_pct_vals = _get(["tax %", "tax%"])
+        net_income_vals = _get(["net profit", "profit after tax", "pat"])
+        eps_vals = _get(["eps in rs", "eps"])
 
         # Build QuarterlyResult for each quarter
         results = []
@@ -244,9 +253,10 @@ class ScreenerClient:
             if operating_income is not None and depreciation is not None:
                 ebitda = operating_income + depreciation
 
-            # Margins
-            operating_margin = None
-            if operating_income is not None and revenue and revenue != 0:
+            # Use Screener's OPM% directly (as fraction)
+            opm_raw = opm_vals[i] if i < len(opm_vals) else None
+            operating_margin = opm_raw / 100 if opm_raw is not None else None
+            if operating_margin is None and operating_income is not None and revenue and revenue != 0:
                 operating_margin = operating_income / revenue
 
             net_margin = None
@@ -258,13 +268,18 @@ class ScreenerClient:
                     symbol=symbol,
                     quarter_end=quarter_end,
                     revenue=revenue,
+                    expenses=expenses_vals[i] if i < len(expenses_vals) else None,
                     operating_income=operating_income,
                     net_income=net_income,
                     ebitda=ebitda,
-                    eps=None,  # Not directly available; compute externally if needed
-                    eps_diluted=None,
+                    eps=eps_vals[i] if i < len(eps_vals) else None,
                     operating_margin=operating_margin,
                     net_margin=net_margin,
+                    other_income=other_income_vals[i] if i < len(other_income_vals) else None,
+                    depreciation=depreciation,
+                    interest=interest_vals[i] if i < len(interest_vals) else None,
+                    profit_before_tax=pbt_vals[i] if i < len(pbt_vals) else None,
+                    tax_pct=tax_pct_vals[i] if i < len(tax_pct_vals) else None,
                 )
             )
 
@@ -469,6 +484,13 @@ class ScreenerClient:
         # P&L fields
         revenue = _extract_row_values(pl_start, pl_end, "Sales")
         employee_cost = _extract_row_values(pl_start, pl_end, "Employee Cost")
+        raw_material_cost = _extract_row_values(pl_start, pl_end, "Raw Material Cost")
+        power_and_fuel = _extract_row_values(pl_start, pl_end, "Power & Fuel Cost")
+        other_mfr_exp = _extract_row_values(pl_start, pl_end, "Other Manufacturing Expenses")
+        selling_and_admin = _extract_row_values(pl_start, pl_end, "Selling and Admin Expenses")
+        other_expenses_detail = _extract_row_values(pl_start, pl_end, "Other Expenses")
+        total_expenses = _extract_row_values(pl_start, pl_end, "Expenses")
+        operating_profit = _extract_row_values(pl_start, pl_end, "Operating Profit")
         other_income = _extract_row_values(pl_start, pl_end, "Other Income")
         depreciation = _extract_row_values(pl_start, pl_end, "Depreciation")
         interest = _extract_row_values(pl_start, pl_end, "Interest")
@@ -556,6 +578,13 @@ class ScreenerClient:
                 fiscal_year_end=fy_end,
                 revenue=revenue[i] if i < len(revenue) else None,
                 employee_cost=employee_cost[i] if i < len(employee_cost) else None,
+                raw_material_cost=raw_material_cost[i] if i < len(raw_material_cost) else None,
+                power_and_fuel=power_and_fuel[i] if i < len(power_and_fuel) else None,
+                other_mfr_exp=other_mfr_exp[i] if i < len(other_mfr_exp) else None,
+                selling_and_admin=selling_and_admin[i] if i < len(selling_and_admin) else None,
+                other_expenses_detail=other_expenses_detail[i] if i < len(other_expenses_detail) else None,
+                total_expenses=total_expenses[i] if i < len(total_expenses) else None,
+                operating_profit=operating_profit[i] if i < len(operating_profit) else None,
                 other_income=other_income[i] if i < len(other_income) else None,
                 depreciation=depreciation[i] if i < len(depreciation) else None,
                 interest=interest[i] if i < len(interest) else None,
@@ -604,6 +633,190 @@ class ScreenerClient:
         annual_eps = self.parse_annual_eps(symbol, excel_bytes)
         annual_fin = self.parse_annual_financials(symbol, excel_bytes)
         return quarters, annual_eps, annual_fin
+
+    # -- HTML Parsing --
+
+    @staticmethod
+    def _parse_table_section(soup: BeautifulSoup, section_id: str) -> dict[str, list[tuple[str, float | None]]]:
+        """Parse a Screener data table section into {row_label: [(date, value), ...]}."""
+        section = soup.find("section", id=section_id)
+        if not section:
+            return {}
+
+        table = section.find("table", class_="data-table")
+        if not table:
+            return {}
+
+        # Extract date columns from <th data-date-key="...">
+        headers = table.find("thead")
+        if not headers:
+            return {}
+        dates: list[str] = []
+        for th in headers.find_all("th"):
+            dk = th.get("data-date-key")
+            if dk:
+                dates.append(dk)  # Already YYYY-MM-DD format
+
+        if not dates:
+            return {}
+
+        # Extract rows
+        result: dict[str, list[tuple[str, float | None]]] = {}
+        tbody = table.find("tbody")
+        if not tbody:
+            return {}
+
+        for tr in tbody.find_all("tr", recursive=False):
+            tds = tr.find_all("td")
+            if not tds:
+                continue
+            # First td is the label (may contain a <button> for sub-items)
+            label_td = tds[0]
+            label = label_td.get_text(strip=True)
+            if not label:
+                continue
+
+            values: list[tuple[str, float | None]] = []
+            for i, date_key in enumerate(dates):
+                td_idx = i + 1  # offset by label column
+                if td_idx < len(tds):
+                    raw = tds[td_idx].get_text(strip=True)
+                    raw = raw.replace(",", "").replace("%", "").strip()
+                    if not raw or raw == "—" or raw == "-":
+                        values.append((date_key, None))
+                    else:
+                        try:
+                            values.append((date_key, float(raw)))
+                        except ValueError:
+                            values.append((date_key, None))
+                else:
+                    values.append((date_key, None))
+            result[label] = values
+
+        return result
+
+    def parse_quarterly_from_html(self, symbol: str, html: str) -> list[QuarterlyResult]:
+        """Parse quarterly results from Screener.in HTML #quarters section."""
+        soup = BeautifulSoup(html, "html.parser")
+        data = self._parse_table_section(soup, "quarters")
+        if not data:
+            return []
+
+        # Flexible label matching
+        def _find(candidates: list[str]) -> list[tuple[str, float | None]]:
+            for c in candidates:
+                cl = c.lower()
+                for label, vals in data.items():
+                    if label.lower().rstrip("+") == cl:
+                        return vals
+            return []
+
+        revenue_vals = _find(["Sales", "Revenue", "Total Revenue"])
+        expenses_vals = _find(["Expenses"])
+        op_income_vals = _find(["Operating Profit", "Financing Profit"])
+        opm_vals = _find(["OPM %", "OPM%", "Financing Margin %", "Financing Margin%"])
+        other_income_vals = _find(["Other Income"])
+        interest_vals = _find(["Interest"])
+        depreciation_vals = _find(["Depreciation"])
+        pbt_vals = _find(["Profit before tax"])
+        tax_pct_vals = _find(["Tax %", "Tax%"])
+        net_income_vals = _find(["Net Profit"])
+        eps_vals = _find(["EPS in Rs"])
+
+        # Build date list from first non-empty series
+        first_series = revenue_vals or expenses_vals or net_income_vals
+        if not first_series:
+            return []
+
+        results = []
+        for i, (date_key, _) in enumerate(first_series):
+            def _val(series: list[tuple[str, float | None]]) -> float | None:
+                return series[i][1] if i < len(series) else None
+
+            revenue = _val(revenue_vals)
+            operating_income = _val(op_income_vals)
+            net_income = _val(net_income_vals)
+            depreciation = _val(depreciation_vals)
+
+            # OPM from Screener (already percentage, e.g. 30 means 30%)
+            opm_raw = _val(opm_vals)
+            operating_margin = opm_raw / 100 if opm_raw is not None else None
+
+            # EBITDA = operating_income + depreciation
+            ebitda = None
+            if operating_income is not None and depreciation is not None:
+                ebitda = operating_income + depreciation
+
+            # Net margin
+            net_margin = None
+            if net_income is not None and revenue and revenue != 0:
+                net_margin = net_income / revenue
+
+            results.append(QuarterlyResult(
+                symbol=symbol,
+                quarter_end=date_key,
+                revenue=revenue,
+                expenses=_val(expenses_vals),
+                operating_income=operating_income,
+                net_income=net_income,
+                ebitda=ebitda,
+                eps=_val(eps_vals),
+                operating_margin=operating_margin,
+                net_margin=net_margin,
+                other_income=_val(other_income_vals),
+                depreciation=depreciation,
+                interest=_val(interest_vals),
+                profit_before_tax=_val(pbt_vals),
+                tax_pct=_val(tax_pct_vals),
+            ))
+
+        results.sort(key=lambda r: r.quarter_end)
+        return results
+
+    def parse_ratios_from_html(self, symbol: str, html: str) -> list[ScreenerRatios]:
+        """Parse efficiency ratios from Screener.in HTML #ratios section."""
+        soup = BeautifulSoup(html, "html.parser")
+        data = self._parse_table_section(soup, "ratios")
+        if not data:
+            return []
+
+        def _find(candidates: list[str]) -> list[tuple[str, float | None]]:
+            for c in candidates:
+                cl = c.lower()
+                for label, vals in data.items():
+                    if label.lower().rstrip("+") == cl:
+                        return vals
+            return []
+
+        debtor_vals = _find(["Debtor Days"])
+        inventory_vals = _find(["Inventory Days"])
+        payable_vals = _find(["Days Payable"])
+        ccc_vals = _find(["Cash Conversion Cycle"])
+        wc_vals = _find(["Working Capital Days"])
+        roce_vals = _find(["ROCE %", "ROCE%", "ROE %", "ROE%"])
+
+        first_series = debtor_vals or roce_vals or wc_vals
+        if not first_series:
+            return []
+
+        results = []
+        for i, (date_key, _) in enumerate(first_series):
+            def _val(series: list[tuple[str, float | None]]) -> float | None:
+                return series[i][1] if i < len(series) else None
+
+            results.append(ScreenerRatios(
+                symbol=symbol,
+                fiscal_year_end=date_key,
+                debtor_days=_val(debtor_vals),
+                inventory_days=_val(inventory_vals),
+                days_payable=_val(payable_vals),
+                cash_conversion_cycle=_val(ccc_vals),
+                working_capital_days=_val(wc_vals),
+                roce_pct=_val(roce_vals),
+            ))
+
+        results.sort(key=lambda r: r.fiscal_year_end)
+        return results
 
     def close(self) -> None:
         self._client.close()
