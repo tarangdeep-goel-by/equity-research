@@ -29,53 +29,46 @@ console = Console()
 
 @app.command()
 def fetch(
-    symbol: Annotated[str | None, typer.Option("-s", "--symbol", help="Fetch for specific symbol (default: all in watchlist)")] = None,
-    quarters_only: Annotated[bool, typer.Option("--quarters-only", help="Only fetch quarterly results")] = False,
+    symbol: Annotated[str | None, typer.Option("-s", "--symbol", help="Fetch for specific symbol")] = None,
     valuation_only: Annotated[bool, typer.Option("--valuation-only", help="Only fetch valuation snapshot")] = False,
 ) -> None:
-    """Fetch fundamentals for watchlist stocks and store them."""
+    """Fetch valuation snapshots from yfinance.
+
+    Fetches daily valuation metrics (P/E, P/B, margins, beta, etc.) for all
+    Nifty 500 stocks. Quarterly results come from Screener.in via 'fund backfill'.
+    """
     with FlowStore() as store:
         if symbol:
             symbols = [symbol.upper()]
         else:
-            watchlist = store.get_watchlist()
-            if not watchlist:
-                console.print("[yellow]Watchlist is empty. Use 'flowtrack holding add SYMBOL' first.[/]")
+            # Use scanner symbols (Nifty 500) instead of watchlist
+            symbols = store.get_all_scanner_symbols()
+            if not symbols:
+                console.print("[yellow]No index constituents. Run 'flowtrack scan refresh' first.[/]")
                 raise typer.Exit(1)
-            symbols = [w.symbol for w in watchlist]
 
     client = FundClient()
     total = len(symbols)
 
     with Progress(console=console) as progress:
-        task = progress.add_task("Fetching fundamentals...", total=total)
+        task = progress.add_task("Fetching valuations...", total=total)
 
         with FlowStore() as store:
             for i, sym in enumerate(symbols):
                 progress.update(task, description=f"[bold]{sym}[/]")
 
                 try:
-                    if not valuation_only:
-                        results = client.fetch_quarterly_results(sym)
-                        if results:
-                            count = store.upsert_quarterly_results(results)
-                            console.print(f"  [green]+[/] {sym}: {len(results)} quarters")
-
-                    if not quarters_only:
-                        snap = client.fetch_valuation_snapshot(sym)
-                        store.upsert_valuation_snapshot(snap)
-                        console.print(f"  [green]+[/] {sym}: valuation snapshot")
-
+                    snap = client.fetch_valuation_snapshot(sym)
+                    store.upsert_valuation_snapshot(snap)
                 except YFinanceError as e:
                     console.print(f"  [red]x[/] {sym}: {e}")
 
                 progress.advance(task)
 
-                # Rate limit between stocks
                 if i < total - 1:
-                    time.sleep(0.5)
+                    time.sleep(0.3)
 
-    console.print(f"\n[bold]Done.[/] Fetched fundamentals for {total} stock(s).")
+    console.print(f"\n[bold]Done.[/] Fetched valuation snapshots for {total} stock(s).")
 
 
 @app.command()
