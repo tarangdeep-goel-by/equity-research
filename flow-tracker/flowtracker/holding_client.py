@@ -33,11 +33,14 @@ BACKOFF_BASE = 1
 _XBRL_CATEGORY_MAP = {
     "ShareholdingOfPromoterAndPromoterGroup": "Promoter",
     "InstitutionsForeign": "FII",
-    "InstitutionsDomestic": "DII",
+    "InstitutionsForeignPortfolioInvestor": "FII",  # older XBRL format
     "MutualFundsOrUTI": "MF",
     "MutualFundsOrUti": "MF",  # older format uses lowercase 'ti'
     "InsuranceCompanies": "Insurance",
+    "AlternativeInvestmentFunds": "AIF",
     "NonInstitutions": "Public",
+    # NOTE: InstitutionsDomestic (DII) deliberately excluded —
+    # it's a parent of MF + Insurance + AIF and would double-count.
 }
 
 # The XBRL element name we look for shareholding percentage
