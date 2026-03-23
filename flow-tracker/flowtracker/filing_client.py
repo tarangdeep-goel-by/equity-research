@@ -39,8 +39,8 @@ _RESEARCH_CATEGORIES = {
     "General",
 }
 
-# Default PDF storage location
-_DEFAULT_FILING_DIR = Path.home() / ".local" / "share" / "flowtracker" / "filings"
+# Default PDF storage location — in vault alongside research
+_DEFAULT_FILING_DIR = Path.home() / "vault" / "stocks"
 
 
 class FilingClient:
@@ -223,7 +223,7 @@ class FilingClient:
 
         # Build local path
         slug = re.sub(r'[^a-zA-Z0-9]+', '_', filing.headline[:60]).strip('_').lower()
-        dir_path = base_dir / filing.symbol / _safe_dirname(filing.subcategory or filing.category)
+        dir_path = base_dir / filing.symbol / "filings" / _safe_dirname(filing.subcategory or filing.category)
         dir_path.mkdir(parents=True, exist_ok=True)
         file_path = dir_path / f"{filing.filing_date}_{slug}.pdf"
 
@@ -252,7 +252,7 @@ class FilingClient:
         if base_dir is None:
             base_dir = _DEFAULT_FILING_DIR
 
-        dir_path = base_dir / symbol / _safe_dirname(category)
+        dir_path = base_dir / symbol / "filings" / _safe_dirname(category)
         dir_path.mkdir(parents=True, exist_ok=True)
         file_path = dir_path / filename
 
