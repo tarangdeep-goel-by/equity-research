@@ -19,6 +19,7 @@ from flowtracker.deals_models import BulkBlockDeal
 from flowtracker.insider_models import InsiderTransaction
 from flowtracker.estimates_models import ConsensusEstimate, EarningsSurprise
 from flowtracker.mfportfolio_models import MFSchemeHolding, MFHoldingChange
+from flowtracker.filing_models import CorporateFiling
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
 _DEFAULT_DB_NAME = "flows.db"
@@ -346,6 +347,26 @@ CREATE TABLE IF NOT EXISTS mf_scheme_holdings (
 
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_isin ON mf_scheme_holdings(isin);
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_month ON mf_scheme_holdings(month);
+
+CREATE TABLE IF NOT EXISTS corporate_filings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    bse_scrip_code TEXT,
+    filing_date TEXT NOT NULL,
+    category TEXT NOT NULL,
+    subcategory TEXT,
+    headline TEXT NOT NULL,
+    attachment_name TEXT NOT NULL,
+    pdf_flag INTEGER DEFAULT 0,
+    file_size INTEGER,
+    news_id TEXT,
+    local_path TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(news_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_filings_symbol ON corporate_filings(symbol);
+CREATE INDEX IF NOT EXISTS idx_filings_date ON corporate_filings(filing_date);
 """
 
 
@@ -1875,6 +1896,62 @@ class FlowStore:
             (month,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # -- Corporate Filings --
+
+    def upsert_filings(self, filings: list[CorporateFiling]) -> int:
+        """Insert or replace corporate filing records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for f in filings:
+            if not f.news_id:
+                continue
+            cursor.execute(
+                "INSERT OR REPLACE INTO corporate_filings "
+                "(symbol, bse_scrip_code, filing_date, category, subcategory, "
+                "headline, attachment_name, pdf_flag, file_size, news_id, local_path) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (f.symbol, f.bse_scrip_code, f.filing_date, f.category,
+                 f.subcategory, f.headline, f.attachment_name, f.pdf_flag,
+                 f.file_size, f.news_id, f.local_path),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def update_filing_path(self, news_id: str, local_path: str) -> None:
+        """Update the local file path for a downloaded filing."""
+        self._conn.execute(
+            "UPDATE corporate_filings SET local_path = ? WHERE news_id = ?",
+            (local_path, news_id),
+        )
+        self._conn.commit()
+
+    def get_filings(
+        self, symbol: str, category: str | None = None, limit: int = 50,
+    ) -> list[CorporateFiling]:
+        """Get stored filings for a symbol."""
+        if category:
+            rows = self._conn.execute(
+                "SELECT * FROM corporate_filings WHERE symbol = ? "
+                "AND (category LIKE ? OR subcategory LIKE ?) "
+                "ORDER BY filing_date DESC LIMIT ?",
+                (symbol, f"%{category}%", f"%{category}%", limit),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM corporate_filings WHERE symbol = ? "
+                "ORDER BY filing_date DESC LIMIT ?",
+                (symbol, limit),
+            ).fetchall()
+        return [CorporateFiling(
+            symbol=r["symbol"], bse_scrip_code=r["bse_scrip_code"],
+            filing_date=r["filing_date"], category=r["category"],
+            subcategory=r["subcategory"] or "", headline=r["headline"],
+            attachment_name=r["attachment_name"], pdf_flag=r["pdf_flag"],
+            file_size=r["file_size"], news_id=r["news_id"],
+            local_path=r["local_path"],
+        ) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""
