@@ -17,6 +17,24 @@ class QuarterlyResult(BaseModel):
     eps_diluted: float | None = None
     operating_margin: float | None = None
     net_margin: float | None = None
+    expenses: float | None = None
+    other_income: float | None = None
+    depreciation: float | None = None
+    interest: float | None = None
+    profit_before_tax: float | None = None
+    tax_pct: float | None = None
+
+
+class ScreenerRatios(BaseModel):
+    """Annual efficiency ratios from Screener.in HTML page."""
+    symbol: str
+    fiscal_year_end: str  # "2025-03-31"
+    debtor_days: float | None = None
+    inventory_days: float | None = None
+    days_payable: float | None = None
+    cash_conversion_cycle: float | None = None
+    working_capital_days: float | None = None
+    roce_pct: float | None = None
 
 
 class ValuationSnapshot(BaseModel):
@@ -109,6 +127,13 @@ class AnnualFinancials(BaseModel):
     # P&L
     revenue: float | None = None
     employee_cost: float | None = None
+    raw_material_cost: float | None = None
+    power_and_fuel: float | None = None
+    other_mfr_exp: float | None = None
+    selling_and_admin: float | None = None
+    other_expenses_detail: float | None = None
+    total_expenses: float | None = None
+    operating_profit: float | None = None
     other_income: float | None = None
     depreciation: float | None = None
     interest: float | None = None
