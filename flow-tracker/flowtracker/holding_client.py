@@ -44,8 +44,16 @@ _XBRL_CATEGORY_MAP = {
 _PERCENTAGE_TAG = "ShareholdingAsAPercentageOfTotalNumberOfShares"
 
 # XBRL element names for promoter pledge/encumbrance
-_PLEDGE_TAG = "EncumberedShareUnderPledgedAsPercentageOfTotalNumberOfShares"
-_ENCUMBERED_TAG = "EncumberedSharesHeldAsPercentageOfTotalNumberOfShares"
+# New format (2024+): EncumberedShareUnderPledged..., EncumberedSharesHeld...
+# Old format (2018-2023): PledgedOrEncumberedSharesHeld...
+_PLEDGE_TAGS = {
+    "EncumberedShareUnderPledgedAsPercentageOfTotalNumberOfShares",
+    "PledgedOrEncumberedSharesHeldAsPercentageOfTotalNumberOfShares",
+}
+_ENCUMBERED_TAGS = {
+    "EncumberedSharesHeldAsPercentageOfTotalNumberOfShares",
+    "PledgedOrEncumberedSharesHeldAsPercentageOfTotalNumberOfShares",
+}
 _PROMOTER_CONTEXT = "ShareholdingOfPromoterAndPromoterGroup"
 
 
@@ -280,9 +288,9 @@ class NSEHoldingClient:
             if val is None:
                 continue
 
-            if local == _PLEDGE_TAG:
+            if local in _PLEDGE_TAGS:
                 pledge_pct_raw = val
-            elif local == _ENCUMBERED_TAG:
+            elif local in _ENCUMBERED_TAGS:
                 encumbered_pct_raw = val
 
         pledge: PromoterPledge | None = None
