@@ -156,16 +156,37 @@ CREATE TABLE IF NOT EXISTS valuation_snapshot (
     price REAL,
     market_cap REAL,
     enterprise_value REAL,
+    fifty_two_week_high REAL,
+    fifty_two_week_low REAL,
+    beta REAL,
     pe_trailing REAL,
     pe_forward REAL,
     pb_ratio REAL,
     ev_ebitda REAL,
-    dividend_yield REAL,
+    ev_revenue REAL,
+    ps_ratio REAL,
+    peg_ratio REAL,
+    gross_margin REAL,
+    operating_margin REAL,
+    net_margin REAL,
     roe REAL,
     roa REAL,
+    revenue_growth REAL,
+    earnings_growth REAL,
+    earnings_quarterly_growth REAL,
+    dividend_yield REAL,
     debt_to_equity REAL,
     current_ratio REAL,
+    total_cash REAL,
+    total_debt REAL,
+    book_value_per_share REAL,
     free_cash_flow REAL,
+    operating_cash_flow REAL,
+    revenue_per_share REAL,
+    cash_per_share REAL,
+    avg_volume INTEGER,
+    float_shares INTEGER,
+    shares_outstanding INTEGER,
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, date)
 );
@@ -345,6 +366,31 @@ class FlowStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
+        self._migrate_valuation_snapshot()
+
+    def _migrate_valuation_snapshot(self) -> None:
+        """Add new columns to valuation_snapshot if they don't exist."""
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(valuation_snapshot)").fetchall()
+        }
+        new_cols = [
+            ("fifty_two_week_high", "REAL"), ("fifty_two_week_low", "REAL"),
+            ("beta", "REAL"), ("ev_revenue", "REAL"), ("ps_ratio", "REAL"),
+            ("peg_ratio", "REAL"), ("gross_margin", "REAL"),
+            ("operating_margin", "REAL"), ("net_margin", "REAL"),
+            ("revenue_growth", "REAL"), ("earnings_growth", "REAL"),
+            ("earnings_quarterly_growth", "REAL"), ("total_cash", "REAL"),
+            ("total_debt", "REAL"), ("book_value_per_share", "REAL"),
+            ("operating_cash_flow", "REAL"), ("revenue_per_share", "REAL"),
+            ("cash_per_share", "REAL"), ("avg_volume", "INTEGER"),
+            ("float_shares", "INTEGER"), ("shares_outstanding", "INTEGER"),
+        ]
+        for col, typ in new_cols:
+            if col not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE valuation_snapshot ADD COLUMN {col} {typ}"
+                )
 
     def upsert_flows(self, flows: list[DailyFlow]) -> int:
         """Insert or replace flows. Logs changes to audit_log."""
@@ -1082,14 +1128,26 @@ class FlowStore:
             )
         cursor.execute(
             "INSERT OR REPLACE INTO valuation_snapshot "
-            "(symbol, date, price, market_cap, enterprise_value, pe_trailing, pe_forward, "
-            "pb_ratio, ev_ebitda, dividend_yield, roe, roa, debt_to_equity, current_ratio, free_cash_flow) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "(symbol, date, price, market_cap, enterprise_value, "
+            "fifty_two_week_high, fifty_two_week_low, beta, "
+            "pe_trailing, pe_forward, pb_ratio, ev_ebitda, ev_revenue, ps_ratio, peg_ratio, "
+            "gross_margin, operating_margin, net_margin, roe, roa, "
+            "revenue_growth, earnings_growth, earnings_quarterly_growth, "
+            "dividend_yield, debt_to_equity, current_ratio, total_cash, total_debt, "
+            "book_value_per_share, free_cash_flow, operating_cash_flow, "
+            "revenue_per_share, cash_per_share, avg_volume, float_shares, shares_outstanding) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (snapshot.symbol, snapshot.date, snapshot.price, snapshot.market_cap,
-             snapshot.enterprise_value, snapshot.pe_trailing, snapshot.pe_forward,
-             snapshot.pb_ratio, snapshot.ev_ebitda, snapshot.dividend_yield,
-             snapshot.roe, snapshot.roa, snapshot.debt_to_equity, snapshot.current_ratio,
-             snapshot.free_cash_flow),
+             snapshot.enterprise_value, snapshot.fifty_two_week_high, snapshot.fifty_two_week_low,
+             snapshot.beta, snapshot.pe_trailing, snapshot.pe_forward, snapshot.pb_ratio,
+             snapshot.ev_ebitda, snapshot.ev_revenue, snapshot.ps_ratio, snapshot.peg_ratio,
+             snapshot.gross_margin, snapshot.operating_margin, snapshot.net_margin,
+             snapshot.roe, snapshot.roa, snapshot.revenue_growth, snapshot.earnings_growth,
+             snapshot.earnings_quarterly_growth, snapshot.dividend_yield,
+             snapshot.debt_to_equity, snapshot.current_ratio, snapshot.total_cash,
+             snapshot.total_debt, snapshot.book_value_per_share, snapshot.free_cash_flow,
+             snapshot.operating_cash_flow, snapshot.revenue_per_share, snapshot.cash_per_share,
+             snapshot.avg_volume, snapshot.float_shares, snapshot.shares_outstanding),
         )
         self._conn.commit()
         return cursor.rowcount
@@ -1109,15 +1167,32 @@ class FlowStore:
             "ORDER BY date ASC",
             (symbol.upper(), f"-{days}"),
         ).fetchall()
-        return [ValuationSnapshot(
-            symbol=r["symbol"], date=r["date"], price=r["price"],
-            market_cap=r["market_cap"], enterprise_value=r["enterprise_value"],
-            pe_trailing=r["pe_trailing"], pe_forward=r["pe_forward"],
-            pb_ratio=r["pb_ratio"], ev_ebitda=r["ev_ebitda"],
-            dividend_yield=r["dividend_yield"], roe=r["roe"], roa=r["roa"],
-            debt_to_equity=r["debt_to_equity"], current_ratio=r["current_ratio"],
-            free_cash_flow=r["free_cash_flow"],
-        ) for r in rows]
+        def _snap(r: dict) -> ValuationSnapshot:
+            return ValuationSnapshot(
+                symbol=r["symbol"], date=r["date"], price=r["price"],
+                market_cap=r["market_cap"], enterprise_value=r["enterprise_value"],
+                fifty_two_week_high=r.get("fifty_two_week_high"),
+                fifty_two_week_low=r.get("fifty_two_week_low"),
+                beta=r.get("beta"),
+                pe_trailing=r["pe_trailing"], pe_forward=r["pe_forward"],
+                pb_ratio=r["pb_ratio"], ev_ebitda=r["ev_ebitda"],
+                ev_revenue=r.get("ev_revenue"), ps_ratio=r.get("ps_ratio"),
+                peg_ratio=r.get("peg_ratio"),
+                gross_margin=r.get("gross_margin"), operating_margin=r.get("operating_margin"),
+                net_margin=r.get("net_margin"), roe=r["roe"], roa=r["roa"],
+                revenue_growth=r.get("revenue_growth"), earnings_growth=r.get("earnings_growth"),
+                earnings_quarterly_growth=r.get("earnings_quarterly_growth"),
+                dividend_yield=r["dividend_yield"],
+                debt_to_equity=r["debt_to_equity"], current_ratio=r["current_ratio"],
+                total_cash=r.get("total_cash"), total_debt=r.get("total_debt"),
+                book_value_per_share=r.get("book_value_per_share"),
+                free_cash_flow=r["free_cash_flow"],
+                operating_cash_flow=r.get("operating_cash_flow"),
+                revenue_per_share=r.get("revenue_per_share"), cash_per_share=r.get("cash_per_share"),
+                avg_volume=r.get("avg_volume"), float_shares=r.get("float_shares"),
+                shares_outstanding=r.get("shares_outstanding"),
+            )
+        return [_snap(r) for r in rows]
 
     def get_valuation_band(self, symbol: str, metric: str, days: int = 1095) -> ValuationBand | None:
         """Compute min/max/median/percentile for a valuation metric over N days.
@@ -1125,7 +1200,11 @@ class FlowStore:
         metric must be a column name in valuation_snapshot (e.g., 'pe_trailing', 'ev_ebitda', 'pb_ratio').
         """
         # Validate metric name to prevent SQL injection
-        valid_metrics = {"pe_trailing", "pe_forward", "pb_ratio", "ev_ebitda", "dividend_yield"}
+        valid_metrics = {
+            "pe_trailing", "pe_forward", "pb_ratio", "ev_ebitda", "ev_revenue",
+            "ps_ratio", "peg_ratio", "dividend_yield", "beta",
+            "gross_margin", "operating_margin", "net_margin", "roe", "roa",
+        }
         if metric not in valid_metrics:
             return None
 

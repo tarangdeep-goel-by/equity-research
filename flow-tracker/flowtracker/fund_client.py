@@ -149,19 +149,49 @@ class FundClient:
         return ValuationSnapshot(
             symbol=symbol,
             date=date.today().isoformat(),
+            # Price context
             price=info.get("currentPrice") or info.get("regularMarketPrice"),
             market_cap=info.get("marketCap"),
             enterprise_value=info.get("enterpriseValue"),
+            fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
+            fifty_two_week_low=info.get("fiftyTwoWeekLow"),
+            beta=info.get("beta"),
+            # Valuation multiples
             pe_trailing=info.get("trailingPE"),
             pe_forward=info.get("forwardPE"),
             pb_ratio=info.get("priceToBook"),
             ev_ebitda=info.get("enterpriseToEbitda"),
-            dividend_yield=info.get("dividendYield"),
+            ev_revenue=info.get("enterpriseToRevenue"),
+            ps_ratio=info.get("priceToSalesTrailing12Months"),
+            peg_ratio=info.get("pegRatio"),
+            # Profitability
+            gross_margin=info.get("grossMargins"),
+            operating_margin=info.get("operatingMargins"),
+            net_margin=info.get("profitMargins"),
             roe=info.get("returnOnEquity"),
             roa=info.get("returnOnAssets"),
+            # Growth
+            revenue_growth=info.get("revenueGrowth"),
+            earnings_growth=info.get("earningsGrowth"),
+            earnings_quarterly_growth=info.get("earningsQuarterlyGrowth"),
+            # Yield
+            dividend_yield=info.get("dividendYield"),
+            # Balance sheet
             debt_to_equity=_div100(info.get("debtToEquity")),
             current_ratio=info.get("currentRatio"),
+            total_cash=info.get("totalCash"),
+            total_debt=info.get("totalDebt"),
+            book_value_per_share=info.get("bookValue"),
+            # Cash flow
             free_cash_flow=info.get("freeCashflow"),
+            operating_cash_flow=info.get("operatingCashflow"),
+            # Per-share
+            revenue_per_share=info.get("revenuePerShare"),
+            cash_per_share=info.get("totalCashPerShare"),
+            # Liquidity
+            avg_volume=info.get("averageVolume"),
+            float_shares=info.get("floatShares"),
+            shares_outstanding=info.get("sharesOutstanding"),
         )
 
     def compute_historical_pe(

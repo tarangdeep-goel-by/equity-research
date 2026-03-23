@@ -22,19 +22,49 @@ class QuarterlyResult(BaseModel):
 class ValuationSnapshot(BaseModel):
     symbol: str
     date: str
+    # Price context
     price: float | None = None
     market_cap: float | None = None
     enterprise_value: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    beta: float | None = None
+    # Valuation multiples
     pe_trailing: float | None = None
     pe_forward: float | None = None
     pb_ratio: float | None = None
     ev_ebitda: float | None = None
-    dividend_yield: float | None = None
+    ev_revenue: float | None = None
+    ps_ratio: float | None = None       # price-to-sales
+    peg_ratio: float | None = None
+    # Profitability
+    gross_margin: float | None = None
+    operating_margin: float | None = None
+    net_margin: float | None = None
     roe: float | None = None
     roa: float | None = None
+    # Growth
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    earnings_quarterly_growth: float | None = None
+    # Yield & returns
+    dividend_yield: float | None = None
+    # Balance sheet
     debt_to_equity: float | None = None
     current_ratio: float | None = None
+    total_cash: float | None = None
+    total_debt: float | None = None
+    book_value_per_share: float | None = None
+    # Cash flow
     free_cash_flow: float | None = None
+    operating_cash_flow: float | None = None
+    # Per-share
+    revenue_per_share: float | None = None
+    cash_per_share: float | None = None
+    # Liquidity
+    avg_volume: int | None = None
+    float_shares: int | None = None
+    shares_outstanding: int | None = None
 
 
 class LiveSnapshot(BaseModel):
