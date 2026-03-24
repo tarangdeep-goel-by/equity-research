@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ symbol }} — Fundamentals Deep Dive</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+:root{--bg:#0f1117;--card:#1a1d28;--border:#2a2d3a;--text:#e4e4e7;--dim:#71717a;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#eab308;--cyan:#06b6d4;--purple:#a855f7;--orange:#f97316}
+*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;line-height:1.6;padding:2rem}
+.container{max-width:1400px;margin:0 auto}h1{font-size:2rem;margin-bottom:0.25rem}.subtitle{color:var(--dim);margin-bottom:2rem;font-size:0.9rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem}.card h2{font-size:1.05rem;color:var(--cyan);margin-bottom:0.8rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem}
+.full-width{grid-column:1/-1}table{width:100%;border-collapse:collapse;font-size:0.82rem}th{text-align:left;padding:0.35rem 0.5rem;color:var(--dim);border-bottom:1px solid var(--border);font-weight:500}td{padding:0.35rem 0.5rem;border-bottom:1px solid var(--border)}
+th.r,td.r{text-align:right}tr:hover{background:rgba(255,255,255,0.03)}.up{color:var(--green)}.down{color:var(--red)}.hl{color:var(--cyan);font-weight:600}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600}.bg{background:rgba(34,197,94,0.15);color:var(--green)}.br{background:rgba(239,68,68,0.15);color:var(--red)}.by{background:rgba(234,179,8,0.15);color:var(--yellow)}
+.stat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:0.8rem;margin-bottom:1.5rem}.stat{text-align:center}.stat-value{font-size:1.3rem;font-weight:700}.stat-label{font-size:0.7rem;color:var(--dim)}
+.narrative{background:rgba(6,182,212,0.05);border-left:3px solid var(--cyan);padding:1rem;border-radius:0 8px 8px 0;margin:1rem 0;font-size:0.85rem}.narrative strong{color:var(--cyan)}
+.explain{background:rgba(168,85,247,0.06);border-left:3px solid var(--purple);padding:0.8rem 1rem;border-radius:0 8px 8px 0;margin:0.6rem 0;font-size:0.82rem;color:#c4b5fd}
+.explain strong{color:var(--purple)}
+.example{background:rgba(234,179,8,0.06);border-left:3px solid var(--yellow);padding:0.8rem 1rem;border-radius:0 8px 8px 0;margin:0.6rem 0;font-size:0.82rem}
+.example strong{color:var(--yellow)}
+.callout{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:1rem;margin:1rem 0;font-size:0.85rem}
+.callout-warn{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.3)}
+.callout-neutral{background:rgba(234,179,8,0.08);border-color:rgba(234,179,8,0.3)}
+.note{color:var(--dim);font-size:0.78rem;font-style:italic;margin-bottom:0.5rem}
+.chart-box{position:relative;height:380px}
+.cite{color:var(--dim);font-size:0.72rem;font-style:italic}
+.source-tag{display:inline-block;background:rgba(6,182,212,0.1);color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:0.7rem;margin-left:4px}
+.term{color:var(--purple);font-weight:600;cursor:help;border-bottom:1px dotted var(--purple)}
+@media(max-width:768px){.grid,.grid-3{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="container">
+
+{# ============ SECTION 1: HEADER ============ #}
+<h1>{{ symbol }} <span style="color:var(--dim);font-weight:400;font-size:1.1rem">Fundamentals & Valuation</span></h1>
+<p class="subtitle">{{ industry }} | Market Cap ₹{{ "{:,.0f}".format(mcap_cr) }} Cr | Data: yfinance + Screener.in + BSE Concalls | {{ report_date }}</p>
+
+{# ============ SECTION 2: KEY STATS BAR ============ #}
+<div class="stat-grid">
+<div class="stat"><div class="stat-value">₹{{ "{:,.1f}".format(price) }}</div><div class="stat-label">CMP (Current Market Price)</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">{{ "%.1f"|format(pe_trailing) }}x</div><div class="stat-label">P/E — {% if pe_percentile == 0 %}All-Time Low (0th percentile){% else %}{{ "%.0f"|format(pe_percentile) }}th percentile{% endif %}</div></div>
+<div class="stat"><div class="stat-value {% if v.earnings_growth and v.earnings_growth > 0 %}up{% else %}down{% endif %}">{{ "%.1f"|format((v.earnings_growth or 0) * 100) }}%</div><div class="stat-label">Earnings Growth (last 12 months)</div></div>
+<div class="stat"><div class="stat-value">{{ "%.2f"|format(v.beta or 0) }}</div><div class="stat-label">Beta (low = less volatile)</div></div>
+<div class="stat"><div class="stat-value up">{{ roce }}%</div><div class="stat-label">ROCE (latest FY)</div></div>
+<div class="stat"><div class="stat-value up">+{{ upside_pct }}%</div><div class="stat-label">Analyst Upside ({{ num_analysts }} analysts)</div></div>
+</div>
+
+{# ============ SECTION 3: GLOSSARY ============ #}
+<div class="card" style="margin-bottom:2rem">
+<h2>Financial Terms Used in This Report — Plain English Guide</h2>
+<p class="note">Every term you'll see below, explained with {{ symbol }}'s actual numbers as examples.</p>
+<table>
+<tr><td class="hl" style="width:140px">CMP</td><td><strong>Current Market Price</strong> — what one share costs right now on the stock exchange. {{ symbol }}'s CMP is ₹{{ "{:,.0f}".format(price) }}. This changes every second during market hours.</td></tr>
+<tr><td class="hl">Market Cap</td><td><strong>Market Capitalization</strong> — the total value of ALL shares of the company. CMP × Total Shares = ₹{{ "{:,.0f}".format(price) }} × {{ "%.1f"|format(shares / 1e7) }} Cr shares = ₹{{ "{:,.0f}".format(mcap_cr) }} Cr. Think of it as "how much would it cost to buy the entire company?"</td></tr>
+<tr><td class="hl">EPS</td><td><strong>Earnings Per Share</strong> — how much profit the company made for each share. Net Profit / Total Shares. {{ symbol }} earned ₹{{ "{:,.0f}".format(ni_annual) }} Cr in the last FY with {{ "%.1f"|format(shares / 1e7) }} Cr shares, so EPS = ~₹{{ eps_annual }}/share.</td></tr>
+<tr><td class="hl">P/E Ratio</td><td><strong>Price-to-Earnings</strong> — how many years of current earnings you're paying for. CMP / EPS. {{ symbol }}: ₹{{ "{:,.0f}".format(price) }} / ₹{{ eps_annual }} = {{ "%.1f"|format(pe_trailing) }}x. <em>Lower P/E = cheaper.</em></td></tr>
+<tr><td class="hl">ATL</td><td><strong>All-Time Low</strong> — the lowest value this metric has ever reached in the stock's history.</td></tr>
+<tr><td class="hl">EV/EBITDA</td><td><strong>Enterprise Value / EBITDA</strong>. EV = Market Cap + Debt - Cash. Better than P/E because it adjusts for cash/debt on the balance sheet.</td></tr>
+<tr><td class="hl">EBITDA</td><td><strong>Earnings Before Interest, Tax, Depreciation & Amortisation</strong> — how much cash the core business generates before accounting items.</td></tr>
+<tr><td class="hl">Gross Margin</td><td>% of revenue left after direct costs. Higher = better pricing power.</td></tr>
+<tr><td class="hl">OPM</td><td><strong>Operating Profit Margin</strong> — % of revenue left after ALL operating costs. Best measure of core business profitability.</td></tr>
+<tr><td class="hl">Net Margin</td><td>Final % left after everything — costs, interest, taxes, other income.</td></tr>
+<tr><td class="hl">ROCE</td><td><strong>Return on Capital Employed</strong> — Operating Profit / Capital Employed. Above 20% is excellent. {{ symbol }}'s {{ roce }}% means every ₹100 of capital generates ₹{{ roce }} of operating profit.</td></tr>
+<tr><td class="hl">D/E Ratio</td><td><strong>Debt-to-Equity</strong> — how leveraged the company is. {{ symbol }}'s {{ "%.3f"|format(v.debt_to_equity or 0) }} means virtually zero debt. Below 0.5 = conservative, above 1 = aggressive.</td></tr>
+<tr><td class="hl">Current Ratio</td><td>Current Assets / Current Liabilities. Above 1.5 = comfortable. {{ symbol }}: {{ "%.2f"|format(v.current_ratio or 0) }}x.</td></tr>
+<tr><td class="hl">OCF / CFO</td><td><strong>Operating Cash Flow</strong> — actual cash generated by the business. When OCF > Net Profit, earnings are "real."</td></tr>
+<tr><td class="hl">Beta</td><td>Stock's sensitivity to market moves. {{ symbol }}'s {{ "%.2f"|format(v.beta or 0) }} means if Nifty falls 10%, {{ symbol }} typically falls only {{ "%.0f"|format((v.beta or 0) * 10) }}%.</td></tr>
+<tr><td class="hl">Deferred Revenue</td><td>Cash collected but not yet recognized as revenue. High growth in deferred revenue = future revenue already locked in.</td></tr>
+<tr><td class="hl">BVPS</td><td><strong>Book Value Per Share</strong> — net assets / shares. {{ symbol }}: ₹{{ "%.0f"|format(v.book_value_per_share or 0) }}. Stock at ₹{{ "{:,.0f}".format(price) }} = {{ "%.1f"|format(price / (v.book_value_per_share or 1)) }}x book value.</td></tr>
+<tr><td class="hl">Working Capital Days</td><td>How many days of revenue are tied up in operations. Negative = customers fund the business (subscription model).</td></tr>
+</table>
+</div>
+
+{# ============ SECTION 4: VALUATION CALLOUT ============ #}
+{% if pe_percentile is not none and pe_percentile <= 10 %}
+<div class="callout" style="margin-bottom:2rem">
+<strong style="color:var(--green);font-size:1rem">This Stock is at Its Cheapest-Ever Valuation</strong><br><br>
+<div class="explain">
+<strong>What does "cheapest ever" mean?</strong> P/E is {{ "%.1f"|format(pe_trailing) }}x today. Over {{ pe_observations }} weekly observations since {{ pe_period_start }}, the P/E ranged from {{ "%.1f"|format(pe_trailing) }}x (now) to {{ "%.0f"|format(pe_band.max_val or 0) }}x. The median was {{ "%.1f"|format(pe_median) }}x. Today's {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentile) }}th percentile.
+</div>
+<div class="example">
+<strong>In rupees:</strong> At the median P/E of {{ "%.1f"|format(pe_median) }}x and current EPS of ~₹{{ eps_annual }}, the stock "should" trade at {{ "%.0f"|format(pe_median * eps_annual) }}. It trades at ₹{{ "{:,.0f}".format(price) }} — a {{ "%.0f"|format((1 - price / (pe_median * eps_annual)) * 100) }}% discount to its historical median valuation.
+</div>
+</div>
+{% elif pe_percentile is not none and pe_percentile <= 30 %}
+<div class="callout-neutral" style="border-radius:8px;padding:1rem;margin:1rem 0 2rem;font-size:0.85rem">
+<strong style="color:var(--yellow);font-size:1rem">Trading Below Historical Average</strong><br><br>
+P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentile) }}th percentile — cheaper than {{ "%.0f"|format(100 - pe_percentile) }}% of historical observations. Median P/E: {{ "%.1f"|format(pe_median) }}x.
+</div>
+{% endif %}
+
+{# ============ SECTION 5: HISTORICAL P/E CHART ============ #}
+{% if pe_chart.dates %}
+<div class="card" style="margin-bottom:2rem">
+<h2>Historical P/E — Since {{ pe_period_start[:4] }} Weekly</h2>
+<p class="note">Source: yfinance weekly prices / Screener.in annual EPS. {{ pe_observations }} observations.</p>
+<div class="chart-box"><canvas id="peChart"></canvas></div>
+<div class="explain" style="margin-top:1rem">
+<strong>How to read this chart:</strong> The orange line shows how "expensive" or "cheap" the stock was at each point. Higher = more expensive. The green dashed line is today's P/E ({{ "%.1f"|format(pe_trailing) }}x). The grey dashed line is the median ({{ "%.1f"|format(pe_median) }}x).
+</div>
+</div>
+{% endif %}
+
+{# ============ SECTION 6: PRICE VS P/E ============ #}
+{% if pe_chart.dates %}
+<div class="card" style="margin-bottom:2rem">
+<h2>Price vs P/E — What's Driving the Cheapness?</h2>
+<p class="note">Blue = Price in ₹ (left axis), Orange = P/E ratio (right axis).</p>
+<div class="chart-box"><canvas id="pricePeChart"></canvas></div>
+<div class="explain" style="margin-top:1rem">
+<strong>Why this chart matters:</strong> When price is flat but P/E falls, it means <em>earnings grew while the price didn't move</em> — the stock got cheaper because the company became more profitable, not because anything went wrong with the price. This is the best kind of cheapness for a value investor.
+</div>
+</div>
+{% endif %}
+
+{# ============ SECTION 7: QUARTERLY EARNINGS CHART ============ #}
+{% if qr_chart.dates %}
+<div class="card" style="margin-bottom:2rem">
+<h2>Quarterly Earnings — {{ qr_chart.dates|length }} Quarter Trend</h2>
+<p class="note">Source: Screener.in. Revenue and Net Income in ₹Cr, OPM% on right axis.</p>
+<div class="chart-box"><canvas id="qrChart"></canvas></div>
+<div class="explain" style="margin-top:1rem">
+<strong>How to read:</strong> Blue bars = Revenue (total earnings). Green bars = Net Income (final profit). Orange line = OPM (Operating Profit Margin — what % of revenue becomes operating profit).
+</div>
+</div>
+{% endif %}
+
+{# ============ SECTION 8: THREE CARDS ============ #}
+<div class="grid-3">
+
+{# VALUATION CARD #}
+<div class="card">
+<h2>Valuation Multiples</h2>
+<p class="note">These answer: "Is the stock cheap or expensive?"</p>
+<table>
+<tr><td>P/E Trailing</td><td class="r"><strong class="{% if pe_percentile is not none and pe_percentile <= 20 %}up{% endif %}">{{ "%.1f"|format(pe_trailing) }}x</strong>{% if pe_percentile is not none and pe_percentile == 0 %} <span class="badge bg">ATL</span>{% endif %}</td></tr>
+<tr><td>P/E Forward</td><td class="r">{{ "%.1f"|format(pe_forward or 0) }}x</td></tr>
+<tr><td>P/B</td><td class="r">{{ "%.2f"|format(v.pb_ratio or 0) }}x</td></tr>
+<tr><td>EV/EBITDA</td><td class="r">{{ "%.1f"|format(v.ev_ebitda or 0) }}x</td></tr>
+<tr><td>EV/Revenue</td><td class="r">{{ "%.1f"|format(v.ev_revenue or 0) }}x</td></tr>
+<tr><td>P/Sales</td><td class="r">{{ "%.1f"|format(v.ps_ratio or 0) }}x</td></tr>
+<tr><td>Dividend Yield</td><td class="r">{{ "%.1f"|format(v.dividend_yield or 0) }}%</td></tr>
+</table>
+<div class="explain">
+<strong>P/E of {{ "%.1f"|format(pe_trailing) }}x</strong> means you pay ₹{{ "%.1f"|format(pe_trailing) }} for every ₹1 of annual earnings.
+<strong>EV/EBITDA of {{ "%.1f"|format(v.ev_ebitda or 0) }}x</strong> adjusts for the company's cash pile — often a better measure than P/E.
+</div>
+</div>
+
+{# PROFITABILITY CARD #}
+<div class="card">
+<h2>Profitability</h2>
+<p class="note">These answer: "How good is this business?"</p>
+<table>
+<tr><td>Gross Margin</td><td class="r">{{ "%.1f"|format((v.gross_margin or 0) * 100) }}%</td></tr>
+<tr><td>Operating Margin</td><td class="r">{{ "%.1f"|format((v.operating_margin or 0) * 100) }}%</td></tr>
+<tr><td>Net Margin</td><td class="r">{{ "%.1f"|format((v.net_margin or 0) * 100) }}%</td></tr>
+<tr><td>Revenue Growth</td><td class="r {% if v.revenue_growth and v.revenue_growth > 0 %}up{% endif %}">+{{ "%.1f"|format((v.revenue_growth or 0) * 100) }}%</td></tr>
+<tr><td>Earnings Growth</td><td class="r {% if v.earnings_growth and v.earnings_growth > 0 %}up{% endif %}">+{{ "%.1f"|format((v.earnings_growth or 0) * 100) }}%</td></tr>
+<tr><td>ROCE (latest FY)</td><td class="r up">{{ roce }}%</td></tr>
+</table>
+<div class="explain">
+<strong>Margins as a waterfall:</strong><br>
+₹100 Revenue → ₹{{ "%.0f"|format((v.gross_margin or 0) * 100) }} Gross Profit ({{ "%.1f"|format((v.gross_margin or 0) * 100) }}%) → ₹{{ "%.0f"|format((v.operating_margin or 0) * 100) }} Operating Profit ({{ "%.1f"|format((v.operating_margin or 0) * 100) }}%) → ₹{{ "%.0f"|format((v.net_margin or 0) * 100) }} Net Profit ({{ "%.1f"|format((v.net_margin or 0) * 100) }}%)
+</div>
+</div>
+
+{# BALANCE SHEET CARD #}
+<div class="card">
+<h2>Balance Sheet & Liquidity</h2>
+<p class="note">These answer: "Is this company financially safe?"</p>
+{% set total_cash = v.total_cash or 0 %}
+{% set total_debt = v.total_debt or 0 %}
+{% set net_cash = total_cash - total_debt %}
+<table>
+<tr><td>D/E Ratio</td><td class="r"><strong class="{% if (v.debt_to_equity or 0) < 0.1 %}up{% endif %}">{{ "%.3f"|format(v.debt_to_equity or 0) }}</strong>{% if (v.debt_to_equity or 0) < 0.05 %} <span class="badge bg">Near Zero</span>{% endif %}</td></tr>
+<tr><td>Current Ratio</td><td class="r">{{ "%.2f"|format(v.current_ratio or 0) }}x</td></tr>
+<tr><td>Total Cash</td><td class="r">₹{{ "{:,.0f}".format(total_cash / 1e7) }} Cr</td></tr>
+<tr><td>Total Debt</td><td class="r">₹{{ "{:,.0f}".format(total_debt / 1e7) }} Cr</td></tr>
+<tr><td>Net Cash</td><td class="r {% if net_cash > 0 %}up{% endif %}">₹{{ "{:,.0f}".format(net_cash / 1e7) }} Cr</td></tr>
+<tr><td>BVPS</td><td class="r">₹{{ "%.0f"|format(v.book_value_per_share or 0) }}</td></tr>
+<tr><td>Op Cash Flow</td><td class="r">₹{{ "{:,.0f}".format((v.operating_cash_flow or 0) / 1e7) }} Cr</td></tr>
+</table>
+<div class="explain">
+<strong>Net Cash of ₹{{ "{:,.0f}".format(net_cash / 1e7) }} Cr</strong> = {{ "%.0f"|format(net_cash / 1e7 / mcap_cr * 100) }}% of market cap. If you bought the entire company, you'd get ₹{{ "{:,.0f}".format(net_cash / 1e7) }} Cr back from the bank account.<br><br>
+<strong>OCF of ₹{{ "{:,.0f}".format((v.operating_cash_flow or 0) / 1e7) }} Cr vs Net Profit ₹{{ "{:,.0f}".format(ni_annual) }} Cr</strong> — {% if (v.operating_cash_flow or 0) / 1e7 > ni_annual %}earnings are backed by real cash (OCF > NI){% else %}OCF below net profit — worth investigating{% endif %}.
+</div>
+</div>
+</div>
+
+{# ============ SECTION 9: PRICE CONTEXT ============ #}
+<div class="card" style="margin-bottom:2rem">
+<h2>Price Context</h2>
+<table>
+<tr><td>52-Week High</td><td class="r">₹{{ "{:,.0f}".format(v.fifty_two_week_high or 0) }}</td><td>52-Week Low</td><td class="r">₹{{ "{:,.0f}".format(v.fifty_two_week_low or 0) }}</td></tr>
+<tr><td>Beta</td><td class="r">{{ "%.3f"|format(v.beta or 0) }}</td><td>Avg Volume</td><td class="r">{{ "{:,}".format(v.avg_volume or 0) }}</td></tr>
+<tr><td>Shares Outstanding</td><td class="r">{{ "{:,}".format(v.shares_outstanding or 0) }}</td><td>Float</td><td class="r">{{ "{:,}".format(v.float_shares or 0) }}</td></tr>
+{% if shareholding %}
+<tr><td>Promoter Hold</td><td class="r">{{ "%.1f"|format(shareholding.get('promoter', {}).get('pct', 0)) }}%</td><td>FII Hold</td><td class="r">{{ "%.1f"|format(shareholding.get('fii', {}).get('pct', 0)) }}%</td></tr>
+{% endif %}
+</table>
+</div>
+
+{# ============ SECTION 10: ANALYST CONSENSUS ============ #}
+{% if consensus %}
+<div class="card" style="margin-bottom:2rem">
+<h2>Analyst Consensus & Scenario Analysis</h2>
+<p class="note">Source: yfinance consensus from {{ consensus.num_analysts or 0 }} professional analysts.</p>
+<table>
+<tr><td>Target Mean</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_mean or 0) }}</td><td>Target Median</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_median or 0) }}</td></tr>
+<tr><td>Target High</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_high or 0) }}</td><td>Target Low</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_low or 0) }}</td></tr>
+<tr><td>Forward P/E</td><td class="r">{{ "%.1f"|format(consensus.forward_pe or 0) }}x</td><td>Forward EPS</td><td class="r">₹{{ "%.1f"|format(consensus.forward_eps or 0) }}</td></tr>
+<tr><td>Upside to Mean</td><td class="r up">+{{ upside_pct }}%</td><td>Earnings Growth</td><td class="r up">{{ "%.1f"|format((v.earnings_growth or 0) * 100) }}%</td></tr>
+</table>
+{% set fwd_eps = consensus.forward_eps or eps_annual %}
+<h3 style="margin-top:1rem;font-size:0.9rem;color:var(--dim)">Scenario Analysis — What Could the Stock Be Worth?</h3>
+<table>
+<thead><tr><th>Scenario</th><th class="r">P/E</th><th class="r">EPS</th><th class="r">Target</th><th class="r">Upside</th></tr></thead>
+<tr><td><span class="badge br">Bear</span> P/E stays at current</td><td class="r">{{ "%.1f"|format(pe_trailing) }}x</td><td class="r">₹{{ "%.0f"|format(fwd_eps) }}</td><td class="r">₹{{ "{:,.0f}".format(pe_trailing * fwd_eps) }}</td><td class="r {% if pe_trailing * fwd_eps > price %}up{% else %}down{% endif %}">{{ "%.1f"|format((pe_trailing * fwd_eps / price - 1) * 100) }}%</td></tr>
+<tr><td><span class="badge by">Base</span> Modest re-rating</td><td class="r">25x</td><td class="r">₹{{ "%.0f"|format(fwd_eps) }}</td><td class="r">₹{{ "{:,.0f}".format(25 * fwd_eps) }}</td><td class="r up">+{{ "%.1f"|format((25 * fwd_eps / price - 1) * 100) }}%</td></tr>
+<tr><td><span class="badge bg">Bull</span> Re-rating to 35x</td><td class="r">35x</td><td class="r">₹{{ "%.0f"|format(fwd_eps) }}</td><td class="r">₹{{ "{:,.0f}".format(35 * fwd_eps) }}</td><td class="r up">+{{ "%.1f"|format((35 * fwd_eps / price - 1) * 100) }}%</td></tr>
+{% if pe_median > 35 %}
+<tr><td><span class="badge bg">Median reversion</span></td><td class="r">{{ "%.1f"|format(pe_median) }}x</td><td class="r">₹{{ "%.0f"|format(fwd_eps) }}</td><td class="r">₹{{ "{:,.0f}".format(pe_median * fwd_eps) }}</td><td class="r up">+{{ "%.1f"|format((pe_median * fwd_eps / price - 1) * 100) }}%</td></tr>
+{% endif %}
+</table>
+</div>
+{% endif %}
+
+{# ============ SECTION 11: ANNUAL FINANCIALS ============ #}
+{% if af_table %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Annual Financials — {{ af_table|length }} Year Trend</h2>
+<p class="note">Source: Screener.in. All values in ₹Cr except EPS (₹).</p>
+<table>
+<thead><tr><th>Metric</th>{% for a in af_table %}<th class="r">FY{{ a.fiscal_year_end[:4] }}</th>{% endfor %}<th>Trend</th></tr></thead>
+<tbody>
+<tr><td colspan="{{ af_table|length + 2 }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Income Statement</td></tr>
+{% for label, key in [('Revenue', 'revenue'), ('Net Income', 'net_income'), ('EPS', 'eps'), ('PBT', 'profit_before_tax'), ('Depreciation', 'depreciation'), ('Interest', 'interest'), ('Other Income', 'other_income')] %}
+<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
+{% endfor %}
+<tr><td colspan="{{ af_table|length + 2 }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Balance Sheet</td></tr>
+{% for label, key in [('Equity Capital', 'equity_capital'), ('Reserves', 'reserves'), ('Borrowings', 'borrowings'), ('Total Assets', 'total_assets'), ('Cash & Bank', 'cash_and_bank')] %}
+<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
+{% endfor %}
+<tr><td colspan="{{ af_table|length + 2 }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Cash Flow</td></tr>
+{% for label, key in [('CFO', 'cfo'), ('CFI', 'cfi'), ('CFF', 'cff'), ('Net Cash Flow', 'net_cash_flow')] %}
+<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+
+{# ============ SECTION 11B: EFFICIENCY RATIOS ============ #}
+{% if ratios_table %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Efficiency Ratios — {{ ratios_table|length }} Year Trend</h2>
+<p class="note">Source: Screener.in ratios section.</p>
+<table>
+<thead><tr><th>Metric</th>{% for r in ratios_table %}<th class="r">{{ r.fiscal_year_end[:4] }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for label, key in [('ROCE %', 'roce_pct'), ('Debtor Days', 'debtor_days'), ('Working Capital Days', 'working_capital_days'), ('Inventory Days', 'inventory_days'), ('Days Payable', 'days_payable'), ('Cash Conversion Cycle', 'cash_conversion_cycle')] %}
+{% set all_none = ratios_table|map(attribute=key)|select('none')|list|length == ratios_table|length %}
+{% if not all_none %}
+<tr><td>{{ label }}</td>{% for r in ratios_table %}<td class="r">{% if r[key] is not none %}{{ "%.0f"|format(r[key]) }}{% else %}—{% endif %}</td>{% endfor %}</tr>
+{% endif %}
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+
+{# ============ SECTIONS 12-15: CONCALL-GROUNDED (OPTIONAL) ============ #}
+{% if concall_data %}
+{# These sections are populated when concall extraction data is provided #}
+{# The concall_data dict contains: operational_kpis, themes, analyst_qa, guidance, scorecard, risks, thesis #}
+
+{# SECTION 12a: OPERATIONAL KPIs #}
+{% if concall_data.operational_kpis %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Operational KPIs — From Concall Transcripts & Investor Decks</h2>
+<p class="note">Metrics extracted directly from company filings.</p>
+{{ concall_data.operational_kpis | safe }}
+</div>
+{% endif %}
+
+{# SECTION 12b: KEY THEMES #}
+{% if concall_data.themes %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Key Themes — Last {{ concall_data.quarters_covered or 4 }} Quarters</h2>
+<div class="narrative">
+{{ concall_data.themes | safe }}
+</div>
+</div>
+{% endif %}
+
+{# SECTION 12c: GUIDANCE #}
+{% if concall_data.guidance %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Management Guidance & Credibility</h2>
+{{ concall_data.guidance | safe }}
+</div>
+{% endif %}
+
+{# SECTION 12d: ANALYST Q&A #}
+{% if concall_data.analyst_qa %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>What Analysts Are Asking About</h2>
+<div class="explain" style="margin-bottom:1rem">
+<strong>Why this section matters:</strong> Professional analysts ask tough questions every quarter. Tracking how their concerns evolve tells you whether problems are getting better or worse.
+</div>
+{{ concall_data.analyst_qa | safe }}
+</div>
+{% endif %}
+
+{# SECTION 13: SCORECARD #}
+{% if concall_data.scorecard %}
+<div class="grid">
+<div class="card">
+<h2>Business Quality Scorecard</h2>
+<p class="note">Green = strength, Yellow = watch, Red = concern.</p>
+<table>
+{{ concall_data.scorecard | safe }}
+</table>
+</div>
+
+{# SECTION 14: RISKS #}
+{% if concall_data.risks %}
+<div class="card">
+<h2>Risk Factors</h2>
+<table>
+{{ concall_data.risks | safe }}
+</table>
+</div>
+{% endif %}
+</div>
+{% endif %}
+
+{# SECTION 15: THESIS #}
+{% if concall_data.thesis %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Investment Thesis</h2>
+<div class="grid-3" style="margin-bottom:0">
+{{ concall_data.thesis | safe }}
+</div>
+</div>
+{% endif %}
+
+{% else %}
+{# NO CONCALL DATA — show placeholder #}
+<div class="callout-neutral" style="border-radius:8px;padding:1.5rem;margin:2rem 0;font-size:0.9rem;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3)">
+<strong style="color:var(--yellow)">Sections 12-15 (Management Commentary, Scorecard, Risks, Thesis) require concall extraction</strong><br><br>
+This report contains numerical data from Screener.in and yfinance. To add qualitative analysis from concall transcripts and investor decks, run the full research command which reads and extracts insights from company filings.
+</div>
+{% endif %}
+
+</div>
+
+{# ============ CHARTS ============ #}
+<script>
+{% if pe_chart.dates %}
+const peDates = {{ pe_chart.dates | tojson }};
+const peVals = {{ pe_chart.pe_vals | tojson }};
+new Chart(document.getElementById('peChart'), {
+  type: 'line',
+  data: { labels: peDates, datasets: [{ label: 'P/E Trailing', data: peVals, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      annotation: { annotations: {
+        currentPE: { type: 'line', yMin: {{ pe_trailing }}, yMax: {{ pe_trailing }}, borderColor: '#22c55e', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Current: {{ "%.1f"|format(pe_trailing) }}x', position: 'start', backgroundColor: 'rgba(34,197,94,0.8)', font: { size: 11 } } },
+        medianPE: { type: 'line', yMin: {{ "%.1f"|format(pe_median) }}, yMax: {{ "%.1f"|format(pe_median) }}, borderColor: '#71717a', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Median: {{ "%.1f"|format(pe_median) }}x', position: 'end', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 11 } } }
+      } },
+      legend: { display: false }
+    },
+    scales: {
+      x: { ticks: { color: '#71717a', maxTicksLimit: 12 }, grid: { color: 'rgba(42,45,58,0.5)' } },
+      y: { ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } }
+    }
+  }
+});
+
+const pePrices = {{ pe_chart.price_vals | tojson }};
+new Chart(document.getElementById('pricePeChart'), {
+  type: 'line',
+  data: { labels: peDates, datasets: [
+    { label: 'Price (₹)', data: pePrices, borderColor: '#3b82f6', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
+    { label: 'P/E', data: peVals, borderColor: '#f97316', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y1' }
+  ] },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e4e4e7' } } },
+    scales: {
+      x: { ticks: { color: '#71717a', maxTicksLimit: 12 }, grid: { color: 'rgba(42,45,58,0.5)' } },
+      y: { position: 'left', ticks: { color: '#3b82f6' }, grid: { color: 'rgba(42,45,58,0.5)' }, title: { display: true, text: 'Price (₹)', color: '#3b82f6' } },
+      y1: { position: 'right', ticks: { color: '#f97316' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'P/E', color: '#f97316' } }
+    }
+  }
+});
+{% endif %}
+
+{% if qr_chart.dates %}
+new Chart(document.getElementById('qrChart'), {
+  type: 'bar',
+  data: { labels: {{ qr_chart.dates | tojson }}, datasets: [
+    { label: 'Revenue (₹Cr)', data: {{ qr_chart.revenues | tojson }}, backgroundColor: 'rgba(59,130,246,0.7)', order: 2 },
+    { label: 'Net Income (₹Cr)', data: {{ qr_chart.net_incomes | tojson }}, backgroundColor: 'rgba(34,197,94,0.7)', order: 3 },
+    { label: 'OPM %', data: {{ qr_chart.opms | tojson }}, type: 'line', borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', order: 1 }
+  ] },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e4e4e7' } } },
+    scales: {
+      x: { ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } },
+      y: { position: 'left', ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' }, title: { display: true, text: '₹ Cr', color: '#71717a' } },
+      y1: { position: 'right', min: 0, max: 50, ticks: { color: '#f97316' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'OPM %', color: '#f97316' } }
+    }
+  }
+});
+{% endif %}
+</script>
+</body>
+</html>
