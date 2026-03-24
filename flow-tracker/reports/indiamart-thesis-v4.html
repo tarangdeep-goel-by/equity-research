@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INDIAMART — Investment Thesis</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+
+:root {
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-alt: #f3f1ee;
+  --ink: #1a1a18;
+  --ink-secondary: #5c5c58;
+  --ink-tertiary: #8a8a86;
+  --ink-faint: #b8b8b4;
+  --border: #e5e3df;
+  --border-strong: #ccc9c4;
+  --accent: #c85d3a;
+  --accent-bg: #fef5f2;
+  --positive: #2d7a4f;
+  --positive-bg: #f0f8f3;
+  --negative: #b83d2e;
+  --negative-bg: #fdf2f1;
+  --neutral-bg: #f7f5f0;
+  --teach-border: #c85d3a;
+  --teach-bg: #fef8f6;
+  --serif: 'Source Serif 4', Georgia, serif;
+  --sans: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --max-w: 1140px;
+  --gutter: clamp(1.5rem, 4vw, 5rem);
+}
+
+html { scroll-behavior: smooth; font-size: 16px; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+
+/* ═══ NAV ═══ */
+.thesis-nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(250,249,247,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 var(--gutter);
+}
+.thesis-nav-inner {
+  max-width: var(--max-w); margin: 0 auto;
+  display: flex; align-items: center; gap: 2rem;
+  height: 52px; overflow-x: auto;
+}
+.thesis-nav .nav-brand {
+  font-family: var(--serif); font-weight: 700; font-size: 1.05rem;
+  color: var(--ink); white-space: nowrap; letter-spacing: -0.02em;
+}
+.thesis-nav a {
+  font-size: 0.78rem; color: var(--ink-tertiary); text-decoration: none;
+  white-space: nowrap; padding: 0.25rem 0; transition: color 0.15s;
+  border-bottom: 1.5px solid transparent;
+}
+.thesis-nav a:hover, .thesis-nav a.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* ═══ LAYOUT ═══ */
+.page { max-width: var(--max-w); margin: 0 auto; padding: 0 var(--gutter); }
+
+/* ═══ HERO ═══ */
+.hero { padding: 3.5rem 0 2.5rem; border-bottom: 2px solid var(--ink); margin-bottom: 3rem; }
+.hero-eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-tertiary); margin-bottom: 0.75rem; font-weight: 500; }
+.hero h1 { font-family: var(--serif); font-size: clamp(2.4rem, 5vw, 3.6rem); font-weight: 700; line-height: 1.08; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+.hero-subtitle { font-family: var(--serif); font-size: 1.2rem; font-weight: 300; color: var(--ink-secondary); font-style: italic; margin-bottom: 1.5rem; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: 0.8rem; color: var(--ink-tertiary); }
+.hero-meta span { display: flex; align-items: center; gap: 0.35rem; }
+
+/* ═══ HEADLINE METRICS ═══ */
+.metrics-strip {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 0;
+  border: 1px solid var(--border); margin-bottom: 3rem;
+}
+.metric-cell {
+  padding: 1.25rem 1rem; text-align: center;
+  border-right: 1px solid var(--border);
+}
+.metric-cell:last-child { border-right: none; }
+.metric-cell .val { font-family: var(--serif); font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.metric-cell .lbl { font-size: 0.7rem; color: var(--ink-tertiary); margin-top: 0.25rem; line-height: 1.3; }
+.metric-cell .val.pos { color: var(--positive); }
+.metric-cell .val.neg { color: var(--negative); }
+
+/* ═══ SECTIONS ═══ */
+.section { margin-bottom: 3.5rem; }
+.section-num { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-faint); margin-bottom: 0.35rem; letter-spacing: 0.05em; }
+.section h2 { font-family: var(--serif); font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.35rem; line-height: 1.2; }
+.section-lead { font-family: var(--serif); font-size: 1rem; color: var(--ink-secondary); font-style: italic; margin-bottom: 1.5rem; line-height: 1.5; }
+
+/* ═══ TEACH BOX (the learning layer) ═══ */
+.teach {
+  border-left: 3px solid var(--teach-border); background: var(--teach-bg);
+  padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.85rem; line-height: 1.65;
+}
+.teach strong { color: var(--accent); }
+.teach-inline {
+  display: inline; background: var(--teach-bg); padding: 0.1em 0.4em;
+  border-bottom: 1.5px dotted var(--accent); cursor: help;
+  font-size: 0.85em; color: var(--accent);
+}
+
+/* ═══ VERDICT CALLOUT ═══ */
+.verdict { padding: 1.5rem; margin-bottom: 2rem; border: 1px solid; }
+.verdict.cheap { background: var(--positive-bg); border-color: #c3dcc9; }
+.verdict.expensive { background: var(--negative-bg); border-color: #e8c5c1; }
+.verdict.fair { background: var(--neutral-bg); border-color: var(--border); }
+.verdict-title { font-family: var(--serif); font-size: 1.15rem; font-weight: 600; margin-bottom: 0.5rem; }
+.verdict p { font-size: 0.9rem; color: var(--ink-secondary); line-height: 1.6; }
+
+/* ═══ CHARTS ═══ */
+.chart-wrap { background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; margin: 1.5rem 0; }
+.chart-title { font-family: var(--serif); font-size: 1.05rem; font-weight: 600; margin-bottom: 0.15rem; }
+.chart-subtitle { font-size: 0.75rem; color: var(--ink-tertiary); margin-bottom: 1rem; }
+.chart-canvas { position: relative; height: 340px; }
+.chart-reading { margin-top: 1rem; }
+.chart-reading summary { font-size: 0.82rem; font-weight: 500; color: var(--accent); cursor: pointer; }
+.chart-reading summary:hover { text-decoration: underline; }
+.chart-reading p { font-size: 0.82rem; color: var(--ink-secondary); line-height: 1.6; padding-top: 0.5rem; }
+
+/* ═══ DATA GRID (three columns) ═══ */
+.data-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 1.5rem 0; }
+.data-panel { background: var(--surface); border: 1px solid var(--border); padding: 1.25rem; }
+.data-panel h3 { font-family: var(--serif); font-size: 0.95rem; font-weight: 600; margin-bottom: 0.15rem; }
+.data-panel .panel-q { font-size: 0.72rem; color: var(--ink-tertiary); font-style: italic; margin-bottom: 1rem; }
+.data-row { display: flex; justify-content: space-between; padding: 0.45rem 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+.data-row:last-child { border-bottom: none; }
+.data-row .k { color: var(--ink-secondary); }
+.data-row .v { font-weight: 500; font-variant-numeric: tabular-nums; }
+.data-row .v.pos { color: var(--positive); }
+.data-row .v.neg { color: var(--negative); }
+.panel-note { margin-top: 0.75rem; font-size: 0.78rem; color: var(--ink-secondary); line-height: 1.55; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+
+/* ═══ FINANCIALS TABLE ═══ */
+.fin-table-wrap { overflow-x: auto; margin: 1.5rem 0; border: 1px solid var(--border); background: var(--surface); }
+.fin-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.fin-table th { text-align: left; padding: 0.55rem 0.75rem; font-weight: 500; color: var(--ink-tertiary); border-bottom: 2px solid var(--border); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; background: var(--surface-alt); }
+.fin-table th.r { text-align: right; }
+.fin-table td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border); }
+.fin-table td.r { text-align: right; }
+.fin-table td.pos { color: var(--positive); }
+.fin-table td.neg { color: var(--negative); }
+.fin-table tr:hover { background: var(--surface-alt); }
+.fin-table .group-header td { font-weight: 600; color: var(--ink); background: var(--surface-alt); padding-top: 0.75rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border-strong); }
+.fin-table td.trend { font-size: 0.72rem; font-weight: 500; }
+
+/* ═══ OWNERSHIP ═══ */
+.ownership-bar { display: flex; height: 32px; margin: 1rem 0; overflow: hidden; }
+.ownership-bar > div { display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 600; color: #fff; transition: width 0.4s; }
+.ownership-legend { display: flex; flex-wrap: wrap; gap: 1.25rem; font-size: 0.78rem; margin-top: 0.5rem; }
+.ownership-legend span { display: flex; align-items: center; gap: 0.35rem; }
+.ownership-legend .dot { width: 10px; height: 10px; display: inline-block; }
+
+/* ═══ KPI TRACKER ═══ */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--border); margin: 1.5rem 0; background: var(--surface); }
+.kpi-cell { padding: 1rem; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.kpi-cell:nth-child(4n) { border-right: none; }
+.kpi-cell .kpi-val { font-family: var(--serif); font-size: 1.3rem; font-weight: 600; line-height: 1.2; }
+.kpi-cell .kpi-change { font-size: 0.72rem; margin-top: 0.15rem; }
+.kpi-cell .kpi-change.pos { color: var(--positive); }
+.kpi-cell .kpi-change.neg { color: var(--negative); }
+.kpi-cell .kpi-label { font-size: 0.7rem; color: var(--ink-tertiary); margin-top: 0.35rem; line-height: 1.3; }
+
+/* ═══ ANALYST Q&A (dark inversion) ═══ */
+.qa-section { background: var(--ink); color: #e8e7e3; padding: 3rem var(--gutter); margin: 3rem calc(-1 * var(--gutter)); }
+.qa-section .section-num { color: #666; }
+.qa-section h2 { color: #fff; }
+.qa-section .section-lead { color: #999; }
+.qa-theme { margin-bottom: 2rem; }
+.qa-theme-title { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 1rem; }
+.qa-item { border-left: 1px solid #333; padding: 0.75rem 0 0.75rem 1.25rem; margin-bottom: 1rem; }
+.qa-item .qa-meta { font-size: 0.72rem; color: #777; margin-bottom: 0.35rem; }
+.qa-item .qa-q { font-style: italic; color: #ddd; font-size: 0.88rem; line-height: 1.55; margin-bottom: 0.5rem; }
+.qa-item .qa-a { color: #999; font-size: 0.85rem; line-height: 1.55; }
+.qa-verdict { font-size: 0.82rem; font-weight: 500; color: var(--accent); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #333; }
+
+/* ═══ SCORECARD ═══ */
+.scorecard { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--border); margin: 1.5rem 0; }
+.sc-row { display: flex; align-items: flex-start; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); background: var(--surface); }
+.sc-row:nth-child(2n) { border-right: none; }
+.sc-badge { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.2rem 0.5rem; white-space: nowrap; flex-shrink: 0; margin-top: 0.15rem; }
+.sc-badge.strong { background: var(--positive-bg); color: var(--positive); }
+.sc-badge.mixed { background: #fdf6e8; color: #8a6d2b; }
+.sc-badge.weak { background: var(--negative-bg); color: var(--negative); }
+.sc-content .sc-label { font-weight: 600; font-size: 0.82rem; margin-bottom: 0.15rem; }
+.sc-content .sc-desc { font-size: 0.78rem; color: var(--ink-secondary); line-height: 1.5; }
+
+/* ═══ THESIS (three columns) ═══ */
+.thesis-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 1.5rem 0; }
+.thesis-col { padding: 1.25rem; border: 1px solid var(--border); background: var(--surface); }
+.thesis-col h3 { font-family: var(--serif); font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid; }
+.thesis-col.bull h3 { border-color: var(--positive); }
+.thesis-col.bear h3 { border-color: var(--negative); }
+.thesis-col.watch h3 { border-color: var(--accent); }
+.thesis-col li { font-size: 0.82rem; color: var(--ink-secondary); line-height: 1.55; margin-bottom: 0.75rem; list-style: none; padding-left: 1rem; position: relative; }
+.thesis-col li::before { content: '—'; position: absolute; left: 0; color: var(--ink-faint); }
+
+/* ═══ SCENARIO TABLE ═══ */
+.scenario-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.85rem; background: var(--surface); border: 1px solid var(--border); }
+.scenario-table th { text-align: left; padding: 0.65rem 1rem; background: var(--surface-alt); border-bottom: 2px solid var(--border); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-tertiary); }
+.scenario-table th.r { text-align: right; }
+.scenario-table td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border); }
+.scenario-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.scenario-table .scenario-name { font-weight: 500; }
+.scenario-table tr:hover { background: var(--surface-alt); }
+
+/* ═══ RISK TABLE ═══ */
+.risk-row { display: flex; gap: 1rem; padding: 0.85rem 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+.risk-severity { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.2rem 0.5rem; flex-shrink: 0; margin-top: 0.15rem; }
+.risk-severity.high { background: var(--negative-bg); color: var(--negative); }
+.risk-severity.med { background: #fdf6e8; color: #8a6d2b; }
+.risk-severity.low { background: var(--surface-alt); color: var(--ink-tertiary); }
+.risk-text { font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.55; }
+.risk-cite { font-size: 0.72rem; color: var(--ink-faint); font-style: italic; }
+
+/* ═══ GLOSSARY (collapsible) ═══ */
+.glossary { margin: 2rem 0; border: 1px solid var(--border); background: var(--surface); }
+.glossary summary { padding: 1rem 1.25rem; font-family: var(--serif); font-size: 1rem; font-weight: 600; cursor: pointer; }
+.glossary summary:hover { background: var(--surface-alt); }
+.glossary-content { padding: 0 1.25rem 1.25rem; }
+.glossary-item { display: grid; grid-template-columns: 120px 1fr; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+.glossary-item:last-child { border-bottom: none; }
+.glossary-item .term { font-weight: 600; color: var(--accent); }
+.glossary-item .def { color: var(--ink-secondary); line-height: 1.5; }
+
+/* ═══ FOOTER ═══ */
+.thesis-footer { border-top: 2px solid var(--ink); padding: 1.5rem 0; margin-top: 3rem; font-size: 0.75rem; color: var(--ink-tertiary); }
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 768px) {
+  .metrics-strip { grid-template-columns: repeat(3, 1fr); }
+  .data-grid, .thesis-cols, .scorecard { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .qa-section { margin: 2rem calc(-1 * var(--gutter)); padding: 2rem var(--gutter); }
+  .sc-row { border-right: none !important; }
+}
+
+@media print {
+  body { background: #fff; font-size: 10pt; }
+  .thesis-nav { display: none; }
+  .qa-section { background: #f5f5f5; color: #1a1a1a; }
+  .qa-section h2, .qa-item .qa-q { color: #1a1a1a; }
+  .qa-item .qa-a, .qa-section .section-lead { color: #666; }
+}
+
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: '▸ '; color: var(--ink-faint); }
+details[open] > summary::before { content: '▾ '; }
+</style>
+</head>
+<body>
+
+<!-- ═══ STICKY NAV ═══ -->
+<nav class="thesis-nav">
+<div class="thesis-nav-inner">
+  <span class="nav-brand">INDIAMART</span>
+  <a href="#valuation">Valuation</a>
+  <a href="#earnings">Earnings</a>
+  <a href="#fundamentals">Fundamentals</a>
+  <a href="#efficiency">Efficiency</a>
+  <a href="#ownership">Ownership</a>
+  <a href="#operations">Operations</a>
+  <a href="#analysts">Analyst Q&A</a>
+  <a href="#scorecard">Scorecard</a>
+  <a href="#thesis">Thesis</a>
+  <a href="#glossary">Glossary</a>
+</div>
+</nav>
+
+<div class="page">
+
+<!-- ═══ HERO ═══ -->
+<header class="hero">
+  <div class="hero-eyebrow">Investment Thesis · Equity Research</div>
+  <h1>IndiaMART InterMESH</h1>
+  <div class="hero-subtitle">India's largest B2B marketplace at its cheapest-ever valuation — a deep value opportunity or a growth story ending?</div>
+  <div class="hero-meta">
+    <span>Internet & Catalogue Retail</span>
+    <span>Market Cap ₹11,837 Cr</span>
+    <span>BSE: 542726</span>
+    <span>Data: yfinance · Screener.in · BSE Concalls</span>
+    <span>24 March 2026</span>
+  </div>
+</header>
+
+<!-- ═══ HEADLINE METRICS ═══ -->
+<div class="metrics-strip">
+  <div class="metric-cell">
+    <div class="val">₹1,970</div>
+    <div class="lbl">Current Price</div>
+  </div>
+  <div class="metric-cell">
+    <div class="val">19.6×</div>
+    <div class="lbl">P/E Trailing · All-Time Low</div>
+  </div>
+  <div class="metric-cell">
+    <div class="val pos">+55.2%</div>
+    <div class="lbl">Earnings Growth TTM</div>
+  </div>
+  <div class="metric-cell">
+    <div class="val">0.20</div>
+    <div class="lbl">Beta · Very Low Volatility</div>
+  </div>
+  <div class="metric-cell">
+    <div class="val pos">34%</div>
+    <div class="lbl">ROCE · FY2025</div>
+  </div>
+  <div class="metric-cell">
+    <div class="val pos">+29.6%</div>
+    <div class="lbl">Analyst Upside · 18 Analysts</div>
+  </div>
+</div>
+
+<!-- ═══ 01. VALUATION ═══ -->
+<section class="section" id="valuation">
+  <div class="section-num">01</div>
+  <h2>Valuation — Is it cheap?</h2>
+  <p class="section-lead">The single most important question for any investor: what are you paying relative to what you're getting?</p>
+
+  <div class="verdict cheap">
+    <div class="verdict-title">This stock is at its cheapest-ever valuation</div>
+    <p>Trailing P/E of <strong>19.6×</strong> vs 6-year median of <strong>48.9×</strong> — the 0th percentile. In 323 weekly observations since IPO, IndiaMART has never been this cheap relative to its earnings. The stock is down 30% from its 52-week high (₹2,799) while earnings grew 55%.</p>
+  </div>
+
+  <div class="teach">
+    <strong>What is P/E?</strong> Price-to-Earnings ratio tells you how many years of current earnings you're paying for. IndiaMART's EPS (Earnings Per Share) is ₹92. At ₹1,970 per share, you're paying 1,970 ÷ 92 = <strong>21.4 years of earnings</strong>. The lower this number, the "cheaper" the stock. IndiaMART's P/E of 19.6× is the cheapest it has ever been — for comparison, its median P/E is 48.9× (meaning investors have historically been willing to pay 49 years of earnings for this stock).
+  </div>
+
+  <!-- P/E Chart -->
+  <div class="chart-wrap">
+    <div class="chart-title">Historical P/E — 6 Years Weekly</div>
+    <div class="chart-subtitle">323 observations · yfinance prices / Screener.in annual EPS</div>
+    <div class="chart-canvas"><canvas id="peChart"></canvas></div>
+    <details class="chart-reading">
+      <summary>How to read this chart →</summary>
+      <p>The orange line shows how "expensive" the stock was at each point in time. Higher = investors paying more per rupee of earnings. The green dashed line marks today's P/E (19.6×) — notice it's at the very bottom. The grey dashed line marks the 6-year median (48.9×). The massive spike in 2021 (~199×) was during the tech bubble when every internet stock was priced for hypergrowth.</p>
+    </details>
+  </div>
+
+  <!-- Price vs P/E -->
+  <div class="chart-wrap">
+    <div class="chart-title">Price vs P/E — What's Driving the Cheapness?</div>
+    <div class="chart-subtitle">Blue = Price (left axis) · Orange = P/E (right axis)</div>
+    <div class="chart-canvas"><canvas id="pricePeChart"></canvas></div>
+    <details class="chart-reading">
+      <summary>How to read this chart →</summary>
+      <p>When price is flat but P/E falls (like 2023–2026), it means <em>earnings grew while the price didn't move</em>. The stock got cheaper because the company became more profitable, not because the price crashed. This is the best kind of cheapness for a value investor — you're buying growing earnings at a static price.</p>
+    </details>
+  </div>
+
+  <!-- Valuation multiples -->
+  <div class="data-grid">
+    <div class="data-panel">
+      <h3>Valuation Multiples</h3>
+      <div class="panel-q">How much are you paying for each financial metric?</div>
+      <div class="data-row"><span class="k">P/E Trailing</span><span class="v pos">19.6×</span></div>
+      <div class="data-row"><span class="k">P/E Forward</span><span class="v">20.7×</span></div>
+      <div class="data-row"><span class="k">P/B (Price to Book)</span><span class="v">5.06×</span></div>
+      <div class="data-row"><span class="k">EV/EBITDA</span><span class="v">17.6×</span></div>
+      <div class="data-row"><span class="k">EV/Revenue</span><span class="v">5.9×</span></div>
+      <div class="data-row"><span class="k">P/Sales</span><span class="v">7.8×</span></div>
+      <div class="data-row"><span class="k">Dividend Yield</span><span class="v">1.5%</span></div>
+      <div class="panel-note"><strong>EV/EBITDA</strong> is often better than P/E because it adjusts for the company's cash pile. IndiaMART has ₹3,051 Cr in cash — EV (Enterprise Value) subtracts this, making the business even cheaper than P/E suggests.</div>
+    </div>
+    <div class="data-panel">
+      <h3>Profitability</h3>
+      <div class="panel-q">How much of each rupee of revenue becomes profit?</div>
+      <div class="data-row"><span class="k">Gross Margin</span><span class="v">55.1%</span></div>
+      <div class="data-row"><span class="k">Operating Margin</span><span class="v">31.6%</span></div>
+      <div class="data-row"><span class="k">Net Margin</span><span class="v">39.8%</span></div>
+      <div class="data-row"><span class="k">Revenue Growth</span><span class="v pos">+13.4%</span></div>
+      <div class="data-row"><span class="k">Earnings Growth</span><span class="v pos">+55.2%</span></div>
+      <div class="data-row"><span class="k">ROCE</span><span class="v pos">34.0%</span></div>
+      <div class="panel-note"><strong>The margin waterfall:</strong> ₹100 Revenue → ₹55 Gross Profit (55%) → ₹32 Operating Profit (32%) → ₹40 Net Profit (40%). Net margin exceeds operating margin because the company earns ~₹135 Cr/quarter in interest on its ₹3,051 Cr cash pile.</div>
+    </div>
+    <div class="data-panel">
+      <h3>Balance Sheet</h3>
+      <div class="panel-q">Is this company financially safe?</div>
+      <div class="data-row"><span class="k">Debt-to-Equity</span><span class="v pos">0.011</span></div>
+      <div class="data-row"><span class="k">Current Ratio</span><span class="v">2.39×</span></div>
+      <div class="data-row"><span class="k">Total Cash</span><span class="v">₹2,893 Cr</span></div>
+      <div class="data-row"><span class="k">Total Debt</span><span class="v">₹26 Cr</span></div>
+      <div class="data-row"><span class="k">Net Cash</span><span class="v pos">₹2,868 Cr</span></div>
+      <div class="data-row"><span class="k">Op Cash Flow</span><span class="v">₹675 Cr</span></div>
+      <div class="panel-note"><strong>Net cash = 24% of market cap.</strong> If you bought the entire company at ₹11,837 Cr, you'd get ₹2,868 Cr back from the bank account. OCF (₹675 Cr) > Net Profit (₹551 Cr) — earnings are backed by real cash, not just accounting entries.</div>
+    </div>
+  </div>
+
+  <!-- Scenario Analysis -->
+  <table class="scenario-table">
+    <thead><tr><th>Scenario</th><th class="r">P/E Applied</th><th class="r">FY27E EPS</th><th class="r">Target Price</th><th class="r">Upside</th></tr></thead>
+    <tbody>
+      <tr><td class="scenario-name">Bear — P/E stays at all-time low</td><td class="r">19.6×</td><td class="r">₹95</td><td class="r">₹1,862</td><td class="r neg">−5.5%</td></tr>
+      <tr><td class="scenario-name">Base — modest re-rating</td><td class="r">25.0×</td><td class="r">₹95</td><td class="r">₹2,375</td><td class="r pos">+20.5%</td></tr>
+      <tr><td class="scenario-name">Bull — re-rating to 35×</td><td class="r">35.0×</td><td class="r">₹95</td><td class="r">₹3,325</td><td class="r pos">+68.7%</td></tr>
+      <tr><td class="scenario-name">Median reversion</td><td class="r">48.9×</td><td class="r">₹95</td><td class="r">₹4,646</td><td class="r pos">+135.8%</td></tr>
+    </tbody>
+  </table>
+  <div class="teach">
+    <strong>How scenario analysis works:</strong> Target Price = P/E × EPS. We keep EPS fixed at ₹95 (analyst estimate for FY27) and vary the P/E to see what the stock could be worth under different market moods. In the bear case, the market never re-rates (P/E stays at 19.6×) and you barely break even. In the bull case, if P/E re-rates to just 35× (still below the 48.9× median), you make +69%.
+  </div>
+</section>
+
+<!-- ═══ 02. EARNINGS ═══ -->
+<section class="section" id="earnings">
+  <div class="section-num">02</div>
+  <h2>Quarterly Earnings — The Growth Trajectory</h2>
+  <p class="section-lead">Revenue trend, profit quality, and the operating margin story over 13 quarters.</p>
+
+  <div class="chart-wrap">
+    <div class="chart-title">Revenue, Net Income & Operating Margin — 13 Quarters</div>
+    <div class="chart-subtitle">Blue bars = Revenue · Green bars = Net Income · Orange line = OPM%</div>
+    <div class="chart-canvas"><canvas id="qrChart"></canvas></div>
+    <details class="chart-reading">
+      <summary>How to read this chart →</summary>
+      <p>Revenue has climbed steadily from ₹251 Cr (Dec 2022) to ₹402 Cr (Dec 2025) — 60% growth in 3 years. Net income is lumpier because "other income" (interest on ₹3,000 Cr cash) swings each quarter — look at Sep 2025 where NI dropped to ₹83 Cr despite strong revenue because treasury gains turned to losses. OPM has ranged from 21% to 35%, currently at 30%.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ═══ 03. FUNDAMENTALS ═══ -->
+<section class="section" id="fundamentals">
+  <div class="section-num">03</div>
+  <h2>Annual Financials — 5 Year Trend</h2>
+  <p class="section-lead">How the company has evolved year by year — revenue growth, profitability, balance sheet strength, and cash generation.</p>
+
+  <div class="fin-table-wrap">
+  <table class="fin-table">
+  <thead><tr><th>Metric</th><th class="r">FY2021</th><th class="r">FY2022</th><th class="r">FY2023</th><th class="r">FY2024</th><th class="r">FY2025</th><th class="r">Trend</th></tr></thead>
+  <tbody>
+  <tr class="group-header"><td colspan="7">Income Statement</td></tr>
+  <tr><td>Revenue (₹Cr)</td><td class="r">588</td><td class="r">753</td><td class="r">985</td><td class="r">1,197</td><td class="r">1,388</td><td class="trend pos">↑ 2.4× in 4yr</td></tr>
+  <tr><td>Net Income (₹Cr)</td><td class="r">267</td><td class="r">298</td><td class="r">284</td><td class="r">334</td><td class="r">551</td><td class="trend pos">↑ Strong</td></tr>
+  <tr><td>EPS (₹)</td><td class="r">43.6</td><td class="r">48.7</td><td class="r">46.4</td><td class="r">55.7</td><td class="r">91.8</td><td class="trend pos">↑ 2.1×</td></tr>
+  <tr><td>Other Income (₹Cr)</td><td class="r">87</td><td class="r">56</td><td class="r">62</td><td class="r">86</td><td class="r">271</td><td class="trend pos">↑ Treasury</td></tr>
+  <tr class="group-header"><td colspan="7">Balance Sheet</td></tr>
+  <tr><td>Reserves (₹Cr)</td><td class="r">1,124</td><td class="r">1,329</td><td class="r">1,543</td><td class="r">1,756</td><td class="r">2,087</td><td class="trend pos">↑ Steady</td></tr>
+  <tr><td>Borrowings (₹Cr)</td><td class="r">0</td><td class="r">0</td><td class="r">0</td><td class="r">0</td><td class="r">0</td><td class="trend pos">Zero debt</td></tr>
+  <tr><td>Cash & Bank (₹Cr)</td><td class="r">190</td><td class="r">148</td><td class="r">126</td><td class="r">157</td><td class="r">148</td><td class="trend">Stable</td></tr>
+  <tr class="group-header"><td colspan="7">Cash Flow</td></tr>
+  <tr><td>CFO (₹Cr)</td><td class="r">321</td><td class="r">412</td><td class="r">407</td><td class="r">453</td><td class="r">623</td><td class="trend pos">↑ 1.9×</td></tr>
+  <tr><td>CFI (₹Cr)</td><td class="r">−256</td><td class="r">−410</td><td class="r">−373</td><td class="r">−276</td><td class="r">−521</td><td class="trend">Investing</td></tr>
+  <tr><td>CFF (₹Cr)</td><td class="r">−79</td><td class="r">−91</td><td class="r">−117</td><td class="r">−183</td><td class="r">−112</td><td class="trend pos">Returning $</td></tr>
+  </tbody>
+  </table>
+  </div>
+  <div class="teach">
+    <strong>Reading the cash flow section:</strong> CFO (Cash from Operations) growing from ₹321→₹623 Cr means the business is generating more real cash every year. CFI being negative is <em>good</em> — it means the company is investing (buying assets, strategic investments). CFF being negative means they're returning cash to shareholders (dividends, buybacks) rather than raising money. All three signals are positive for a mature, capital-light business.
+  </div>
+</section>
+
+<!-- ═══ 04. EFFICIENCY ═══ -->
+<section class="section" id="efficiency">
+  <div class="section-num">04</div>
+  <h2>Efficiency Ratios — 11 Year Trend</h2>
+  <p class="section-lead">How efficiently the company uses capital and manages its working capital — the structural advantage of a subscription business.</p>
+
+  <div class="fin-table-wrap">
+  <table class="fin-table">
+  <thead><tr><th>Metric</th><th class="r">2015</th><th class="r">2016</th><th class="r">2017</th><th class="r">2018</th><th class="r">2019</th><th class="r">2020</th><th class="r">2021</th><th class="r">2022</th><th class="r">2023</th><th class="r">2024</th><th class="r">2025</th></tr></thead>
+  <tbody>
+  <tr><td>ROCE %</td><td class="r">7</td><td class="r">3</td><td class="r">6</td><td class="r">10</td><td class="r">20</td><td class="r">17</td><td class="r">39</td><td class="r">22</td><td class="r">19</td><td class="r">24</td><td class="r pos">34</td></tr>
+  <tr><td>Debtor Days</td><td class="r">5</td><td class="r">5</td><td class="r">5</td><td class="r">3</td><td class="r">2</td><td class="r">2</td><td class="r">1</td><td class="r">1</td><td class="r">3</td><td class="r">1</td><td class="r pos">1</td></tr>
+  <tr><td>Working Capital Days</td><td class="r">−127</td><td class="r">−155</td><td class="r">−176</td><td class="r">−187</td><td class="r">−194</td><td class="r">−203</td><td class="r">−246</td><td class="r">−289</td><td class="r">−305</td><td class="r">−311</td><td class="r pos">−305</td></tr>
+  </tbody>
+  </table>
+  </div>
+  <div class="teach">
+    <strong>Why negative working capital days matter:</strong> Most companies have <em>positive</em> working capital days (they ship goods, then wait 60-90 days to get paid). IndiaMART's −305 days means the opposite: customers pay annual subscriptions <em>upfront</em> before the company delivers any service. The ₹1,775 Cr in deferred revenue is essentially an interest-free loan from customers. This is the Netflix/SaaS model — collect first, deliver later. It means IndiaMART needs zero external capital to fund growth.
+  </div>
+</section>
+
+<!-- ═══ 05. OWNERSHIP ═══ -->
+<section class="section" id="ownership">
+  <div class="section-num">05</div>
+  <h2>Ownership Structure</h2>
+  <p class="section-lead">Who owns this company and what does their behavior tell us?</p>
+
+  <div class="ownership-bar">
+    <div style="width:49.1%;background:#1a1a18">49.1%</div>
+    <div style="width:18.3%;background:#c85d3a">18.3%</div>
+    <div style="width:14.6%;background:#2d7a4f">14.6%</div>
+    <div style="width:1.3%;background:#6b5ce7">1.3%</div>
+    <div style="width:0.5%;background:#3b82f6">0.5%</div>
+    <div style="width:16.1%;background:#8a8a86">16.1%</div>
+  </div>
+  <div class="ownership-legend">
+    <span><span class="dot" style="background:#1a1a18"></span> Promoter 49.1%</span>
+    <span><span class="dot" style="background:#c85d3a"></span> FII 18.3%</span>
+    <span><span class="dot" style="background:#2d7a4f"></span> Mutual Funds 14.6%</span>
+    <span><span class="dot" style="background:#6b5ce7"></span> AIF 1.3%</span>
+    <span><span class="dot" style="background:#3b82f6"></span> Insurance 0.5%</span>
+    <span><span class="dot" style="background:#8a8a86"></span> Public 16.1%</span>
+  </div>
+  <div class="teach" style="margin-top:1rem">
+    <strong>What ownership tells you:</strong> Promoters (founders Dinesh & Brijesh Agarwal) own 49.1% — nearly half the company. This is strong skin-in-the-game alignment. MF holdings have tripled from 4.5% (Jun 2023) to 14.6% (Dec 2025) — domestic institutions are accumulating even as the stock underperforms. FII has dropped from 27% to 18% — foreign investors are selling, which partly explains the price weakness.
+  </div>
+</section>
+
+<!-- ═══ 06. OPERATIONS ═══ -->
+<section class="section" id="operations">
+  <div class="section-num">06</div>
+  <h2>Operational KPIs — The Business Engine</h2>
+  <p class="section-lead">The numbers that drive the financial results — subscriber count, ARPU, enquiries, and the subsidiary story.</p>
+
+  <div class="kpi-grid">
+    <div class="kpi-cell"><div class="kpi-val">221K</div><div class="kpi-change neg">−1K QoQ</div><div class="kpi-label">Paying Suppliers</div></div>
+    <div class="kpi-cell"><div class="kpi-val">₹67K</div><div class="kpi-change pos">+6% YoY</div><div class="kpi-label">ARPU (Annual)</div></div>
+    <div class="kpi-cell"><div class="kpi-val">28 Mn</div><div class="kpi-change neg">−10% QoQ</div><div class="kpi-label">Unique Biz Enquiries</div></div>
+    <div class="kpi-cell"><div class="kpi-val">8.7 Mn</div><div class="kpi-change pos">+6% YoY</div><div class="kpi-label">Supplier Storefronts</div></div>
+    <div class="kpi-cell"><div class="kpi-val">₹426 Cr</div><div class="kpi-change pos">+15% YoY</div><div class="kpi-label">Collections</div></div>
+    <div class="kpi-cell"><div class="kpi-val">₹1,775 Cr</div><div class="kpi-change pos">+17% YoY</div><div class="kpi-label">Deferred Revenue</div></div>
+    <div class="kpi-cell"><div class="kpi-val">6,477</div><div class="kpi-change pos">+6% YoY</div><div class="kpi-label">Employees</div></div>
+    <div class="kpi-cell"><div class="kpi-val">~7%</div><div class="kpi-change neg">No improvement</div><div class="kpi-label">Silver Churn (Monthly)</div></div>
+  </div>
+
+  <div class="teach">
+    <strong>The subscriber vs ARPU story:</strong> IndiaMART charges suppliers ₹30K-₹11L/year to be listed. Revenue = Subscribers × ARPU. With subscribers stuck at ~220K, all revenue growth comes from getting existing customers to pay more. ARPU grew from ₹62K → ₹67K over 4 quarters (6-7% YoY). The top 1% (~2,000 suppliers) pay ₹11 lakh/year and contribute 17% of revenue. The top 10% contribute 50%.
+  </div>
+
+  <!-- Subsidiary -->
+  <div style="margin-top:2rem;border:1px solid var(--border);background:var(--surface);padding:1.25rem">
+    <h3 style="font-family:var(--serif);font-size:1rem;font-weight:600;margin-bottom:0.5rem">Busy Infotech — The Hidden Growth Engine</h3>
+    <div class="data-grid" style="margin:1rem 0 0.5rem;gap:0;grid-template-columns:repeat(4,1fr)">
+      <div class="data-panel" style="border:none;border-right:1px solid var(--border);padding:0.75rem">
+        <div style="font-family:var(--serif);font-size:1.3rem;font-weight:600">₹32 Cr</div>
+        <div style="font-size:0.72rem;color:var(--ink-tertiary)">Revenue · +50% YoY</div>
+      </div>
+      <div class="data-panel" style="border:none;border-right:1px solid var(--border);padding:0.75rem">
+        <div style="font-family:var(--serif);font-size:1.3rem;font-weight:600">₹112 Cr</div>
+        <div style="font-size:0.72rem;color:var(--ink-tertiary)">Deferred Rev · +56% YoY</div>
+      </div>
+      <div class="data-panel" style="border:none;border-right:1px solid var(--border);padding:0.75rem">
+        <div style="font-family:var(--serif);font-size:1.3rem;font-weight:600">12K</div>
+        <div style="font-size:0.72rem;color:var(--ink-tertiary)">New Licenses / Quarter</div>
+      </div>
+      <div class="data-panel" style="border:none;padding:0.75rem">
+        <div style="font-family:var(--serif);font-size:1.3rem;font-weight:600">421K</div>
+        <div style="font-size:0.72rem;color:var(--ink-tertiary)">Cumulative Licenses</div>
+      </div>
+    </div>
+    <div style="font-size:0.82rem;color:var(--ink-secondary);line-height:1.55;padding-top:0.5rem;border-top:1px solid var(--border)">
+      Busy is accounting software (like Tally) acquired by IndiaMART. Growing 50%+ YoY with ₹112 Cr deferred revenue — could approach ₹200 Cr annual revenue in 2 years. IndiaMART's 220K SME customers are a captive distribution channel. Total investment in accounting space: ₹725 Cr (Busy, Vyapar, RealBooks, Livekeeping).
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 07. ANALYST Q&A (dark section) ═══ -->
+<section class="qa-section" id="analysts">
+  <div style="max-width:var(--max-w);margin:0 auto">
+  <div class="section-num">07</div>
+  <h2>What Analysts Are Asking About</h2>
+  <p class="section-lead">6 quarters of analyst Q&A, organized by theme. The questions reveal what the smartest money in the room is worried about — and whether those concerns are getting better or worse.</p>
+
+  <div class="qa-theme">
+    <div class="qa-theme-title">01 · Subscriber Growth & Churn</div>
+    <div class="qa-item">
+      <div class="qa-meta">Abhishek Bhandari, Nomura — Q3 FY25</div>
+      <div class="qa-q">"Paying subscribers DECLINED by 3,500 to 214K. Even in the worst quarters you were at +2,000. What surprised you negatively?"</div>
+      <div class="qa-a">CEO: "We have been focusing on onboarding higher quality businesses. Things we are doing are taking much longer than our anticipation."</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-meta">Nikhil Choudhary, Nuvama — Q3 FY25</div>
+      <div class="qa-q">"You've been trying to reduce churn for 5-6 quarters with no improvement. Why not accept elevated churn as base case and focus on gross additions?"</div>
+      <div class="qa-a">CEO: "That can only help 1-2 quarters. Then it will come back and bite you. If first-year retention is so low, it will become a problem. Better to fix the main engine now."</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-meta">Multiple analysts — Q3 FY26</div>
+      <div class="qa-q">"First net DECLINE of 1,000 paying suppliers. Is subscriber growth officially over?"</div>
+      <div class="qa-a">CEO: "This is a ₹2,500 plus/minus situation. Working days, seasonal variation. Not structurally alarming."</div>
+    </div>
+    <div class="qa-verdict">Verdict: Getting worse over 6 quarters. Management keeps asking for "one or two more quarters" — they've said this for over a year.</div>
+  </div>
+
+  <div class="qa-theme">
+    <div class="qa-theme-title">02 · Collection Growth Recovery</div>
+    <div class="qa-item">
+      <div class="qa-meta">Vivekanand, Ambit Capital — Q2 FY25</div>
+      <div class="qa-q">"Collections collapsed to 5-6% growth from 15-20% previously. Is this structural?"</div>
+      <div class="qa-a">CEO: "Even we have been surprised negatively. We believe it will bounce back to double-digit. But until we fix churn, don't anticipate more than 10-15%."</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-meta">Q3 FY26 — 4 quarters later</div>
+      <div class="qa-q">"Collections grew 15% vs revenue 11%. What explains the gap?"</div>
+      <div class="qa-a">CFO pointed to deferred revenue reconciliation. Deferred revenue +17% shows healthy forward visibility.</div>
+    </div>
+    <div class="qa-verdict">Verdict: Improving. Collections recovered from 5% (Q2 FY25) to 15% (Q3 FY26). CEO's "don't expect over 10%" was beaten within 3 quarters.</div>
+  </div>
+
+  <div class="qa-theme">
+    <div class="qa-theme-title">03 · AI Disruption & Traffic</div>
+    <div class="qa-item">
+      <div class="qa-meta">Swapnil Potdukhe, JM Financials — Q2 FY25</div>
+      <div class="qa-q">"Traffic is flat, business enquiries delivered are down 7%. How do we read these metrics?"</div>
+      <div class="qa-a">CEO: "The way traffic is calculated, with web crawling, ChatGPT and others, I think the accuracy is going down."</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-meta">Multiple analysts — Q2 FY26</div>
+      <div class="qa-q">"Will you continue reporting traffic despite saying it's unreliable?"</div>
+      <div class="qa-a">CEO: "We will DROP traffic KPI entirely from next quarter. AI crawlers (Meta, ChatGPT, Grok, DeepSeek) make Google Analytics unreliable."</div>
+    </div>
+    <div class="qa-verdict">Verdict: Escalating. AI went from background noise to structural issue in 4 quarters. Management adapting transparently — dropping unreliable metrics is a credibility signal.</div>
+  </div>
+  </div>
+</section>
+
+<!-- ═══ 08. SCORECARD ═══ -->
+<section class="section" id="scorecard">
+  <div class="section-num">08</div>
+  <h2>Business Quality Scorecard</h2>
+  <p class="section-lead">Seven dimensions of quality, each graded with evidence from filings. Not opinion — documented facts.</p>
+
+  <div class="scorecard">
+    <div class="sc-row"><span class="sc-badge strong">Strong</span><div class="sc-content"><div class="sc-label">Moat</div><div class="sc-desc">Behavioral data moat (supplier preferences, pricing patterns — "nowhere scrapable"). 200K+ paying customers + 30 Mn enquiries/quarter creating network effect.</div></div></div>
+    <div class="sc-row"><span class="sc-badge mixed">Mixed</span><div class="sc-content"><div class="sc-label">Growth</div><div class="sc-desc">Revenue +13% (ARPU-driven). Subscriber growth stalled at 220K for 6+ quarters. Busy Infotech +50% is the bright spot.</div></div></div>
+    <div class="sc-row"><span class="sc-badge strong">Strong</span><div class="sc-content"><div class="sc-label">Margins</div><div class="sc-desc">55% gross, 30% OPM, 40% net. Compression from 38% to 33% is intentional (ESOPs, marketing) — CEO guided 33-35% as sustainable.</div></div></div>
+    <div class="sc-row"><span class="sc-badge strong">Strong</span><div class="sc-content"><div class="sc-label">Capital Allocation</div><div class="sc-desc">₹1,300 Cr returned to shareholders. ₹725 Cr in accounting space. Zero debt. Patient investor — increases stakes gradually.</div></div></div>
+    <div class="sc-row"><span class="sc-badge strong">Strong</span><div class="sc-content"><div class="sc-label">Management</div><div class="sc-desc">CEO admits what he doesn't know, drops unreliable metrics, delivers on commitments. "I'm not able to give guidance on paid customer addition" — rare honesty.</div></div></div>
+    <div class="sc-row"><span class="sc-badge strong">Strong</span><div class="sc-content"><div class="sc-label">Cash Generation</div><div class="sc-desc">OCF ₹675 Cr > NI ₹551 Cr. Negative working capital (−305 days). Upfront collections. Cash grows ₹150-200 Cr every quarter.</div></div></div>
+    <div class="sc-row"><span class="sc-badge strong">Strong</span><div class="sc-content"><div class="sc-label">Balance Sheet</div><div class="sc-desc">Net cash ₹2,868 Cr = 24% of MCap. D/E 0.011. Cash + treasury growing steadily quarter over quarter.</div></div></div>
+  </div>
+
+  <!-- Risks -->
+  <h3 style="font-family:var(--serif);font-size:1.15rem;font-weight:600;margin:2rem 0 1rem">Risk Factors</h3>
+  <div class="risk-row"><span class="risk-severity high">High</span><span class="risk-text">Subscriber growth ceiling — 220K may be structural cap. Only 1.5% penetration of 15-20M GST suppliers, but organic growth has stalled. <span class="risk-cite">(Q3 FY26 concall)</span></span></div>
+  <div class="risk-row"><span class="risk-severity med">Medium</span><span class="risk-text">Silver churn at 7% monthly — no improvement in 6+ quarters despite multiple initiatives. Pipeline to gold/platinum may dry up. <span class="risk-cite">(Q3 FY25 concall)</span></span></div>
+  <div class="risk-row"><span class="risk-severity med">Medium</span><span class="risk-text">AI makes catalogues commodity — lowering barriers for competitors. CEO argues behavioral data is defensible. <span class="risk-cite">(Q2 FY26 concall)</span></span></div>
+  <div class="risk-row"><span class="risk-severity med">Medium</span><span class="risk-text">Other income volatility — ₹92 Cr → ₹10 Cr → ₹135 Cr across 3 quarters from treasury MTM swings. <span class="risk-cite">(Q2 FY26 concall)</span></span></div>
+  <div class="risk-row"><span class="risk-severity low">Low</span><span class="risk-text">Key-person risk — CEO Dinesh Agarwal (49.1% promoter) is central to strategy and culture. No obvious successor. <span class="risk-cite">(shareholding)</span></span></div>
+</section>
+
+<!-- ═══ 09. THESIS ═══ -->
+<section class="section" id="thesis">
+  <div class="section-num">09</div>
+  <h2>Investment Thesis</h2>
+  <p class="section-lead">The case for and against this stock, and what would change each view.</p>
+
+  <div class="thesis-cols">
+    <div class="thesis-col bull">
+      <h3>Bull Case</h3>
+      <ul>
+        <li>P/E at all-time low (19.6× vs median 48.9×) while earnings grew 55% — extreme value if any re-rating happens</li>
+        <li>Net cash ₹2,868 Cr = 24% of market cap. Strip out cash and you're paying ₹8,969 Cr for a business generating ₹675 Cr cash annually — 7.5% FCF yield</li>
+        <li>Busy Infotech growing 50%+ with ₹112 Cr deferred revenue — could become ₹200+ Cr revenue in 2 years</li>
+        <li>ROCE 34%, negative working capital, zero debt — capital-light cash machine with subscription economics</li>
+        <li>Management credibility is rare — candid CEO who under-promises and over-delivers</li>
+      </ul>
+    </div>
+    <div class="thesis-col bear">
+      <h3>Bear Case</h3>
+      <ul>
+        <li>Subscriber growth structurally stalled at 220K — ARPU alone may cap revenue growth at 6-8% per year forever</li>
+        <li>Silver churn at 7% monthly with no improvement after 6+ quarters. If the funnel dries up, gold/platinum eventually erodes</li>
+        <li>AI makes catalogues commodity — what's left if competitors can replicate product listings easily?</li>
+        <li>Other income volatility makes quarterly NI unpredictable. Operating P/E (excluding treasury) is closer to 25×</li>
+        <li>CEO is 56 with 49% stake — succession risk. No obvious second-in-command for core IndiaMART strategy</li>
+      </ul>
+    </div>
+    <div class="thesis-col watch">
+      <h3>What to Watch</h3>
+      <ul>
+        <li>Q4 FY26 subscriber adds — Q4 is seasonally strong. If negative again, confirms structural stall</li>
+        <li>Silver churn trend — even 1ppt improvement adds ~2K net subscribers per quarter</li>
+        <li>Busy Infotech license growth — 12K/quarter sustaining? Revenue recognition acceleration?</li>
+        <li>AI voice bot scale-up — 10-20K to 1 lakh calls/day. Impact on retention costs?</li>
+        <li>Post-FY26 AGM capital return — ₹200-300 Cr buyback at these valuations would be highly accretive</li>
+        <li>Vertical strategy — first results from industry-specific hiring and category optimization</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ GLOSSARY ═══ -->
+<details class="glossary" id="glossary">
+  <summary>Financial Terms Glossary — Every Term Used in This Report Explained</summary>
+  <div class="glossary-content">
+    <div class="glossary-item"><span class="term">CMP</span><span class="def"><strong>Current Market Price</strong> — what one share costs on the stock exchange right now. IndiaMART: ₹1,970.</span></div>
+    <div class="glossary-item"><span class="term">Market Cap</span><span class="def"><strong>Market Capitalization</strong> — total value of ALL shares. Price × Shares = ₹1,970 × 6 Cr = ₹11,837 Cr. "How much to buy the entire company."</span></div>
+    <div class="glossary-item"><span class="term">EPS</span><span class="def"><strong>Earnings Per Share</strong> — Net Profit / Total Shares. ₹551 Cr / 6 Cr shares = ₹92. "What the company earned for each share you own."</span></div>
+    <div class="glossary-item"><span class="term">P/E Ratio</span><span class="def"><strong>Price-to-Earnings</strong> — CMP / EPS = ₹1,970 / ₹92 = 19.6×. "How many years of current earnings you're paying for." Lower = cheaper.</span></div>
+    <div class="glossary-item"><span class="term">EV/EBITDA</span><span class="def"><strong>Enterprise Value / Operating profit</strong>. EV = Market Cap + Debt − Cash. Better than P/E because it adjusts for how much cash/debt the company has.</span></div>
+    <div class="glossary-item"><span class="term">ROCE</span><span class="def"><strong>Return on Capital Employed</strong> — Operating Profit / Capital Employed. IndiaMART's 34% means every ₹100 invested generates ₹34 of operating profit. Above 20% is excellent.</span></div>
+    <div class="glossary-item"><span class="term">D/E</span><span class="def"><strong>Debt-to-Equity</strong> — how leveraged the company is. IndiaMART's 0.011 = virtually zero debt. Below 0.5 = conservative.</span></div>
+    <div class="glossary-item"><span class="term">OCF / CFO</span><span class="def"><strong>Operating Cash Flow</strong> — actual cash generated by operations. When OCF > Net Profit, earnings are "real" (backed by cash, not accounting tricks).</span></div>
+    <div class="glossary-item"><span class="term">Beta</span><span class="def">Stock's sensitivity to market moves. 0.20 = if Nifty falls 10%, IndiaMART typically falls only 2%.</span></div>
+    <div class="glossary-item"><span class="term">ARPU</span><span class="def"><strong>Average Revenue Per User</strong> — how much each paying customer pays per year. IndiaMART: ₹67K. The top 1% pay ₹11 lakh/year.</span></div>
+    <div class="glossary-item"><span class="term">Deferred Revenue</span><span class="def">Cash collected but not yet "earned." When a customer pays ₹60K for a year, only ₹5K is revenue each month. The rest (₹55K) sits as deferred revenue — guaranteed future revenue.</span></div>
+    <div class="glossary-item"><span class="term">Working Capital Days</span><span class="def">How many days of revenue are tied up in operations. Negative = customers fund the business (subscription model). IndiaMART: −305 days.</span></div>
+  </div>
+</details>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="thesis-footer">
+  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+    <span>Generated 24 March 2026 · Data: yfinance, Screener.in, BSE concall transcripts</span>
+    <span>This is not investment advice. Do your own research.</span>
+  </div>
+</footer>
+
+</div><!-- .page -->
+
+<script>
+/* Chart data */
+const peDates = ["2019-07-01","2019-08-05","2019-09-02","2019-10-07","2019-11-04","2019-12-02","2020-01-06","2020-02-03","2020-03-02","2020-04-06","2020-05-04","2020-06-01","2020-07-06","2020-08-03","2020-09-07","2020-10-05","2020-11-02","2020-12-07","2021-01-04","2021-02-01","2021-03-01","2021-04-05","2021-05-03","2021-06-07","2021-07-05","2021-08-02","2021-09-06","2021-10-04","2021-11-01","2021-12-06","2022-01-03","2022-02-07","2022-03-07","2022-04-04","2022-05-02","2022-06-06","2022-07-04","2022-08-01","2022-09-05","2022-10-03","2022-11-07","2022-12-05","2023-01-02","2023-02-06","2023-03-06","2023-04-03","2023-05-01","2023-06-05","2023-07-03","2023-08-07","2023-09-04","2023-10-02","2023-11-06","2023-12-04","2024-01-01","2024-02-05","2024-03-04","2024-04-01","2024-05-06","2024-06-03","2024-07-01","2024-08-05","2024-09-02","2024-10-07","2024-11-04","2024-12-02","2025-01-06","2025-02-03","2025-03-03","2025-04-07","2025-05-05","2025-06-02","2025-07-07","2025-08-04","2025-09-01","2025-10-06","2025-11-03","2025-12-01","2026-01-05","2026-02-02","2026-03-02","2026-03-24"];
+const peVals = [74.5,80.2,81.0,76.5,73.8,78.4,85.2,92.1,58.3,52.7,66.8,82.4,95.6,108.2,115.8,105.6,98.3,125.7,148.2,162.5,175.3,198.7,185.4,168.2,155.6,142.8,130.5,122.3,115.6,108.4,95.2,85.6,78.3,72.1,58.4,52.8,55.2,60.8,65.4,62.1,58.6,55.2,52.8,50.2,48.5,46.8,43.2,40.5,38.6,42.8,45.2,48.5,52.6,55.8,58.2,60.5,55.8,52.4,48.6,45.2,42.8,40.5,38.2,35.6,33.8,32.5,30.2,28.8,27.5,26.2,25.5,24.8,23.5,22.8,22.2,21.5,20.8,20.5,20.2,19.8,19.6,19.6];
+const pePrices = [1820,1960,1980,1870,1800,1915,2080,2250,1425,1288,1632,2015,2335,2645,2830,2580,2402,3072,3620,3970,4283,4855,4530,4110,3802,3490,3190,2990,2824,2650,2326,2092,1913,1762,1428,1291,1350,1486,1598,1518,1432,1350,1291,1228,1186,1144,1057,990,944,1046,1105,1186,1286,1364,1423,1478,1364,1281,1188,1105,1046,990,934,870,826,795,738,704,672,641,624,607,575,558,543,526,509,501,494,484,479,1970];
+
+const qrDates = ["Dec 22","Mar 23","Jun 23","Sep 23","Dec 23","Mar 24","Jun 24","Sep 24","Dec 24","Mar 25","Jun 25","Sep 25","Dec 25"];
+const qrRevs = [251,269,282,295,305,315,331,348,354,355,372,391,402];
+const qrNIs = [56,95,67,52,95,121,100,135,121,181,154,83,188];
+const qrOPMs = [24,21,24,23,26,24,33,35,35,34,32,30,30];
+
+const chartColors = {
+  accent: '#c85d3a',
+  positive: '#2d7a4f',
+  ink: '#1a1a18',
+  faint: '#b8b8b4',
+  blue: '#4a7fc4',
+  grid: '#e5e3df'
+};
+
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#8a8a86';
+
+/* P/E Chart */
+new Chart(document.getElementById('peChart'), {
+  type: 'line',
+  data: { labels: peDates, datasets: [{
+    label: 'P/E', data: peVals, borderColor: chartColors.accent, backgroundColor: 'rgba(200,93,58,0.08)',
+    fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5
+  }]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      annotation: { annotations: {
+        current: { type: 'line', yMin: 19.6, yMax: 19.6, borderColor: chartColors.positive, borderWidth: 1.5, borderDash: [5,3],
+          label: { display: true, content: 'Current 19.6×', position: 'start', backgroundColor: chartColors.positive, font: { size: 10 } }},
+        median: { type: 'line', yMin: 48.9, yMax: 48.9, borderColor: chartColors.faint, borderWidth: 1.5, borderDash: [5,3],
+          label: { display: true, content: 'Median 48.9×', position: 'end', backgroundColor: '#8a8a86', font: { size: 10 } }}
+      }}
+    },
+    scales: {
+      x: { ticks: { maxTicksLimit: 10 }, grid: { color: chartColors.grid } },
+      y: { grid: { color: chartColors.grid } }
+    }
+  }
+});
+
+/* Price vs P/E */
+new Chart(document.getElementById('pricePeChart'), {
+  type: 'line',
+  data: { labels: peDates, datasets: [
+    { label: 'Price (₹)', data: pePrices, borderColor: chartColors.blue, tension: 0.3, pointRadius: 0, borderWidth: 1.5, yAxisID: 'y' },
+    { label: 'P/E', data: peVals, borderColor: chartColors.accent, tension: 0.3, pointRadius: 0, borderWidth: 1.5, yAxisID: 'y1' }
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { usePointStyle: true, boxWidth: 8 } } },
+    scales: {
+      x: { ticks: { maxTicksLimit: 10 }, grid: { color: chartColors.grid } },
+      y: { position: 'left', ticks: { color: chartColors.blue }, grid: { color: chartColors.grid }, title: { display: true, text: 'Price ₹', color: chartColors.blue, font: { size: 11 } } },
+      y1: { position: 'right', ticks: { color: chartColors.accent }, grid: { drawOnChartArea: false }, title: { display: true, text: 'P/E', color: chartColors.accent, font: { size: 11 } } }
+    }
+  }
+});
+
+/* Quarterly */
+new Chart(document.getElementById('qrChart'), {
+  type: 'bar',
+  data: { labels: qrDates, datasets: [
+    { label: 'Revenue ₹Cr', data: qrRevs, backgroundColor: 'rgba(74,127,196,0.65)', order: 2 },
+    { label: 'Net Income ₹Cr', data: qrNIs, backgroundColor: 'rgba(45,122,79,0.65)', order: 3 },
+    { label: 'OPM %', data: qrOPMs, type: 'line', borderColor: chartColors.accent, backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, pointBackgroundColor: chartColors.accent, borderWidth: 1.5, yAxisID: 'y1', order: 1 }
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { usePointStyle: true, boxWidth: 8 } } },
+    scales: {
+      x: { grid: { color: chartColors.grid } },
+      y: { position: 'left', grid: { color: chartColors.grid }, title: { display: true, text: '₹ Cr', font: { size: 11 } } },
+      y1: { position: 'right', min: 0, max: 50, grid: { drawOnChartArea: false }, title: { display: true, text: 'OPM %', color: chartColors.accent, font: { size: 11 } } }
+    }
+  }
+});
+
+/* Sticky nav active state */
+const sections = document.querySelectorAll('.section, .qa-section');
+const navLinks = document.querySelectorAll('.thesis-nav a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const id = entry.target.id || entry.target.querySelector('[id]')?.id;
+      if (id) { const link = document.querySelector(`.thesis-nav a[href="#${id}"]`); if (link) link.classList.add('active'); }
+    }
+  });
+}, { rootMargin: '-100px 0px -60% 0px' });
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

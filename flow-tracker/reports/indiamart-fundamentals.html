@@ -1,394 +1,711 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-IN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>INDIAMART — Fundamentals Deep Dive</title>
+<title>INDIAMART — Investment Thesis</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0f1117;--card:#1a1d28;--border:#2a2d3a;--text:#e4e4e7;--dim:#71717a;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#eab308;--cyan:#06b6d4;--purple:#a855f7;--orange:#f97316}
-*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;line-height:1.6;padding:2rem}
-.container{max-width:1400px;margin:0 auto}h1{font-size:2rem;margin-bottom:0.25rem}.subtitle{color:var(--dim);margin-bottom:2rem;font-size:0.9rem}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:2rem}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem}.card h2{font-size:1.05rem;color:var(--cyan);margin-bottom:0.8rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem}
-.full-width{grid-column:1/-1}table{width:100%;border-collapse:collapse;font-size:0.82rem}th{text-align:left;padding:0.35rem 0.5rem;color:var(--dim);border-bottom:1px solid var(--border);font-weight:500}td{padding:0.35rem 0.5rem;border-bottom:1px solid var(--border)}
-th.r,td.r{text-align:right}tr:hover{background:rgba(255,255,255,0.03)}.up{color:var(--green)}.down{color:var(--red)}.hl{color:var(--cyan);font-weight:600}
-.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600}.bg{background:rgba(34,197,94,0.15);color:var(--green)}.br{background:rgba(239,68,68,0.15);color:var(--red)}.by{background:rgba(234,179,8,0.15);color:var(--yellow)}
-.stat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:0.8rem;margin-bottom:1.5rem}.stat{text-align:center}.stat-value{font-size:1.3rem;font-weight:700}.stat-label{font-size:0.7rem;color:var(--dim)}
-.narrative{background:rgba(6,182,212,0.05);border-left:3px solid var(--cyan);padding:1rem;border-radius:0 8px 8px 0;margin:1rem 0;font-size:0.85rem}.narrative strong{color:var(--cyan)}
-.explain{background:rgba(168,85,247,0.06);border-left:3px solid var(--purple);padding:0.8rem 1rem;border-radius:0 8px 8px 0;margin:0.6rem 0;font-size:0.82rem;color:#c4b5fd}
-.explain strong{color:var(--purple)}
-.example{background:rgba(234,179,8,0.06);border-left:3px solid var(--yellow);padding:0.8rem 1rem;border-radius:0 8px 8px 0;margin:0.6rem 0;font-size:0.82rem}
-.example strong{color:var(--yellow)}
-.callout{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:1rem;margin:1rem 0;font-size:0.85rem}
-.callout-warn{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.3)}
-.callout-neutral{background:rgba(234,179,8,0.08);border-color:rgba(234,179,8,0.3)}
-.note{color:var(--dim);font-size:0.78rem;font-style:italic;margin-bottom:0.5rem}
-.chart-box{position:relative;height:380px}
-.cite{color:var(--dim);font-size:0.72rem;font-style:italic}
-.source-tag{display:inline-block;background:rgba(6,182,212,0.1);color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:0.7rem;margin-left:4px}
-.term{color:var(--purple);font-weight:600;cursor:help;border-bottom:1px dotted var(--purple)}
-@media(max-width:768px){.grid,.grid-3{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(3,1fr)}}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#faf9f7;--surface:#fff;--surface-alt:#f3f1ee;--ink:#1a1a18;--ink2:#5c5c58;--ink3:#8a8a86;--ink4:#b8b8b4;
+  --border:#e5e3df;--border2:#ccc9c4;--accent:#c85d3a;--accent-bg:#fef8f6;
+  --pos:#2d7a4f;--pos-bg:#f0f8f3;--neg:#b83d2e;--neg-bg:#fdf2f1;
+  --serif:'Source Serif 4',Georgia,serif;--sans:'DM Sans',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;
+  --maxw:1140px;--gutter:clamp(1.5rem,4vw,5rem);
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:100;background:rgba(250,249,247,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 var(--gutter)}
+.nav-inner{max-width:var(--maxw);margin:0 auto;display:flex;align-items:center;gap:2rem;height:48px;overflow-x:auto}
+.nav .brand{font-family:var(--serif);font-weight:700;font-size:1rem;color:var(--ink);white-space:nowrap}
+.nav a{font-size:.75rem;color:var(--ink3);text-decoration:none;white-space:nowrap;border-bottom:1.5px solid transparent;padding:.2rem 0;transition:all .15s}
+.nav a:hover,.nav a.active{color:var(--ink);border-bottom-color:var(--accent)}
+
+/* LAYOUT */
+.page{max-width:var(--maxw);margin:0 auto;padding:0 var(--gutter)}
+.story{display:flex;gap:40px;margin-bottom:0}
+.story-explain{width:320px;flex-shrink:0}
+.story-visual{flex:1;min-width:0}
+
+/* TYPOGRAPHY */
+.sec-num{font-family:var(--mono);font-size:.7rem;color:var(--ink4);letter-spacing:1px;margin-bottom:.35rem}
+.big-num{font-family:var(--serif);font-weight:700;line-height:1;letter-spacing:-1px}
+.metric-name{font-family:var(--sans);font-size:.875rem;font-weight:500;margin-top:.25rem}
+.metric-sub{font-size:.7rem;color:var(--ink3)}
+.headline{font-family:var(--serif);font-size:.95rem;font-weight:600;line-height:1.4;margin-top:1rem}
+.body-text{font-size:.82rem;color:var(--ink2);line-height:1.65;margin-top:.5rem}
+
+/* TEACH BOX */
+.teach{border-left:3px solid var(--accent);background:var(--accent-bg);padding:.75rem 1rem;margin:.75rem 0;font-size:.8rem;line-height:1.6}
+.teach strong{color:var(--accent)}
+
+/* CHART */
+.chart-wrap{background:var(--surface);border:1px solid var(--border);padding:1.25rem;margin:.75rem 0}
+.chart-title{font-family:var(--serif);font-size:.9rem;font-weight:600}
+.chart-sub{font-size:.7rem;color:var(--ink3);margin-bottom:.75rem}
+.chart-canvas{position:relative;height:300px}
+details summary{font-size:.78rem;font-weight:500;color:var(--accent);cursor:pointer;margin-top:.5rem;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'▸ '}
+details[open] summary::before{content:'▾ '}
+details p{font-size:.78rem;color:var(--ink2);line-height:1.6;padding-top:.35rem}
+
+/* DATA ROW */
+.data-row{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.8rem}
+.data-row:last-child{border-bottom:none}
+.data-row .k{color:var(--ink2)}.data-row .v{font-weight:500;font-variant-numeric:tabular-nums}
+.pos{color:var(--pos)}.neg{color:var(--neg)}
+
+/* DATA STRIP */
+.data-strip{display:flex;gap:0;margin:.75rem 0}
+.data-strip .cell{flex:1;padding:.75rem 1rem;background:var(--surface);border:1px solid var(--border);border-left:none}
+.data-strip .cell:first-child{border-left:1px solid var(--border)}
+.cell .cv{font-family:var(--serif);font-size:1.4rem;font-weight:600;line-height:1.2}
+.cell .cs{font-size:.65rem;color:var(--ink3);margin-top:.15rem}
+.cell .ct{font-size:.65rem;margin-top:.1rem}
+
+/* VERDICT */
+.verdict{padding:1.25rem;margin:.75rem 0;border:1px solid}
+.verdict.cheap{background:var(--pos-bg);border-color:#c3dcc9}
+.verdict-badge{display:inline-block;font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;padding:.2rem .6rem;background:var(--pos);color:#fff;margin-bottom:.5rem}
+.verdict-title{font-family:var(--serif);font-size:1.05rem;font-weight:600;margin-bottom:.35rem}
+.verdict p{font-size:.82rem;color:var(--ink2);line-height:1.6}
+
+/* SCENARIO */
+.scenario{font-size:.8rem;margin:.75rem 0}
+.scenario .sr{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border)}
+.scenario .sr:last-child{border-bottom:none}
+
+/* OWNERSHIP BAR */
+.own-bar{display:flex;height:28px;margin:.75rem 0;overflow:hidden}
+.own-bar>div{display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:600;color:#fff}
+.own-legend{display:flex;flex-wrap:wrap;gap:1rem;font-size:.72rem;margin-top:.35rem}
+.own-legend span{display:flex;align-items:center;gap:.3rem}
+.own-legend .dot{width:10px;height:10px}
+
+/* TABLE */
+.fin-wrap{overflow-x:auto;margin:.75rem 0;border:1px solid var(--border);background:var(--surface)}
+table.fin{width:100%;border-collapse:collapse;font-size:.75rem;font-variant-numeric:tabular-nums}
+.fin th{text-align:left;padding:.45rem .6rem;font-weight:500;color:var(--ink3);border-bottom:2px solid var(--border);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;background:var(--surface-alt)}
+.fin th.r{text-align:right}.fin td{padding:.4rem .6rem;border-bottom:1px solid var(--border)}.fin td.r{text-align:right}
+.fin .gh td{font-weight:600;background:var(--surface-alt);padding-top:.6rem;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border2)}
+.fin tr:hover{background:var(--surface-alt)}
+
+/* QA SECTION */
+.qa-sec{background:var(--ink);color:#e8e7e3;padding:3rem var(--gutter);margin:2.5rem calc(-1 * var(--gutter))}
+.qa-sec .sec-num{color:#555}.qa-sec h2{color:#fff;font-family:var(--serif);font-size:1.5rem;font-weight:600;margin-bottom:.25rem}
+.qa-sec .lead{color:#999;font-size:.82rem;margin-bottom:2rem}
+.qa-theme-title{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:.75rem}
+.qa-item{border-left:1px solid #333;padding:.6rem 0 .6rem 1.2rem;margin-bottom:.75rem}
+.qa-meta{font-size:.68rem;color:#777;margin-bottom:.25rem}.qa-q{font-style:italic;color:#ddd;font-size:.82rem;line-height:1.5;margin-bottom:.35rem}
+.qa-a{color:#999;font-size:.8rem;line-height:1.5}.qa-verdict{font-size:.78rem;font-weight:500;color:var(--accent);margin-top:.5rem;padding-top:.5rem;border-top:1px solid #333}
+
+/* SCORECARD */
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);margin:.75rem 0}
+.sc-row{display:flex;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);background:var(--surface);align-items:flex-start}
+.sc-row:nth-child(2n){border-right:none}
+.sc-badge{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;padding:.15rem .4rem;white-space:nowrap;flex-shrink:0;margin-top:.1rem}
+.sc-badge.s{background:var(--pos-bg);color:var(--pos)}.sc-badge.m{background:#fdf6e8;color:#8a6d2b}.sc-badge.w{background:var(--neg-bg);color:var(--neg)}
+.sc-label{font-weight:600;font-size:.78rem}.sc-desc{font-size:.72rem;color:var(--ink2);line-height:1.5;margin-top:.1rem}
+
+/* RISK */
+.risk-row{display:flex;gap:.75rem;padding:.6rem 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.risk-sev{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;padding:.15rem .4rem;flex-shrink:0;margin-top:.1rem}
+.risk-sev.h{background:var(--neg-bg);color:var(--neg)}.risk-sev.m{background:#fdf6e8;color:#8a6d2b}.risk-sev.l{background:var(--surface-alt);color:var(--ink3)}
+.risk-text{font-size:.8rem;color:var(--ink2);line-height:1.5}.risk-cite{font-size:.68rem;color:var(--ink4);font-style:italic}
+
+/* THESIS COLS */
+.thesis-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:.75rem 0}
+.thesis-col{padding:1.25rem;border:1px solid var(--border);border-left:none;background:var(--surface)}
+.thesis-col:first-child{border-left:1px solid var(--border)}
+.thesis-col h3{font-family:var(--serif);font-size:.9rem;font-weight:600;margin-bottom:.75rem;padding-bottom:.4rem;border-bottom:2px solid}
+.thesis-col.bull{background:var(--pos-bg)}.thesis-col.bull h3{border-color:var(--pos)}
+.thesis-col.bear{background:var(--neg-bg)}.thesis-col.bear h3{border-color:var(--neg)}
+.thesis-col.watch{background:var(--accent-bg)}.thesis-col.watch h3{border-color:var(--accent)}
+.thesis-col li{font-size:.78rem;color:var(--ink2);line-height:1.5;margin-bottom:.6rem;list-style:none;padding-left:1rem;position:relative}
+.thesis-col li::before{content:'—';position:absolute;left:0;color:var(--ink4)}
+
+/* GLOSSARY */
+.glossary{margin:2rem 0;border:1px solid var(--border);background:var(--surface)}
+.glossary summary{padding:.75rem 1rem;font-family:var(--serif);font-size:.9rem;font-weight:600;cursor:pointer}
+.glossary-content{padding:0 1rem 1rem}
+.glossary-item{display:grid;grid-template-columns:110px 1fr;gap:.6rem;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.78rem}
+.glossary-item:last-child{border-bottom:none}
+.glossary-item .term{font-weight:600;color:var(--accent)}.glossary-item .def{color:var(--ink2);line-height:1.5}
+
+.divider{border:none;border-top:1px solid var(--border);margin:2.5rem 0}
+
+/* HERO */
+.hero{padding:3rem 0 2rem;border-bottom:2px solid var(--ink);margin-bottom:2.5rem}
+.hero-eye{font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--ink3);font-weight:600;margin-bottom:.6rem}
+.hero h1{font-family:var(--serif);font-size:clamp(2.2rem,5vw,3.2rem);font-weight:700;line-height:1.08;letter-spacing:-1px}
+.hero-sub{font-family:var(--serif);font-size:1.1rem;font-weight:300;color:var(--ink2);font-style:italic;margin:.4rem 0 1rem}
+.hero-meta{display:flex;flex-wrap:wrap;gap:1.2rem;font-size:.75rem;color:var(--ink3)}
+
+.footer{border-top:2px solid var(--ink);padding:1.25rem 0;margin-top:2.5rem;font-size:.7rem;color:var(--ink3);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+
+@media(max-width:768px){
+  .story{flex-direction:column;gap:1.5rem}.story-explain{width:100%}
+  .data-strip{flex-wrap:wrap}.data-strip .cell{min-width:45%}
+  .sc-grid,.thesis-cols{grid-template-columns:1fr}.sc-row{border-right:none!important}
+  .qa-sec{margin:2rem calc(-1 * var(--gutter));padding:2rem var(--gutter)}
+}
+@media print{body{background:#fff;font-size:10pt}.nav{display:none}.qa-sec{background:#f5f5f5;color:#1a1a1a}.qa-sec h2,.qa-q{color:#1a1a1a}.qa-a,.qa-sec .lead{color:#666}}
 </style>
 </head>
 <body>
-<div class="container">
 
+<nav class="nav"><div class="nav-inner">
+<span class="brand">INDIAMART</span>
+<a href="#valuation">Valuation</a><a href="#earnings">Earnings</a><a href="#balance-sheet">Balance Sheet</a>
+<a href="#subscribers">Subscribers</a><a href="#ownership">Ownership</a><a href="#financials">Financials</a>
+<a href="#efficiency">Efficiency</a><a href="#analysts">Analysts</a><a href="#scorecard">Scorecard</a><a href="#thesis">Thesis</a>
+<a href="#glossary">Glossary</a>
+</div></nav>
 
-<h1>INDIAMART <span style="color:var(--dim);font-weight:400;font-size:1.1rem">Fundamentals & Valuation</span></h1>
-<p class="subtitle">Internet & Catalogue Retail | Market Cap ₹11,837 Cr | Data: yfinance + Screener.in + BSE Concalls | 2026-03-24</p>
+<div class="page">
 
-
-<div class="stat-grid">
-<div class="stat"><div class="stat-value">₹1,970.5</div><div class="stat-label">CMP (Current Market Price)</div></div>
-<div class="stat"><div class="stat-value" style="color:var(--green)">19.6x</div><div class="stat-label">P/E — All-Time Low (0th percentile)</div></div>
-<div class="stat"><div class="stat-value up">55.2%</div><div class="stat-label">Earnings Growth (last 12 months)</div></div>
-<div class="stat"><div class="stat-value">0.20</div><div class="stat-label">Beta (low = less volatile)</div></div>
-<div class="stat"><div class="stat-value up">34.0%</div><div class="stat-label">ROCE (latest FY)</div></div>
-<div class="stat"><div class="stat-value up">+29.6%</div><div class="stat-label">Analyst Upside (18 analysts)</div></div>
+<header class="hero">
+<div class="hero-eye">Investment Thesis · Equity Research</div>
+<h1>IndiaMART InterMESH</h1>
+<div class="hero-sub">India's largest B2B marketplace at its cheapest-ever valuation — a deep value opportunity or a growth story ending?</div>
+<div class="hero-meta">
+<span>Internet & Catalogue Retail</span><span>MCap ₹11,837 Cr</span><span>BSE 542726</span><span>2026-03-24</span>
 </div>
+</header>
 
-
-<div class="card" style="margin-bottom:2rem">
-<h2>Financial Terms Used in This Report — Plain English Guide</h2>
-<p class="note">Every term you'll see below, explained with INDIAMART's actual numbers as examples.</p>
-<table>
-<tr><td class="hl" style="width:140px">CMP</td><td><strong>Current Market Price</strong> — what one share costs right now on the stock exchange. INDIAMART's CMP is ₹1,970. This changes every second during market hours.</td></tr>
-<tr><td class="hl">Market Cap</td><td><strong>Market Capitalization</strong> — the total value of ALL shares of the company. CMP × Total Shares = ₹1,970 × 6.0 Cr shares = ₹11,837 Cr. Think of it as "how much would it cost to buy the entire company?"</td></tr>
-<tr><td class="hl">EPS</td><td><strong>Earnings Per Share</strong> — how much profit the company made for each share. Net Profit / Total Shares. INDIAMART earned ₹551 Cr in the last FY with 6.0 Cr shares, so EPS = ~₹91.7/share.</td></tr>
-<tr><td class="hl">P/E Ratio</td><td><strong>Price-to-Earnings</strong> — how many years of current earnings you're paying for. CMP / EPS. INDIAMART: ₹1,970 / ₹91.7 = 19.6x. <em>Lower P/E = cheaper.</em></td></tr>
-<tr><td class="hl">ATL</td><td><strong>All-Time Low</strong> — the lowest value this metric has ever reached in the stock's history.</td></tr>
-<tr><td class="hl">EV/EBITDA</td><td><strong>Enterprise Value / EBITDA</strong>. EV = Market Cap + Debt - Cash. Better than P/E because it adjusts for cash/debt on the balance sheet.</td></tr>
-<tr><td class="hl">EBITDA</td><td><strong>Earnings Before Interest, Tax, Depreciation & Amortisation</strong> — how much cash the core business generates before accounting items.</td></tr>
-<tr><td class="hl">Gross Margin</td><td>% of revenue left after direct costs. Higher = better pricing power.</td></tr>
-<tr><td class="hl">OPM</td><td><strong>Operating Profit Margin</strong> — % of revenue left after ALL operating costs. Best measure of core business profitability.</td></tr>
-<tr><td class="hl">Net Margin</td><td>Final % left after everything — costs, interest, taxes, other income.</td></tr>
-<tr><td class="hl">ROCE</td><td><strong>Return on Capital Employed</strong> — Operating Profit / Capital Employed. Above 20% is excellent. INDIAMART's 34.0% means every ₹100 of capital generates ₹34.0 of operating profit.</td></tr>
-<tr><td class="hl">D/E Ratio</td><td><strong>Debt-to-Equity</strong> — how leveraged the company is. INDIAMART's 0.011 means virtually zero debt. Below 0.5 = conservative, above 1 = aggressive.</td></tr>
-<tr><td class="hl">Current Ratio</td><td>Current Assets / Current Liabilities. Above 1.5 = comfortable. INDIAMART: 2.39x.</td></tr>
-<tr><td class="hl">OCF / CFO</td><td><strong>Operating Cash Flow</strong> — actual cash generated by the business. When OCF > Net Profit, earnings are "real."</td></tr>
-<tr><td class="hl">Beta</td><td>Stock's sensitivity to market moves. INDIAMART's 0.20 means if Nifty falls 10%, INDIAMART typically falls only 2%.</td></tr>
-<tr><td class="hl">Deferred Revenue</td><td>Cash collected but not yet recognized as revenue. High growth in deferred revenue = future revenue already locked in.</td></tr>
-<tr><td class="hl">BVPS</td><td><strong>Book Value Per Share</strong> — net assets / shares. INDIAMART: ₹390. Stock at ₹1,970 = 5.1x book value.</td></tr>
-<tr><td class="hl">Working Capital Days</td><td>How many days of revenue are tied up in operations. Negative = customers fund the business (subscription model).</td></tr>
-</table>
+<!-- ═══ 01. VALUATION ═══ -->
+<section id="valuation">
+<div class="story">
+<div class="story-explain">
+  <div class="sec-num">01</div>
+  <div class="big-num pos" style="font-size:3.5rem">19.6×</div>
+  <div class="metric-name">P/E Trailing</div>
+  <div class="metric-sub">Price-to-Earnings Ratio · All-Time Low</div>
+  <p class="headline">This is how many years of current earnings you're paying for when you buy one share.</p>
+  <p class="body-text">IndiaMART earned ₹91.7 per share last year (EPS). The stock costs ₹1,970. So you're paying 1,970 ÷ 91.7 = <strong>20× one year's earnings</strong>.</p>
+  <p class="body-text">The lower this number, the "cheaper" the stock. IndiaMART's 6-year median P/E is 48.9× — meaning investors have historically paid 49 years of earnings for this business. Today's 19.6× is the absolute lowest ever recorded in 323 weekly observations since IPO.</p>
+  <p class="body-text"><strong>Why is it so cheap?</strong> The market thinks subscriber growth has peaked at 220K. But earnings grew 55% last year, and 18 analysts have a mean target of ₹2,553 (+29.6% upside).</p>
 </div>
-
-
-
-<div class="callout" style="margin-bottom:2rem">
-<strong style="color:var(--green);font-size:1rem">This Stock is at Its Cheapest-Ever Valuation</strong><br><br>
-<div class="explain">
-<strong>What does "cheapest ever" mean?</strong> P/E is 19.6x today. Over 324 weekly observations since 2019-07-01, the P/E ranged from 19.6x (now) to 199x. The median was 48.9x. Today's 19.6x is at the 0th percentile.
-</div>
-<div class="example">
-<strong>In rupees:</strong> At the median P/E of 48.9x and current EPS of ~₹91.7, the stock "should" trade at 4482. It trades at ₹1,970 — a 56% discount to its historical median valuation.
-</div>
-</div>
-
-
-
-
-<div class="card" style="margin-bottom:2rem">
-<h2>Historical P/E — Since 2019 Weekly</h2>
-<p class="note">Source: yfinance weekly prices / Screener.in annual EPS. 324 observations.</p>
-<div class="chart-box"><canvas id="peChart"></canvas></div>
-<div class="explain" style="margin-top:1rem">
-<strong>How to read this chart:</strong> The orange line shows how "expensive" or "cheap" the stock was at each point. Higher = more expensive. The green dashed line is today's P/E (19.6x). The grey dashed line is the median (48.9x).
-</div>
-</div>
-
-
-
-
-<div class="card" style="margin-bottom:2rem">
-<h2>Price vs P/E — What's Driving the Cheapness?</h2>
-<p class="note">Blue = Price in ₹ (left axis), Orange = P/E ratio (right axis).</p>
-<div class="chart-box"><canvas id="pricePeChart"></canvas></div>
-<div class="explain" style="margin-top:1rem">
-<strong>Why this chart matters:</strong> When price is flat but P/E falls, it means <em>earnings grew while the price didn't move</em> — the stock got cheaper because the company became more profitable, not because anything went wrong with the price. This is the best kind of cheapness for a value investor.
-</div>
-</div>
-
-
-
-
-<div class="card" style="margin-bottom:2rem">
-<h2>Quarterly Earnings — 13 Quarter Trend</h2>
-<p class="note">Source: Screener.in. Revenue and Net Income in ₹Cr, OPM% on right axis.</p>
-<div class="chart-box"><canvas id="qrChart"></canvas></div>
-<div class="explain" style="margin-top:1rem">
-<strong>How to read:</strong> Blue bars = Revenue (total earnings). Green bars = Net Income (final profit). Orange line = OPM (Operating Profit Margin — what % of revenue becomes operating profit).
+<div class="story-visual">
+  <div class="verdict cheap">
+    <div class="verdict-badge">Historically Cheap</div>
+    <div class="verdict-title">P/E at all-time low — 0th percentile over 6 years</div>
+    <p>In 323 weekly observations since IPO, IndiaMART has never traded this cheaply relative to earnings. The 6-year median P/E is 48.9× — today's 19.6× implies the market sees this as a no-growth business. Earnings grew 55% last year.</p>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-title">Historical P/E — 6 Years Weekly</div>
+    <div class="chart-sub">Orange = P/E over time · Green dashed = current (19.6×) · Grey = median (48.9×)</div>
+    <div class="chart-canvas"><canvas id="peChart"></canvas></div>
+    <details><summary>How to read this chart</summary><p>The orange line shows how expensive the stock was at each point. Higher = more expensive. The spike in 2021 (~199×) was during the tech bubble. Since then, P/E has steadily declined as earnings grew faster than the stock price.</p></details>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-title">Price vs P/E — What's Driving the Cheapness?</div>
+    <div class="chart-sub">Blue = Price ₹ (left axis) · Orange = P/E (right axis)</div>
+    <div class="chart-canvas"><canvas id="pricePeChart"></canvas></div>
+    <details><summary>How to read this chart</summary><p>When price is flat but P/E falls (2023–2026), earnings grew while price didn't move. The stock got cheaper because the company became more profitable — the best kind of cheapness for a value investor.</p></details>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart-title">Scenario Analysis — What Could the Stock Be Worth?</div>
+    <div class="chart-sub">Target Price = P/E × EPS. We fix EPS at ₹95 (analyst estimate) and vary the P/E:</div>
+    <div class="scenario">
+      <div class="sr"><span>Bear — P/E stays at 19.6×</span><span class="neg">₹1,863 (-5.5%)</span></div>
+      <div class="sr"><span>Base — re-rates to 25×</span><span class="pos">₹2,376 (+20.6%)</span></div>
+      <div class="sr"><span>Bull — re-rates to 35×</span><span class="pos">₹3,326 (+68.8%)</span></div>
+      <div class="sr"><span>Median reversion — 48.9×</span><span class="pos">₹4,645 (+135.7%)</span></div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);padding:1.25rem;margin-top:.75rem">
+    <div style="font-family:var(--serif);font-size:.9rem;font-weight:600;margin-bottom:.5rem">Analyst Consensus — 18 Analysts</div>
+    <div class="data-strip" style="margin:0">
+      <div class="cell"><div class="cv">₹2,553</div><div class="cs">Target Mean</div></div>
+      <div class="cell"><div class="cv">₹2,525</div><div class="cs">Target Median</div></div>
+      <div class="cell"><div class="cv">₹3,500</div><div class="cs">Target High</div></div>
+      <div class="cell"><div class="cv">₹1,975</div><div class="cs">Target Low</div></div>
+    </div>
+    <div class="data-strip" style="margin:.5rem 0 0">
+      <div class="cell"><div class="cv">20.7×</div><div class="cs">Forward P/E</div></div>
+      <div class="cell"><div class="cv">₹95.0</div><div class="cs">Forward EPS</div></div>
+      <div class="cell"><div class="cv pos">+55.2%</div><div class="cs">Earnings Growth</div></div>
+      <div class="cell"><div class="cv pos">+29.6%</div><div class="cs">Upside to Mean</div></div>
+    </div>
+    <div class="teach" style="margin-top:.75rem"><strong>What are analyst targets?</strong> 18 professional analysts at banks (Nomura, BofA, HDFC Securities, etc.) research this stock and publish a "target price" — where they think it will be in 12 months. The average is ₹2,553, which is 29.6% above today's price of ₹1,970. The lowest target (₹1,975) is almost exactly today's price — even the most bearish analyst doesn't see downside.</div>
+    </div>
+    <div class="teach"><strong>How scenarios work:</strong> We keep EPS fixed and change the P/E. In the bear case, the market never re-rates and you barely break even. In the bull case, if P/E goes to just 35× (still below the 48.9× median), you make +69%.</div>
+  </div>
 </div>
 </div>
+</section>
 
+<hr class="divider">
 
-
-<div class="grid-3">
-
-
-<div class="card">
-<h2>Valuation Multiples</h2>
-<p class="note">These answer: "Is the stock cheap or expensive?"</p>
-<table>
-<tr><td>P/E Trailing</td><td class="r"><strong class="up">19.6x</strong> <span class="badge bg">ATL</span></td></tr>
-<tr><td>P/E Forward</td><td class="r">20.7x</td></tr>
-<tr><td>P/B</td><td class="r">5.06x</td></tr>
-<tr><td>EV/EBITDA</td><td class="r">17.6x</td></tr>
-<tr><td>EV/Revenue</td><td class="r">5.9x</td></tr>
-<tr><td>P/Sales</td><td class="r">7.8x</td></tr>
-<tr><td>Dividend Yield</td><td class="r">1.5%</td></tr>
-</table>
-<div class="explain">
-<strong>P/E of 19.6x</strong> means you pay ₹19.6 for every ₹1 of annual earnings.
-<strong>EV/EBITDA of 17.6x</strong> adjusts for the company's cash pile — often a better measure than P/E.
+<!-- ═══ 02. EARNINGS ═══ -->
+<section id="earnings">
+<div class="story">
+<div class="story-explain">
+  <div class="sec-num">02</div>
+  <div class="big-num" style="font-size:3.5rem">55%</div>
+  <div class="metric-name">Gross Margin</div>
+  <div class="metric-sub">How much of each rupee of revenue survives as profit</div>
+  <p class="headline">Think of margins as a waterfall — each stage takes a cut, and what's left at the bottom is your profit.</p>
+  <p class="body-text">For every ₹100 of revenue IndiaMART earns:</p>
+  <p class="body-text" style="font-family:var(--mono);font-size:.75rem;line-height:2">
+₹100&nbsp;&nbsp;Revenue comes in<br>
+&nbsp;−₹45&nbsp;&nbsp;Direct costs<br>
+<strong>₹55</strong>&nbsp;&nbsp;Gross Profit (55% margin)<br>
+&nbsp;−₹23&nbsp;&nbsp;Salaries, marketing, rent<br>
+<strong>₹32</strong>&nbsp;&nbsp;Operating Profit (32%)<br>
+&nbsp;+₹8&nbsp;&nbsp;&nbsp;Interest on ₹3,051 Cr cash<br>
+<strong>₹40</strong>&nbsp;&nbsp;Net Profit (40% margin)
+  </p>
+  <p class="body-text"><strong>Wait — net margin (40%) is HIGHER than operating margin (32%)?</strong> Yes. IndiaMART earns ~₹135 Cr/quarter in interest on its massive cash pile. The cash itself is generating profit.</p>
+  <p class="body-text"><strong>ROCE of 34%</strong> means every ₹100 of capital generates ₹34 of operating profit. Above 20% is excellent. Above 30% is rare.</p>
+</div>
+<div class="story-visual">
+  <div class="chart-wrap">
+    <div class="chart-title">Quarterly Revenue, Net Income & Operating Margin — 13 Quarters</div>
+    <div class="chart-sub">Blue = Revenue (₹Cr) · Green = Net Income · Orange line = OPM%</div>
+    <div class="chart-canvas"><canvas id="qrChart"></canvas></div>
+    <details><summary>How to read this chart</summary><p>Revenue has climbed from ₹251 Cr to ₹402 Cr over 3 years (+60%). Net income is lumpy because "other income" (interest on cash) swings each quarter. OPM has ranged from 21% to 35%, currently 30%. The compression from 34% to 30% is from new ESOP grants and marketing spend — investments, not competitive pressure.</p></details>
+  </div>
+  <div class="data-strip">
+    <div class="cell"><div class="cv">17.6×</div><div class="cs">EV/EBITDA</div><div class="ct">Enterprise Value based</div></div>
+    <div class="cell"><div class="cv">5.9×</div><div class="cs">EV/Revenue</div></div>
+    <div class="cell"><div class="cv">7.8×</div><div class="cs">P/Sales</div></div>
+    <div class="cell"><div class="cv">5.06×</div><div class="cs">P/B Ratio</div></div>
+  </div>
+  <div class="data-strip">
+    <div class="cell"><div class="cv">31.6%</div><div class="cs">Operating Margin</div></div>
+    <div class="cell"><div class="cv">39.8%</div><div class="cs">Net Margin</div></div>
+    <div class="cell"><div class="cv pos">34%</div><div class="cs">ROCE</div><div class="ct pos">Return on Capital</div></div>
+    <div class="cell"><div class="cv pos">+55.2%</div><div class="cs">Earnings Growth TTM</div></div>
+  </div>
 </div>
 </div>
+</section>
 
+<hr class="divider">
 
-<div class="card">
-<h2>Profitability</h2>
-<p class="note">These answer: "How good is this business?"</p>
-<table>
-<tr><td>Gross Margin</td><td class="r">55.1%</td></tr>
-<tr><td>Operating Margin</td><td class="r">31.6%</td></tr>
-<tr><td>Net Margin</td><td class="r">39.8%</td></tr>
-<tr><td>Revenue Growth</td><td class="r up">+13.4%</td></tr>
-<tr><td>Earnings Growth</td><td class="r up">+55.2%</td></tr>
-<tr><td>ROCE (latest FY)</td><td class="r up">34.0%</td></tr>
-</table>
-<div class="explain">
-<strong>Margins as a waterfall:</strong><br>
-₹100 Revenue → ₹55 Gross Profit (55.1%) → ₹32 Operating Profit (31.6%) → ₹40 Net Profit (39.8%)
+<!-- ═══ 03. BALANCE SHEET ═══ -->
+<section id="balance-sheet">
+<div class="story">
+<div class="story-explain">
+  <div class="sec-num">03</div>
+  <div class="big-num pos" style="font-size:3rem">₹2,868 Cr</div>
+  <div class="metric-name">Net Cash</div>
+  <div class="metric-sub">Cash minus debt — money sitting in the bank</div>
+  <p class="headline">If the economy tanks, will this company survive? Absolutely yes.</p>
+  <p class="body-text">IndiaMART has <strong>₹2,893 Cr in cash</strong> and only owes <strong>₹26 Cr in debt</strong>. Net cash = ₹2,868 Cr.</p>
+  <p class="body-text">That's <strong>24% of its entire market cap</strong> (₹11,837 Cr). If you bought the whole company, you'd get ₹2,868 Cr back immediately from the bank account — so you're really paying ₹8,969 Cr for the operating business.</p>
+  <p class="body-text"><strong>Debt-to-Equity of 0.011</strong> means for every ₹100 of shareholder money, only ₹1.1 is borrowed. Most companies have D/E of 0.3–1.0.</p>
+  <p class="body-text"><strong>Operating Cash Flow (₹675 Cr) exceeds Net Profit (₹551 Cr).</strong> This is crucial — it means earnings are "real." The company is collecting more cash than it reports as profit. When OCF &lt; NI, that's a red flag.</p>
+</div>
+<div class="story-visual">
+  <div class="data-strip">
+    <div class="cell"><div class="cv pos">0.011</div><div class="cs">D/E Ratio</div><div class="ct pos">Near zero debt</div></div>
+    <div class="cell"><div class="cv">2.39×</div><div class="cs">Current Ratio</div><div class="ct">Can pay 2.4× short-term bills</div></div>
+    <div class="cell"><div class="cv">₹675 Cr</div><div class="cs">Op Cash Flow</div><div class="ct pos">&gt; NI ₹551 Cr ✓</div></div>
+  </div>
+  <div class="teach"><strong>What does "OCF > Net Profit" mean?</strong> Some companies report high profits but don't actually collect the cash — they're owed money by customers or have accounting tricks inflating earnings. OCF tells you how much real cash flowed in. IndiaMART's OCF (₹675 Cr) is 22% higher than Net Profit (₹551 Cr) — earnings are backed by real money. This is because customers pay subscriptions upfront.</div>
+  <div class="data-strip">
+    <div class="cell"><div class="cv">5.06×</div><div class="cs">P/B Ratio</div></div>
+    <div class="cell"><div class="cv">₹390</div><div class="cs">Book Value/Share</div></div>
+    <div class="cell"><div class="cv">₹2,799</div><div class="cs">52-Week High</div></div>
+    <div class="cell"><div class="cv">₹1,900</div><div class="cs">52-Week Low</div></div>
+  </div>
+  <div class="data-strip">
+    <div class="cell"><div class="cv">0.20</div><div class="cs">Beta</div><div class="ct">Very low volatility</div></div>
+    <div class="cell"><div class="cv">134,784</div><div class="cs">Avg Volume</div></div>
+    <div class="cell"><div class="cv">60,056,269</div><div class="cs">Shares Outstanding</div></div>
+    <div class="cell"><div class="cv">1.5%</div><div class="cs">Dividend Yield</div></div>
+  </div>
+  <div class="teach"><strong>What is Beta?</strong> It measures how much the stock moves relative to the overall market (Nifty). Beta 0.20 means if Nifty falls 10%, IndiaMART typically falls only 2%. Low beta = less volatile, sleeping well at night, but also less upside in bull rallies.</div>
 </div>
 </div>
+</section>
 
+<hr class="divider">
 
-<div class="card">
-<h2>Balance Sheet & Liquidity</h2>
-<p class="note">These answer: "Is this company financially safe?"</p>
+<!-- ═══ 04. SUBSCRIBERS ═══ -->
+<section id="subscribers">
+<div class="story">
+<div class="story-explain">
+  <div class="sec-num">04</div>
+  <div class="big-num neg" style="font-size:3.5rem">221K</div>
+  <div class="metric-name">Paying Suppliers</div>
+  <div class="metric-sub neg" style="font-weight:500">−1,000 this quarter · First decline ever</div>
+  <p class="headline">This is the #1 debate about IndiaMART — and the main reason the stock is cheap.</p>
+  <p class="body-text">IndiaMART makes money by charging suppliers an annual subscription (₹30K–₹11L/year) to be listed. Revenue = Subscribers × ARPU.</p>
+  <p class="body-text">221,000 businesses currently pay. That number dropped by 1,000 this quarter — <strong>the first time it's ever gone negative</strong>. For 6+ quarters, net additions have been stuck at +1K to +3K.</p>
+  <p class="body-text"><strong>Why?</strong> Silver-tier subscribers (~₹30K/year) are churning at ~7% per month — roughly half of new silver customers leave within a year. Management has been trying to fix this for 6 quarters with "no significant improvement."</p>
+  <p class="body-text"><strong>Bull:</strong> Only 1.5% of India's 15–20M GST-registered suppliers are paying. Huge TAM.</p>
+  <p class="body-text"><strong>Bear:</strong> If the addressable market willing to pay ₹30K+/year is smaller than 15M, 220K may be the ceiling.</p>
+</div>
+<div class="story-visual">
+  <div class="data-strip">
+    <div class="cell"><div class="cv">221K</div><div class="cs">Paying Suppliers</div><div class="ct neg">−1K QoQ</div></div>
+    <div class="cell"><div class="cv pos">₹67K</div><div class="cs">ARPU (Annual)</div><div class="ct pos">+6% YoY</div></div>
+    <div class="cell"><div class="cv">28 Mn</div><div class="cs">Unique Biz Enquiries</div><div class="ct neg">−10% QoQ</div></div>
+    <div class="cell"><div class="cv pos">8.7 Mn</div><div class="cs">Supplier Storefronts</div><div class="ct pos">+6% YoY</div></div>
+  </div>
+  <div class="data-strip">
+    <div class="cell"><div class="cv pos">₹426 Cr</div><div class="cs">Collections</div><div class="ct pos">+15% YoY</div></div>
+    <div class="cell"><div class="cv pos">₹1,775 Cr</div><div class="cs">Deferred Revenue</div><div class="ct pos">+17% YoY</div></div>
+    <div class="cell"><div class="cv neg">~7%</div><div class="cs">Silver Churn (Monthly)</div><div class="ct neg">No improvement</div></div>
+    <div class="cell"><div class="cv">6,477</div><div class="cs">Employees</div><div class="ct pos">+6% YoY</div></div>
+  </div>
+  <div class="teach"><strong>The subscriber vs ARPU story:</strong> Revenue = Subscribers × ARPU. With subscribers stuck at ~220K, all growth comes from ARPU (getting existing customers to pay more). ARPU grew from ₹62K → ₹67K over 4 quarters (6-7% YoY). The top 1% (~2,000 suppliers) pay ₹11 lakh/year and contribute 17% of revenue. The top 10% contribute 50%.</div>
+  <div class="teach"><strong>What is Deferred Revenue?</strong> Cash the company already collected but hasn't "earned" yet in accounting terms. When a customer pays ₹60K for a yearly plan in January, only ₹5K is revenue in January (1/12th). The remaining ₹55K sits as deferred revenue. IndiaMART's ₹1,775 Cr deferred revenue is essentially guaranteed future revenue — they already have the cash.</div>
+  <div style="background:var(--surface);border:1px solid var(--border);padding:1.25rem;margin-top:.75rem">
+    <div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.5rem">Busy Infotech — The Hidden Growth Engine</div>
+    <div class="data-strip" style="margin:0">
+      <div class="cell"><div class="cv pos">₹32 Cr</div><div class="cs">Revenue · +50% YoY</div></div>
+      <div class="cell"><div class="cv pos">₹112 Cr</div><div class="cs">Deferred Rev · +56%</div></div>
+      <div class="cell"><div class="cv">12K</div><div class="cs">New Licenses/Qtr</div></div>
+      <div class="cell"><div class="cv">421K</div><div class="cs">Cumulative Licenses</div></div>
+    </div>
+    <p style="font-size:.78rem;color:var(--ink2);line-height:1.5;margin-top:.75rem;padding-top:.5rem;border-top:1px solid var(--border)">Busy is accounting software (like Tally) acquired by IndiaMART. Growing 50%+ YoY with ₹112 Cr deferred revenue. IndiaMART's 220K SME customers are a captive distribution channel. Total investment in accounting space: ₹725 Cr.</p>
+  </div>
 
-
-
-<table>
-<tr><td>D/E Ratio</td><td class="r"><strong class="up">0.011</strong> <span class="badge bg">Near Zero</span></td></tr>
-<tr><td>Current Ratio</td><td class="r">2.39x</td></tr>
-<tr><td>Total Cash</td><td class="r">₹2,893 Cr</td></tr>
-<tr><td>Total Debt</td><td class="r">₹26 Cr</td></tr>
-<tr><td>Net Cash</td><td class="r up">₹2,868 Cr</td></tr>
-<tr><td>BVPS</td><td class="r">₹390</td></tr>
-<tr><td>Op Cash Flow</td><td class="r">₹675 Cr</td></tr>
-</table>
-<div class="explain">
-<strong>Net Cash of ₹2,868 Cr</strong> = 24% of market cap. If you bought the entire company, you'd get ₹2,868 Cr back from the bank account.<br><br>
-<strong>OCF of ₹675 Cr vs Net Profit ₹551 Cr</strong> — earnings are backed by real cash (OCF > NI).
+  <!-- Multi-quarter KPI tracker -->
+  <div style="margin-top:1.5rem">
+  <div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.5rem">Quarterly KPI Tracker — 6 Quarters</div>
+  <div class="fin-wrap"><table class="fin">
+  <thead><tr><th>Metric</th><th class="r">Q3 FY26</th><th class="r">Q2 FY26</th><th class="r">Q1 FY26</th><th class="r">Q4 FY25</th><th class="r">Q3 FY25</th><th class="r">Q2 FY25</th></tr></thead>
+  <tbody>
+  <tr><td>Paying Suppliers</td><td class="r neg">221K (−1K)</td><td class="r pos">222K (+2.8K)</td><td class="r">218K (+1K)</td><td class="r">217K (+2K)</td><td class="r neg">214K (−3.5K)</td><td class="r pos">218K (+2.4K)</td></tr>
+  <tr><td>ARPU (₹K, annual)</td><td class="r pos">67</td><td class="r">65</td><td class="r">64</td><td class="r">62</td><td class="r">60</td><td class="r">58</td></tr>
+  <tr><td>Unique Biz Enquiries (Mn)</td><td class="r">28</td><td class="r pos">31</td><td class="r">29</td><td class="r">~27</td><td class="r pos">27</td><td class="r">28</td></tr>
+  <tr><td>Revenue (₹Cr)</td><td class="r">402</td><td class="r">391</td><td class="r">372</td><td class="r">355</td><td class="r">354</td><td class="r">348</td></tr>
+  <tr><td>Collections (₹Cr)</td><td class="r pos">426 (+15%)</td><td class="r">406 (+14%)</td><td class="r">430</td><td class="r">~541</td><td class="r">363 (+10%)</td><td class="r">356 (+6%)</td></tr>
+  <tr><td>Deferred Revenue (₹Cr)</td><td class="r pos">1,775 (+17%)</td><td class="r">1,750 (+18%)</td><td class="r">—</td><td class="r">—</td><td class="r">1,492 (+17%)</td><td class="r">1,483 (+19%)</td></tr>
+  <tr><td>EBITDA Margin</td><td class="r">33%</td><td class="r">33%</td><td class="r">36%</td><td class="r">34%</td><td class="r">38%</td><td class="r">36%</td></tr>
+  <tr><td>Net Profit (₹Cr)</td><td class="r">188</td><td class="r neg">83</td><td class="r">154</td><td class="r">181</td><td class="r">121</td><td class="r">135</td></tr>
+  <tr><td>Employees</td><td class="r">6,477</td><td class="r">6,315</td><td class="r">6,315</td><td class="r">6,102</td><td class="r">—</td><td class="r">—</td></tr>
+  <tr class="gh"><td colspan="7">Busy Infotech</td></tr>
+  <tr><td>Busy Revenue (₹Cr)</td><td class="r pos">32 (+50%)</td><td class="r">29 (+46%)</td><td class="r">25</td><td class="r">—</td><td class="r">16</td><td class="r">15</td></tr>
+  <tr><td>Busy Billing (₹Cr)</td><td class="r">33 (+28%)</td><td class="r pos">38 (+57%)</td><td class="r">—</td><td class="r">—</td><td class="r">20 (+42%)</td><td class="r">17 (+17%)</td></tr>
+  <tr><td>Busy Deferred Rev (₹Cr)</td><td class="r pos">112 (+56%)</td><td class="r">111 (+63%)</td><td class="r">—</td><td class="r">—</td><td class="r">57 (+43%)</td><td class="r">53 (+40%)</td></tr>
+  </tbody></table></div>
+  <div class="teach"><strong>Reading the KPI table:</strong> Scan left to right to see quarterly trends. Key patterns: (1) Subscribers plateaued — net adds went from +2.4K to −3.5K to +2.8K to −1K. No clear direction. (2) ARPU steadily climbing: ₹58K→₹67K over 6 quarters. (3) Collections recovered from +6% to +15%. (4) EBITDA margin compressed from 38% to 33%. (5) Busy Infotech accelerating — billing from ₹17 Cr to ₹33-38 Cr.</div>
+  </div>
 </div>
 </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══ 05. OWNERSHIP ═══ -->
+<section id="ownership">
+<div class="story">
+<div class="story-explain">
+  <div class="sec-num">05</div>
+  <div class="big-num" style="font-size:3.5rem">49.1%</div>
+  <div class="metric-name">Promoter Holding</div>
+  <div class="metric-sub">Founders Dinesh & Brijesh Agarwal</div>
+  <p class="headline">Who owns this company — and what does their behavior tell us?</p>
+  <p class="body-text">Promoters own 49.1% — nearly half. This is strong skin-in-the-game alignment.</p>
+  <p class="body-text"><strong>MF holdings tripled</strong> from 4.5% (Jun 2023) to 14.6% (Dec 2025) — domestic institutions are accumulating even as the stock underperforms.</p>
+  <p class="body-text"><strong>FII has dropped</strong> from 27% to 18% — foreign investors are selling, which partly explains the price weakness.</p>
+</div>
+<div class="story-visual">
+  <div class="own-bar">
+    <div style="width:49.1%;background:#1a1a18">49.1%</div>
+    <div style="width:18.3%;background:#c85d3a">18.3%</div>
+    <div style="width:14.6%;background:#2d7a4f">14.6%</div>
+    <div style="width:1.3%;background:#6b5ce7"></div>
+    <div style="width:0.5%;background:#3b82f6"></div>
+    <div style="width:16.1%;background:#8a8a86">16.1%</div>
+  </div>
+  <div class="own-legend">
+    <span><span class="dot" style="background:#1a1a18"></span>Promoter 49.1%</span>
+    <span><span class="dot" style="background:#c85d3a"></span>FII 18.3%</span>
+    <span><span class="dot" style="background:#2d7a4f"></span>MF 14.6%</span>
+    <span><span class="dot" style="background:#6b5ce7"></span>AIF 1.3%</span>
+    <span><span class="dot" style="background:#3b82f6"></span>Insurance 0.5%</span>
+    <span><span class="dot" style="background:#8a8a86"></span>Public 16.1%</span>
+  </div>
+  <div class="teach" style="margin-top:1rem"><strong>Reading ownership changes:</strong> When MFs are buying and FIIs are selling, it often means domestic fund managers see value that foreign investors don't. MF tripling from 4.5% to 14.6% over 2 years while the stock went nowhere is a strong institutional accumulation signal.</div>
+</div>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══ KEY THEMES ═══ -->
+<section>
+<div class="sec-num">06</div>
+<div style="font-family:var(--serif);font-size:1.5rem;font-weight:600;margin-bottom:.25rem">Key Themes — 6 Quarter Analysis</div>
+<p class="body-text" style="margin-bottom:1rem">The dominant narratives emerging from 6 quarters of concall transcripts, investor decks, and financial results.</p>
+
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">1. Subscriber Growth Stall</div>
+<p class="body-text" style="margin-top:0">Paying suppliers peaked at 222K (Q2 FY26) and declined to 221K in Q3 — the first negative quarter. Net additions have been +1K to +3K for several quarters. Silver churn at ~7% monthly remains elevated despite 4-5 quarters of initiatives. Management explicitly refused to give subscriber guidance.</p>
 </div>
 
-
-<div class="card" style="margin-bottom:2rem">
-<h2>Price Context</h2>
-<table>
-<tr><td>52-Week High</td><td class="r">₹2,799</td><td>52-Week Low</td><td class="r">₹1,900</td></tr>
-<tr><td>Beta</td><td class="r">0.201</td><td>Avg Volume</td><td class="r">134,784</td></tr>
-<tr><td>Shares Outstanding</td><td class="r">60,056,269</td><td>Float</td><td class="r">29,099,665</td></tr>
-
-<tr><td>Promoter Hold</td><td class="r">49.1%</td><td>FII Hold</td><td class="r">18.3%</td></tr>
-
-</table>
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">2. ARPU as the Growth Engine</div>
+<p class="body-text" style="margin-top:0">With subscribers stuck, revenue growth is entirely ARPU-driven: ₹62K → ₹64K → ₹65K → ₹67K over 4 quarters (6-7% YoY). Top 1% pay ₹11 lakh/year (17% of revenue), top 10% pay ₹3.3 lakh (50% of revenue). Management says 6-8% ARPU CAGR is sustainable long-term.</p>
 </div>
 
-
-
-<div class="card" style="margin-bottom:2rem">
-<h2>Analyst Consensus & Scenario Analysis</h2>
-<p class="note">Source: yfinance consensus from 18 professional analysts.</p>
-<table>
-<tr><td>Target Mean</td><td class="r">₹2,553</td><td>Target Median</td><td class="r">₹2,525</td></tr>
-<tr><td>Target High</td><td class="r">₹3,500</td><td>Target Low</td><td class="r">₹1,975</td></tr>
-<tr><td>Forward P/E</td><td class="r">21.0x</td><td>Forward EPS</td><td class="r">₹95.0</td></tr>
-<tr><td>Upside to Mean</td><td class="r up">+29.6%</td><td>Earnings Growth</td><td class="r up">55.2%</td></tr>
-</table>
-
-<h3 style="margin-top:1rem;font-size:0.9rem;color:var(--dim)">Scenario Analysis — What Could the Stock Be Worth?</h3>
-<table>
-<thead><tr><th>Scenario</th><th class="r">P/E</th><th class="r">EPS</th><th class="r">Target</th><th class="r">Upside</th></tr></thead>
-<tr><td><span class="badge br">Bear</span> P/E stays at current</td><td class="r">19.6x</td><td class="r">₹95</td><td class="r">₹1,863</td><td class="r down">-5.5%</td></tr>
-<tr><td><span class="badge by">Base</span> Modest re-rating</td><td class="r">25x</td><td class="r">₹95</td><td class="r">₹2,376</td><td class="r up">+20.6%</td></tr>
-<tr><td><span class="badge bg">Bull</span> Re-rating to 35x</td><td class="r">35x</td><td class="r">₹95</td><td class="r">₹3,326</td><td class="r up">+68.8%</td></tr>
-
-<tr><td><span class="badge bg">Median reversion</span></td><td class="r">48.9x</td><td class="r">₹95</td><td class="r">₹4,644</td><td class="r up">+135.7%</td></tr>
-
-</table>
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">3. Busy Infotech Inflection</div>
+<p class="body-text" style="margin-top:0">Accounting software subsidiary growing 28-57% YoY in billing, deferred revenue +56-63%, 12K new licenses/quarter. Revenue from ₹66 Cr (FY25) to implied ₹110+ Cr annual run rate. Still only ₹5 Cr EBITDA/quarter but ₹112 Cr deferred revenue signals accelerating revenue recognition ahead.</p>
 </div>
 
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">4. AI: Both Threat and Opportunity</div>
+<p class="body-text" style="margin-top:0">CEO candidly acknowledged AI impact. Threat: crawlers polluting traffic so badly company is DROPPING it as a metric. Opportunity: AI voice bots doing 10-20K calls/day (target 1 lakh/day), RFQ enrichment (80-90% now with quantity+spec vs 50-60% earlier). Behavioral data moat believed defensible.</p>
+</div>
 
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">5. Margin Compression (Intentional)</div>
+<p class="body-text" style="margin-top:0">EBITDA margin from 38% to 33%. Drivers: new ESOP grants (₹90 Cr total), performance marketing (₹6 Cr/quarter), headcount +6-9%. CEO himself guided 33-35% as sustainable — 38%+ was artificially elevated.</p>
+</div>
 
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">6. Platform Quality Improvements</div>
+<p class="body-text" style="margin-top:0">RFQ quality from 50-60% to 80-90% with quantity+specifications. Suppliers per buyer reduced from 6-7 to 4-5 (creating more competition, improving responsiveness to 70-80%). Localization from all-India to city-preferred. WhatsApp integration adding 1-2% to enquiries.</p>
+</div>
 
-<div class="card full-width" style="margin-bottom:2rem">
-<h2>Annual Financials — 5 Year Trend</h2>
-<p class="note">Source: Screener.in. All values in ₹Cr except EPS (₹).</p>
-<table>
-<thead><tr><th>Metric</th><th class="r">FY2021</th><th class="r">FY2022</th><th class="r">FY2023</th><th class="r">FY2024</th><th class="r">FY2025</th><th>Trend</th></tr></thead>
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">7. Vertical Strategy Emerging</div>
+<p class="body-text" style="margin-top:0">CEO acknowledged need to think about "verticals within horizontal" — cultivating specific industries (pharma, engineering, packaging) more deeply. Started hiring industry-specific people. Major strategic shift from "one platform fits all" to sector-specific optimization.</p>
+</div>
+
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:1.5rem">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">8. Customer Segmentation Insight</div>
+<p class="body-text" style="margin-top:0">CEO described four supplier types: (1) digitally savvy early adopters, (2) new businesses with &lt;1yr GST who naturally churn high, (3) serious businesses with dedicated IndiaMART staff, (4) traditional offline businesses — the "fat middle" where the platform is "too complex for the new genuine customer." This gap is the fix target.</p>
+</div>
+
+<div style="border-left:3px solid var(--accent);padding-left:1.25rem;margin-bottom:0">
+<div style="font-family:var(--serif);font-size:.95rem;font-weight:600;margin-bottom:.35rem">9. Export Opportunity — Small but Real</div>
+<p class="body-text" style="margin-top:0">IndiaMART's "Verified Exporter" program generates ₹50-100 Cr revenue. CEO doesn't see it becoming ₹500-1,500 Cr — export market TAM has been single-digit CAGR for 10-15 years. A nice addition, not a growth driver.</p>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══ 07. ANNUAL FINANCIALS ═══ -->
+<section id="financials">
+<div class="sec-num">07</div>
+<div style="font-family:var(--serif);font-size:1.5rem;font-weight:600;margin-bottom:.25rem">Annual Financials — 5 Year Trend</div>
+<p class="body-text" style="margin-bottom:1rem">How the company has evolved year by year. Read left to right to see growth.</p>
+
+<div class="fin-wrap"><table class="fin">
+<thead><tr><th>Metric</th><th class="r">FY2021</th><th class="r">FY2022</th><th class="r">FY2023</th><th class="r">FY2024</th><th class="r">FY2025</th><th class="r">Trend</th></tr></thead>
 <tbody>
-<tr><td colspan="7" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Income Statement</td></tr>
+<tr class="gh"><td colspan="7">Income Statement</td></tr>
+<tr><td>Revenue (₹Cr)</td><td class="r">669.6</td><td class="r">753.5</td><td class="r">985.4</td><td class="r">1,196.8</td><td class="r">1,388.3</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Employee Cost</td><td class="r">205.3</td><td class="r">267.9</td><td class="r">425.3</td><td class="r">544.9</td><td class="r">601.9</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Other Income</td><td class="r">86.6</td><td class="r">112.2</td><td class="r">180.5</td><td class="r">208.8</td><td class="r">272.4</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Depreciation</td><td class="r">16.1</td><td class="r">11.9</td><td class="r">31.1</td><td class="r">36.5</td><td class="r">32.9</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Interest</td><td class="r">6.7</td><td class="r">5.4</td><td class="r">8.2</td><td class="r">8.9</td><td class="r">7.4</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Profit Before Tax</td><td class="r">389.4</td><td class="r">390.4</td><td class="r">371.3</td><td class="r">454.4</td><td class="r">705.8</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Tax</td><td class="r">109.6</td><td class="r">92.8</td><td class="r">87.5</td><td class="r">120.4</td><td class="r">155.1</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Net Income (₹Cr)</td><td class="r">279.8</td><td class="r">297.6</td><td class="r">283.8</td><td class="r">333.9</td><td class="r">550.7</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>EPS (₹)</td><td class="r">46.1</td><td class="r">48.7</td><td class="r">46.4</td><td class="r">55.7</td><td class="r">91.8</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Dividend</td><td class="r">45.5</td><td class="r">6.1</td><td class="r">61.2</td><td class="r">119.9</td><td class="r">300.1</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr class="gh"><td colspan="7">Balance Sheet</td></tr>
+<tr><td>Equity Capital</td><td class="r">30.3</td><td class="r">30.6</td><td class="r">30.6</td><td class="r">60.0</td><td class="r">60.0</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Reserves (₹Cr)</td><td class="r">1,580.6</td><td class="r">1,843.5</td><td class="r">2,027.9</td><td class="r">1,676.2</td><td class="r">2,125.3</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Borrowings</td><td class="r">63.4</td><td class="r">56.3</td><td class="r">45.9</td><td class="r">40.7</td><td class="r">33.0</td><td class="r"><span class="neg">↓</span></td></tr>
+<tr><td>Other Liabilities</td><td class="r">837.1</td><td class="r">1,018.5</td><td class="r">1,338.1</td><td class="r">1,671.8</td><td class="r">1,911.6</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Total Assets</td><td class="r">2,511.5</td><td class="r">2,948.8</td><td class="r">3,442.5</td><td class="r">3,448.6</td><td class="r">4,130.0</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Net Block</td><td class="r">65.1</td><td class="r">56.1</td><td class="r">553.1</td><td class="r">536.0</td><td class="r">515.0</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>CWIP</td><td class="r">0.2</td><td class="r">0.2</td><td class="r">0.2</td><td class="r">0.5</td><td class="r">0.5</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Investments</td><td class="r">2,254.4</td><td class="r">2,721.7</td><td class="r">2,783.5</td><td class="r">2,745.8</td><td class="r">3,453.2</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Receivables</td><td class="r">1.2</td><td class="r">1.3</td><td class="r">7.1</td><td class="r">4.8</td><td class="r">4.0</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>Inventory</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>
+<tr><td>Cash & Bank</td><td class="r">77.7</td><td class="r">76.8</td><td class="r">58.3</td><td class="r">101.2</td><td class="r">84.4</td><td class="r">→</td></tr>
+<tr><td>Shares (Cr)</td><td class="r">30,316,294.0</td><td class="r">30,552,990.0</td><td class="r">30,579,221.0</td><td class="r">59,948,946.0</td><td class="r">60,005,070.0</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr class="gh"><td colspan="7">Cash Flow</td></tr>
+<tr><td>CFO (₹Cr)</td><td class="r">322.5</td><td class="r">402.3</td><td class="r">475.8</td><td class="r">559.2</td><td class="r">623.2</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>CFI (₹Cr)</td><td class="r">-1,337.6</td><td class="r">-335.4</td><td class="r">-324.0</td><td class="r">162.4</td><td class="r">-486.4</td><td class="r"><span class="pos">↑</span></td></tr>
+<tr><td>CFF (₹Cr)</td><td class="r">1,038.3</td><td class="r">-57.5</td><td class="r">-143.3</td><td class="r">-694.9</td><td class="r">-148.2</td><td class="r"><span class="neg">↓</span></td></tr>
+</tbody></table></div>
+<div class="teach"><strong>Reading cash flow:</strong> CFO growing from ₹321→₹623 Cr means the business generates more real cash every year. CFI being negative is <em>good</em> — the company is investing. CFF being negative means returning cash to shareholders (dividends, buybacks). All three signals are positive for a mature business.</div>
+</section>
 
-<tr><td>Revenue</td><td class="r">669.6</td><td class="r">753.5</td><td class="r">985.4</td><td class="r">1196.8</td><td class="r">1388.3</td><td><span class="up">Improving</span></td></tr>
+<hr class="divider">
 
-<tr><td>Net Income</td><td class="r">279.8</td><td class="r">297.6</td><td class="r">283.8</td><td class="r">333.9</td><td class="r">550.7</td><td><span class="up">Improving</span></td></tr>
+<!-- ═══ 08. EFFICIENCY RATIOS ═══ -->
+<section id="efficiency">
+<div class="sec-num">08</div>
+<div style="font-family:var(--serif);font-size:1.5rem;font-weight:600;margin-bottom:.25rem">Efficiency Ratios — 11 Year Trend</div>
+<p class="body-text" style="margin-bottom:1rem">How efficiently the company uses capital and manages working capital over a decade.</p>
 
-<tr><td>EPS</td><td class="r">46.1</td><td class="r">48.7</td><td class="r">46.4</td><td class="r">55.7</td><td class="r">91.8</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>PBT</td><td class="r">389.4</td><td class="r">390.4</td><td class="r">371.3</td><td class="r">454.4</td><td class="r">705.8</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>Depreciation</td><td class="r">16.1</td><td class="r">11.9</td><td class="r">31.1</td><td class="r">36.5</td><td class="r">32.9</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>Interest</td><td class="r">6.7</td><td class="r">5.4</td><td class="r">8.2</td><td class="r">8.9</td><td class="r">7.4</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>Other Income</td><td class="r">86.6</td><td class="r">112.2</td><td class="r">180.5</td><td class="r">208.8</td><td class="r">272.4</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td colspan="7" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Balance Sheet</td></tr>
-
-<tr><td>Equity Capital</td><td class="r">30.3</td><td class="r">30.6</td><td class="r">30.6</td><td class="r">60.0</td><td class="r">60.0</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>Reserves</td><td class="r">1580.6</td><td class="r">1843.5</td><td class="r">2027.9</td><td class="r">1676.2</td><td class="r">2125.3</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>Borrowings</td><td class="r">63.4</td><td class="r">56.3</td><td class="r">45.9</td><td class="r">40.7</td><td class="r">33.0</td><td><span class="down">Declining</span></td></tr>
-
-<tr><td>Total Assets</td><td class="r">2511.5</td><td class="r">2948.8</td><td class="r">3442.5</td><td class="r">3448.6</td><td class="r">4130.0</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>Cash & Bank</td><td class="r">77.7</td><td class="r">76.8</td><td class="r">58.3</td><td class="r">101.2</td><td class="r">84.4</td><td>Stable</td></tr>
-
-<tr><td colspan="7" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Cash Flow</td></tr>
-
-<tr><td>CFO</td><td class="r">322.5</td><td class="r">402.3</td><td class="r">475.8</td><td class="r">559.2</td><td class="r">623.2</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>CFI</td><td class="r">-1337.6</td><td class="r">-335.4</td><td class="r">-324.0</td><td class="r">162.4</td><td class="r">-486.4</td><td><span class="up">Improving</span></td></tr>
-
-<tr><td>CFF</td><td class="r">1038.3</td><td class="r">-57.5</td><td class="r">-143.3</td><td class="r">-694.9</td><td class="r">-148.2</td><td><span class="down">Declining</span></td></tr>
-
-<tr><td>Net Cash Flow</td><td class="r">23.2</td><td class="r">9.4</td><td class="r">8.6</td><td class="r">26.7</td><td class="r">-11.3</td><td><span class="down">Declining</span></td></tr>
-
-</tbody>
-</table>
+<div class="chart-wrap">
+  <div class="chart-title">ROCE % — 11 Year Evolution</div>
+  <div class="chart-sub">Return on Capital Employed: 7% (2015) → 34% (2025)</div>
+  <div class="chart-canvas" style="height:250px"><canvas id="roceChart"></canvas></div>
 </div>
 
-
-
-
-<div class="card full-width" style="margin-bottom:2rem">
-<h2>Efficiency Ratios — 11 Year Trend</h2>
-<p class="note">Source: Screener.in ratios section.</p>
-<table>
+<div class="fin-wrap"><table class="fin">
 <thead><tr><th>Metric</th><th class="r">2015</th><th class="r">2016</th><th class="r">2017</th><th class="r">2018</th><th class="r">2019</th><th class="r">2020</th><th class="r">2021</th><th class="r">2022</th><th class="r">2023</th><th class="r">2024</th><th class="r">2025</th></tr></thead>
 <tbody>
+<tr><td>ROCE %</td><td class="r">None</td><td class="r">None</td><td class="r">None</td><td class="r">None</td><td class="r">None</td><td class="r">84.0</td><td class="r">39.0</td><td class="r">22.0</td><td class="r">19.0</td><td class="r">24.0</td><td class="r">34.0</td></tr>
+<tr><td>Debtor Days</td><td class="r">1.0</td><td class="r">0.0</td><td class="r">1.0</td><td class="r">1.0</td><td class="r">0.0</td><td class="r">1.0</td><td class="r">1.0</td><td class="r">1.0</td><td class="r">3.0</td><td class="r">1.0</td><td class="r">1.0</td></tr>
+<tr><td>Working Capital Days</td><td class="r">-272.0</td><td class="r">-241.0</td><td class="r">-243.0</td><td class="r">-260.0</td><td class="r">-277.0</td><td class="r">-266.0</td><td class="r">-246.0</td><td class="r">-289.0</td><td class="r">-305.0</td><td class="r">-311.0</td><td class="r">-305.0</td></tr>
+</tbody></table></div>
+<div class="teach"><strong>Why negative working capital matters:</strong> Most companies have <em>positive</em> working capital days (ship goods, wait 60-90 days to get paid). IndiaMART's −305 days means the opposite: customers pay subscriptions <em>upfront</em>. The ₹1,775 Cr in deferred revenue is an interest-free loan from customers. This is the Netflix/SaaS model — collect first, deliver later. Zero external capital needed to fund growth.</div>
+</section>
 
+<!-- ═══ 08. ANALYST Q&A ═══ -->
+<div class="qa-sec" id="analysts">
+<div style="max-width:var(--maxw);margin:0 auto">
+<div class="sec-num">09</div>
+<h2>What Analysts Are Asking About</h2>
+<p class="lead">6 quarters of Q&A from Nomura, BofA, Ambit, HDFC Securities, Nuvama, JM Financials — organized by theme with evolution verdicts.</p>
 
+<div class="qa-theme-title">01 · Subscriber Growth & Churn</div>
+<div class="qa-item"><div class="qa-meta">Abhishek Bhandari, Nomura — Q3 FY25</div><div class="qa-q">"Paying subscribers DECLINED by 3,500 to 214K. Even in the worst quarters you were at +2,000. What surprised you?"</div><div class="qa-a">CEO: "We have been focusing on onboarding higher quality businesses. Things we are doing are taking much longer than our anticipation."</div></div>
+<div class="qa-item"><div class="qa-meta">Nikhil Choudhary, Nuvama — Q3 FY25</div><div class="qa-q">"You've been trying to reduce churn for 5-6 quarters with no improvement. Why not accept elevated churn and focus on gross additions?"</div><div class="qa-a">CEO: "That can only help 1-2 quarters. Then it comes back and bites you. Better to fix the main engine now."</div></div>
+<div class="qa-item"><div class="qa-meta">Multiple analysts — Q3 FY26</div><div class="qa-q">"First net DECLINE of 1,000 paying suppliers. Is subscriber growth officially over?"</div><div class="qa-a">CEO: "This is a ₹2,500 plus/minus situation. Working days, seasonal variation. Not structurally alarming."</div></div>
+<div class="qa-verdict">Verdict: Getting worse over 6 quarters. Management keeps asking for "one or two more quarters" — they've been saying this for over a year.</div>
 
-<tr><td>ROCE %</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">84</td><td class="r">39</td><td class="r">22</td><td class="r">19</td><td class="r">24</td><td class="r">34</td></tr>
+<div class="qa-theme-title" style="margin-top:2rem">02 · Collection Growth Recovery</div>
+<div class="qa-item"><div class="qa-meta">Vivekanand, Ambit Capital — Q2 FY25</div><div class="qa-q">"Collections collapsed to 5-6% growth from 15-20%. Is this structural?"</div><div class="qa-a">CEO: "Even we have been surprised negatively. But until we fix churn, don't anticipate more than 10-15%."</div></div>
+<div class="qa-item"><div class="qa-meta">Q3 FY26 — 4 quarters later</div><div class="qa-q">"Collections grew 15% vs revenue 11%. What explains the gap?"</div><div class="qa-a">CFO: Deferred revenue +17% shows healthy forward visibility.</div></div>
+<div class="qa-verdict">Verdict: Improving. Collections recovered from 5% to 15%. CEO's "don't expect over 10%" was beaten within 3 quarters.</div>
 
+<div class="qa-theme-title" style="margin-top:2rem">03 · AI Disruption & Traffic</div>
+<div class="qa-item"><div class="qa-meta">Swapnil Potdukhe, JM Financials — Q2 FY25</div><div class="qa-q">"Traffic flat, enquiries delivered down 7%. Is the platform losing relevance?"</div><div class="qa-a">CEO: "Web crawling, ChatGPT and others — traffic accuracy is going down and down."</div></div>
+<div class="qa-item"><div class="qa-meta">Multiple analysts — Q2 FY26</div><div class="qa-q">"Will you continue reporting traffic?"</div><div class="qa-a">CEO: "We will DROP traffic KPI entirely. AI crawlers (Meta, ChatGPT, Grok, DeepSeek) make it unreliable."</div></div>
+<div class="qa-verdict">Verdict: Escalating. AI went from background noise to structural issue. Management adapting transparently — dropping unreliable metrics is a credibility signal.</div>
 
+<div class="qa-theme-title" style="margin-top:2rem">04 · Margins & Cost Structure</div>
+<div class="qa-item"><div class="qa-meta">Sachin, Bank of America — Q2 FY25</div><div class="qa-q">"Margins at 36-38% and rising. Why not 40-45% like during COVID?"</div><div class="qa-a">CEO: "COVID margins of 50-52% were anomalous — rent halved, no travel, no hiring. Sustainable margin is 33-35%. Collection to cash flow ratio of 35-40% is the leading indicator."</div></div>
+<div class="qa-item"><div class="qa-meta">Multiple analysts — Q3 FY26</div><div class="qa-q">"Margins compressed from 38% to 33%. Is this temporary?"</div><div class="qa-a">"New ESOP grants of ₹90 Cr, performance marketing ₹6 Cr/quarter, headcount +6%. These are investments. S&M to stabilize at 16-18% of revenue."</div></div>
+<div class="qa-verdict">Verdict: Expected compression. Management guided for this. 33-35% is the new normal, not a red flag.</div>
 
+<div class="qa-theme-title" style="margin-top:2rem">05 · Competition</div>
+<div class="qa-item"><div class="qa-meta">Chat Q — Q2 FY25</div><div class="qa-q">"JustDial becoming aggressive. TradeIndia more active. Is competitive intensity hurting?"</div><div class="qa-a">CEO: "JustDial declined during COVID while we stayed flat. They woke up a little late. We're happy with what we're doing. TradeIndia remains our distantly respected competition."</div></div>
+<div class="qa-item"><div class="qa-meta">Anmol Garg, DAM Capital — Q2 FY25</div><div class="qa-q">"Any competition from B2B e-commerce, Facebook, WhatsApp?"</div><div class="qa-a">"Neither Amazon nor Google nor Facebook has solved B2B in India or globally. B2B is a niche they're not willing to solve. We continue to find our niche."</div></div>
+<div class="qa-verdict">Verdict: Stable. No competitive threat materializing. CEO positions IndiaMART as "a small replica of Google for B2B."</div>
 
-<tr><td>Debtor Days</td><td class="r">1</td><td class="r">0</td><td class="r">1</td><td class="r">1</td><td class="r">0</td><td class="r">1</td><td class="r">1</td><td class="r">1</td><td class="r">3</td><td class="r">1</td><td class="r">1</td></tr>
+<div class="qa-theme-title" style="margin-top:2rem">06 · Capital Allocation & Investments</div>
+<div class="qa-item"><div class="qa-meta">Chat Q — Q3 FY25</div><div class="qa-q">"With ₹500 Cr+ operating cash flow and robust balance sheet, thoughts on buyback?"</div><div class="qa-a">"We returned ₹120 Cr to shareholders and did ₹84 Cr strategic investment in 9 months. Board will decide annually after financial year ends."</div></div>
+<div class="qa-item"><div class="qa-meta">Prateek Chandra (CSO) — Q2 FY25</div><div class="qa-q">"Strategic investments beyond accounting?"</div><div class="qa-a">"Invested in logistics SaaS (3 companies), Bizom (distribution), EasyEcom (e-commerce enablement), M1xchange (invoice discounting). Four or five have raised subsequent capital after IndiaMART."</div></div>
+<div class="qa-verdict">Verdict: Excellent. ₹1,300 Cr returned cumulatively. Patient investing — increases stakes gradually, doesn't overpay. Portfolio of 13 strategic companies.</div>
 
-
-
-
-<tr><td>Working Capital Days</td><td class="r">-272</td><td class="r">-241</td><td class="r">-243</td><td class="r">-260</td><td class="r">-277</td><td class="r">-266</td><td class="r">-246</td><td class="r">-289</td><td class="r">-305</td><td class="r">-311</td><td class="r">-305</td></tr>
-
-
-
-
-
-
-
-
-
-
-<tr><td>Cash Conversion Cycle</td><td class="r">1</td><td class="r">0</td><td class="r">1</td><td class="r">1</td><td class="r">0</td><td class="r">1</td><td class="r">1</td><td class="r">1</td><td class="r">3</td><td class="r">1</td><td class="r">1</td></tr>
-
-
-</tbody>
-</table>
+<!-- Management Guidance & Credibility -->
+<div style="margin-top:2rem;border-top:1px solid #333;padding-top:1.5rem">
+<div style="font-family:var(--serif);font-size:1.1rem;font-weight:600;color:#fff;margin-bottom:.75rem">Management Guidance & Credibility</div>
+<div style="display:grid;grid-template-columns:100px 1fr 1fr;gap:0;font-size:.78rem;margin-bottom:1rem">
+  <div style="padding:.5rem;border-bottom:1px solid #333;color:#777">Quarter</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#777">What They Said</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#777">Delivered?</div>
+  <div style="padding:.5rem;border-bottom:1px solid #333;color:#ddd">Q3 FY26</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#999">No formal guidance. ARPU 6-8% long-term.</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#999">ARPU +6% YoY — in band ✓</div>
+  <div style="padding:.5rem;border-bottom:1px solid #333;color:#ddd">Q3 FY25</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#999">"Don't expect collection growth over 10%"</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#999">Collections +15% by Q3 FY26 — beat ✓</div>
+  <div style="padding:.5rem;border-bottom:1px solid #333;color:#ddd">Q2 FY25</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#999">S&M 16-18% of revenue. Marketing ₹6-10 Cr/qtr.</div><div style="padding:.5rem;border-bottom:1px solid #333;color:#999">S&M ~17%, marketing ₹6 Cr — on track ✓</div>
+</div>
+<div style="font-size:.82rem;color:#999;line-height:1.55"><strong style="color:var(--accent)">Credibility: HIGH.</strong> CEO Dinesh Agarwal is unusually candid — admits "things are taking much longer than anticipated" on churn, refuses to give guidance he can't back up, drops traffic KPI when it became unreliable. Delivers on what he commits to. Analyst Sachin from BofA asked why margins can't be 40-45% — CEO pushed back honestly with "33-35% is sustainable." This under-promise, over-deliver pattern is rare among Indian promoter-CEOs.</div>
+</div>
+</div>
 </div>
 
+<!-- ═══ 09. SCORECARD ═══ -->
+<section id="scorecard">
+<div class="sec-num">10</div>
+<div style="font-family:var(--serif);font-size:1.5rem;font-weight:600;margin-bottom:.25rem">Business Quality Scorecard</div>
+<p class="body-text" style="margin-bottom:1rem">Seven dimensions graded with evidence from filings. Not opinion — documented facts.</p>
 
-
-
-
-<div class="callout-neutral" style="border-radius:8px;padding:1.5rem;margin:2rem 0;font-size:0.9rem;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3)">
-<strong style="color:var(--yellow)">Sections 12-15 (Management Commentary, Scorecard, Risks, Thesis) require concall extraction</strong><br><br>
-This report contains numerical data from Screener.in and yfinance. To add qualitative analysis from concall transcripts and investor decks, run the full research command which reads and extracts insights from company filings.
+<div class="sc-grid">
+<div class="sc-row"><span class="sc-badge s">Strong</span><div><div class="sc-label">Moat</div><div class="sc-desc">Three-layer defensibility: (1) behavioral data on supplier preferences, pricing patterns, quantities — CEO: "nowhere scrapable or available to any bot or AI agent", (2) 200K+ paying customer service network creating network effect with 30 Mn enquiries/quarter, (3) contact information behind login wall. Explicitly defended against AI scraping on Q3 FY26 and Q2 FY26 concalls.</div></div></div>
+<div class="sc-row"><span class="sc-badge m">Mixed</span><div><div class="sc-label">Growth</div><div class="sc-desc">Revenue +13% YoY but subscriber growth flat-to-negative for 6+ quarters. Collection growth recovered from 5% (Q2 FY25) to 15% (Q3 FY26). Busy Infotech +50% YoY with ₹112 Cr deferred revenue is the hidden growth engine. ARPU growing 6-7% within management's 6-8% guidance band.</div></div></div>
+<div class="sc-row"><span class="sc-badge s">Strong</span><div><div class="sc-label">Margins</div><div class="sc-desc">55% gross, 30% OPM, 40% net margin. Compression from 38% to 33% is intentional — CEO explicitly said 33-35% is sustainable and 38%+ was "elevated because we are not adding customers." COVID-era 50% margins were anomalous (rent halved, no travel). S&M costs at 16-18% of revenue as guided.</div></div></div>
+<div class="sc-row"><span class="sc-badge s">Strong</span><div><div class="sc-label">Capital Allocation</div><div class="sc-desc">₹1,300 Cr returned cumulatively (buybacks + dividends). ₹725 Cr invested in accounting (Busy 100%, Vyapar 29%, Livekeeping 66%→100%). Strategic portfolio of 13 companies — 4-5 raised subsequent capital post-IndiaMART. Patient: increases stakes gradually, waits for the right opportunity.</div></div></div>
+<div class="sc-row"><span class="sc-badge s">Strong</span><div><div class="sc-label">Management</div><div class="sc-desc">CEO Dinesh Agarwal unusually candid: admitted "things are taking much longer than anticipated" (Q3 FY25), refused subscriber guidance ("I'm not able to give any guidance"), dropped traffic KPI when unreliable. Delivers on commitments: ARPU 6-8% (delivered 6-7%), S&M 16-18% (delivered ~17%), collection growth guidance (beat). Under-promises, over-delivers — rare for Indian mid-caps.</div></div></div>
+<div class="sc-row"><span class="sc-badge s">Strong</span><div><div class="sc-label">Cash Generation</div><div class="sc-desc">OCF ₹675 Cr > NI ₹551 Cr — earnings backed by real cash (1.2× conversion). Working capital deeply negative (−305 days) because customers pay upfront. Deferred revenue ₹1,775 Cr = 1.3× annual revenue already collected. Cash pile growing ₹150-200 Cr every quarter.</div></div></div>
+<div class="sc-row"><span class="sc-badge s">Strong</span><div><div class="sc-label">Balance Sheet</div><div class="sc-desc">Net cash ₹2,868 Cr = 24% of MCap. D/E 0.011 (virtually zero debt). Cash + treasury trajectory: ₹2,449 Cr (Q2 FY25) → ₹2,606 Cr (Q3 FY25) → ₹2,874 Cr (Q2 FY26) → ₹3,051 Cr (Q3 FY26). If the business stopped growing entirely, cash pile supports ₹478/share floor valuation.</div></div></div>
 </div>
 
+<div style="font-family:var(--serif);font-size:1.1rem;font-weight:600;margin:1.5rem 0 .75rem">Risk Factors</div>
+<div class="risk-row"><span class="risk-sev h">High</span><span class="risk-text">Subscriber growth ceiling — 220K may be structural cap. Only 1.5% penetration but growth stalled. <span class="risk-cite">(Q3 FY26 concall)</span></span></div>
+<div class="risk-row"><span class="risk-sev m">Medium</span><span class="risk-text">Silver churn 7% monthly — no improvement in 6+ quarters. Pipeline to gold/platinum may dry up. <span class="risk-cite">(Q3 FY25 concall)</span></span></div>
+<div class="risk-row"><span class="risk-sev m">Medium</span><span class="risk-text">AI makes catalogues commodity — lowering barriers for competitors. <span class="risk-cite">(Q2 FY26 concall)</span></span></div>
+<div class="risk-row"><span class="risk-sev m">Medium</span><span class="risk-text">Other income volatility — ₹10–135 Cr/quarter swings from treasury MTM. <span class="risk-cite">(Q2 FY26)</span></span></div>
+<div class="risk-row"><span class="risk-sev l">Low</span><span class="risk-text">Key-person risk — CEO Dinesh Agarwal (49.1% promoter) central to strategy. <span class="risk-cite">(shareholding)</span></span></div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══ 10. THESIS ═══ -->
+<section id="thesis">
+<div class="sec-num">11</div>
+<div style="font-family:var(--serif);font-size:1.5rem;font-weight:600;margin-bottom:.25rem">Investment Thesis</div>
+<p class="body-text" style="margin-bottom:1rem">The case for and against — with evidence from 6 quarters of concalls, 5 years of financials, and 11 years of efficiency data.</p>
+
+<div class="thesis-cols">
+<div class="thesis-col bull"><h3>Bull Case</h3><ul>
+<li>P/E at all-time low (19.6× vs median 48.9×) while earnings grew 55% — extreme value if any re-rating happens</li>
+<li>Net cash ₹2,868 Cr = 24% of MCap. Strip out cash, you're paying ₹8,969 Cr for a business generating ₹675 Cr cash annually — 7.5% FCF yield</li>
+<li>Busy Infotech growing 50%+ with ₹112 Cr deferred revenue — could become ₹200+ Cr revenue in 2 years. IndiaMART's 220K paying SME customers are a captive distribution channel for accounting software</li>
+<li>ROCE 34%, negative working capital, zero debt — capital-light subscription model</li>
+<li>CEO credibility rare among Indian mid-caps — under-promises, over-delivers</li>
+</ul></div>
+<div class="thesis-col bear"><h3>Bear Case</h3><ul>
+<li>Subscriber growth structurally stalled at 220K — ARPU alone caps revenue at 6-8% growth</li>
+<li>Silver churn 7% monthly, no improvement in 6+ quarters. Pipeline to gold/platinum may dry up</li>
+<li>AI makes catalogues commodity — competitors can replicate product listings</li>
+<li>Other income ₹10–135 Cr/quarter swings make NI unpredictable. On normalized operating earnings (excluding treasury), the P/E is closer to 25× — not as cheap as the headline 19.6× suggests</li>
+<li>CEO succession risk — Dinesh Agarwal (56) with 49% stake, no obvious second</li>
+</ul></div>
+<div class="thesis-col watch"><h3>What to Watch</h3><ul>
+<li>Q4 FY26 subscriber adds — seasonally strong, if negative again confirms structural stall</li>
+<li>Silver churn trend — even 1ppt improvement adds ~2K net subs/quarter</li>
+<li>Busy Infotech license acceleration — 12K/quarter sustaining?</li>
+<li>AI voice bot scale: 10-20K → 1 lakh calls/day</li>
+<li>Post-FY26 AGM capital return — buyback at these valuations highly accretive</li>
+<li>Vertical strategy — first results from category optimization</li>
+</ul></div>
+</div>
+</section>
+
+<!-- ═══ GLOSSARY ═══ -->
+<details class="glossary" id="glossary">
+<summary>Financial Terms Glossary — Every Term Explained</summary>
+<div class="glossary-content">
+<div class="glossary-item"><span class="term">CMP</span><span class="def"><strong>Current Market Price</strong> — what one share costs. IndiaMART: ₹1,970.</span></div>
+<div class="glossary-item"><span class="term">Market Cap</span><span class="def">Price × Shares = ₹1,970 × 6.0 Cr = ₹11,837 Cr. "How much to buy the entire company."</span></div>
+<div class="glossary-item"><span class="term">EPS</span><span class="def"><strong>Earnings Per Share</strong> — Net Profit / Shares. ₹551 Cr / 6.0 Cr = ₹91.7. "What the company earned for each share."</span></div>
+<div class="glossary-item"><span class="term">P/E</span><span class="def">CMP / EPS = 19.6×. "How many years of earnings you're paying for." Lower = cheaper.</span></div>
+<div class="glossary-item"><span class="term">EV/EBITDA</span><span class="def">Enterprise Value / Operating Profit. EV = MCap + Debt − Cash. Better than P/E — adjusts for cash/debt.</span></div>
+<div class="glossary-item"><span class="term">ROCE</span><span class="def">Operating Profit / Capital Employed. IndiaMART's 34% = every ₹100 generates ₹34 profit. Above 20% = excellent.</span></div>
+<div class="glossary-item"><span class="term">D/E</span><span class="def">Debt / Equity. 0.011 = virtually zero debt. Below 0.5 = conservative.</span></div>
+<div class="glossary-item"><span class="term">OCF</span><span class="def">Operating Cash Flow — actual cash from operations. OCF > NI = earnings are "real."</span></div>
+<div class="glossary-item"><span class="term">Beta</span><span class="def">0.20 = if Nifty falls 10%, stock falls ~2%. Low beta = less volatile.</span></div>
+<div class="glossary-item"><span class="term">ARPU</span><span class="def">Average Revenue Per User — ₹67K/year. Top 1% pay ₹11L/year.</span></div>
+<div class="glossary-item"><span class="term">Deferred Revenue</span><span class="def">Cash collected but not yet "earned." ₹1,775 Cr = guaranteed future revenue.</span></div>
+<div class="glossary-item"><span class="term">WC Days</span><span class="def">Working Capital Days. −305 = customers fund the business (subscription model).</span></div>
+</div>
+</details>
+
+<footer class="footer">
+<span>Generated 2026-03-24 · Data: yfinance, Screener.in, BSE concall transcripts</span>
+<span>This is not investment advice. Do your own research.</span>
+</footer>
 
 </div>
-
 
 <script>
+Chart.defaults.font.family="'DM Sans',sans-serif";Chart.defaults.font.size=11;Chart.defaults.color='#8a8a86';
+const C={accent:'#c85d3a',pos:'#2d7a4f',ink:'#1a1a18',faint:'#b8b8b4',blue:'#4a7fc4',grid:'#e5e3df'};
 
-const peDates = ["2019-07-01", "2019-07-08", "2019-07-15", "2019-07-22", "2019-07-29", "2019-08-05", "2019-08-12", "2019-08-19", "2019-08-26", "2019-09-02", "2020-04-06", "2020-04-13", "2020-04-20", "2020-04-27", "2020-05-04", "2020-05-11", "2020-05-18", "2020-05-25", "2020-06-01", "2020-06-08", "2020-06-15", "2020-06-22", "2020-06-29", "2020-07-06", "2020-07-13", "2020-07-20", "2020-07-27", "2020-08-03", "2020-08-10", "2020-08-17", "2020-08-24", "2020-08-31", "2020-09-07", "2020-09-14", "2020-09-21", "2020-09-28", "2020-10-05", "2020-10-12", "2020-10-19", "2020-10-26", "2020-11-02", "2020-11-09", "2020-11-16", "2020-11-23", "2020-11-30", "2020-12-07", "2020-12-14", "2020-12-21", "2020-12-28", "2021-01-04", "2021-01-11", "2021-01-18", "2021-01-25", "2021-02-01", "2021-02-08", "2021-02-15", "2021-02-22", "2021-03-01", "2021-03-08", "2021-03-15", "2021-03-22", "2021-03-29", "2021-04-05", "2021-04-12", "2021-04-19", "2021-04-26", "2021-05-03", "2021-05-10", "2021-05-17", "2021-05-24", "2021-05-31", "2021-06-07", "2021-06-14", "2021-06-21", "2021-06-28", "2021-07-05", "2021-07-12", "2021-07-19", "2021-07-26", "2021-08-02", "2021-08-09", "2021-08-16", "2021-08-23", "2021-08-30", "2021-09-06", "2021-09-13", "2021-09-20", "2021-09-27", "2021-10-04", "2021-10-11", "2021-10-18", "2021-10-25", "2021-11-01", "2021-11-08", "2021-11-15", "2021-11-22", "2021-11-29", "2021-12-06", "2021-12-13", "2021-12-20", "2021-12-27", "2022-01-03", "2022-01-10", "2022-01-17", "2022-01-24", "2022-01-31", "2022-02-07", "2022-02-14", "2022-02-21", "2022-02-28", "2022-03-07", "2022-03-14", "2022-03-21", "2022-03-28", "2022-04-04", "2022-04-11", "2022-04-18", "2022-04-25", "2022-05-02", "2022-05-09", "2022-05-16", "2022-05-23", "2022-05-30", "2022-06-06", "2022-06-13", "2022-06-20", "2022-06-27", "2022-07-04", "2022-07-11", "2022-07-18", "2022-07-25", "2022-08-01", "2022-08-08", "2022-08-15", "2022-08-22", "2022-08-29", "2022-09-05", "2022-09-12", "2022-09-19", "2022-09-26", "2022-10-03", "2022-10-10", "2022-10-17", "2022-10-24", "2022-10-31", "2022-11-07", "2022-11-14", "2022-11-21", "2022-11-28", "2022-12-05", "2022-12-12", "2022-12-19", "2022-12-26", "2023-01-02", "2023-01-09", "2023-01-16", "2023-01-23", "2023-01-30", "2023-02-06", "2023-02-13", "2023-02-20", "2023-02-27", "2023-03-06", "2023-03-13", "2023-03-20", "2023-03-27", "2023-04-03", "2023-04-10", "2023-04-17", "2023-04-24", "2023-05-01", "2023-05-08", "2023-05-15", "2023-05-22", "2023-05-29", "2023-06-05", "2023-06-12", "2023-06-19", "2023-06-26", "2023-07-03", "2023-07-10", "2023-07-17", "2023-07-24", "2023-07-31", "2023-08-07", "2023-08-14", "2023-08-21", "2023-08-28", "2023-09-04", "2023-09-11", "2023-09-18", "2023-09-25", "2023-10-02", "2023-10-09", "2023-10-16", "2023-10-23", "2023-10-30", "2023-11-06", "2023-11-13", "2023-11-20", "2023-11-27", "2023-12-04", "2023-12-11", "2023-12-18", "2023-12-25", "2024-01-01", "2024-01-08", "2024-01-15", "2024-01-22", "2024-01-29", "2024-02-05", "2024-02-12", "2024-02-19", "2024-02-26", "2024-03-04", "2024-03-11", "2024-03-18", "2024-03-25", "2024-04-01", "2024-04-08", "2024-04-15", "2024-04-22", "2024-04-29", "2024-05-06", "2024-05-13", "2024-05-20", "2024-05-27", "2024-06-03", "2024-06-10", "2024-06-17", "2024-06-24", "2024-07-01", "2024-07-08", "2024-07-15", "2024-07-22", "2024-07-29", "2024-08-05", "2024-08-12", "2024-08-19", "2024-08-26", "2024-09-02", "2024-09-09", "2024-09-16", "2024-09-23", "2024-09-30", "2024-10-07", "2024-10-14", "2024-10-21", "2024-10-28", "2024-11-04", "2024-11-11", "2024-11-18", "2024-11-25", "2024-12-02", "2024-12-09", "2024-12-16", "2024-12-23", "2024-12-30", "2025-01-06", "2025-01-13", "2025-01-20", "2025-01-27", "2025-02-03", "2025-02-10", "2025-02-17", "2025-02-24", "2025-03-03", "2025-03-10", "2025-03-17", "2025-03-24", "2025-03-31", "2025-04-07", "2025-04-14", "2025-04-21", "2025-04-28", "2025-05-05", "2025-05-12", "2025-05-19", "2025-05-26", "2025-06-02", "2025-06-09", "2025-06-16", "2025-06-23", "2025-06-30", "2025-07-07", "2025-07-14", "2025-07-21", "2025-07-28", "2025-08-04", "2025-08-11", "2025-08-18", "2025-08-25", "2025-09-01", "2025-09-08", "2025-09-15", "2025-09-22", "2025-09-29", "2025-10-06", "2025-10-13", "2025-10-20", "2025-10-27", "2025-11-03", "2025-11-10", "2025-11-17", "2025-11-24", "2025-12-01", "2025-12-08", "2025-12-15", "2025-12-22", "2025-12-29", "2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02", "2026-02-09", "2026-02-16", "2026-02-23", "2026-03-02", "2026-03-09", "2026-03-16", "2026-03-19", "2026-03-23", "2026-03-24"];
-const peVals = [182.02165139934974, 178.95259127740613, 168.3447802880567, 167.91226385120385, 168.83229549202377, 160.70305263496445, 157.9017913879273, 158.2862427001466, 164.78825722578281, 198.72634662315994, 42.54640591802971, 42.39675192251217, 41.46284588189862, 42.57576222962644, 44.7618068778413, 43.51913295191427, 48.11285952846172, 46.92985091751022, 44.15561723547336, 43.091972766244155, 43.71993069772336, 45.4219744088676, 39.777852481216186, 42.231941031607285, 38.84490391978061, 46.51216020091028, 53.577020850914735, 58.44257576608937, 55.344417303351676, 61.272692720348765, 66.89881643315219, 77.5306843749735, 90.32112688739358, 94.81065100500196, 99.52657107424261, 94.60418019506336, 94.7254162085786, 94.75666832894771, 94.70552936605205, 91.79869918005328, 93.8019371162132, 188.6646845632888, 94.6240766123817, 96.46628570038973, 97.01186691079184, 101.49665150646926, 115.14426289078403, 117.66844609809677, 133.32783613283902, 141.91004754795216, 147.47934965893865, 149.52805828126063, 147.80517024841186, 185.28143188791307, 174.47717939488908, 167.39717621168495, 162.83091971275363, 152.80428393412228, 160.80305541213616, 154.17862082181267, 147.6962474171254, 151.02551741644686, 87.99434266037728, 83.61538435694668, 86.49732329304541, 83.29993913631901, 78.15124088920979, 71.3556401816252, 80.43058050649027, 77.92277193340456, 72.62735818184636, 76.16165088593979, 76.29841338176504, 73.3960493252549, 76.14541566963767, 77.33224970860552, 75.75766679402669, 75.9834978582435, 74.88050957420103, 77.06710452517359, 75.89652159342106, 74.51056911529729, 74.86164176328157, 85.45934473483521, 93.27013643112535, 90.40836306385603, 89.32718770664296, 87.27721753024807, 92.477254020881, 99.02152404556087, 83.08853172430145, 75.05193544864979, 76.98849217765654, 79.22750595424925, 80.08130353169568, 76.63300185580735, 75.23415125314992, 76.55633879364076, 73.1678928907423, 67.72528161036857, 68.01460746669419, 70.06772934087041, 71.09692022409033, 64.27487173999793, 50.678044941561936, 53.3513097027106, 52.99266768308008, 50.77728369439071, 51.09496423680613, 46.276691044485204, 47.0212756725949, 47.201912979718834, 46.769229898596954, 46.74665420793476, 48.935302635937816, 48.6550614612252, 47.92866879818172, 48.83841385965378, 43.909110281081475, 41.61462407265609, 42.493569820576575, 44.869026396849904, 44.80493675935862, 42.047884456925985, 39.5074623466283, 41.14559488429168, 37.94485453740298, 38.83869372067228, 39.50994583887644, 40.4882563371891, 42.27395492685986, 45.4483642414063, 42.45133291003156, 42.70671911388946, 43.48876606133923, 47.22412384999118, 47.39964735862845, 44.602573490905456, 43.76548874652976, 44.31824244803042, 44.604067094719674, 43.11480876542445, 43.35340445660574, 45.148866604095616, 46.73455259708794, 47.67552300004515, 44.65327582709548, 43.540310429209754, 44.40672594378948, 44.09555012900521, 43.091943595624244, 40.8476234294019, 42.94282379468261, 43.14214973457398, 44.34508220784631, 45.23038830221056, 44.08461875343874, 45.40386687676662, 47.63775186466278, 47.69441357982967, 47.40262955416355, 48.86504812364288, 47.27687613235575, 48.649307578075124, 49.47794694517915, 49.90444100344504, 52.21214744246116, 56.29641082057262, 54.815783421744534, 56.036932662707436, 62.09573791007161, 61.70364904690968, 58.550956001116425, 58.251311923620655, 59.72752791476192, 58.545196955759174, 61.917754981800286, 60.882100696279466, 58.96898688943426, 57.53573211324781, 59.7044812049136, 66.0263284800761, 64.75336362352685, 65.4857099416354, 65.67430025235176, 64.55849311069787, 63.19752646142718, 65.20598036924612, 67.45120789870917, 64.67374245256845, 62.67786474160369, 60.27024160864338, 60.09422223057156, 59.2120617700296, 57.047502989245324, 58.07425549624776, 54.28889920628105, 54.51729220616214, 54.6283512371512, 54.461770586982084, 54.44186134608525, 56.100376917410955, 58.48495334052294, 56.82224219410607, 57.03492679239113, 57.48019996564845, 54.34547366739113, 55.182588285956825, 51.32074829398319, 53.68542074040799, 56.50479455957351, 58.15073393404503, 55.96731875429395, 55.66243152398663, 54.6744499210575, 55.06315389741439, 56.04274961437084, 55.43298568217551, 44.40439045188277, 45.056523361468784, 44.10757042830139, 45.990641434440036, 48.88202236019614, 46.544992350089835, 45.958335477803566, 44.70033757860458, 42.213151762988474, 44.39653438014673, 45.360387969755955, 46.72513369797125, 47.17828998774143, 47.49417776332535, 49.486299467079654, 49.2434455242177, 53.374633880446176, 49.077138933597844, 48.87476284108774, 48.37232954970804, 50.975992265870644, 52.79565323682438, 52.509680820949995, 55.059666959874235, 53.76443715844438, 51.355233053226534, 49.99488690064007, 52.995393093090286, 53.02619012249214, 42.91775059889205, 44.89579190606753, 41.768584076489745, 40.197058293719124, 40.10378992223761, 41.26615078511005, 41.49405143453362, 41.98152265964217, 39.59519810226082, 39.707828115642315, 39.603115583826174, 40.91858869684833, 40.16978355667016, 36.66420783659605, 38.12926213458228, 38.23485194967435, 37.389260532078154, 35.59599482168925, 34.579695044636175, 35.38481519150509, 34.42131032199806, 37.6963491564044, 36.40551454418701, 22.087875374523332, 22.345596903656705, 23.44158836906437, 23.991185401818136, 24.151259547507713, 24.071221144679495, 25.080769007059192, 25.271794527135913, 24.89187944037134, 25.912101749761664, 26.897039598749316, 27.13346543319865, 28.418013969436622, 27.746867091031866, 28.377702171667874, 28.90067293614944, 27.89722171781369, 28.31450933896631, 27.905938429215087, 27.73706245318458, 29.095696386417284, 28.297075916163514, 27.838388570796255, 28.33520920107363, 26.90684689656346, 25.786817310638728, 25.836933746254765, 26.054838231455417, 25.53949625192936, 25.83039820767886, 26.77937064474759, 26.666061376429994, 26.708551687057376, 25.51443670413791, 25.1679680406755, 25.194115514912834, 24.319231134805698, 24.15035515877519, 24.145995473091062, 23.72761992549255, 23.374613063487377, 24.939168331214812, 23.904122026511708, 24.061012191869434, 24.387868919670417, 23.969493372071906, 23.813691133160066, 23.228618122389683, 23.104413629812054, 22.900670808175956, 21.729435530205873, 20.189054, 21.503903590033136, 19.603065];
-new Chart(document.getElementById('peChart'), {
-  type: 'line',
-  data: { labels: peDates, datasets: [{ label: 'P/E Trailing', data: peVals, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: {
-      annotation: { annotations: {
-        currentPE: { type: 'line', yMin: 19.603065, yMax: 19.603065, borderColor: '#22c55e', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Current: 19.6x', position: 'start', backgroundColor: 'rgba(34,197,94,0.8)', font: { size: 11 } } },
-        medianPE: { type: 'line', yMin: 48.9, yMax: 48.9, borderColor: '#71717a', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Median: 48.9x', position: 'end', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 11 } } }
-      } },
-      legend: { display: false }
-    },
-    scales: {
-      x: { ticks: { color: '#71717a', maxTicksLimit: 12 }, grid: { color: 'rgba(42,45,58,0.5)' } },
-      y: { ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } }
-    }
-  }
-});
+new Chart(document.getElementById('peChart'),{type:'line',data:{labels:["2019-07-01", "2019-07-08", "2019-07-15", "2019-07-22", "2019-07-29", "2019-08-05", "2019-08-12", "2019-08-19", "2019-08-26", "2019-09-02", "2020-04-06", "2020-04-13", "2020-04-20", "2020-04-27", "2020-05-04", "2020-05-11", "2020-05-18", "2020-05-25", "2020-06-01", "2020-06-08", "2020-06-15", "2020-06-22", "2020-06-29", "2020-07-06", "2020-07-13", "2020-07-20", "2020-07-27", "2020-08-03", "2020-08-10", "2020-08-17", "2020-08-24", "2020-08-31", "2020-09-07", "2020-09-14", "2020-09-21", "2020-09-28", "2020-10-05", "2020-10-12", "2020-10-19", "2020-10-26", "2020-11-02", "2020-11-09", "2020-11-16", "2020-11-23", "2020-11-30", "2020-12-07", "2020-12-14", "2020-12-21", "2020-12-28", "2021-01-04", "2021-01-11", "2021-01-18", "2021-01-25", "2021-02-01", "2021-02-08", "2021-02-15", "2021-02-22", "2021-03-01", "2021-03-08", "2021-03-15", "2021-03-22", "2021-03-29", "2021-04-05", "2021-04-12", "2021-04-19", "2021-04-26", "2021-05-03", "2021-05-10", "2021-05-17", "2021-05-24", "2021-05-31", "2021-06-07", "2021-06-14", "2021-06-21", "2021-06-28", "2021-07-05", "2021-07-12", "2021-07-19", "2021-07-26", "2021-08-02", "2021-08-09", "2021-08-16", "2021-08-23", "2021-08-30", "2021-09-06", "2021-09-13", "2021-09-20", "2021-09-27", "2021-10-04", "2021-10-11", "2021-10-18", "2021-10-25", "2021-11-01", "2021-11-08", "2021-11-15", "2021-11-22", "2021-11-29", "2021-12-06", "2021-12-13", "2021-12-20", "2021-12-27", "2022-01-03", "2022-01-10", "2022-01-17", "2022-01-24", "2022-01-31", "2022-02-07", "2022-02-14", "2022-02-21", "2022-02-28", "2022-03-07", "2022-03-14", "2022-03-21", "2022-03-28", "2022-04-04", "2022-04-11", "2022-04-18", "2022-04-25", "2022-05-02", "2022-05-09", "2022-05-16", "2022-05-23", "2022-05-30", "2022-06-06", "2022-06-13", "2022-06-20", "2022-06-27", "2022-07-04", "2022-07-11", "2022-07-18", "2022-07-25", "2022-08-01", "2022-08-08", "2022-08-15", "2022-08-22", "2022-08-29", "2022-09-05", "2022-09-12", "2022-09-19", "2022-09-26", "2022-10-03", "2022-10-10", "2022-10-17", "2022-10-24", "2022-10-31", "2022-11-07", "2022-11-14", "2022-11-21", "2022-11-28", "2022-12-05", "2022-12-12", "2022-12-19", "2022-12-26", "2023-01-02", "2023-01-09", "2023-01-16", "2023-01-23", "2023-01-30", "2023-02-06", "2023-02-13", "2023-02-20", "2023-02-27", "2023-03-06", "2023-03-13", "2023-03-20", "2023-03-27", "2023-04-03", "2023-04-10", "2023-04-17", "2023-04-24", "2023-05-01", "2023-05-08", "2023-05-15", "2023-05-22", "2023-05-29", "2023-06-05", "2023-06-12", "2023-06-19", "2023-06-26", "2023-07-03", "2023-07-10", "2023-07-17", "2023-07-24", "2023-07-31", "2023-08-07", "2023-08-14", "2023-08-21", "2023-08-28", "2023-09-04", "2023-09-11", "2023-09-18", "2023-09-25", "2023-10-02", "2023-10-09", "2023-10-16", "2023-10-23", "2023-10-30", "2023-11-06", "2023-11-13", "2023-11-20", "2023-11-27", "2023-12-04", "2023-12-11", "2023-12-18", "2023-12-25", "2024-01-01", "2024-01-08", "2024-01-15", "2024-01-22", "2024-01-29", "2024-02-05", "2024-02-12", "2024-02-19", "2024-02-26", "2024-03-04", "2024-03-11", "2024-03-18", "2024-03-25", "2024-04-01", "2024-04-08", "2024-04-15", "2024-04-22", "2024-04-29", "2024-05-06", "2024-05-13", "2024-05-20", "2024-05-27", "2024-06-03", "2024-06-10", "2024-06-17", "2024-06-24", "2024-07-01", "2024-07-08", "2024-07-15", "2024-07-22", "2024-07-29", "2024-08-05", "2024-08-12", "2024-08-19", "2024-08-26", "2024-09-02", "2024-09-09", "2024-09-16", "2024-09-23", "2024-09-30", "2024-10-07", "2024-10-14", "2024-10-21", "2024-10-28", "2024-11-04", "2024-11-11", "2024-11-18", "2024-11-25", "2024-12-02", "2024-12-09", "2024-12-16", "2024-12-23", "2024-12-30", "2025-01-06", "2025-01-13", "2025-01-20", "2025-01-27", "2025-02-03", "2025-02-10", "2025-02-17", "2025-02-24", "2025-03-03", "2025-03-10", "2025-03-17", "2025-03-24", "2025-03-31", "2025-04-07", "2025-04-14", "2025-04-21", "2025-04-28", "2025-05-05", "2025-05-12", "2025-05-19", "2025-05-26", "2025-06-02", "2025-06-09", "2025-06-16", "2025-06-23", "2025-06-30", "2025-07-07", "2025-07-14", "2025-07-21", "2025-07-28", "2025-08-04", "2025-08-11", "2025-08-18", "2025-08-25", "2025-09-01", "2025-09-08", "2025-09-15", "2025-09-22", "2025-09-29", "2025-10-06", "2025-10-13", "2025-10-20", "2025-10-27", "2025-11-03", "2025-11-10", "2025-11-17", "2025-11-24", "2025-12-01", "2025-12-08", "2025-12-15", "2025-12-22", "2025-12-29", "2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02", "2026-02-09", "2026-02-16", "2026-02-23", "2026-03-02", "2026-03-09", "2026-03-16", "2026-03-19", "2026-03-24"],datasets:[{data:[182.02165139934974, 178.9526086986184, 168.34479770926896, 167.9122464299916, 168.8322780708115, 160.70307005617673, 157.901773966715, 158.28626012135885, 164.7882746469951, 198.72634662315994, 42.54640591802971, 42.396747135116286, 41.46285066929452, 42.57576701702233, 44.7618068778413, 43.519142526706055, 48.11285952846172, 46.92985570490612, 44.155622022869245, 43.09196797884826, 43.71993548511926, 45.4219744088676, 39.77785487491413, 42.23194581900318, 38.844901526082666, 46.51216020091028, 53.577020850914735, 58.44257576608937, 55.344422090747564, 61.27269750774465, 66.89881643315219, 77.5306843749735, 90.32113646218535, 94.81065100500196, 99.52656149945084, 94.60418019506336, 94.72540663378682, 94.75666832894771, 94.7055102164685, 91.7986896052615, 93.8019371162132, 188.66466541370525, 94.62405746279813, 96.46627612559796, 97.01184776120829, 101.49665150646926, 115.14427246557582, 117.66846524768033, 133.32783613283902, 141.91005712274395, 147.47934965893865, 149.52805828126063, 147.80517024841186, 185.28143188791307, 174.47717939488908, 167.39717621168495, 162.8308814135865, 152.80428393412228, 160.8030362625526, 154.17860167222912, 147.6962378423336, 151.0255078416551, 87.99434795734834, 83.61538435694668, 86.49731269910329, 83.29994443329008, 78.15124618618084, 71.35563488465414, 80.4305911004324, 77.92277193340456, 72.62736347881743, 76.16165088593979, 76.29841867873611, 73.39604402828384, 76.14541566963767, 77.33224441163445, 75.75766149705562, 75.9834978582435, 74.88050957420103, 77.06710982214464, 75.89651629644999, 74.51057441226834, 74.86164176328157, 85.45934473483521, 93.27014702506747, 90.40836306385603, 89.32719830058508, 87.27721753024807, 92.477254020881, 99.02151345161874, 83.08852642733038, 75.05193544864979, 76.98849217765654, 79.22750595424925, 80.08130353169568, 76.63300185580735, 75.23415125314992, 76.55633879364076, 73.16789818771335, 67.72528161036857, 68.01460746669419, 70.06773463784147, 71.09692022409033, 64.27487703696899, 50.678050238533, 53.3513097027106, 52.99266768308008, 50.77728369439071, 51.09496953377719, 46.276691044485204, 47.02127037562384, 47.201912979718834, 46.769229898596954, 46.74665420793476, 48.935302635937816, 48.6550614612252, 47.92866879818172, 48.83841385965378, 43.909115293174814, 41.61462657870276, 42.493569820576575, 44.86903140894324, 44.80493675935862, 42.047884456925985, 39.5074623466283, 41.14559488429168, 37.94485203135631, 38.83869372067228, 39.50994834492311, 40.4882563371891, 42.27395492685986, 45.4483642414063, 42.45133291003156, 42.70671911388946, 43.48876606133923, 47.22412384999118, 47.39964735862845, 44.602573490905456, 43.76548874652976, 44.31824244803042, 44.604067094719674, 43.11480876542445, 43.35340445660574, 45.148866604095616, 46.73455259708794, 47.67552300004515, 44.65327582709548, 43.540310429209754, 44.40672594378948, 44.09555012900521, 43.091943595624244, 40.8476234294019, 42.94282379468261, 43.14214973457398, 44.34508220784631, 45.23038830221056, 44.08461875343874, 45.40386687676662, 47.63775186466278, 47.69441357982967, 47.40262955416355, 48.86504812364288, 47.27687613235575, 48.649307578075124, 49.47794694517915, 49.90444100344504, 52.21214744246116, 56.29641082057262, 54.815783421744534, 56.036932662707436, 62.09573791007161, 61.70364904690968, 58.550956001116425, 58.251311923620655, 59.72752791476192, 58.545196955759174, 61.917754981800286, 60.882100696279466, 58.96898688943426, 57.53573211324781, 59.7044812049136, 66.0263284800761, 64.75336362352685, 65.4857099416354, 65.67430025235176, 64.55849311069787, 63.19752646142718, 65.20598036924612, 67.45120789870917, 64.67374245256845, 62.67786474160369, 60.27024160864338, 60.09422223057156, 59.2120617700296, 57.047502989245324, 58.07425549624776, 54.28889920628105, 54.51729220616214, 54.6283512371512, 54.461770586982084, 54.44186134608525, 56.100376917410955, 58.48495334052294, 56.82224219410607, 57.03492679239113, 57.48019996564845, 54.34547366739113, 55.182588285956825, 51.32074829398319, 53.68542074040799, 56.50479455957351, 58.15073393404503, 55.96731875429395, 55.66243152398663, 54.6744499210575, 55.06315389741439, 56.04274961437084, 55.43298568217551, 44.40439045188277, 45.056523361468784, 44.10757042830139, 45.990641434440036, 48.88202236019614, 46.544992350089835, 45.958335477803566, 44.70033757860458, 42.213151762988474, 44.39653438014673, 45.360387969755955, 46.72513369797125, 47.17828998774143, 47.49417776332535, 49.486299467079654, 49.2434455242177, 53.374633880446176, 49.077138933597844, 48.87476284108774, 48.37232954970804, 50.975992265870644, 52.79565323682438, 52.509680820949995, 55.059666959874235, 53.76443715844438, 51.355233053226534, 49.99488690064007, 52.995393093090286, 53.02619012249214, 42.91775059889205, 44.89579190606753, 41.768584076489745, 40.197058293719124, 40.10378992223761, 41.26615078511005, 41.49405143453362, 41.98152265964217, 39.59519810226082, 39.707828115642315, 39.603115583826174, 40.91858869684833, 40.16978355667016, 36.66420783659605, 38.12926213458228, 38.23485194967435, 37.389260532078154, 35.59599482168925, 34.579695044636175, 35.38481519150509, 34.42131032199806, 37.6963491564044, 36.40551454418701, 22.087875374523332, 22.345596903656705, 23.44158836906437, 23.991185401818136, 24.151259547507713, 24.071221144679495, 25.080769007059192, 25.271794527135913, 24.89187944037134, 25.912101749761664, 26.897039598749316, 27.13346543319865, 28.418013969436622, 27.746867091031866, 28.377702171667874, 28.90067293614944, 27.89722171781369, 28.31450933896631, 27.905938429215087, 27.73706245318458, 29.095696386417284, 28.297075916163514, 27.838388570796255, 28.33520920107363, 26.90684689656346, 25.786817310638728, 25.836933746254765, 26.054838231455417, 25.53949625192936, 25.83039820767886, 26.77937064474759, 26.666061376429994, 26.708551687057376, 25.51443670413791, 25.1679680406755, 25.194115514912834, 24.319231134805698, 24.15035515877519, 24.145995473091062, 23.72761992549255, 23.374613063487377, 24.939168331214812, 23.904122026511708, 24.061012191869434, 24.387868919670417, 23.969493372071906, 23.813691133160066, 23.228618122389683, 23.104413629812054, 22.900670808175956, 21.729435530205873, 20.189054, 19.603065],borderColor:C.accent,backgroundColor:'rgba(200,93,58,0.08)',fill:true,tension:.3,pointRadius:0,borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},annotation:{annotations:{cur:{type:'line',yMin:19.603065,yMax:19.603065,borderColor:C.pos,borderWidth:1.5,borderDash:[5,3],label:{display:true,content:'Current 19.6×',position:'start',backgroundColor:C.pos,font:{size:10}}},med:{type:'line',yMin:48.9,yMax:48.9,borderColor:C.faint,borderWidth:1.5,borderDash:[5,3],label:{display:true,content:'Median 48.9×',position:'end',backgroundColor:'#8a8a86',font:{size:10}}}}}},scales:{x:{ticks:{maxTicksLimit:10},grid:{color:C.grid}},y:{grid:{color:C.grid}}}}});
 
-const pePrices = [637.7122192382812, 626.9597778320312, 589.7953491210938, 588.280029296875, 591.5033569335938, 563.0225830078125, 553.2083740234375, 554.5552978515625, 577.3350830078125, 696.237060546875, 1084.8597412109375, 1081.0438232421875, 1057.2308349609375, 1085.6082763671875, 1141.3486328125, 1109.66259765625, 1226.794677734375, 1196.6300048828125, 1125.891845703125, 1098.770751953125, 1114.7825927734375, 1158.1817626953125, 1014.2664184570312, 1076.8414306640625, 990.4778442382812, 1185.9796142578125, 1366.121337890625, 1490.1845703125, 1411.1868896484375, 1562.34765625, 1705.8040771484375, 1976.8983154296875, 2303.032470703125, 2417.507568359375, 2537.75537109375, 2412.242919921875, 2415.334228515625, 2416.131103515625, 2414.8271484375, 2340.7080078125, 2391.787109375, 4810.623046875, 2412.750244140625, 2459.723388671875, 2473.634765625, 2587.989013671875, 2935.9794921875, 3000.341796875, 3399.629150390625, 3618.460693359375, 3760.46826171875, 3812.706787109375, 3768.776123046875, 4724.35595703125, 4448.8662109375, 4268.33837890625, 4151.90673828125, 3896.244873046875, 4100.19970703125, 3931.2880859375, 3765.998779296875, 3850.889404296875, 4055.712890625, 3853.884033203125, 3986.71435546875, 3839.344970703125, 3602.038330078125, 3288.824951171875, 3707.094482421875, 3591.508056640625, 3347.439208984375, 3510.3369140625, 3516.640380859375, 3382.86865234375, 3509.588623046875, 3564.29052734375, 3491.717041015625, 3502.125732421875, 3451.288330078125, 3552.06982421875, 3498.116943359375, 3434.237548828125, 3450.418701171875, 3938.873291015625, 4298.87744140625, 4166.9765625, 4117.14453125, 4022.66015625, 4262.3330078125, 4563.96240234375, 3829.60107421875, 3459.189453125, 3548.446533203125, 3651.64404296875, 3690.99609375, 3532.061767578125, 3467.587890625, 3528.5283203125, 3372.352783203125, 3121.49951171875, 3134.834716796875, 3229.46435546875, 3276.900390625, 2962.468017578125, 2335.781982421875, 2458.994384765625, 2442.46435546875, 2340.35595703125, 2354.998046875, 2132.9208984375, 2167.2392578125, 2175.56494140625, 2155.622314453125, 2154.581787109375, 2383.65380859375, 2370.003173828125, 2334.620361328125, 2378.934326171875, 2138.826416015625, 2027.061279296875, 2069.875, 2185.584228515625, 2182.46240234375, 2048.16552734375, 1924.4207763671875, 2004.2147216796875, 1848.3056640625, 1891.8448486328125, 1924.541748046875, 1972.195556640625, 2059.177490234375, 2213.803955078125, 2067.817626953125, 2080.257568359375, 2118.351318359375, 2300.3017578125, 2308.8515625, 2172.605224609375, 2131.83056640625, 2158.75537109375, 2172.677978515625, 2100.1357421875, 2111.7578125, 2199.21533203125, 2276.45458984375, 2322.28955078125, 2175.074951171875, 2120.862060546875, 2163.0654296875, 2147.907958984375, 2099.02197265625, 1989.700439453125, 2091.75830078125, 2101.467529296875, 2160.062744140625, 2203.186279296875, 2147.37548828125, 2211.636474609375, 2320.44970703125, 2323.209716796875, 2308.996826171875, 2380.231689453125, 2302.871337890625, 2369.722900390625, 2410.086181640625, 2430.86083984375, 2421.46630859375, 2610.884033203125, 2542.21630859375, 2598.85009765625, 2879.842041015625, 2861.657958984375, 2715.444091796875, 2701.54736328125, 2770.010498046875, 2715.177001953125, 2871.587646484375, 2823.556640625, 2734.831298828125, 2668.360595703125, 2768.941650390625, 3062.1328125, 3003.095947265625, 3037.060302734375, 3045.806640625, 2994.058349609375, 2930.940185546875, 3024.087158203125, 3128.215087890625, 2999.4033203125, 2906.839599609375, 2795.18017578125, 2787.016845703125, 2746.1044921875, 2645.7177734375, 2693.3359375, 2517.78076171875, 2528.373046875, 2533.523681640625, 2525.798095703125, 2524.874755859375, 2601.79248046875, 2712.383056640625, 2635.270751953125, 2645.134521484375, 2665.78515625, 2520.404541015625, 2559.227783203125, 2380.12548828125, 2489.79296875, 2620.54833984375, 2696.8828125, 2595.62158203125, 2581.481689453125, 2535.66162109375, 2553.688720703125, 2599.119873046875, 2570.840576171875, 2471.474365234375, 2507.77099609375, 2454.953857421875, 2559.762451171875, 2720.69189453125, 2590.61669921875, 2557.96435546875, 2487.9462890625, 2349.513671875, 2471.037109375, 2524.68359375, 2600.64306640625, 2625.864990234375, 2643.44677734375, 2754.324951171875, 2740.80810546875, 2970.7431640625, 2731.5517578125, 2720.287841796875, 2692.3232421875, 2837.23876953125, 2938.51806640625, 2922.601318359375, 3064.529296875, 2992.43896484375, 2858.3466796875, 2782.632080078125, 2949.63525390625, 2951.349365234375, 2388.73046875, 2498.824951171875, 2324.769775390625, 2237.30126953125, 2232.110107421875, 2296.80517578125, 2309.48974609375, 2336.62158203125, 2203.802734375, 2210.071533203125, 2204.243408203125, 2277.46044921875, 2235.783203125, 2040.668701171875, 2122.211181640625, 2128.088134765625, 2081.02392578125, 1981.2137451171875, 1924.648193359375, 1969.4598388671875, 1915.832763671875, 2098.115966796875, 2026.270263671875, 2027.298828125, 2050.953369140625, 2151.547119140625, 2201.990966796875, 2216.68310546875, 2209.3369140625, 2301.99658203125, 2319.529541015625, 2284.65966796875, 2378.299072265625, 2468.699951171875, 2490.39990234375, 2608.300048828125, 2546.699951171875, 2604.60009765625, 2652.60009765625, 2560.5, 2598.800048828125, 2561.300048828125, 2545.800048828125, 2670.5, 2597.199951171875, 2555.10009765625, 2600.699951171875, 2469.60009765625, 2366.800048828125, 2371.39990234375, 2391.39990234375, 2344.10009765625, 2370.800048828125, 2457.89990234375, 2447.5, 2451.39990234375, 2341.800048828125, 2310.0, 2312.39990234375, 2232.10009765625, 2216.60009765625, 2216.199951171875, 2177.800048828125, 2145.39990234375, 2289.0, 2194.0, 2208.39990234375, 2238.39990234375, 2200.0, 2185.699951171875, 2132.0, 2120.60009765625, 2101.89990234375, 1994.4000244140625, 2029.0, 1973.699951171875, 1970.5];
-new Chart(document.getElementById('pricePeChart'), {
-  type: 'line',
-  data: { labels: peDates, datasets: [
-    { label: 'Price (₹)', data: pePrices, borderColor: '#3b82f6', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
-    { label: 'P/E', data: peVals, borderColor: '#f97316', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y1' }
-  ] },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#e4e4e7' } } },
-    scales: {
-      x: { ticks: { color: '#71717a', maxTicksLimit: 12 }, grid: { color: 'rgba(42,45,58,0.5)' } },
-      y: { position: 'left', ticks: { color: '#3b82f6' }, grid: { color: 'rgba(42,45,58,0.5)' }, title: { display: true, text: 'Price (₹)', color: '#3b82f6' } },
-      y1: { position: 'right', ticks: { color: '#f97316' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'P/E', color: '#f97316' } }
-    }
-  }
-});
+new Chart(document.getElementById('pricePeChart'),{type:'line',data:{labels:["2019-07-01", "2019-07-08", "2019-07-15", "2019-07-22", "2019-07-29", "2019-08-05", "2019-08-12", "2019-08-19", "2019-08-26", "2019-09-02", "2020-04-06", "2020-04-13", "2020-04-20", "2020-04-27", "2020-05-04", "2020-05-11", "2020-05-18", "2020-05-25", "2020-06-01", "2020-06-08", "2020-06-15", "2020-06-22", "2020-06-29", "2020-07-06", "2020-07-13", "2020-07-20", "2020-07-27", "2020-08-03", "2020-08-10", "2020-08-17", "2020-08-24", "2020-08-31", "2020-09-07", "2020-09-14", "2020-09-21", "2020-09-28", "2020-10-05", "2020-10-12", "2020-10-19", "2020-10-26", "2020-11-02", "2020-11-09", "2020-11-16", "2020-11-23", "2020-11-30", "2020-12-07", "2020-12-14", "2020-12-21", "2020-12-28", "2021-01-04", "2021-01-11", "2021-01-18", "2021-01-25", "2021-02-01", "2021-02-08", "2021-02-15", "2021-02-22", "2021-03-01", "2021-03-08", "2021-03-15", "2021-03-22", "2021-03-29", "2021-04-05", "2021-04-12", "2021-04-19", "2021-04-26", "2021-05-03", "2021-05-10", "2021-05-17", "2021-05-24", "2021-05-31", "2021-06-07", "2021-06-14", "2021-06-21", "2021-06-28", "2021-07-05", "2021-07-12", "2021-07-19", "2021-07-26", "2021-08-02", "2021-08-09", "2021-08-16", "2021-08-23", "2021-08-30", "2021-09-06", "2021-09-13", "2021-09-20", "2021-09-27", "2021-10-04", "2021-10-11", "2021-10-18", "2021-10-25", "2021-11-01", "2021-11-08", "2021-11-15", "2021-11-22", "2021-11-29", "2021-12-06", "2021-12-13", "2021-12-20", "2021-12-27", "2022-01-03", "2022-01-10", "2022-01-17", "2022-01-24", "2022-01-31", "2022-02-07", "2022-02-14", "2022-02-21", "2022-02-28", "2022-03-07", "2022-03-14", "2022-03-21", "2022-03-28", "2022-04-04", "2022-04-11", "2022-04-18", "2022-04-25", "2022-05-02", "2022-05-09", "2022-05-16", "2022-05-23", "2022-05-30", "2022-06-06", "2022-06-13", "2022-06-20", "2022-06-27", "2022-07-04", "2022-07-11", "2022-07-18", "2022-07-25", "2022-08-01", "2022-08-08", "2022-08-15", "2022-08-22", "2022-08-29", "2022-09-05", "2022-09-12", "2022-09-19", "2022-09-26", "2022-10-03", "2022-10-10", "2022-10-17", "2022-10-24", "2022-10-31", "2022-11-07", "2022-11-14", "2022-11-21", "2022-11-28", "2022-12-05", "2022-12-12", "2022-12-19", "2022-12-26", "2023-01-02", "2023-01-09", "2023-01-16", "2023-01-23", "2023-01-30", "2023-02-06", "2023-02-13", "2023-02-20", "2023-02-27", "2023-03-06", "2023-03-13", "2023-03-20", "2023-03-27", "2023-04-03", "2023-04-10", "2023-04-17", "2023-04-24", "2023-05-01", "2023-05-08", "2023-05-15", "2023-05-22", "2023-05-29", "2023-06-05", "2023-06-12", "2023-06-19", "2023-06-26", "2023-07-03", "2023-07-10", "2023-07-17", "2023-07-24", "2023-07-31", "2023-08-07", "2023-08-14", "2023-08-21", "2023-08-28", "2023-09-04", "2023-09-11", "2023-09-18", "2023-09-25", "2023-10-02", "2023-10-09", "2023-10-16", "2023-10-23", "2023-10-30", "2023-11-06", "2023-11-13", "2023-11-20", "2023-11-27", "2023-12-04", "2023-12-11", "2023-12-18", "2023-12-25", "2024-01-01", "2024-01-08", "2024-01-15", "2024-01-22", "2024-01-29", "2024-02-05", "2024-02-12", "2024-02-19", "2024-02-26", "2024-03-04", "2024-03-11", "2024-03-18", "2024-03-25", "2024-04-01", "2024-04-08", "2024-04-15", "2024-04-22", "2024-04-29", "2024-05-06", "2024-05-13", "2024-05-20", "2024-05-27", "2024-06-03", "2024-06-10", "2024-06-17", "2024-06-24", "2024-07-01", "2024-07-08", "2024-07-15", "2024-07-22", "2024-07-29", "2024-08-05", "2024-08-12", "2024-08-19", "2024-08-26", "2024-09-02", "2024-09-09", "2024-09-16", "2024-09-23", "2024-09-30", "2024-10-07", "2024-10-14", "2024-10-21", "2024-10-28", "2024-11-04", "2024-11-11", "2024-11-18", "2024-11-25", "2024-12-02", "2024-12-09", "2024-12-16", "2024-12-23", "2024-12-30", "2025-01-06", "2025-01-13", "2025-01-20", "2025-01-27", "2025-02-03", "2025-02-10", "2025-02-17", "2025-02-24", "2025-03-03", "2025-03-10", "2025-03-17", "2025-03-24", "2025-03-31", "2025-04-07", "2025-04-14", "2025-04-21", "2025-04-28", "2025-05-05", "2025-05-12", "2025-05-19", "2025-05-26", "2025-06-02", "2025-06-09", "2025-06-16", "2025-06-23", "2025-06-30", "2025-07-07", "2025-07-14", "2025-07-21", "2025-07-28", "2025-08-04", "2025-08-11", "2025-08-18", "2025-08-25", "2025-09-01", "2025-09-08", "2025-09-15", "2025-09-22", "2025-09-29", "2025-10-06", "2025-10-13", "2025-10-20", "2025-10-27", "2025-11-03", "2025-11-10", "2025-11-17", "2025-11-24", "2025-12-01", "2025-12-08", "2025-12-15", "2025-12-22", "2025-12-29", "2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02", "2026-02-09", "2026-02-16", "2026-02-23", "2026-03-02", "2026-03-09", "2026-03-16", "2026-03-19", "2026-03-24"],datasets:[{label:'Price ₹',data:[637.7122192382812, 626.9598388671875, 589.79541015625, 588.2799682617188, 591.5032958984375, 563.0226440429688, 553.2083129882812, 554.5553588867188, 577.3351440429688, 696.237060546875, 1084.8597412109375, 1081.043701171875, 1057.23095703125, 1085.6083984375, 1141.3486328125, 1109.662841796875, 1226.794677734375, 1196.630126953125, 1125.8919677734375, 1098.7706298828125, 1114.78271484375, 1158.1817626953125, 1014.2664794921875, 1076.841552734375, 990.477783203125, 1185.9796142578125, 1366.121337890625, 1490.1845703125, 1411.18701171875, 1562.3477783203125, 1705.8040771484375, 1976.8983154296875, 2303.03271484375, 2417.507568359375, 2537.755126953125, 2412.242919921875, 2415.333984375, 2416.131103515625, 2414.82666015625, 2340.707763671875, 2391.787109375, 4810.62255859375, 2412.749755859375, 2459.72314453125, 2473.63427734375, 2587.989013671875, 2935.979736328125, 3000.34228515625, 3399.629150390625, 3618.4609375, 3760.46826171875, 3812.706787109375, 3768.776123046875, 4724.35595703125, 4448.8662109375, 4268.33837890625, 4151.90576171875, 3896.244873046875, 4100.19921875, 3931.28759765625, 3765.99853515625, 3850.88916015625, 4055.713134765625, 3853.884033203125, 3986.7138671875, 3839.34521484375, 3602.03857421875, 3288.82470703125, 3707.094970703125, 3591.508056640625, 3347.439453125, 3510.3369140625, 3516.640625, 3382.868408203125, 3509.588623046875, 3564.290283203125, 3491.716796875, 3502.125732421875, 3451.288330078125, 3552.070068359375, 3498.11669921875, 3434.23779296875, 3450.418701171875, 3938.873291015625, 4298.8779296875, 4166.9765625, 4117.14501953125, 4022.66015625, 4262.3330078125, 4563.9619140625, 3829.600830078125, 3459.189453125, 3548.446533203125, 3651.64404296875, 3690.99609375, 3532.061767578125, 3467.587890625, 3528.5283203125, 3372.35302734375, 3121.49951171875, 3134.834716796875, 3229.464599609375, 3276.900390625, 2962.46826171875, 2335.7822265625, 2458.994384765625, 2442.46435546875, 2340.35595703125, 2354.998291015625, 2132.9208984375, 2167.239013671875, 2175.56494140625, 2155.622314453125, 2154.581787109375, 2383.65380859375, 2370.003173828125, 2334.620361328125, 2378.934326171875, 2138.82666015625, 2027.0614013671875, 2069.875, 2185.58447265625, 2182.46240234375, 2048.16552734375, 1924.4207763671875, 2004.2147216796875, 1848.3055419921875, 1891.8448486328125, 1924.5418701171875, 1972.195556640625, 2059.177490234375, 2213.803955078125, 2067.817626953125, 2080.257568359375, 2118.351318359375, 2300.3017578125, 2308.8515625, 2172.605224609375, 2131.83056640625, 2158.75537109375, 2172.677978515625, 2100.1357421875, 2111.7578125, 2199.21533203125, 2276.45458984375, 2322.28955078125, 2175.074951171875, 2120.862060546875, 2163.0654296875, 2147.907958984375, 2099.02197265625, 1989.700439453125, 2091.75830078125, 2101.467529296875, 2160.062744140625, 2203.186279296875, 2147.37548828125, 2211.636474609375, 2320.44970703125, 2323.209716796875, 2308.996826171875, 2380.231689453125, 2302.871337890625, 2369.722900390625, 2410.086181640625, 2430.86083984375, 2421.46630859375, 2610.884033203125, 2542.21630859375, 2598.85009765625, 2879.842041015625, 2861.657958984375, 2715.444091796875, 2701.54736328125, 2770.010498046875, 2715.177001953125, 2871.587646484375, 2823.556640625, 2734.831298828125, 2668.360595703125, 2768.941650390625, 3062.1328125, 3003.095947265625, 3037.060302734375, 3045.806640625, 2994.058349609375, 2930.940185546875, 3024.087158203125, 3128.215087890625, 2999.4033203125, 2906.839599609375, 2795.18017578125, 2787.016845703125, 2746.1044921875, 2645.7177734375, 2693.3359375, 2517.78076171875, 2528.373046875, 2533.523681640625, 2525.798095703125, 2524.874755859375, 2601.79248046875, 2712.383056640625, 2635.270751953125, 2645.134521484375, 2665.78515625, 2520.404541015625, 2559.227783203125, 2380.12548828125, 2489.79296875, 2620.54833984375, 2696.8828125, 2595.62158203125, 2581.481689453125, 2535.66162109375, 2553.688720703125, 2599.119873046875, 2570.840576171875, 2471.474365234375, 2507.77099609375, 2454.953857421875, 2559.762451171875, 2720.69189453125, 2590.61669921875, 2557.96435546875, 2487.9462890625, 2349.513671875, 2471.037109375, 2524.68359375, 2600.64306640625, 2625.864990234375, 2643.44677734375, 2754.324951171875, 2740.80810546875, 2970.7431640625, 2731.5517578125, 2720.287841796875, 2692.3232421875, 2837.23876953125, 2938.51806640625, 2922.601318359375, 3064.529296875, 2992.43896484375, 2858.3466796875, 2782.632080078125, 2949.63525390625, 2951.349365234375, 2388.73046875, 2498.824951171875, 2324.769775390625, 2237.30126953125, 2232.110107421875, 2296.80517578125, 2309.48974609375, 2336.62158203125, 2203.802734375, 2210.071533203125, 2204.243408203125, 2277.46044921875, 2235.783203125, 2040.668701171875, 2122.211181640625, 2128.088134765625, 2081.02392578125, 1981.2137451171875, 1924.648193359375, 1969.4598388671875, 1915.832763671875, 2098.115966796875, 2026.270263671875, 2027.298828125, 2050.953369140625, 2151.547119140625, 2201.990966796875, 2216.68310546875, 2209.3369140625, 2301.99658203125, 2319.529541015625, 2284.65966796875, 2378.299072265625, 2468.699951171875, 2490.39990234375, 2608.300048828125, 2546.699951171875, 2604.60009765625, 2652.60009765625, 2560.5, 2598.800048828125, 2561.300048828125, 2545.800048828125, 2670.5, 2597.199951171875, 2555.10009765625, 2600.699951171875, 2469.60009765625, 2366.800048828125, 2371.39990234375, 2391.39990234375, 2344.10009765625, 2370.800048828125, 2457.89990234375, 2447.5, 2451.39990234375, 2341.800048828125, 2310.0, 2312.39990234375, 2232.10009765625, 2216.60009765625, 2216.199951171875, 2177.800048828125, 2145.39990234375, 2289.0, 2194.0, 2208.39990234375, 2238.39990234375, 2200.0, 2185.699951171875, 2132.0, 2120.60009765625, 2101.89990234375, 1994.4000244140625, 2029.0, 1970.5],borderColor:C.blue,tension:.3,pointRadius:0,borderWidth:1.5,yAxisID:'y'},{label:'P/E',data:[182.02165139934974, 178.9526086986184, 168.34479770926896, 167.9122464299916, 168.8322780708115, 160.70307005617673, 157.901773966715, 158.28626012135885, 164.7882746469951, 198.72634662315994, 42.54640591802971, 42.396747135116286, 41.46285066929452, 42.57576701702233, 44.7618068778413, 43.519142526706055, 48.11285952846172, 46.92985570490612, 44.155622022869245, 43.09196797884826, 43.71993548511926, 45.4219744088676, 39.77785487491413, 42.23194581900318, 38.844901526082666, 46.51216020091028, 53.577020850914735, 58.44257576608937, 55.344422090747564, 61.27269750774465, 66.89881643315219, 77.5306843749735, 90.32113646218535, 94.81065100500196, 99.52656149945084, 94.60418019506336, 94.72540663378682, 94.75666832894771, 94.7055102164685, 91.7986896052615, 93.8019371162132, 188.66466541370525, 94.62405746279813, 96.46627612559796, 97.01184776120829, 101.49665150646926, 115.14427246557582, 117.66846524768033, 133.32783613283902, 141.91005712274395, 147.47934965893865, 149.52805828126063, 147.80517024841186, 185.28143188791307, 174.47717939488908, 167.39717621168495, 162.8308814135865, 152.80428393412228, 160.8030362625526, 154.17860167222912, 147.6962378423336, 151.0255078416551, 87.99434795734834, 83.61538435694668, 86.49731269910329, 83.29994443329008, 78.15124618618084, 71.35563488465414, 80.4305911004324, 77.92277193340456, 72.62736347881743, 76.16165088593979, 76.29841867873611, 73.39604402828384, 76.14541566963767, 77.33224441163445, 75.75766149705562, 75.9834978582435, 74.88050957420103, 77.06710982214464, 75.89651629644999, 74.51057441226834, 74.86164176328157, 85.45934473483521, 93.27014702506747, 90.40836306385603, 89.32719830058508, 87.27721753024807, 92.477254020881, 99.02151345161874, 83.08852642733038, 75.05193544864979, 76.98849217765654, 79.22750595424925, 80.08130353169568, 76.63300185580735, 75.23415125314992, 76.55633879364076, 73.16789818771335, 67.72528161036857, 68.01460746669419, 70.06773463784147, 71.09692022409033, 64.27487703696899, 50.678050238533, 53.3513097027106, 52.99266768308008, 50.77728369439071, 51.09496953377719, 46.276691044485204, 47.02127037562384, 47.201912979718834, 46.769229898596954, 46.74665420793476, 48.935302635937816, 48.6550614612252, 47.92866879818172, 48.83841385965378, 43.909115293174814, 41.61462657870276, 42.493569820576575, 44.86903140894324, 44.80493675935862, 42.047884456925985, 39.5074623466283, 41.14559488429168, 37.94485203135631, 38.83869372067228, 39.50994834492311, 40.4882563371891, 42.27395492685986, 45.4483642414063, 42.45133291003156, 42.70671911388946, 43.48876606133923, 47.22412384999118, 47.39964735862845, 44.602573490905456, 43.76548874652976, 44.31824244803042, 44.604067094719674, 43.11480876542445, 43.35340445660574, 45.148866604095616, 46.73455259708794, 47.67552300004515, 44.65327582709548, 43.540310429209754, 44.40672594378948, 44.09555012900521, 43.091943595624244, 40.8476234294019, 42.94282379468261, 43.14214973457398, 44.34508220784631, 45.23038830221056, 44.08461875343874, 45.40386687676662, 47.63775186466278, 47.69441357982967, 47.40262955416355, 48.86504812364288, 47.27687613235575, 48.649307578075124, 49.47794694517915, 49.90444100344504, 52.21214744246116, 56.29641082057262, 54.815783421744534, 56.036932662707436, 62.09573791007161, 61.70364904690968, 58.550956001116425, 58.251311923620655, 59.72752791476192, 58.545196955759174, 61.917754981800286, 60.882100696279466, 58.96898688943426, 57.53573211324781, 59.7044812049136, 66.0263284800761, 64.75336362352685, 65.4857099416354, 65.67430025235176, 64.55849311069787, 63.19752646142718, 65.20598036924612, 67.45120789870917, 64.67374245256845, 62.67786474160369, 60.27024160864338, 60.09422223057156, 59.2120617700296, 57.047502989245324, 58.07425549624776, 54.28889920628105, 54.51729220616214, 54.6283512371512, 54.461770586982084, 54.44186134608525, 56.100376917410955, 58.48495334052294, 56.82224219410607, 57.03492679239113, 57.48019996564845, 54.34547366739113, 55.182588285956825, 51.32074829398319, 53.68542074040799, 56.50479455957351, 58.15073393404503, 55.96731875429395, 55.66243152398663, 54.6744499210575, 55.06315389741439, 56.04274961437084, 55.43298568217551, 44.40439045188277, 45.056523361468784, 44.10757042830139, 45.990641434440036, 48.88202236019614, 46.544992350089835, 45.958335477803566, 44.70033757860458, 42.213151762988474, 44.39653438014673, 45.360387969755955, 46.72513369797125, 47.17828998774143, 47.49417776332535, 49.486299467079654, 49.2434455242177, 53.374633880446176, 49.077138933597844, 48.87476284108774, 48.37232954970804, 50.975992265870644, 52.79565323682438, 52.509680820949995, 55.059666959874235, 53.76443715844438, 51.355233053226534, 49.99488690064007, 52.995393093090286, 53.02619012249214, 42.91775059889205, 44.89579190606753, 41.768584076489745, 40.197058293719124, 40.10378992223761, 41.26615078511005, 41.49405143453362, 41.98152265964217, 39.59519810226082, 39.707828115642315, 39.603115583826174, 40.91858869684833, 40.16978355667016, 36.66420783659605, 38.12926213458228, 38.23485194967435, 37.389260532078154, 35.59599482168925, 34.579695044636175, 35.38481519150509, 34.42131032199806, 37.6963491564044, 36.40551454418701, 22.087875374523332, 22.345596903656705, 23.44158836906437, 23.991185401818136, 24.151259547507713, 24.071221144679495, 25.080769007059192, 25.271794527135913, 24.89187944037134, 25.912101749761664, 26.897039598749316, 27.13346543319865, 28.418013969436622, 27.746867091031866, 28.377702171667874, 28.90067293614944, 27.89722171781369, 28.31450933896631, 27.905938429215087, 27.73706245318458, 29.095696386417284, 28.297075916163514, 27.838388570796255, 28.33520920107363, 26.90684689656346, 25.786817310638728, 25.836933746254765, 26.054838231455417, 25.53949625192936, 25.83039820767886, 26.77937064474759, 26.666061376429994, 26.708551687057376, 25.51443670413791, 25.1679680406755, 25.194115514912834, 24.319231134805698, 24.15035515877519, 24.145995473091062, 23.72761992549255, 23.374613063487377, 24.939168331214812, 23.904122026511708, 24.061012191869434, 24.387868919670417, 23.969493372071906, 23.813691133160066, 23.228618122389683, 23.104413629812054, 22.900670808175956, 21.729435530205873, 20.189054, 19.603065],borderColor:C.accent,tension:.3,pointRadius:0,borderWidth:1.5,yAxisID:'y1'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{usePointStyle:true,boxWidth:8}}},scales:{x:{ticks:{maxTicksLimit:10},grid:{color:C.grid}},y:{position:'left',ticks:{color:C.blue},grid:{color:C.grid},title:{display:true,text:'Price ₹',color:C.blue,font:{size:11}}},y1:{position:'right',ticks:{color:C.accent},grid:{drawOnChartArea:false},title:{display:true,text:'P/E',color:C.accent,font:{size:11}}}}}});
 
+new Chart(document.getElementById('qrChart'),{type:'bar',data:{labels:["2022-12-31", "2023-03-31", "2023-06-30", "2023-09-30", "2023-12-31", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"],datasets:[{label:'Revenue ₹Cr',data:[251.0, 269.0, 282.0, 295.0, 305.0, 315.0, 331.0, 348.0, 354.0, 355.0, 372.0, 391.0, 402.0],backgroundColor:'rgba(74,127,196,0.6)',order:2},{label:'Net Income ₹Cr',data:[113.0, 56.0, 83.0, 69.0, 82.0, 100.0, 114.0, 135.0, 121.0, 181.0, 154.0, 83.0, 188.0],backgroundColor:'rgba(45,122,79,0.6)',order:3},{label:'OPM %',data:[24.0, 21.0, 24.0, 23.0, 26.0, 24.0, 33.0, 35.0, 35.0, 34.0, 32.0, 30.0, 30.0],type:'line',borderColor:C.accent,backgroundColor:'transparent',tension:.3,pointRadius:3,pointBackgroundColor:C.accent,borderWidth:1.5,yAxisID:'y1',order:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{usePointStyle:true,boxWidth:8}}},scales:{x:{grid:{color:C.grid}},y:{position:'left',grid:{color:C.grid},title:{display:true,text:'₹ Cr',font:{size:11}}},y1:{position:'right',min:0,max:50,grid:{drawOnChartArea:false},title:{display:true,text:'OPM %',color:C.accent,font:{size:11}}}}}});
 
+new Chart(document.getElementById('roceChart'),{type:'bar',data:{labels:["2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"],datasets:[{data:[null, null, null, null, null, 84.0, 39.0, 22.0, 19.0, 24.0, 34.0],backgroundColor:[null, null, null, null, null, 84.0, 39.0, 22.0, 19.0, 24.0, 34.0].map(v=>v>=25?'rgba(45,122,79,0.6)':'rgba(200,93,58,0.4)'),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:C.grid},title:{display:true,text:'ROCE %',font:{size:11}}}}}});
 
-new Chart(document.getElementById('qrChart'), {
-  type: 'bar',
-  data: { labels: ["2022-12-31", "2023-03-31", "2023-06-30", "2023-09-30", "2023-12-31", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"], datasets: [
-    { label: 'Revenue (₹Cr)', data: [251.0, 269.0, 282.0, 295.0, 305.0, 315.0, 331.0, 348.0, 354.0, 355.0, 372.0, 391.0, 402.0], backgroundColor: 'rgba(59,130,246,0.7)', order: 2 },
-    { label: 'Net Income (₹Cr)', data: [113.0, 56.0, 83.0, 69.0, 82.0, 100.0, 114.0, 135.0, 121.0, 181.0, 154.0, 83.0, 188.0], backgroundColor: 'rgba(34,197,94,0.7)', order: 3 },
-    { label: 'OPM %', data: [24.0, 21.0, 24.0, 23.0, 26.0, 24.0, 33.0, 35.0, 35.0, 34.0, 32.0, 30.0, 30.0], type: 'line', borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', order: 1 }
-  ] },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#e4e4e7' } } },
-    scales: {
-      x: { ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } },
-      y: { position: 'left', ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' }, title: { display: true, text: '₹ Cr', color: '#71717a' } },
-      y1: { position: 'right', min: 0, max: 50, ticks: { color: '#f97316' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'OPM %', color: '#f97316' } }
-    }
-  }
-});
-
+/* Nav active state */
+const secs=document.querySelectorAll('section');const navLinks=document.querySelectorAll('.nav a');
+const obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){navLinks.forEach(function(l){l.classList.remove('active')});var id=e.target.id;if(id){var l=document.querySelector('.nav a[href="#'+id+'"]');if(l)l.classList.add('active');}}});},{rootMargin:'-80px 0px -60% 0px'});
+secs.forEach(function(s){obs.observe(s)});
 </script>
-</body>
-</html>
+</body></html>
