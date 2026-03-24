@@ -223,12 +223,13 @@ def backfill(
     client = FundClient()
     total_quarters = 0
     total_annual = 0
+    total_ratios = 0
     total_pe_snapshots = 0
     errors: list[str] = []
 
-    # Stream 1: Screener.in quarterly results + annual EPS
+    # Stream 1: Screener.in HTML + Excel → quarterly, annual, ratios
     if not valuation_only:
-        console.print(f"\n[bold]Stream 1: Screener.in quarterly results + annual EPS[/]")
+        console.print(f"\n[bold]Stream 1: Screener.in quarterly + annual + ratios[/]")
         try:
             with ScreenerClient() as sc:
                 with Progress() as progress:
@@ -238,15 +239,36 @@ def backfill(
                     for sym in symbols:
                         progress.update(task, description=f"[cyan]{sym}[/]")
                         try:
-                            quarters, annual, annual_fin = sc.fetch_all_with_annual(sym)
+                            # 1. Fetch HTML page
+                            html = sc.fetch_company_page(sym)
+
+                            # 2. Parse quarterly from HTML (primary)
+                            quarters = sc.parse_quarterly_from_html(sym, html)
+
+                            # 3. Download Excel for annual financials (expense sub-items)
+                            excel_bytes = sc.download_excel(sym)
+                            annual = sc.parse_annual_eps(sym, excel_bytes)
+                            annual_fin = sc.parse_annual_financials(sym, excel_bytes)
+
+                            # 4. Parse ratios from HTML
+                            ratios = sc.parse_ratios_from_html(sym, html)
+
+                            # 5. Fallback: if HTML quarterly parsing failed, use Excel
+                            if not quarters:
+                                quarters = sc.parse_quarterly_results(sym, excel_bytes)
 
                             with FlowStore() as store:
                                 if quarters:
-                                    count = store.upsert_quarterly_results(quarters)
+                                    store.upsert_quarterly_results(quarters)
                                     total_quarters += len(quarters)
-                                # Store annual EPS for Stream 2
+                                if annual_fin:
+                                    store.upsert_annual_financials(annual_fin)
+                                    total_annual += len(annual_fin)
+                                if ratios:
+                                    store.upsert_screener_ratios(ratios)
+                                    total_ratios += len(ratios)
+
                                 annual_eps_cache[sym] = annual
-                                total_annual += len(annual)
 
                         except ScreenerError as e:
                             errors.append(f"{sym}: {e}")
@@ -259,7 +281,8 @@ def backfill(
             raise typer.Exit(1)
 
         console.print(f"  Quarterly results: [green]{total_quarters}[/] records for {len(symbols)} stocks")
-        console.print(f"  Annual EPS: [green]{total_annual}[/] records")
+        console.print(f"  Annual financials: [green]{total_annual}[/] records")
+        console.print(f"  Screener ratios: [green]{total_ratios}[/] records")
     else:
         # Still need annual EPS for P/E computation — load from Screener.in
         annual_eps_cache = {}
