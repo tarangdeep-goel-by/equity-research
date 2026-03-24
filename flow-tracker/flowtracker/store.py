@@ -12,7 +12,7 @@ from flowtracker.mf_models import MFMonthlyFlow, MFAUMSummary, MFDailyFlow
 from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, ShareholdingChange, PromoterPledge
 from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrelation
 from flowtracker.scan_models import IndexConstituent, ScanSummary
-from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials
+from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials, ScreenerRatios
 from flowtracker.macro_models import MacroSnapshot
 from flowtracker.bhavcopy_models import DailyStockData
 from flowtracker.deals_models import BulkBlockDeal
@@ -367,6 +367,20 @@ CREATE TABLE IF NOT EXISTS corporate_filings (
 
 CREATE INDEX IF NOT EXISTS idx_filings_symbol ON corporate_filings(symbol);
 CREATE INDEX IF NOT EXISTS idx_filings_date ON corporate_filings(filing_date);
+
+CREATE TABLE IF NOT EXISTS screener_ratios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    fiscal_year_end TEXT NOT NULL,
+    debtor_days REAL,
+    inventory_days REAL,
+    days_payable REAL,
+    cash_conversion_cycle REAL,
+    working_capital_days REAL,
+    roce_pct REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, fiscal_year_end)
+);
 """
 
 
@@ -388,6 +402,37 @@ class FlowStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
         self._migrate_valuation_snapshot()
+        self._migrate_quarterly_and_annual()
+
+    def _migrate_quarterly_and_annual(self) -> None:
+        """Add new columns to quarterly_results and annual_financials if they don't exist."""
+        existing_qr = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(quarterly_results)").fetchall()
+        }
+        new_qr_cols = [
+            ("expenses", "REAL"), ("other_income", "REAL"), ("depreciation", "REAL"),
+            ("interest", "REAL"), ("profit_before_tax", "REAL"), ("tax_pct", "REAL"),
+        ]
+        for col_name, col_type in new_qr_cols:
+            if col_name not in existing_qr:
+                self._conn.execute(f"ALTER TABLE quarterly_results ADD COLUMN {col_name} {col_type}")
+
+        existing_af = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(annual_financials)").fetchall()
+        }
+        new_af_cols = [
+            ("raw_material_cost", "REAL"), ("power_and_fuel", "REAL"),
+            ("other_mfr_exp", "REAL"), ("selling_and_admin", "REAL"),
+            ("other_expenses_detail", "REAL"), ("total_expenses", "REAL"),
+            ("operating_profit", "REAL"),
+        ]
+        for col_name, col_type in new_af_cols:
+            if col_name not in existing_af:
+                self._conn.execute(f"ALTER TABLE annual_financials ADD COLUMN {col_name} {col_type}")
+
+        self._conn.commit()
 
     def _migrate_valuation_snapshot(self) -> None:
         """Add new columns to valuation_snapshot if they don't exist."""
@@ -1107,10 +1152,12 @@ class FlowStore:
             cursor.execute(
                 "INSERT OR REPLACE INTO quarterly_results "
                 "(symbol, quarter_end, revenue, gross_profit, operating_income, net_income, "
-                "ebitda, eps, eps_diluted, operating_margin, net_margin) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "ebitda, eps, eps_diluted, operating_margin, net_margin, "
+                "expenses, other_income, depreciation, interest, profit_before_tax, tax_pct) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (r.symbol, r.quarter_end, r.revenue, r.gross_profit, r.operating_income,
-                 r.net_income, r.ebitda, r.eps, r.eps_diluted, r.operating_margin, r.net_margin),
+                 r.net_income, r.ebitda, r.eps, r.eps_diluted, r.operating_margin, r.net_margin,
+                 r.expenses, r.other_income, r.depreciation, r.interest, r.profit_before_tax, r.tax_pct),
             )
             count += cursor.rowcount
         self._conn.commit()
@@ -1129,6 +1176,9 @@ class FlowStore:
             operating_income=r["operating_income"], net_income=r["net_income"],
             ebitda=r["ebitda"], eps=r["eps"], eps_diluted=r["eps_diluted"],
             operating_margin=r["operating_margin"], net_margin=r["net_margin"],
+            expenses=r["expenses"], other_income=r["other_income"],
+            depreciation=r["depreciation"], interest=r["interest"],
+            profit_before_tax=r["profit_before_tax"], tax_pct=r["tax_pct"],
         ) for r in rows]
 
     # -- Fundamentals: Valuation Snapshots --
@@ -1299,14 +1349,18 @@ class FlowStore:
                 "interest, profit_before_tax, tax, net_income, eps, dividend_amount, "
                 "equity_capital, reserves, borrowings, other_liabilities, total_assets, "
                 "net_block, cwip, investments, other_assets, receivables, inventory, "
-                "cash_and_bank, num_shares, cfo, cfi, cff, net_cash_flow, price) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "cash_and_bank, num_shares, cfo, cfi, cff, net_cash_flow, price, "
+                "raw_material_cost, power_and_fuel, other_mfr_exp, selling_and_admin, "
+                "other_expenses_detail, total_expenses, operating_profit) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (r.symbol, r.fiscal_year_end, r.revenue, r.employee_cost, r.other_income,
                  r.depreciation, r.interest, r.profit_before_tax, r.tax, r.net_income,
                  r.eps, r.dividend_amount, r.equity_capital, r.reserves, r.borrowings,
                  r.other_liabilities, r.total_assets, r.net_block, r.cwip, r.investments,
                  r.other_assets, r.receivables, r.inventory, r.cash_and_bank, r.num_shares,
-                 r.cfo, r.cfi, r.cff, r.net_cash_flow, r.price),
+                 r.cfo, r.cfi, r.cff, r.net_cash_flow, r.price,
+                 r.raw_material_cost, r.power_and_fuel, r.other_mfr_exp, r.selling_and_admin,
+                 r.other_expenses_detail, r.total_expenses, r.operating_profit),
             )
             count += cursor.rowcount
         self._conn.commit()
@@ -1334,6 +1388,43 @@ class FlowStore:
             inventory=r["inventory"], cash_and_bank=r["cash_and_bank"],
             num_shares=r["num_shares"], cfo=r["cfo"], cfi=r["cfi"],
             cff=r["cff"], net_cash_flow=r["net_cash_flow"], price=r["price"],
+            raw_material_cost=r["raw_material_cost"], power_and_fuel=r["power_and_fuel"],
+            other_mfr_exp=r["other_mfr_exp"], selling_and_admin=r["selling_and_admin"],
+            other_expenses_detail=r["other_expenses_detail"], total_expenses=r["total_expenses"],
+            operating_profit=r["operating_profit"],
+        ) for r in rows]
+
+    # -- Screener Ratios --
+
+    def upsert_screener_ratios(self, ratios: list[ScreenerRatios]) -> int:
+        """Insert or replace screener ratios."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in ratios:
+            cursor.execute(
+                "INSERT OR REPLACE INTO screener_ratios "
+                "(symbol, fiscal_year_end, debtor_days, inventory_days, days_payable, "
+                "cash_conversion_cycle, working_capital_days, roce_pct) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (r.symbol, r.fiscal_year_end, r.debtor_days, r.inventory_days,
+                 r.days_payable, r.cash_conversion_cycle, r.working_capital_days, r.roce_pct),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_screener_ratios(self, symbol: str, limit: int = 10) -> list[ScreenerRatios]:
+        """Get stored screener ratios, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM screener_ratios WHERE symbol = ? "
+            "ORDER BY fiscal_year_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [ScreenerRatios(
+            symbol=r["symbol"], fiscal_year_end=r["fiscal_year_end"],
+            debtor_days=r["debtor_days"], inventory_days=r["inventory_days"],
+            days_payable=r["days_payable"], cash_conversion_cycle=r["cash_conversion_cycle"],
+            working_capital_days=r["working_capital_days"], roce_pct=r["roce_pct"],
         ) for r in rows]
 
     # -- Macro Indicators --
