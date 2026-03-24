@@ -32,6 +32,7 @@ from flowtracker.sector_commands import app as sector_app
 from flowtracker.mfportfolio_commands import app as mfport_app
 from flowtracker.screener_commands import app as screen_app
 from flowtracker.filing_commands import app as filing_app
+from flowtracker.research_commands import app as research_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -55,6 +56,7 @@ app.add_typer(sector_app)
 app.add_typer(mfport_app)
 app.add_typer(screen_app)
 app.add_typer(filing_app)
+app.add_typer(research_app)
 console = Console()
 
 
