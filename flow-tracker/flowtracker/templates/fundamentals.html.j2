@@ -29,6 +29,10 @@ th.r,td.r{text-align:right}tr:hover{background:rgba(255,255,255,0.03)}.up{color:
 .cite{color:var(--dim);font-size:0.72rem;font-style:italic}
 .source-tag{display:inline-block;background:rgba(6,182,212,0.1);color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:0.7rem;margin-left:4px}
 .term{color:var(--purple);font-weight:600;cursor:help;border-bottom:1px dotted var(--purple)}
+.chart-toggle{display:inline-block;padding:4px 12px;border-radius:4px;font-size:0.78rem;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--dim);margin:0 2px;transition:all 0.15s}
+.chart-toggle:hover{border-color:var(--cyan);color:var(--text)}
+.chart-toggle.active{background:var(--cyan);color:var(--bg);border-color:var(--cyan);font-weight:600}
+.toggle-bar{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:1rem;align-items:center}
 @media(max-width:768px){.grid,.grid-3{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
@@ -42,7 +46,7 @@ th.r,td.r{text-align:right}tr:hover{background:rgba(255,255,255,0.03)}.up{color:
 {# ============ SECTION 2: KEY STATS BAR ============ #}
 <div class="stat-grid">
 <div class="stat"><div class="stat-value">₹{{ "{:,.1f}".format(price) }}</div><div class="stat-label">CMP (Current Market Price)</div></div>
-<div class="stat"><div class="stat-value" style="color:var(--green)">{{ "%.1f"|format(pe_trailing) }}x</div><div class="stat-label">P/E — {% if pe_percentile == 0 %}All-Time Low (0th percentile){% else %}{{ "%.0f"|format(pe_percentile) }}th percentile{% endif %}</div></div>
+<div class="stat"><div class="stat-value" style="color:var(--green)">{{ "%.1f"|format(pe_trailing or 0) }}x</div><div class="stat-label">P/E{% if pe_percentile is not none %} — {% if pe_percentile == 0 %}All-Time Low{% else %}{{ "%.0f"|format(pe_percentile) }}th %ile{% endif %}{% endif %}</div></div>
 <div class="stat"><div class="stat-value {% if v.earnings_growth and v.earnings_growth > 0 %}up{% else %}down{% endif %}">{{ "%.1f"|format((v.earnings_growth or 0) * 100) }}%</div><div class="stat-label">Earnings Growth (last 12 months)</div></div>
 <div class="stat"><div class="stat-value">{{ "%.2f"|format(v.beta or 0) }}</div><div class="stat-label">Beta (low = less volatile)</div></div>
 <div class="stat"><div class="stat-value up">{{ roce }}%</div><div class="stat-label">ROCE (latest FY)</div></div>
@@ -93,43 +97,69 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# ============ SECTION 5: HISTORICAL P/E CHART ============ #}
-{% if pe_chart.dates %}
-<div class="card" style="margin-bottom:2rem">
-<h2>Historical P/E — Since {{ pe_period_start[:4] }} Weekly</h2>
-<p class="note">Source: yfinance weekly prices / Screener.in annual EPS. {{ pe_observations }} observations.</p>
-<div class="chart-box"><canvas id="peChart"></canvas></div>
-<div class="explain" style="margin-top:1rem">
-<strong>How to read this chart:</strong> The orange line shows how "expensive" or "cheap" the stock was at each point. Higher = more expensive. The green dashed line is today's P/E ({{ "%.1f"|format(pe_trailing) }}x). The grey dashed line is the median ({{ "%.1f"|format(pe_median) }}x).
+{# ============ SECTION 5: UNIFIED CHART with METRIC TOGGLES ============ #}
+{% if screener_charts or (price_chart and price_chart.dates) %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Charts</h2>
+<div class="toggle-bar" id="metricToggles">
+<button class="chart-toggle active" onclick="switchChart('price', this)">Price</button>
+<button class="chart-toggle" onclick="switchChart('pe', this)">PE Ratio</button>
+<button class="chart-toggle" onclick="switchChart('margins', this)">Sales &amp; Margin</button>
+<button class="chart-toggle" onclick="switchChart('ev_ebitda', this)">EV / EBITDA</button>
+<button class="chart-toggle" onclick="switchChart('pb', this)">Price to Book</button>
+<button class="chart-toggle" onclick="switchChart('mcap_sales', this)">Market Cap / Sales</button>
+</div>
+<div class="chart-box" style="height:400px"><canvas id="mainChart"></canvas></div>
+<div id="chartExplain" class="explain" style="margin-top:0.8rem"></div>
+</div>
+{% endif %}
+
+{# ============ SECTION 8: COMPOUNDED GROWTH RATES ============ #}
+{% if growth_rates %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Compounded Growth Rates</h2>
+<p class="note">How fast has the company been growing? These are annualised (CAGR) rates.</p>
+<div class="grid" style="gap:1rem">
+<table>
+<thead><tr><th>Metric</th><th class="r">10Y</th><th class="r">5Y</th><th class="r">3Y</th><th class="r">TTM</th></tr></thead>
+<tbody>
+<tr><td>Sales Growth</td>
+<td class="r">{% if growth_rates.sales_10y is not none %}<span class="{% if growth_rates.sales_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_10y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.sales_5y is not none %}<span class="{% if growth_rates.sales_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_5y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.sales_3y is not none %}<span class="{% if growth_rates.sales_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_3y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.sales_ttm is not none %}<span class="{% if growth_rates.sales_ttm > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_ttm * 100) }}%</span>{% else %}—{% endif %}</td>
+</tr>
+<tr><td>Profit Growth</td>
+<td class="r">{% if growth_rates.profit_10y is not none %}<span class="{% if growth_rates.profit_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_10y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.profit_5y is not none %}<span class="{% if growth_rates.profit_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_5y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.profit_3y is not none %}<span class="{% if growth_rates.profit_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_3y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.profit_ttm is not none %}<span class="{% if growth_rates.profit_ttm > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_ttm * 100) }}%</span>{% else %}—{% endif %}</td>
+</tr>
+<tr><td>Stock Price CAGR</td>
+<td class="r">{% if growth_rates.price_10y is not none %}<span class="{% if growth_rates.price_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_10y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.price_5y is not none %}<span class="{% if growth_rates.price_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_5y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.price_3y is not none %}<span class="{% if growth_rates.price_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_3y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.price_1y is not none %}<span class="{% if growth_rates.price_1y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_1y * 100) }}%</span>{% else %}—{% endif %}</td>
+</tr>
+<tr><td>Avg ROE</td>
+<td class="r">{% if growth_rates.roe_10y is not none %}{{ "%.0f"|format(growth_rates.roe_10y * 100) }}%{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.roe_5y is not none %}{{ "%.0f"|format(growth_rates.roe_5y * 100) }}%{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.roe_3y is not none %}{{ "%.0f"|format(growth_rates.roe_3y * 100) }}%{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.roe_last is not none and growth_rates.roe_last is defined %}{{ "%.0f"|format(growth_rates.roe_last * 100) }}%{% else %}—{% endif %}</td>
+</tr>
+</tbody>
+</table>
+<div>
+<div class="explain">
+<strong>What is CAGR?</strong> Compounded Annual Growth Rate — the steady annual rate at which something grew. Example: if sales grew from ₹100 Cr to ₹200 Cr in 5 years, CAGR = 15% (not 100%/5 = 20%). CAGR accounts for compounding.<br><br>
+<strong>How to read:</strong> Sales CAGR of 20%+ over 5-10 years = strong secular growth. Profit growing faster than sales = improving margins. Stock price lagging profit growth = potential re-rating opportunity.
+</div>
+</div>
 </div>
 </div>
 {% endif %}
 
-{# ============ SECTION 6: PRICE VS P/E ============ #}
-{% if pe_chart.dates %}
-<div class="card" style="margin-bottom:2rem">
-<h2>Price vs P/E — What's Driving the Cheapness?</h2>
-<p class="note">Blue = Price in ₹ (left axis), Orange = P/E ratio (right axis).</p>
-<div class="chart-box"><canvas id="pricePeChart"></canvas></div>
-<div class="explain" style="margin-top:1rem">
-<strong>Why this chart matters:</strong> When price is flat but P/E falls, it means <em>earnings grew while the price didn't move</em> — the stock got cheaper because the company became more profitable, not because anything went wrong with the price. This is the best kind of cheapness for a value investor.
-</div>
-</div>
-{% endif %}
-
-{# ============ SECTION 7: QUARTERLY EARNINGS CHART ============ #}
-{% if qr_chart.dates %}
-<div class="card" style="margin-bottom:2rem">
-<h2>Quarterly Earnings — {{ qr_chart.dates|length }} Quarter Trend</h2>
-<p class="note">Source: Screener.in. Revenue and Net Income in ₹Cr, OPM% on right axis.</p>
-<div class="chart-box"><canvas id="qrChart"></canvas></div>
-<div class="explain" style="margin-top:1rem">
-<strong>How to read:</strong> Blue bars = Revenue (total earnings). Green bars = Net Income (final profit). Orange line = OPM (Operating Profit Margin — what % of revenue becomes operating profit).
-</div>
-</div>
-{% endif %}
-
-{# ============ SECTION 8: THREE CARDS ============ #}
+{# ============ SECTION 9: THREE CARDS — VALUATION / PROFITABILITY / BALANCE SHEET ============ #}
 <div class="grid-3">
 
 {# VALUATION CARD #}
@@ -192,7 +222,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 </div>
 
-{# ============ SECTION 9: PRICE CONTEXT ============ #}
+{# ============ SECTION 10: PRICE CONTEXT ============ #}
 <div class="card" style="margin-bottom:2rem">
 <h2>Price Context</h2>
 <table>
@@ -205,7 +235,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </table>
 </div>
 
-{# ============ SECTION 10: ANALYST CONSENSUS ============ #}
+{# ============ SECTION 11: ANALYST CONSENSUS ============ #}
 {% if consensus %}
 <div class="card" style="margin-bottom:2rem">
 <h2>Analyst Consensus & Scenario Analysis</h2>
@@ -230,32 +260,75 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# ============ SECTION 11: ANNUAL FINANCIALS ============ #}
+{# ============ SECTION 12: QUARTERLY EARNINGS CHART ============ #}
+{% if qr_chart.dates %}
+<div class="card" style="margin-bottom:2rem">
+<h2>Quarterly Earnings — {{ qr_chart.dates|length }} Quarter Trend</h2>
+<p class="note">Source: Screener.in. Revenue and Net Income in ₹Cr, OPM% on right axis.</p>
+<div class="chart-box"><canvas id="qrChart"></canvas></div>
+<div class="explain" style="margin-top:1rem">
+<strong>How to read:</strong> Blue bars = Revenue (total earnings). Green bars = Net Income (final profit). Orange line = OPM (Operating Profit Margin — what % of revenue becomes operating profit).
+</div>
+</div>
+{% endif %}
+
+{# ============ SECTION 13: FULL QUARTERLY RESULTS TABLE ============ #}
+{% if quarterly_full %}
+<details style="margin-bottom:2rem">
+<summary style="cursor:pointer;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.5rem;font-size:1.05rem;color:var(--cyan);font-weight:600">
+Full Quarterly Results — {{ quarterly_full|length }} Quarters (click to expand)
+</summary>
+<div class="card" style="border-top:none;border-radius:0 0 12px 12px;overflow-x:auto">
+<p class="note">Source: Screener.in. All values in ₹Cr except EPS (₹) and margins (%).</p>
+<table style="font-size:0.78rem">
+<thead><tr><th>Metric</th>{% for q in quarterly_full %}<th class="r">{{ q.quarter_end[:7] }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for label, key, fmt in [('Sales', 'revenue', ',.0f'), ('Expenses', 'expenses', ',.0f'), ('Op Profit', 'operating_income', ',.0f'), ('OPM %', 'operating_margin', None), ('Other Income', 'other_income', ',.1f'), ('Interest', 'interest', ',.1f'), ('Depreciation', 'depreciation', ',.1f'), ('PBT', 'profit_before_tax', ',.1f'), ('Tax %', 'tax_pct', None), ('Net Income', 'net_income', ',.0f'), ('EPS', 'eps', ',.1f')] %}
+<tr><td><strong>{{ label }}</strong></td>
+{% for q in quarterly_full %}
+<td class="r">{% if key == 'operating_margin' %}{% if q[key] is not none %}{{ "%.1f"|format(q[key] * 100) }}%{% else %}—{% endif %}{% elif key == 'tax_pct' %}{% if q[key] is not none %}{{ "%.0f"|format(q[key]) }}%{% else %}—{% endif %}{% elif q[key] is not none %}{{ ("{:" + fmt + "}").format(q[key]) }}{% else %}—{% endif %}</td>
+{% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<div class="explain" style="margin-top:0.8rem">
+<strong>Key rows:</strong> <em>Sales</em> = total revenue. <em>OPM %</em> = Operating Profit / Sales — measures core business profitability. <em>PBT</em> = Profit Before Tax. <em>Tax %</em> = effective tax rate. <em>Net Income</em> = final profit. Consistent OPM expansion quarter after quarter is a strong quality signal.
+</div>
+</div>
+</details>
+{% endif %}
+
+{# ============ SECTION 14: ANNUAL FINANCIALS P&L+BS+CF ============ #}
 {% if af_table %}
 <div class="card full-width" style="margin-bottom:2rem">
 <h2>Annual Financials — {{ af_table|length }} Year Trend</h2>
-<p class="note">Source: Screener.in. All values in ₹Cr except EPS (₹).</p>
+<p class="note">Source: Screener.in. All values in ₹Cr except EPS (₹) and % rows.</p>
 <table>
-<thead><tr><th>Metric</th>{% for a in af_table %}<th class="r">FY{{ a.fiscal_year_end[:4] }}</th>{% endfor %}<th>Trend</th></tr></thead>
+<thead><tr><th>Metric</th>{% for a in af_table %}<th class="r">FY{{ a.fiscal_year_end[:4] }}</th>{% endfor %}{% if ttm %}<th class="r" style="color:var(--cyan)">TTM</th>{% endif %}<th>Trend</th></tr></thead>
+{% set ncols = af_table|length + 2 + (1 if ttm else 0) %}
 <tbody>
-<tr><td colspan="{{ af_table|length + 2 }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Income Statement</td></tr>
-{% for label, key in [('Revenue', 'revenue'), ('Net Income', 'net_income'), ('EPS', 'eps'), ('PBT', 'profit_before_tax'), ('Depreciation', 'depreciation'), ('Interest', 'interest'), ('Other Income', 'other_income')] %}
-<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
+{# — P&L Waterfall — #}
+<tr><td colspan="{{ ncols }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Profit & Loss</td></tr>
+{% for label, key, is_pct in [('Sales', 'revenue', false), ('Expenses', 'total_expenses', false), ('Operating Profit', 'operating_profit', false), ('OPM %', 'opm_pct', true), ('Other Income', 'other_income', false), ('Interest', 'interest', false), ('Depreciation', 'depreciation', false), ('Profit before tax', 'profit_before_tax', false), ('Tax %', 'tax_pct_annual', true), ('Net Profit', 'net_income', false), ('EPS in Rs', 'eps', false), ('Dividend Payout %', 'dividend_payout_pct', true)] %}
+<tr{% if is_pct %} style="color:var(--dim)"{% endif %}><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{% if is_pct %}{{ "%.0f"|format(a[key]) }}%{% else %}{{ "%.1f"|format(a[key]) }}{% endif %}{% else %}—{% endif %}</td>{% endfor %}{% if ttm %}<td class="r" style="color:var(--cyan)">{% if ttm[key] is defined and ttm[key] is not none %}{% if is_pct %}{{ "%.0f"|format(ttm[key]) }}%{% else %}{{ "%.1f"|format(ttm[key]) }}{% endif %}{% else %}—{% endif %}</td>{% endif %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 and not is_pct %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% elif vals|length >= 2 and is_pct %}{% if vals[-1] > vals[0] + 2 %}<span class="up">Expanding</span>{% elif vals[-1] < vals[0] - 2 %}<span class="down">Contracting</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
 {% endfor %}
-<tr><td colspan="{{ af_table|length + 2 }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Balance Sheet</td></tr>
+{# — Balance Sheet — #}
+<tr><td colspan="{{ ncols }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Balance Sheet</td></tr>
 {% for label, key in [('Equity Capital', 'equity_capital'), ('Reserves', 'reserves'), ('Borrowings', 'borrowings'), ('Total Assets', 'total_assets'), ('Cash & Bank', 'cash_and_bank')] %}
-<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
+<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}{% if ttm %}<td class="r">—</td>{% endif %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
 {% endfor %}
-<tr><td colspan="{{ af_table|length + 2 }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Cash Flow</td></tr>
+{# — Cash Flow — #}
+<tr><td colspan="{{ ncols }}" style="color:var(--cyan);font-weight:600;padding-top:0.5rem">Cash Flow</td></tr>
 {% for label, key in [('CFO', 'cfo'), ('CFI', 'cfi'), ('CFF', 'cff'), ('Net Cash Flow', 'net_cash_flow')] %}
-<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
+<tr><td>{{ label }}</td>{% for a in af_table %}<td class="r">{% if a[key] is not none %}{{ "%.1f"|format(a[key]) }}{% else %}—{% endif %}</td>{% endfor %}{% if ttm %}<td class="r">—</td>{% endif %}<td>{% set vals = af_table|map(attribute=key)|select('ne', none)|list %}{% if vals|length >= 2 %}{% if vals[-1] > vals[0] * 1.1 %}<span class="up">Improving</span>{% elif vals[-1] < vals[0] * 0.9 %}<span class="down">Declining</span>{% else %}Stable{% endif %}{% else %}—{% endif %}</td></tr>
 {% endfor %}
 </tbody>
 </table>
 </div>
 {% endif %}
 
-{# ============ SECTION 11B: EFFICIENCY RATIOS ============ #}
+{# ============ SECTION 15: EFFICIENCY RATIOS ============ #}
 {% if ratios_table %}
 <div class="card full-width" style="margin-bottom:2rem">
 <h2>Efficiency Ratios — {{ ratios_table|length }} Year Trend</h2>
@@ -274,12 +347,220 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# ============ SECTIONS 12-15: CONCALL-GROUNDED (OPTIONAL) ============ #}
+{# ============ SECTION 16: ROE HISTORY ============ #}
+{% if roe_history and roe_history|selectattr('roe')|list %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>ROE History — Return on Equity</h2>
+<p class="note">ROE = Net Income / Shareholder Equity. Measures how efficiently the company uses shareholder money.</p>
+<div class="chart-box" style="height:280px"><canvas id="roeChart"></canvas></div>
+<div class="explain" style="margin-top:0.8rem">
+<strong>What is ROE?</strong> If shareholders have ₹100 invested in the company and it earns ₹20 profit, ROE = 20%. Above 15% is good, above 20% is excellent. Consistently high ROE = the business is a compounding machine.<br><br>
+<strong>ROE vs ROCE:</strong> ROCE measures returns on ALL capital (equity + debt). ROE measures returns only on shareholder equity. For low-debt companies like {{ symbol }}, they should be similar.
+</div>
+</div>
+{% endif %}
+
+{# ============ SECTION 17: SHAREHOLDING PATTERN with QUARTERLY/YEARLY TOGGLE ============ #}
+{% if shareholding_history and shareholding_history|length >= 2 %}
+<div class="card full-width" style="margin-bottom:2rem">
+<h2>Shareholding Pattern — {{ shareholding_history|length }} Quarter History</h2>
+<p class="note">Source: BSE quarterly filings. Shows % held by each category.</p>
+{% set sh_cats = ['promoter', 'fii', 'dii', 'mf', 'insurance', 'public'] %}
+{% set sh_labels = {'promoter': 'Promoter', 'fii': 'FII', 'dii': 'DII', 'mf': 'Mutual Funds', 'insurance': 'Insurance', 'public': 'Public', 'aif': 'AIF'} %}
+{% set sh_reversed = shareholding_history | reverse | list %}
+
+<div class="toggle-bar">
+<button class="chart-toggle active" onclick="toggleShTab('quarterly', this)">Quarterly</button>
+<button class="chart-toggle" onclick="toggleShTab('yearly', this)">Yearly</button>
+</div>
+
+{# --- Quarterly Tab --- #}
+<div id="sh-quarterly" style="display:block">
+<div style="overflow-x:auto">
+<table style="font-size:0.82rem">
+<thead><tr><th>Category</th>{% for sh in sh_reversed %}<th class="r">{{ sh.quarter[:7] }}</th>{% endfor %}<th class="r">QoQ Chg</th></tr></thead>
+<tbody>
+{% for cat in sh_cats %}
+{% set cat_vals = [] %}
+{% for sh in sh_reversed %}{% if sh[cat] is defined %}{% set _ = cat_vals.append(sh[cat]) %}{% else %}{% set _ = cat_vals.append(0) %}{% endif %}{% endfor %}
+<tr>
+<td><strong>{{ sh_labels.get(cat, cat|title) }}</strong></td>
+{% for val in cat_vals %}<td class="r">{{ "%.1f"|format(val) }}%</td>{% endfor %}
+<td class="r">{% if cat_vals|length >= 2 %}{% set chg = cat_vals[-1] - cat_vals[-2] %}<span class="{% if chg > 0.05 %}up{% elif chg < -0.05 %}down{% endif %}">{{ "%+.1f"|format(chg) }}%</span>{% else %}—{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<div class="chart-box" style="height:280px;margin-top:1rem"><canvas id="shChart"></canvas></div>
+</div>
+
+{# --- Yearly Tab (one entry per year — prefer March, else latest available) --- #}
+<div id="sh-yearly" style="display:none">
+{% set yearly_quarters = [] %}
+{% set seen_years = [] %}
+{% for sh in sh_reversed %}
+{% set yr = sh.quarter[:4] %}
+{% if yr not in seen_years %}{% set _ = seen_years.append(yr) %}{% set _ = yearly_quarters.append(sh) %}{% endif %}
+{% endfor %}
+<div style="overflow-x:auto">
+<table style="font-size:0.82rem">
+<thead><tr><th>Category</th>{% for sh in yearly_quarters %}<th class="r">{{ sh.quarter[:7] }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for cat in sh_cats %}
+{% set cat_vals = [] %}
+{% for sh in yearly_quarters %}{% if sh[cat] is defined %}{% set _ = cat_vals.append(sh[cat]) %}{% else %}{% set _ = cat_vals.append(0) %}{% endif %}{% endfor %}
+<tr>
+<td><strong>{{ sh_labels.get(cat, cat|title) }}</strong></td>
+{% for val in cat_vals %}<td class="r">{{ "%.1f"|format(val) }}%</td>{% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+
+{# --- DII+ / FII+ expand buttons --- #}
+<div style="margin-top:0.8rem">
+{% if screener_shareholders and screener_shareholders.dii %}
+<button class="chart-toggle" onclick="toggleDetail('dii-detail', this)">DIIs+ ({{ screener_shareholders.dii|length }} schemes)</button>
+{% endif %}
+{% if screener_shareholders and screener_shareholders.fii %}
+<button class="chart-toggle" onclick="toggleDetail('fii-detail', this)">FIIs+ ({{ screener_shareholders.fii|length }} funds)</button>
+{% endif %}
+</div>
+
+{# --- DII detail table (hidden by default) --- #}
+{% if screener_shareholders and screener_shareholders.dii %}
+{% set dii = screener_shareholders.dii %}
+{% set dii_q = screener_shareholders.dii_quarters %}
+<div id="dii-detail" style="display:none;margin-top:1rem">
+<h3 style="font-size:0.9rem;color:var(--cyan);margin-bottom:0.5rem">Mutual Fund Scheme Holdings — {{ dii|length }} Schemes</h3>
+<p class="note">Source: Screener.in (BSE quarterly filings). Shows % of company held by each MF scheme.</p>
+<div style="overflow-x:auto">
+<table style="font-size:0.82rem">
+<thead><tr><th>#</th><th>Scheme Name</th>{% for q in dii_q[:8] %}<th class="r">{{ q }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for entity in dii %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{% if entity.url %}<a href="https://www.screener.in{{ entity.url }}" target="_blank" style="color:var(--blue)">{{ entity.name }}</a>{% else %}{{ entity.name }}{% endif %}</td>
+{% for q in dii_q[:8] %}
+<td class="r">{% if entity.quarters[q] is defined %}{{ "%.2f"|format(entity.quarters[q]) }}%{% else %}—{% endif %}</td>
+{% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+{% endif %}
+
+{# --- FII detail table (hidden by default) --- #}
+{% if screener_shareholders and screener_shareholders.fii %}
+{% set fii = screener_shareholders.fii %}
+{% set fii_q = screener_shareholders.fii_quarters %}
+<div id="fii-detail" style="display:none;margin-top:1rem">
+<h3 style="font-size:0.9rem;color:var(--cyan);margin-bottom:0.5rem">Foreign Institutional Investors — {{ fii|length }} Funds</h3>
+<p class="note">Source: Screener.in (BSE quarterly filings). Shows % of company held by each FII.</p>
+<div style="overflow-x:auto">
+<table style="font-size:0.82rem">
+<thead><tr><th>#</th><th>Fund Name</th>{% for q in fii_q[:8] %}<th class="r">{{ q }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for entity in fii %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{% if entity.url %}<a href="https://www.screener.in{{ entity.url }}" target="_blank" style="color:var(--blue)">{{ entity.name }}</a>{% else %}{{ entity.name }}{% endif %}</td>
+{% for q in fii_q[:8] %}
+<td class="r">{% if entity.quarters[q] is defined %}{{ "%.2f"|format(entity.quarters[q]) }}%{% else %}—{% endif %}</td>
+{% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+{% endif %}
+
+{% if not (screener_shareholders and screener_shareholders.dii) and mf_holdings %}
+{# Fallback: AMFI-sourced MF holdings if no Screener data #}
+<div id="dii-detail" style="margin-top:1rem">
+<h3 style="font-size:0.9rem;color:var(--cyan);margin-bottom:0.5rem">Mutual Fund Scheme Holdings — Top {{ mf_holdings|length }} Schemes</h3>
+<p class="note">Source: AMFI monthly portfolio disclosures.</p>
+<table style="font-size:0.82rem">
+<thead><tr><th>#</th><th>Scheme Name</th><th>AMC</th><th class="r">Qty (shares)</th><th class="r">Value (₹L)</th><th class="r">% of NAV</th></tr></thead>
+<tbody>
+{% for h in mf_holdings[:20] %}
+<tr><td>{{ loop.index }}</td><td>{{ h.scheme }}</td><td>{{ h.amc }}</td><td class="r">{{ "{:,.0f}".format(h.qty) }}</td><td class="r">{{ "{:,.0f}".format(h.value_lakhs) }}</td><td class="r">{{ "%.2f"|format(h.pct_nav) }}%</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+
+<div class="explain" style="margin-top:0.8rem">
+<strong>What to watch:</strong> Rising FII + MF = institutional conviction is building. Falling promoter below 50% may signal dilution. Increasing public = retail interest (can be late-cycle). DIIs+ and FIIs+ show individual scheme/fund level detail — click to expand.
+</div>
+</div>
+{% endif %}
+
+{# ============ SECTION 19: DOCUMENTS — CONCALL & ANNUAL REPORT LINKS ============ #}
+{% if document_links and (document_links.concalls or document_links.annual_reports) %}
+<div class="grid" style="margin-bottom:2rem">
+
+{% if document_links.concalls %}
+<div class="card">
+<h2>Concall Transcripts & Presentations</h2>
+<p class="note">Source: Screener.in (compiled from BSE filings). Click to open PDFs or recordings directly.</p>
+<table style="font-size:0.82rem">
+<thead><tr><th>Quarter</th><th>Transcript</th><th>PPT</th><th>Recording</th></tr></thead>
+<tbody>
+{% for cc in document_links.concalls %}
+<tr>
+<td><strong>{{ cc.quarter }}</strong></td>
+<td>{% if cc.transcript_url %}<a href="{{ cc.transcript_url }}" target="_blank" style="color:var(--blue)">PDF</a>{% else %}<span style="color:var(--dim)">—</span>{% endif %}</td>
+<td>{% if cc.ppt_url %}<a href="{{ cc.ppt_url }}" target="_blank" style="color:var(--blue)">PDF</a>{% else %}<span style="color:var(--dim)">—</span>{% endif %}</td>
+<td>{% if cc.recording_url %}<a href="{{ cc.recording_url }}" target="_blank" style="color:var(--blue)">Video</a>{% else %}<span style="color:var(--dim)">—</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<div class="explain" style="margin-top:0.8rem">
+<strong>What are concall transcripts?</strong> After every quarterly result, the management holds a "conference call" with analysts. The transcript is a word-by-word record of what was said — the best source for understanding management's strategy, challenges, and forward guidance.
+</div>
+</div>
+{% endif %}
+
+{% if document_links.annual_reports %}
+<div class="card">
+<h2>Annual Reports</h2>
+<p class="note">Source: BSE filings via Screener.in. Full annual reports filed with the exchange.</p>
+<table style="font-size:0.82rem">
+<thead><tr><th>Year</th><th>Report</th></tr></thead>
+<tbody>
+{% for ar in document_links.annual_reports %}
+<tr>
+<td><strong>{{ ar.year }}</strong></td>
+<td><a href="{{ ar.url }}" target="_blank" style="color:var(--blue)">Download PDF</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<div class="explain" style="margin-top:0.8rem">
+<strong>Why read annual reports?</strong> They contain the Chairman's letter, detailed financial statements, notes to accounts, and management discussion — far more detail than quarterly results. Start with the latest year and read backwards.
+</div>
+</div>
+{% endif %}
+
+</div>
+{% endif %}
+
+{# ============ SECTION 20: CONCALL-GROUNDED SECTIONS (OPTIONAL) ============ #}
 {% if concall_data %}
 {# These sections are populated when concall extraction data is provided #}
 {# The concall_data dict contains: operational_kpis, themes, analyst_qa, guidance, scorecard, risks, thesis #}
 
-{# SECTION 12a: OPERATIONAL KPIs #}
+{# SECTION 20a: OPERATIONAL KPIs #}
 {% if concall_data.operational_kpis %}
 <div class="card full-width" style="margin-bottom:2rem">
 <h2>Operational KPIs — From Concall Transcripts & Investor Decks</h2>
@@ -288,7 +569,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# SECTION 12b: KEY THEMES #}
+{# SECTION 20b: KEY THEMES #}
 {% if concall_data.themes %}
 <div class="card full-width" style="margin-bottom:2rem">
 <h2>Key Themes — Last {{ concall_data.quarters_covered or 4 }} Quarters</h2>
@@ -298,7 +579,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# SECTION 12c: GUIDANCE #}
+{# SECTION 20c: GUIDANCE #}
 {% if concall_data.guidance %}
 <div class="card full-width" style="margin-bottom:2rem">
 <h2>Management Guidance & Credibility</h2>
@@ -306,7 +587,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# SECTION 12d: ANALYST Q&A #}
+{# SECTION 20d: ANALYST Q&A #}
 {% if concall_data.analyst_qa %}
 <div class="card full-width" style="margin-bottom:2rem">
 <h2>What Analysts Are Asking About</h2>
@@ -317,7 +598,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# SECTION 13: SCORECARD #}
+{# SECTION 20e: SCORECARD #}
 {% if concall_data.scorecard %}
 <div class="grid">
 <div class="card">
@@ -328,7 +609,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </table>
 </div>
 
-{# SECTION 14: RISKS #}
+{# SECTION 20f: RISKS #}
 {% if concall_data.risks %}
 <div class="card">
 <h2>Risk Factors</h2>
@@ -340,7 +621,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 </div>
 {% endif %}
 
-{# SECTION 15: THESIS #}
+{# SECTION 20g: THESIS #}
 {% if concall_data.thesis %}
 <div class="card full-width" style="margin-bottom:2rem">
 <h2>Investment Thesis</h2>
@@ -362,53 +643,361 @@ This report contains numerical data from Screener.in and yfinance. To add qualit
 
 {# ============ CHARTS ============ #}
 <script>
-{% if pe_chart.dates %}
-const peDates = {{ pe_chart.dates | tojson }};
-const peVals = {{ pe_chart.pe_vals | tojson }};
-new Chart(document.getElementById('peChart'), {
-  type: 'line',
-  data: { labels: peDates, datasets: [{ label: 'P/E Trailing', data: peVals, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: {
-      annotation: { annotations: {
-        currentPE: { type: 'line', yMin: {{ pe_trailing }}, yMax: {{ pe_trailing }}, borderColor: '#22c55e', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Current: {{ "%.1f"|format(pe_trailing) }}x', position: 'start', backgroundColor: 'rgba(34,197,94,0.8)', font: { size: 11 } } },
-        medianPE: { type: 'line', yMin: {{ "%.1f"|format(pe_median) }}, yMax: {{ "%.1f"|format(pe_median) }}, borderColor: '#71717a', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Median: {{ "%.1f"|format(pe_median) }}x', position: 'end', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 11 } } }
-      } },
-      legend: { display: false }
-    },
-    scales: {
-      x: { ticks: { color: '#71717a', maxTicksLimit: 12 }, grid: { color: 'rgba(42,45,58,0.5)' } },
-      y: { ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } }
-    }
-  }
-});
+/* ── Unified Chart: build all 6 chart configs from Screener data ── */
+const rawScreenerCharts = {{ screener_charts | default({}) | tojson }};
+const currentPE = {{ pe_trailing | default(0) }};
+const currentPrice = {{ price }};
 
-const pePrices = {{ pe_chart.price_vals | tojson }};
-new Chart(document.getElementById('pricePeChart'), {
-  type: 'line',
-  data: { labels: peDates, datasets: [
-    { label: 'Price (₹)', data: pePrices, borderColor: '#3b82f6', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
-    { label: 'P/E', data: peVals, borderColor: '#f97316', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y1' }
-  ] },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#e4e4e7' } } },
-    scales: {
-      x: { ticks: { color: '#71717a', maxTicksLimit: 12 }, grid: { color: 'rgba(42,45,58,0.5)' } },
-      y: { position: 'left', ticks: { color: '#3b82f6' }, grid: { color: 'rgba(42,45,58,0.5)' }, title: { display: true, text: 'Price (₹)', color: '#3b82f6' } },
-      y1: { position: 'right', ticks: { color: '#f97316' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'P/E', color: '#f97316' } }
+/* Helper: parse Screener [[date, value], ...] pairs into {labels, values} */
+function parseSeries(arr) {
+  if (!arr || !arr.length) return { labels: [], values: [] };
+  return {
+    labels: arr.map(p => p[0]),
+    values: arr.map(p => typeof p[1] === 'string' ? parseFloat(p[1]) : p[1])
+  };
+}
+/* Helper: extract volume (index 1 only, ignoring delivery object at index 2) */
+function parseVolume(arr) {
+  if (!arr || !arr.length) return { labels: [], values: [] };
+  return {
+    labels: arr.map(p => p[0]),
+    values: arr.map(p => typeof p[1] === 'string' ? parseInt(p[1]) : p[1])
+  };
+}
+/* Helper: extract numeric median value from label like "Median PE = 49.9" */
+function extractMedian(dataDict, keyword) {
+  for (const k of Object.keys(dataDict)) {
+    if (k.indexOf(keyword || 'Median') !== -1 && k.indexOf('=') !== -1) {
+      const v = parseFloat(k.split('=')[1]);
+      if (!isNaN(v)) return { label: k, value: v };
     }
   }
-});
-{% endif %}
+  return null;
+}
+
+/* Helper: align sparse bar data (quarterly) onto dense label array (daily) by nearest date */
+function alignSeries(denseLabels, sparseData) {
+  if (!sparseData || !sparseData.labels || !sparseData.labels.length) return new Array(denseLabels.length).fill(null);
+  const sparseMap = {};
+  sparseData.labels.forEach((d, i) => { sparseMap[d] = sparseData.values[i]; });
+  /* For each dense label, find exact match or closest prior sparse date */
+  const sparseDates = sparseData.labels.slice().sort();
+  return denseLabels.map(d => {
+    if (sparseMap[d] !== undefined) return sparseMap[d];
+    /* Find the closest sparse date <= d */
+    let best = null;
+    for (let i = sparseDates.length - 1; i >= 0; i--) {
+      if (sparseDates[i] <= d) { best = sparseDates[i]; break; }
+    }
+    return best ? sparseMap[best] : null;
+  });
+}
+
+/* Helper: step-fill sparse quarterly data across dense daily labels.
+   Each daily label gets the value of the most recent quarterly data point,
+   creating filled bars that span the full quarter period (like Screener). */
+function sparseBarAlign(denseLabels, sparseData) {
+  if (!sparseData || !sparseData.labels || !sparseData.labels.length) return new Array(denseLabels.length).fill(null);
+  const sparseMap = {};
+  sparseData.labels.forEach((d, i) => { sparseMap[d] = sparseData.values[i]; });
+  const sparseDates = sparseData.labels.slice().sort();
+  return denseLabels.map(d => {
+    /* Find the most recent sparse date <= d */
+    let best = null;
+    for (let i = sparseDates.length - 1; i >= 0; i--) {
+      if (sparseDates[i] <= d) { best = sparseDates[i]; break; }
+    }
+    return best ? sparseMap[best] : null;
+  });
+}
+
+/* Common axis/grid styles */
+const gridColor = 'rgba(42,45,58,0.5)';
+const dimColor = '#71717a';
+const textColor = '#e4e4e7';
+
+/* Chart explain texts */
+const chartExplains = {
+  price: '<strong>How to read:</strong> Blue line = stock price. Yellow line = 50-day moving average (short-term trend). White line = 200-day moving average (long-term trend). When price is above 200 DMA, the stock is in an uptrend. Volume bars show trading activity.',
+  pe: '<strong>How to read:</strong> Orange line shows how "expensive" or "cheap" the stock was at each point. Higher = more expensive. The green dashed line is today\'s P/E. The grey dashed line is the historical median. When price rises but P/E falls, earnings are growing faster than price.',
+  margins: '<strong>How to read:</strong> Lines show margin trends (GPM, OPM, NPM as % on left axis). Bars show quarterly sales in Cr on right axis. Expanding margins + growing sales = operating leverage.',
+  ev_ebitda: '<strong>How to read:</strong> EV/EBITDA line (left axis) shows enterprise valuation multiple. EBITDA bars (right axis) show absolute earnings power. Below median = potentially undervalued.',
+  pb: '<strong>How to read:</strong> P/B line (left axis) shows how many times book value the market is paying. Book value bars (right axis) show net asset growth. Below median P/B = potential value.',
+  mcap_sales: '<strong>How to read:</strong> Market Cap/Sales line (left axis) shows revenue multiple. Sales bars (right axis) show revenue growth. Below median = market paying less per rupee of revenue.'
+};
+
+/* Build the 6 chart configurations from raw Screener API data */
+const chartConfigs = {};
+
+/* 1. PRICE chart */
+(function() {
+  const sc = rawScreenerCharts.price_chart || {};
+  const priceKey = Object.keys(sc).find(k => k.indexOf('Price') !== -1);
+  const dma50Key = Object.keys(sc).find(k => k.indexOf('50 DMA') !== -1);
+  const dma200Key = Object.keys(sc).find(k => k.indexOf('200 DMA') !== -1);
+  const volKey = Object.keys(sc).find(k => k.indexOf('Volume') !== -1);
+  if (!priceKey) return;
+  const p = parseSeries(sc[priceKey]);
+  const d50 = dma50Key ? parseSeries(sc[dma50Key]) : { labels: [], values: [] };
+  const d200 = dma200Key ? parseSeries(sc[dma200Key]) : { labels: [], values: [] };
+  const vol = volKey ? parseVolume(sc[volKey]) : { labels: [], values: [] };
+  chartConfigs.price = {
+    type: 'bar',
+    data: {
+      labels: p.labels,
+      datasets: [
+        { label: 'Volume', data: vol.values, backgroundColor: 'rgba(59,130,246,0.15)', borderWidth: 0, yAxisID: 'yRight', order: 4 },
+        { label: 'Price (\u20b9)', data: p.values, type: 'line', borderColor: '#3b82f6', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y', order: 1 },
+        { label: '50 DMA', data: d50.values, type: 'line', borderColor: '#eab308', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 1.5, yAxisID: 'y', order: 2 },
+        { label: '200 DMA', data: d200.values, type: 'line', borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 1.5, yAxisID: 'y', order: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: textColor } },
+        annotation: { annotations: {
+          currentPrice: { type: 'line', yMin: currentPrice, yMax: currentPrice, borderColor: '#22c55e', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'CMP: \u20b9' + currentPrice.toLocaleString(), position: 'start', backgroundColor: 'rgba(34,197,94,0.8)', font: { size: 11 } } }
+        } }
+      },
+      scales: {
+        x: { ticks: { color: dimColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+        y: { position: 'left', ticks: { color: '#3b82f6', callback: v => '\u20b9' + v.toLocaleString() }, grid: { color: gridColor } },
+        yRight: { position: 'right', ticks: { color: dimColor, callback: v => (v/1000000).toFixed(1) + 'M' }, grid: { drawOnChartArea: false }, beginAtZero: true }
+      }
+    }
+  };
+})();
+
+/* 2. PE RATIO chart */
+(function() {
+  const sc = rawScreenerCharts.pe_chart || {};
+  const peKey = Object.keys(sc).find(k => k === 'PE');
+  const epsKey = Object.keys(sc).find(k => k.indexOf('TTM EPS') !== -1);
+  if (!peKey) return;
+  const pe = parseSeries(sc[peKey]);
+  const eps = epsKey ? parseSeries(sc[epsKey]) : null;
+  const med = extractMedian(sc, 'Median PE');
+  const annotations = {};
+  annotations.currentPE = { type: 'line', yMin: currentPE, yMax: currentPE, borderColor: '#22c55e', borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Current: ' + currentPE.toFixed(1) + 'x', position: 'start', backgroundColor: 'rgba(34,197,94,0.8)', font: { size: 11 } } };
+  if (med) {
+    annotations.medianPE = { type: 'line', yMin: med.value, yMax: med.value, borderColor: dimColor, borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Median: ' + med.value.toFixed(1) + 'x', position: 'end', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 11 } } };
+  }
+  const datasets = [
+    { label: 'P/E Trailing', data: pe.values, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y' }
+  ];
+  const scales = {
+    x: { ticks: { color: dimColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+    y: { position: 'left', ticks: { color: '#f97316' }, grid: { color: gridColor }, title: { display: true, text: 'P/E', color: '#f97316' } }
+  };
+  if (eps) {
+    datasets.push({ label: 'TTM EPS (\u20b9)', data: eps.values, borderColor: '#3b82f6', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 1.5, yAxisID: 'yRight' });
+    scales.yRight = { position: 'right', ticks: { color: '#3b82f6' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'EPS (\u20b9)', color: '#3b82f6' } };
+  }
+  chartConfigs.pe = {
+    type: 'line',
+    data: { labels: pe.labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: textColor } }, annotation: { annotations: annotations } },
+      scales: scales
+    }
+  };
+})();
+
+/* 3. SALES & MARGIN chart */
+(function() {
+  const sc = rawScreenerCharts.margins_chart || {};
+  const gpmKey = Object.keys(sc).find(k => k.indexOf('GPM') !== -1);
+  const opmKey = Object.keys(sc).find(k => k.indexOf('OPM') !== -1);
+  const npmKey = Object.keys(sc).find(k => k.indexOf('NPM') !== -1);
+  const salesKey = Object.keys(sc).find(k => k.indexOf('Sales') !== -1 || k.indexOf('Quarter Sales') !== -1);
+  if (!opmKey && !salesKey) return;
+  const opm = opmKey ? parseSeries(sc[opmKey]) : null;
+  const gpm = gpmKey ? parseSeries(sc[gpmKey]) : null;
+  const npm = npmKey ? parseSeries(sc[npmKey]) : null;
+  const sales = salesKey ? parseSeries(sc[salesKey]) : null;
+  const datasets = [];
+  /* Margins are all quarterly — use the longest series for labels */
+  const allSeries = [gpm, opm, npm, sales].filter(Boolean);
+  const longestSeries = allSeries.reduce((a, b) => a.labels.length > b.labels.length ? a : b);
+  const mLabels = longestSeries.labels;
+  const labels = mLabels;
+  if (gpm) datasets.push({ label: 'GPM %', data: gpm.labels.length === mLabels.length ? gpm.values : sparseBarAlign(mLabels, gpm), borderColor: '#22c55e', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y', type: 'line', order: 1 });
+  if (opm) datasets.push({ label: 'OPM %', data: opm.labels.length === mLabels.length ? opm.values : sparseBarAlign(mLabels, opm), borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y', type: 'line', order: 2 });
+  if (npm) datasets.push({ label: 'NPM %', data: npm.labels.length === mLabels.length ? npm.values : sparseBarAlign(mLabels, npm), borderColor: '#a855f7', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y', type: 'line', order: 3 });
+  if (sales) datasets.push({ label: 'Qtr Sales (\u20b9Cr)', data: sales.labels.length === mLabels.length ? sales.values : sparseBarAlign(mLabels, sales), backgroundColor: 'rgba(59,130,246,0.5)', yAxisID: 'yRight', order: 4 });
+  const scales = {
+    x: { ticks: { color: dimColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+    y: { position: 'left', ticks: { color: '#f97316', callback: v => v + '%' }, grid: { color: gridColor }, title: { display: true, text: 'Margin %', color: '#f97316' } }
+  };
+  if (sales) scales.yRight = { position: 'right', ticks: { color: '#3b82f6' }, grid: { drawOnChartArea: false }, title: { display: true, text: '\u20b9 Cr', color: '#3b82f6' } };
+  chartConfigs.margins = {
+    type: 'bar',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: textColor } } },
+      scales: scales
+    }
+  };
+})();
+
+/* 4. EV/EBITDA chart */
+(function() {
+  const sc = rawScreenerCharts.ev_ebitda_chart || {};
+  const evKey = Object.keys(sc).find(k => k.indexOf('EV') !== -1 && k.indexOf('EBITDA') !== -1 && k.indexOf('Median') === -1);
+  const ebitdaKey = Object.keys(sc).find(k => k === 'EBITDA' || (k.indexOf('EBITDA') !== -1 && k.indexOf('EV') === -1 && k.indexOf('Median') === -1));
+  if (!evKey) return;
+  const ev = parseSeries(sc[evKey]);
+  const ebitda = ebitdaKey ? parseSeries(sc[ebitdaKey]) : null;
+  const med = extractMedian(sc, 'Median');
+  const annotations = {};
+  if (med) {
+    annotations.median = { type: 'line', yMin: med.value, yMax: med.value, borderColor: dimColor, borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Median: ' + med.value.toFixed(1) + 'x', position: 'end', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 11 } } };
+  }
+  const datasets = [
+    { label: 'EV/EBITDA', data: ev.values, borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y', type: 'line', order: 1 }
+  ];
+  const scales = {
+    x: { ticks: { color: dimColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+    y: { position: 'left', ticks: { color: '#f97316' }, grid: { color: gridColor }, title: { display: true, text: 'EV/EBITDA', color: '#f97316' } }
+  };
+  if (ebitda) {
+    datasets.push({ label: 'EBITDA (\u20b9Cr)', data: sparseBarAlign(ev.labels, ebitda), backgroundColor: 'rgba(59,130,246,0.25)', borderWidth: 0, yAxisID: 'yRight', order: 2 });
+    scales.yRight = { position: 'right', ticks: { color: '#3b82f6' }, grid: { drawOnChartArea: false }, title: { display: true, text: '\u20b9 Cr', color: '#3b82f6' } };
+  }
+  chartConfigs.ev_ebitda = {
+    type: 'bar',
+    data: { labels: ev.labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: textColor } }, annotation: { annotations: annotations } },
+      scales: scales
+    }
+  };
+})();
+
+/* 5. PRICE TO BOOK chart */
+(function() {
+  const sc = rawScreenerCharts.pb_chart || {};
+  const pbKey = Object.keys(sc).find(k => k.indexOf('Price to BV') !== -1 || k.indexOf('P/B') !== -1 || (k.indexOf('Price') !== -1 && k.indexOf('Book') !== -1));
+  const bvKey = Object.keys(sc).find(k => k.indexOf('Book Value') !== -1 && k.indexOf('Price') === -1 && k.indexOf('Median') === -1);
+  if (!pbKey) return;
+  const pb = parseSeries(sc[pbKey]);
+  const bv = bvKey ? parseSeries(sc[bvKey]) : null;
+  const med = extractMedian(sc, 'Median');
+  const annotations = {};
+  if (med) {
+    annotations.median = { type: 'line', yMin: med.value, yMax: med.value, borderColor: dimColor, borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Median: ' + med.value.toFixed(1) + 'x', position: 'end', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 11 } } };
+  }
+  const datasets = [
+    { label: 'Price to Book', data: pb.values, borderColor: '#06b6d4', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y', type: 'line', order: 1 }
+  ];
+  const scales = {
+    x: { ticks: { color: dimColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+    y: { position: 'left', ticks: { color: '#06b6d4' }, grid: { color: gridColor }, title: { display: true, text: 'P/B', color: '#06b6d4' } }
+  };
+  if (bv) {
+    datasets.push({ label: 'Book Value (\u20b9)', data: sparseBarAlign(pb.labels, bv), backgroundColor: 'rgba(34,197,94,0.25)', borderWidth: 0, yAxisID: 'yRight', order: 2 });
+    scales.yRight = { position: 'right', ticks: { color: '#22c55e' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Book Value (\u20b9)', color: '#22c55e' } };
+  }
+  chartConfigs.pb = {
+    type: 'bar',
+    data: { labels: pb.labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: textColor } }, annotation: { annotations: annotations } },
+      scales: scales
+    }
+  };
+})();
+
+/* 6. MARKET CAP / SALES chart */
+(function() {
+  const sc = rawScreenerCharts.mcap_sales_chart || {};
+  const mcKey = Object.keys(sc).find(k => k.indexOf('Market Cap') !== -1 && k.indexOf('Sales') !== -1 && k.indexOf('Median') === -1);
+  const salesKey = Object.keys(sc).find(k => k === 'Sales');
+  if (!mcKey) return;
+  const mc = parseSeries(sc[mcKey]);
+  const sales = salesKey ? parseSeries(sc[salesKey]) : null;
+  const med = extractMedian(sc, 'Median');
+  const annotations = {};
+  if (med) {
+    annotations.median = { type: 'line', yMin: med.value, yMax: med.value, borderColor: dimColor, borderWidth: 2, borderDash: [6, 4], label: { display: true, content: 'Median: ' + med.value.toFixed(1) + 'x', position: 'end', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 11 } } };
+  }
+  const datasets = [
+    { label: 'MCap/Sales', data: mc.values, borderColor: '#eab308', backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, borderWidth: 2, yAxisID: 'y', type: 'line', order: 1 }
+  ];
+  const scales = {
+    x: { ticks: { color: dimColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+    y: { position: 'left', ticks: { color: '#eab308' }, grid: { color: gridColor }, title: { display: true, text: 'MCap/Sales', color: '#eab308' } }
+  };
+  if (sales) {
+    datasets.push({ label: 'Sales (\u20b9Cr)', data: sparseBarAlign(mc.labels, sales), backgroundColor: 'rgba(59,130,246,0.25)', borderWidth: 0, yAxisID: 'yRight', order: 2 });
+    scales.yRight = { position: 'right', ticks: { color: '#3b82f6' }, grid: { drawOnChartArea: false }, title: { display: true, text: '\u20b9 Cr', color: '#3b82f6' } };
+  }
+  chartConfigs.mcap_sales = {
+    type: 'bar',
+    data: { labels: mc.labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: textColor } }, annotation: { annotations: annotations } },
+      scales: scales
+    }
+  };
+})();
+
+/* ── Switch chart function ── */
+let currentChart = null;
+function switchChart(key, btn) {
+  document.querySelectorAll('#metricToggles .chart-toggle').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (currentChart) { currentChart.destroy(); currentChart = null; }
+  const explainEl = document.getElementById('chartExplain');
+  if (explainEl) explainEl.innerHTML = chartExplains[key] || '';
+  const cfg = chartConfigs[key];
+  if (!cfg) { if (explainEl) explainEl.innerHTML = '<em>No data available for this metric.</em>'; return; }
+  /* Deep-copy config to avoid Chart.js mutation issues */
+  const cfgCopy = JSON.parse(JSON.stringify(cfg));
+  currentChart = new Chart(document.getElementById('mainChart'), cfgCopy);
+}
+
+/* Render default chart (Price) on page load */
+(function() {
+  const defaultBtn = document.querySelector('#metricToggles .chart-toggle.active');
+  if (defaultBtn && chartConfigs.price) {
+    switchChart('price', defaultBtn);
+  } else if (defaultBtn) {
+    /* If no price data, try first available */
+    const keys = Object.keys(chartConfigs);
+    if (keys.length > 0) switchChart(keys[0], defaultBtn);
+  }
+})();
+
+/* ── Shareholding toggle (Quarterly/Yearly) ── */
+function toggleShTab(tab, btn) {
+  document.getElementById('sh-quarterly').style.display = tab === 'quarterly' ? 'block' : 'none';
+  document.getElementById('sh-yearly').style.display = tab === 'yearly' ? 'block' : 'none';
+  btn.parentElement.querySelectorAll('.chart-toggle').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+/* ── DII/FII detail toggle ── */
+function toggleDetail(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const showing = el.style.display !== 'none';
+  el.style.display = showing ? 'none' : 'block';
+  btn.classList.toggle('active', !showing);
+}
 
 {% if qr_chart.dates %}
 new Chart(document.getElementById('qrChart'), {
   type: 'bar',
   data: { labels: {{ qr_chart.dates | tojson }}, datasets: [
-    { label: 'Revenue (₹Cr)', data: {{ qr_chart.revenues | tojson }}, backgroundColor: 'rgba(59,130,246,0.7)', order: 2 },
-    { label: 'Net Income (₹Cr)', data: {{ qr_chart.net_incomes | tojson }}, backgroundColor: 'rgba(34,197,94,0.7)', order: 3 },
+    { label: 'Revenue (\u20b9Cr)', data: {{ qr_chart.revenues | tojson }}, backgroundColor: 'rgba(59,130,246,0.7)', order: 2 },
+    { label: 'Net Income (\u20b9Cr)', data: {{ qr_chart.net_incomes | tojson }}, backgroundColor: 'rgba(34,197,94,0.7)', order: 3 },
     { label: 'OPM %', data: {{ qr_chart.opms | tojson }}, type: 'line', borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', order: 1 }
   ] },
   options: {
@@ -416,8 +1005,63 @@ new Chart(document.getElementById('qrChart'), {
     plugins: { legend: { labels: { color: '#e4e4e7' } } },
     scales: {
       x: { ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } },
-      y: { position: 'left', ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' }, title: { display: true, text: '₹ Cr', color: '#71717a' } },
+      y: { position: 'left', ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' }, title: { display: true, text: '\u20b9 Cr', color: '#71717a' } },
       y1: { position: 'right', min: 0, max: 50, ticks: { color: '#f97316' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'OPM %', color: '#f97316' } }
+    }
+  }
+});
+{% endif %}
+
+{# Shareholding stacked bar chart #}
+{% if shareholding_history and shareholding_history|length >= 2 %}
+{% set sh_reversed = shareholding_history | reverse | list %}
+new Chart(document.getElementById('shChart'), {
+  type: 'bar',
+  data: {
+    labels: {{ sh_reversed | map(attribute='quarter') | list | tojson }},
+    datasets: [
+      { label: 'Promoter', data: {{ sh_reversed | map(attribute='promoter', default=0) | list | tojson }}, backgroundColor: 'rgba(59,130,246,0.8)' },
+      { label: 'FII', data: {{ sh_reversed | map(attribute='fii', default=0) | list | tojson }}, backgroundColor: 'rgba(249,115,22,0.8)' },
+      { label: 'MF', data: {{ sh_reversed | map(attribute='mf', default=0) | list | tojson }}, backgroundColor: 'rgba(34,197,94,0.8)' },
+      { label: 'DII', data: {{ sh_reversed | map(attribute='dii', default=0) | list | tojson }}, backgroundColor: 'rgba(168,85,247,0.8)' },
+      { label: 'Public', data: {{ sh_reversed | map(attribute='public', default=0) | list | tojson }}, backgroundColor: 'rgba(113,113,122,0.7)' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e4e4e7' } } },
+    scales: {
+      x: { stacked: true, ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } },
+      y: { stacked: true, max: 100, ticks: { color: '#71717a', callback: v => v + '%' }, grid: { color: 'rgba(42,45,58,0.5)' } }
+    }
+  }
+});
+{% endif %}
+
+{# ROE history bar chart #}
+{% if roe_history and roe_history|selectattr('roe')|list %}
+new Chart(document.getElementById('roeChart'), {
+  type: 'bar',
+  data: {
+    labels: {{ roe_history | map(attribute='year') | list | tojson }},
+    datasets: [{
+      label: 'ROE %',
+      data: {{ roe_history | map(attribute='roe') | list | tojson }},
+      backgroundColor: {{ roe_history | map(attribute='roe') | list | map('default', 0) | list | tojson }}.map(v => v && v >= 15 ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.5)'),
+      borderRadius: 4
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      annotation: { annotations: {
+        goodROE: { type: 'line', yMin: 15, yMax: 15, borderColor: '#71717a', borderWidth: 1, borderDash: [4, 4], label: { display: true, content: '15% (good)', position: 'start', backgroundColor: 'rgba(113,113,122,0.8)', font: { size: 10 } } }
+      } }
+    },
+    scales: {
+      x: { ticks: { color: '#71717a' }, grid: { color: 'rgba(42,45,58,0.5)' } },
+      y: { ticks: { color: '#71717a', callback: v => v + '%' }, grid: { color: 'rgba(42,45,58,0.5)' } }
     }
   }
 });

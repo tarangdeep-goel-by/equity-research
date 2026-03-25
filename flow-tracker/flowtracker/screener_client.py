@@ -818,6 +818,274 @@ class ScreenerClient:
         results.sort(key=lambda r: r.fiscal_year_end)
         return results
 
+    def parse_documents_from_html(self, html: str) -> dict:
+        """Parse #documents section for concall and annual report URLs.
+
+        Returns:
+            {
+                "concalls": [
+                    {"quarter": "Jan 2026", "transcript_url": "...", "ppt_url": "...", "recording_url": "..."},
+                    ...
+                ],
+                "annual_reports": [
+                    {"year": "Financial Year 2025", "url": "..."},
+                    ...
+                ]
+            }
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        section = soup.find("section", id="documents")
+        if not section:
+            return {"concalls": [], "annual_reports": []}
+
+        result: dict = {"concalls": [], "annual_reports": []}
+
+        # Find all h3 headers in the documents section
+        for h3 in section.find_all("h3"):
+            heading_text = h3.get_text(strip=True).lower()
+
+            if "concall" in heading_text:
+                ul = h3.find_next("ul", class_="list-links")
+                if not ul:
+                    continue
+                for li in ul.find_all("li"):
+                    # Quarter label from the div
+                    quarter_div = li.find("div")
+                    quarter = quarter_div.get_text(strip=True) if quarter_div else ""
+
+                    transcript_url = ""
+                    ppt_url = ""
+                    recording_url = ""
+
+                    # Only scrape <a> tags with class concall-link (skip <button>)
+                    for a_tag in li.find_all("a", class_="concall-link"):
+                        link_text = a_tag.get_text(strip=True).lower()
+                        href = a_tag.get("href", "")
+                        if not href:
+                            continue
+                        if "transcript" in link_text:
+                            transcript_url = href
+                        elif "ppt" in link_text:
+                            ppt_url = href
+                        elif "rec" in link_text:
+                            recording_url = href
+
+                    if quarter:
+                        result["concalls"].append({
+                            "quarter": quarter,
+                            "transcript_url": transcript_url,
+                            "ppt_url": ppt_url,
+                            "recording_url": recording_url,
+                        })
+
+            elif "annual report" in heading_text:
+                ul = h3.find_next("ul", class_="list-links")
+                if not ul:
+                    continue
+                for li in ul.find_all("li"):
+                    a_tag = li.find("a")
+                    if not a_tag:
+                        continue
+                    # The year label is the text content (without the nested div text)
+                    # Clone and remove nested elements to get clean text
+                    year_text = a_tag.get_text(strip=True)
+                    # Remove the "from bse" suffix if present
+                    nested_div = a_tag.find("div")
+                    if nested_div:
+                        nested_text = nested_div.get_text(strip=True)
+                        year_text = year_text.replace(nested_text, "").strip()
+                    href = a_tag.get("href", "")
+                    if year_text and href:
+                        result["annual_reports"].append({
+                            "year": year_text,
+                            "url": href,
+                        })
+
+        return result
+
+    def parse_growth_rates_from_html(self, html: str) -> dict:
+        """Parse compounded growth rates tables from Screener HTML.
+
+        Returns dict like:
+        {
+            "sales_10y": 0.23, "sales_5y": 0.17, "sales_3y": 0.23, "sales_ttm": 0.13,
+            "profit_10y": 0.30, ...,
+            "price_10y": None, "price_5y": -0.13, ...,
+            "roe_10y": None, "roe_5y": 0.20, ...
+        }
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        tables = soup.find_all("table", class_="ranges-table")
+        result: dict = {}
+
+        key_map = {
+            "Compounded Sales Growth": "sales",
+            "Compounded Profit Growth": "profit",
+            "Stock Price CAGR": "price",
+            "Return on Equity": "roe",
+        }
+        period_map = {
+            "10 Years:": "10y",
+            "5 Years:": "5y",
+            "3 Years:": "3y",
+            "TTM:": "ttm",
+            "1 Year:": "1y",
+            "Last Year:": "last",
+        }
+
+        for table in tables:
+            header = table.find("th")
+            if not header:
+                continue
+            name = header.get_text(strip=True)
+            prefix = key_map.get(name)
+            if not prefix:
+                continue
+
+            for row in table.find_all("tr")[1:]:
+                cells = row.find_all("td")
+                if len(cells) != 2:
+                    continue
+                period_text = cells[0].get_text(strip=True)
+                value_text = cells[1].get_text(strip=True).replace("%", "").strip()
+                suffix = period_map.get(period_text)
+                if not suffix:
+                    continue
+                try:
+                    result[f"{prefix}_{suffix}"] = float(value_text) / 100
+                except (ValueError, TypeError):
+                    result[f"{prefix}_{suffix}"] = None
+
+        # Screener uses "Last Year" for ROE which is actually the latest FY
+        # Also add roe_3y alias if only "Last Year" was parsed
+        if "roe_3y" in result and "Last Year:" in str(tables):
+            # The Last Year mapped to 3y, but we also want it as a separate key
+            pass
+
+        return result
+
+    @staticmethod
+    def _parse_quarter_key(q: str) -> str:
+        """Convert 'Dec 2025' to '2025-12' for proper chronological sorting."""
+        month_map = {
+            "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04",
+            "May": "05", "Jun": "06", "Jul": "07", "Aug": "08",
+            "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12",
+        }
+        parts = q.split()
+        if len(parts) == 2 and parts[0] in month_map:
+            return f"{parts[1]}-{month_map[parts[0]]}"
+        return q
+
+    def fetch_shareholder_details(self, html: str) -> dict:
+        """Fetch detailed shareholder data from Screener's investor API.
+
+        Fetches both quarterly and yearly views for DII and FII.
+        Returns dict with keys: dii, fii (quarterly), dii_yearly, fii_yearly.
+        Each is a list of {name, quarters: {quarter: pct}, url, all_quarters (sorted)}.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        info_el = soup.find(attrs={"data-company-id": True})
+        if not info_el:
+            return {}
+
+        company_id = info_el["data-company-id"]
+        result: dict = {}
+
+        api_calls = {
+            "dii": ("domestic_institutions", "quarterly"),
+            "fii": ("foreign_institutions", "quarterly"),
+            "dii_yearly": ("domestic_institutions", "yearly"),
+            "fii_yearly": ("foreign_institutions", "yearly"),
+        }
+
+        for key, (classification, period) in api_calls.items():
+            try:
+                resp = self._client.get(
+                    f"{_SCREENER_BASE}/api/3/{company_id}/investors/{classification}/{period}/"
+                )
+                if resp.status_code != 200:
+                    continue
+
+                raw = resp.json()
+                entities = []
+                all_quarters: set[str] = set()
+
+                for name, data in raw.items():
+                    attrs = data.pop("setAttributes", {})
+                    url = attrs.get("data-person-url", "")
+                    quarters = {k: float(v) for k, v in data.items()}
+                    all_quarters.update(quarters.keys())
+                    if quarters:
+                        # Find latest quarter by proper date sorting
+                        sorted_qs = sorted(quarters.keys(), key=self._parse_quarter_key, reverse=True)
+                        entities.append({
+                            "name": name,
+                            "latest_pct": quarters[sorted_qs[0]],
+                            "latest_quarter": sorted_qs[0],
+                            "quarters": quarters,
+                            "url": url,
+                        })
+
+                entities.sort(key=lambda x: x["latest_pct"], reverse=True)
+
+                # Sort all quarters chronologically (newest first)
+                sorted_all = sorted(all_quarters, key=self._parse_quarter_key, reverse=True)
+                result[key] = entities
+                result[f"{key}_quarters"] = sorted_all
+            except Exception:
+                continue
+
+        return result
+
+    def _get_company_id(self, html: str) -> str | None:
+        """Extract the Screener internal company ID from page HTML.
+
+        Used for the /api/company/{id}/chart/ endpoint.
+        """
+        match = re.search(r"/api/company/(\d+)/", html)
+        return match.group(1) if match else None
+
+    def fetch_chart_data(self, symbol: str, html: str | None = None) -> dict:
+        """Fetch all chart datasets from Screener's chart API.
+
+        Returns dict with keys: price_chart, pe_chart, margins_chart.
+        Each contains the raw datasets from Screener's API.
+        """
+        if html is None:
+            html = self.fetch_company_page(symbol)
+
+        company_id = self._get_company_id(html)
+        if not company_id:
+            return {}
+
+        result = {}
+        queries = {
+            "price_chart": "Price-DMA50-DMA200-Volume",
+            "pe_chart": "Price+to+Earning-Median+PE-EPS",
+            "margins_chart": "GPM-OPM-NPM-Quarter+Sales",
+            "ev_ebitda_chart": "EV+Multiple-Median+EV+Multiple-EBITDA",
+            "pb_chart": "Price+to+book+value-Median+PBV-Book+value",
+            "mcap_sales_chart": "Market+Cap+to+Sales-Median+Market+Cap+to+Sales-Sales",
+        }
+
+        for key, q in queries.items():
+            try:
+                resp = self._client.get(
+                    f"{_SCREENER_BASE}/api/company/{company_id}/chart/?q={q}&days=10000"
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    datasets = {}
+                    for ds in data.get("datasets", []):
+                        label = ds.get("label", "")
+                        datasets[label] = ds.get("values", [])
+                    result[key] = datasets
+            except Exception:
+                continue
+
+        return result
+
     def close(self) -> None:
         self._client.close()
 

@@ -195,14 +195,14 @@ class FundClient:
         )
 
     def compute_historical_pe(
-        self, symbol: str, annual_eps: list, weekly_prices: list[tuple[str, float]] | None = None
+        self, symbol: str, annual_eps: list, weekly_prices: list[tuple[str, float, int]] | None = None
     ) -> list:
         """Compute historical weekly P/E from annual EPS + weekly prices.
 
         Args:
             symbol: Stock symbol (e.g., 'TECHM')
             annual_eps: List of AnnualEPS objects with fiscal_year_end and eps fields
-            weekly_prices: Optional pre-fetched list of (date_iso, close_price) tuples.
+            weekly_prices: Optional pre-fetched list of (date_iso, close_price, volume) tuples.
                           If None, fetches from yfinance.
 
         Returns:
@@ -221,7 +221,7 @@ class FundClient:
         sorted_eps = sorted(annual_eps, key=lambda a: a.fiscal_year_end)
 
         snapshots = []
-        for date_str, close_price in weekly_prices:
+        for date_str, close_price, _volume in weekly_prices:
             if close_price <= 0:
                 continue
 
@@ -252,16 +252,16 @@ class FundClient:
 
         return snapshots
 
-    def fetch_weekly_prices(self, symbol: str, period: str = "10y") -> list[tuple[str, float]]:
-        """Fetch weekly closing prices for historical P/E computation.
-        Returns list of (date_iso, close_price) tuples.
+    def fetch_weekly_prices(self, symbol: str, period: str = "10y") -> list[tuple[str, float, int]]:
+        """Fetch weekly closing prices and volume for historical P/E computation.
+        Returns list of (date_iso, close_price, volume) tuples.
         """
         ticker = self._ticker(symbol)
         hist = ticker.history(period=period, interval="1wk")
         if hist is None or hist.empty:
             return []
         return [
-            (idx.strftime("%Y-%m-%d"), float(row["Close"]))
+            (idx.strftime("%Y-%m-%d"), float(row["Close"]), int(row.get("Volume", 0)))
             for idx, row in hist.iterrows()
             if row["Close"] is not None and str(row["Close"]) != "nan"
         ]
