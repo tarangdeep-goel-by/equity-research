@@ -1086,6 +1086,142 @@ class ScreenerClient:
 
         return result
 
+    # --- Phase 2: New Screener API methods for research agent ---
+
+    def _get_both_ids(self, html: str) -> tuple[str, str]:
+        """Extract both company_id and warehouse_id from company page HTML."""
+        soup = BeautifulSoup(html, "html.parser")
+        info_el = soup.find(id="company-info") or soup.find(attrs={"data-company-id": True})
+        company_id = ""
+        warehouse_id = ""
+        if info_el:
+            company_id = info_el.get("data-company-id", "")
+            warehouse_id = info_el.get("data-warehouse-id", "")
+        if not company_id:
+            m = re.search(r'data-company-id="(\d+)"', html)
+            company_id = m.group(1) if m else ""
+        if not warehouse_id:
+            m = re.search(r'formaction="/user/company/export/(\d+)/"', html)
+            warehouse_id = m.group(1) if m else ""
+        return company_id, warehouse_id
+
+    def search(self, query: str) -> list[dict]:
+        """Search for companies. Returns [{id, name, url}, ...]."""
+        resp = self._client.get(f"{_SCREENER_BASE}/api/company/search/", params={"q": query})
+        resp.raise_for_status()
+        return resp.json()
+
+    def fetch_chart_data_single(self, company_id: str, chart_type: str, days: int = 10000) -> dict:
+        """Fetch a single chart type from Chart API.
+
+        chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'
+        Returns: {"datasets": [{"metric": str, "label": str, "values": [[date, value], ...]}]}
+        """
+        queries = {
+            "price": "Price-DMA50-DMA200-Volume",
+            "pe": "Price+to+Earning-Median+PE-EPS",
+            "sales_margin": "GPM-OPM-NPM-Quarter+Sales",
+            "ev_ebitda": "EV+Multiple-Median+EV+Multiple-EBITDA",
+            "pbv": "Price+to+book+value-Median+PBV-Book+value",
+            "mcap_sales": "Market+Cap+to+Sales-Median+Market+Cap+to+Sales-Sales",
+        }
+        q = queries.get(chart_type)
+        if not q:
+            return {"datasets": []}
+        url = f"{_SCREENER_BASE}/api/company/{company_id}/chart/?q={q}&days={days}&consolidated=true"
+        resp = self._client.get(url)
+        resp.raise_for_status()
+        return resp.json()
+
+    def fetch_peers(self, warehouse_id: str) -> list[dict]:
+        """Fetch peer comparison table. Returns list of peer dicts."""
+        url = f"{_SCREENER_BASE}/api/company/{warehouse_id}/peers/"
+        resp = self._client.get(url)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        table = soup.find("table")
+        if not table:
+            return []
+        headers = [th.get_text(strip=True) for th in table.find_all("th")]
+        peers = []
+        for tr in table.find_all("tr")[1:]:
+            tds = tr.find_all("td")
+            if len(tds) < 2:
+                continue
+            row: dict = {}
+            for i, td in enumerate(tds):
+                if i < len(headers):
+                    key = headers[i].lower().replace(" ", "_").replace(".", "").replace("(", "").replace(")", "").replace("%", "pct")
+                    val = td.get_text(strip=True).replace(",", "")
+                    try:
+                        row[key] = float(val)
+                    except ValueError:
+                        row[key] = val
+                    a = td.find("a")
+                    if a:
+                        row["url"] = a.get("href", "")
+            peers.append(row)
+        return peers
+
+    def fetch_shareholders(self, company_id: str) -> dict[str, list[dict]]:
+        """Fetch individual shareholder details for each category from API.
+
+        Returns: {"promoters": [{name, values: {quarter: pct}, url}, ...], ...}
+        """
+        import time as _time
+        classifications = ["promoters", "foreign_institutions", "domestic_institutions", "public"]
+        result: dict[str, list[dict]] = {}
+        for cls in classifications:
+            url = f"{_SCREENER_BASE}/api/3/{company_id}/investors/{cls}/quarterly/"
+            try:
+                resp = self._client.get(url)
+                resp.raise_for_status()
+                raw = resp.json()
+                holders: list[dict] = []
+                if isinstance(raw, dict):
+                    for name, data in raw.items():
+                        if isinstance(data, dict):
+                            person_url = data.pop("data-person-url", data.pop("setAttributes", {}).get("data-person-url", ""))
+                            holders.append({"name": name, "values": data, "url": person_url})
+                result[cls] = holders
+            except Exception:
+                result[cls] = []
+            _time.sleep(1)
+        return result
+
+    def fetch_schedules(self, company_id: str, section: str, parent: str) -> dict:
+        """Fetch schedule (sub-item breakdown) for a specific line item.
+
+        section: 'quarters', 'profit-loss', 'balance-sheet', 'cash-flow'
+        parent: e.g., 'Sales', 'Expenses', 'Borrowings'
+        """
+        url = f"{_SCREENER_BASE}/api/company/{company_id}/schedules/"
+        params = {"parent": parent, "section": section, "consolidated": ""}
+        resp = self._client.get(url, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
+
+    def fetch_all_schedules(self, company_id: str) -> dict[str, dict[str, dict]]:
+        """Fetch all schedule breakdowns across all sections."""
+        import time as _time
+        schedule_parents = {
+            "quarters": ["Sales", "Expenses", "Other Income", "Net Profit"],
+            "profit-loss": ["Sales", "Expenses", "Other Income", "Net Profit"],
+            "balance-sheet": ["Borrowings", "Other Liabilities", "Fixed Assets", "Other Assets"],
+            "cash-flow": ["Cash from Operating Activity", "Cash from Investing Activity", "Cash from Financing Activity"],
+        }
+        result: dict[str, dict[str, dict]] = {}
+        for section, parents in schedule_parents.items():
+            result[section] = {}
+            for parent in parents:
+                try:
+                    result[section][parent] = self.fetch_schedules(company_id, section, parent)
+                except Exception:
+                    result[section][parent] = {}
+                _time.sleep(1)
+        return result
+
     def close(self) -> None:
         self._client.close()
 

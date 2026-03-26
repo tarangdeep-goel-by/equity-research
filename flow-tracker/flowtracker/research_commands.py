@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -135,3 +137,146 @@ def fundamentals(
     # Step 4: Open in browser
     subprocess.run(["open", str(output_path)], check=False)
     console.print(f"\n[bold green]Done.[/] Report opened in browser.")
+
+
+@app.command()
+def thesis(
+    symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")],
+    no_agent: Annotated[bool, typer.Option("--no-agent", help="Skip agent, use data-only report (fallback to fundamentals)")] = False,
+    skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Skip data refresh, use cached DB data")] = False,
+    model: Annotated[str | None, typer.Option("--model", help="Claude model override")] = None,
+) -> None:
+    """Generate an AI-powered equity research thesis.
+
+    Uses Claude as a multi-turn research agent with access to all FlowTracker data.
+    The agent queries data, cross-references signals, and produces a Markdown report.
+
+    Use --no-agent to fall back to the data-only HTML fundamentals report.
+    Use --skip-fetch to skip refreshing data from live sources.
+    """
+    symbol = symbol.upper()
+
+    if no_agent:
+        console.print("[yellow]--no-agent: falling back to fundamentals report[/]")
+        fundamentals(symbol=symbol)
+        return
+
+    if not skip_fetch:
+        console.print(f"\n[bold]Refreshing data for {symbol}...[/]")
+        from flowtracker.research.refresh import refresh_for_research
+        summary = refresh_for_research(symbol, console)
+        total = sum(summary.values())
+        console.print(f"\n[dim]Refresh complete: {total} total records across {len(summary)} sources[/]")
+
+    console.print(f"\n[bold]Generating research thesis for {symbol}...[/]")
+    console.print("[dim]Agent will query data, analyze, and produce a Markdown report.[/]")
+    console.print("[dim]This may take 1-3 minutes.[/]\n")
+
+    try:
+        from flowtracker.research.agent import generate_thesis
+        output_path = generate_thesis(symbol, model=model)
+        console.print(f"\n[bold green]Done.[/] Report: [cyan]{output_path}[/]")
+
+        reports_path = Path(__file__).parent.parent / "reports" / f"{symbol.lower()}-thesis.md"
+        if reports_path.exists():
+            console.print(f"  Also: [cyan]{reports_path}[/]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/]")
+        raise typer.Exit(1)
+
+
+# All available tool names for the data command
+_DATA_TOOLS = [
+    "company_info", "quarterly_results", "annual_financials", "screener_ratios",
+    "valuation_snapshot", "valuation_band", "pe_history",
+    "shareholding", "shareholding_changes", "insider_transactions",
+    "bulk_block_deals", "mf_holdings", "delivery_trend", "promoter_pledge",
+    "consensus_estimate", "earnings_surprises",
+    "macro_snapshot", "fii_dii_streak", "fii_dii_flows",
+    "chart_data", "peer_comparison", "shareholder_detail", "expense_breakdown",
+    "recent_filings", "composite_score",
+]
+
+
+@app.command()
+def data(
+    tool_name: Annotated[str, typer.Argument(help=f"Tool to query: {', '.join(_DATA_TOOLS)}")],
+    symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")] = "",
+    raw: Annotated[bool, typer.Option("--raw", help="Print raw JSON instead of pretty")] = False,
+) -> None:
+    """Query any research data tool directly. Prints JSON output.
+
+    Examples:
+        flowtrack research data shareholding_changes -s INDIAMART
+        flowtrack research data macro_snapshot
+        flowtrack research data composite_score -s RELIANCE
+    """
+    if tool_name not in _DATA_TOOLS:
+        console.print(f"[red]Unknown tool: {tool_name}[/]")
+        console.print(f"Available: {', '.join(_DATA_TOOLS)}")
+        raise typer.Exit(1)
+
+    symbol = symbol.upper() if symbol else ""
+
+    no_symbol = {"macro_snapshot", "fii_dii_streak", "fii_dii_flows"}
+    if tool_name not in no_symbol and not symbol:
+        console.print("[red]--symbol / -s is required for this tool[/]")
+        raise typer.Exit(1)
+
+    from flowtracker.research.data_api import ResearchDataAPI
+
+    method_map = {
+        "company_info": lambda api: api.get_company_info(symbol),
+        "quarterly_results": lambda api: api.get_quarterly_results(symbol),
+        "annual_financials": lambda api: api.get_annual_financials(symbol),
+        "screener_ratios": lambda api: api.get_screener_ratios(symbol),
+        "valuation_snapshot": lambda api: api.get_valuation_snapshot(symbol),
+        "valuation_band": lambda api: api.get_valuation_band(symbol),
+        "pe_history": lambda api: api.get_pe_history(symbol),
+        "shareholding": lambda api: api.get_shareholding(symbol),
+        "shareholding_changes": lambda api: api.get_shareholding_changes(symbol),
+        "insider_transactions": lambda api: api.get_insider_transactions(symbol),
+        "bulk_block_deals": lambda api: api.get_bulk_block_deals(symbol),
+        "mf_holdings": lambda api: api.get_mf_holdings(symbol),
+        "delivery_trend": lambda api: api.get_delivery_trend(symbol),
+        "promoter_pledge": lambda api: api.get_promoter_pledge(symbol),
+        "consensus_estimate": lambda api: api.get_consensus_estimate(symbol),
+        "earnings_surprises": lambda api: api.get_earnings_surprises(symbol),
+        "macro_snapshot": lambda api: api.get_macro_snapshot(),
+        "fii_dii_streak": lambda api: api.get_fii_dii_streak(),
+        "fii_dii_flows": lambda api: api.get_fii_dii_flows(),
+        "chart_data": lambda api: api.get_chart_data(symbol, "pe"),
+        "peer_comparison": lambda api: api.get_peer_comparison(symbol),
+        "shareholder_detail": lambda api: api.get_shareholder_detail(symbol),
+        "expense_breakdown": lambda api: api.get_expense_breakdown(symbol),
+        "recent_filings": lambda api: api.get_recent_filings(symbol),
+        "composite_score": lambda api: _get_score(symbol),
+    }
+
+    with ResearchDataAPI() as api:
+        result = method_map[tool_name](api)
+
+    if raw:
+        print(json.dumps(result, default=str))
+    else:
+        console.print_json(json.dumps(result, default=str))
+
+
+def _get_score(symbol: str) -> dict:
+    """Get composite score as a dict."""
+    from flowtracker.screener_engine import ScreenerEngine
+    from flowtracker.store import FlowStore
+
+    with FlowStore() as store:
+        engine = ScreenerEngine(store)
+        score = engine.score_stock(symbol)
+    if not score:
+        return {"error": "No data"}
+    return {
+        "symbol": score.symbol,
+        "composite_score": score.composite_score,
+        "factors": [
+            {"factor": f.factor, "score": f.score, "raw_value": f.raw_value, "detail": f.detail}
+            for f in score.factors
+        ],
+    }

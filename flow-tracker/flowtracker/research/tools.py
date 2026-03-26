@@ -1,0 +1,376 @@
+"""MCP tool definitions wrapping ResearchDataAPI for the research agent."""
+
+from __future__ import annotations
+
+import json
+
+from claude_agent_sdk import tool
+
+from flowtracker.research.data_api import ResearchDataAPI
+
+
+# --- Core Financials ---
+
+
+@tool(
+    "get_quarterly_results",
+    "Get quarterly P&L: revenue, expenses, operating profit, net income, EPS, margins. Returns up to 12 quarters.",
+    {"symbol": str, "quarters": int},
+)
+async def get_quarterly_results(args):
+    with ResearchDataAPI() as api:
+        data = api.get_quarterly_results(args["symbol"], args.get("quarters", 12))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_annual_financials",
+    "Get annual P&L + Balance Sheet + Cash Flow for up to 10 years. Revenue, profit, debt, FCF, etc.",
+    {"symbol": str, "years": int},
+)
+async def get_annual_financials(args):
+    with ResearchDataAPI() as api:
+        data = api.get_annual_financials(args["symbol"], args.get("years", 10))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_screener_ratios",
+    "Get efficiency ratios: debtor days, inventory days, cash conversion cycle, working capital days, ROCE%. Up to 10 years.",
+    {"symbol": str, "years": int},
+)
+async def get_screener_ratios(args):
+    with ResearchDataAPI() as api:
+        data = api.get_screener_ratios(args["symbol"], args.get("years", 10))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Valuation ---
+
+
+@tool(
+    "get_valuation_snapshot",
+    "Get latest valuation snapshot: price, PE, PB, EV/EBITDA, dividend yield, margins, market cap — 50+ fields.",
+    {"symbol": str},
+)
+async def get_valuation_snapshot(args):
+    with ResearchDataAPI() as api:
+        data = api.get_valuation_snapshot(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_valuation_band",
+    "Get PE (or other metric) percentile band over historical period. Shows where current valuation sits vs history.",
+    {"symbol": str, "metric": str, "days": int},
+)
+async def get_valuation_band(args):
+    with ResearchDataAPI() as api:
+        data = api.get_valuation_band(
+            args["symbol"],
+            args.get("metric", "pe_trailing"),
+            args.get("days", 2500),
+        )
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_pe_history",
+    "Get historical PE and price time series for charting. Up to ~7 years of daily data.",
+    {"symbol": str, "days": int},
+)
+async def get_pe_history(args):
+    with ResearchDataAPI() as api:
+        data = api.get_pe_history(args["symbol"], args.get("days", 2500))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Ownership & Institutional ---
+
+
+@tool(
+    "get_shareholding",
+    "Get quarterly ownership breakdown: FII%, DII%, MF%, Promoter%, Public%. Up to 12 quarters.",
+    {"symbol": str, "quarters": int},
+)
+async def get_shareholding(args):
+    with ResearchDataAPI() as api:
+        data = api.get_shareholding(args["symbol"], args.get("quarters", 12))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_shareholding_changes",
+    "Get latest quarter-over-quarter ownership changes by category (FII, DII, Promoter, etc.).",
+    {"symbol": str},
+)
+async def get_shareholding_changes(args):
+    with ResearchDataAPI() as api:
+        data = api.get_shareholding_changes(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_insider_transactions",
+    "Get SAST insider buy/sell trades: person name, category, quantity, value. Up to 1 year.",
+    {"symbol": str, "days": int},
+)
+async def get_insider_transactions(args):
+    with ResearchDataAPI() as api:
+        data = api.get_insider_transactions(args["symbol"], args.get("days", 365))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_bulk_block_deals",
+    "Get BSE bulk/block deals — large institutional trades with buyer/seller, qty, price.",
+    {"symbol": str},
+)
+async def get_bulk_block_deals(args):
+    with ResearchDataAPI() as api:
+        data = api.get_bulk_block_deals(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_mf_holdings",
+    "Get MF scheme holdings — which mutual fund schemes hold this stock, quantity, % of NAV.",
+    {"symbol": str},
+)
+async def get_mf_holdings(args):
+    with ResearchDataAPI() as api:
+        data = api.get_mf_holdings(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_mf_holding_changes",
+    "Get MF holding changes for this stock (latest month). Shows scheme-level additions/reductions.",
+    {"symbol": str},
+)
+async def get_mf_holding_changes(args):
+    with ResearchDataAPI() as api:
+        data = api.get_mf_holding_changes(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Market Signals ---
+
+
+@tool(
+    "get_delivery_trend",
+    "Get daily delivery % from bhavcopy — high delivery signals accumulation. Up to 30 days.",
+    {"symbol": str, "days": int},
+)
+async def get_delivery_trend(args):
+    with ResearchDataAPI() as api:
+        data = api.get_delivery_trend(args["symbol"], args.get("days", 30))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_promoter_pledge",
+    "Get quarterly promoter pledge % history. Rising pledge = risk signal.",
+    {"symbol": str},
+)
+async def get_promoter_pledge(args):
+    with ResearchDataAPI() as api:
+        data = api.get_promoter_pledge(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Consensus ---
+
+
+@tool(
+    "get_consensus_estimate",
+    "Get latest analyst consensus: target price, recommendation, forward PE, earnings growth estimate.",
+    {"symbol": str},
+)
+async def get_consensus_estimate(args):
+    with ResearchDataAPI() as api:
+        data = api.get_consensus_estimate(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_earnings_surprises",
+    "Get quarterly earnings surprises: actual vs estimate EPS, surprise %. Shows beat/miss history.",
+    {"symbol": str},
+)
+async def get_earnings_surprises(args):
+    with ResearchDataAPI() as api:
+        data = api.get_earnings_surprises(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Macro Context ---
+
+
+@tool(
+    "get_macro_snapshot",
+    "Get current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec yield.",
+    {},
+)
+async def get_macro_snapshot(args):
+    with ResearchDataAPI() as api:
+        data = api.get_macro_snapshot()
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_fii_dii_streak",
+    "Get current FII/DII buying/selling streak — consecutive days of net buy or sell.",
+    {},
+)
+async def get_fii_dii_streak(args):
+    with ResearchDataAPI() as api:
+        data = api.get_fii_dii_streak()
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_fii_dii_flows",
+    "Get daily FII/DII net flows (in crores) for recent period. Up to 30 days.",
+    {"days": int},
+)
+async def get_fii_dii_flows(args):
+    with ResearchDataAPI() as api:
+        data = api.get_fii_dii_flows(args.get("days", 30))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Screener APIs (Phase 2) ---
+
+
+@tool(
+    "get_chart_data",
+    "Get Screener chart time series. chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'.",
+    {"symbol": str, "chart_type": str},
+)
+async def get_chart_data(args):
+    with ResearchDataAPI() as api:
+        data = api.get_chart_data(args["symbol"], args["chart_type"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_peer_comparison",
+    "Get peer comparison table: CMP, P/E, MCap, ROCE%, etc. for sector peers of the given stock.",
+    {"symbol": str},
+)
+async def get_peer_comparison(args):
+    with ResearchDataAPI() as api:
+        data = api.get_peer_comparison(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_shareholder_detail",
+    "Get individual shareholder names and quarterly %: e.g. Vanguard, LIC, etc. Optionally filter by classification.",
+    {"symbol": str, "classification": str},
+)
+async def get_shareholder_detail(args):
+    with ResearchDataAPI() as api:
+        data = api.get_shareholder_detail(
+            args["symbol"], args.get("classification")
+        )
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_expense_breakdown",
+    "Get schedule sub-item breakdowns (e.g., Expenses -> Employee Cost, Raw Material). section: 'profit-loss', 'balance-sheet'.",
+    {"symbol": str, "section": str},
+)
+async def get_expense_breakdown(args):
+    with ResearchDataAPI() as api:
+        data = api.get_expense_breakdown(
+            args["symbol"], args.get("section", "profit-loss")
+        )
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Filings & Info ---
+
+
+@tool(
+    "get_recent_filings",
+    "Get recent BSE corporate filings for a stock. Returns filing type, date, subject, PDF link.",
+    {"symbol": str, "limit": int},
+)
+async def get_recent_filings(args):
+    with ResearchDataAPI() as api:
+        data = api.get_recent_filings(args["symbol"], args.get("limit", 10))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_company_info",
+    "Get basic company info: symbol, company name, and industry classification.",
+    {"symbol": str},
+)
+async def get_company_info(args):
+    with ResearchDataAPI() as api:
+        data = api.get_company_info(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Scoring ---
+
+
+@tool(
+    "get_composite_score",
+    "Get 8-factor composite score (0-100) for a stock: ownership, insider, valuation, earnings, quality, delivery, estimates, risk. Each factor has a score, raw value, and explanation.",
+    {"symbol": str},
+)
+async def get_composite_score(args):
+    from flowtracker.screener_engine import ScreenerEngine
+    from flowtracker.store import FlowStore
+
+    with FlowStore() as store:
+        engine = ScreenerEngine(store)
+        score = engine.score_stock(args["symbol"])
+    if score is None:
+        return {"content": [{"type": "text", "text": "No scoring data available"}]}
+    data = {
+        "symbol": score.symbol,
+        "composite_score": score.composite_score,
+        "factors": [
+            {"factor": f.factor, "score": f.score, "raw_value": f.raw_value, "detail": f.detail}
+            for f in score.factors
+        ],
+    }
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Tool Registry ---
+
+RESEARCH_TOOLS = [
+    get_quarterly_results,
+    get_annual_financials,
+    get_screener_ratios,
+    get_valuation_snapshot,
+    get_valuation_band,
+    get_pe_history,
+    get_shareholding,
+    get_shareholding_changes,
+    get_insider_transactions,
+    get_bulk_block_deals,
+    get_mf_holdings,
+    get_mf_holding_changes,
+    get_delivery_trend,
+    get_promoter_pledge,
+    get_consensus_estimate,
+    get_earnings_surprises,
+    get_macro_snapshot,
+    get_fii_dii_streak,
+    get_fii_dii_flows,
+    get_chart_data,
+    get_peer_comparison,
+    get_shareholder_detail,
+    get_expense_breakdown,
+    get_recent_filings,
+    get_company_info,
+    get_composite_score,
+]
