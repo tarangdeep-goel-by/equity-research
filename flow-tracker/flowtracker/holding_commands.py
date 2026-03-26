@@ -6,6 +6,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from flowtracker.holding_client import NSEHoldingClient, NSEHoldingError
 from flowtracker.holding_display import (
@@ -14,6 +15,7 @@ from flowtracker.holding_display import (
     display_shareholding,
     display_watchlist,
 )
+from flowtracker.screener_client import ScreenerClient, ScreenerError
 from flowtracker.store import FlowStore
 
 app = typer.Typer(
@@ -111,3 +113,90 @@ def changes(
     with FlowStore() as store:
         data = store.get_biggest_changes(category, limit)
     display_holding_changes(data)
+
+
+@app.command()
+def shareholders(
+    symbol: Annotated[
+        str, typer.Option("-s", "--symbol", help="Stock symbol")
+    ],
+    classification: Annotated[
+        str | None,
+        typer.Option(
+            "-c",
+            "--classification",
+            help="Filter: promoters, foreign_institutions, domestic_institutions, public",
+        ),
+    ] = None,
+) -> None:
+    """Fetch individual shareholder details from Screener.in."""
+    symbol = symbol.upper()
+    try:
+        with ScreenerClient() as sc:
+            with FlowStore() as store:
+                # Resolve company_id
+                cached = store.get_screener_ids(symbol)
+                if cached:
+                    company_id = cached[0]
+                else:
+                    company_id, warehouse_id = sc._get_both_ids(symbol)
+                    store.upsert_screener_ids(symbol, company_id, warehouse_id)
+
+                console.print(f"[dim]Fetching shareholders for {symbol}...[/]")
+                data = sc.fetch_shareholders(company_id)
+                if not any(data.values()):
+                    console.print("[yellow]No shareholder data returned.[/]")
+                    raise typer.Exit(1)
+
+                count = store.upsert_shareholder_details(symbol, data)
+                console.print(f"[green]Stored {count} shareholder records.[/]")
+
+        # Display tables per classification
+        classifications_to_show = (
+            [classification] if classification else list(data.keys())
+        )
+
+        for cls in classifications_to_show:
+            holders = data.get(cls, [])
+            if not holders:
+                continue
+
+            # Collect all quarter keys
+            all_quarters: list[str] = []
+            for h in holders:
+                for q in h.get("values", {}):
+                    if q not in all_quarters:
+                        all_quarters.append(q)
+            all_quarters.sort()
+            display_quarters = all_quarters[-6:] if len(all_quarters) > 6 else all_quarters
+
+            cls_title = cls.replace("_", " ").title()
+            table = Table(
+                title=f"{symbol} — {cls_title}",
+                show_header=True,
+                header_style="bold cyan",
+            )
+            table.add_column("Holder", style="bold", max_width=35)
+            for q in display_quarters:
+                table.add_column(q, justify="right")
+
+            for h in holders:
+                row = [h.get("name", "?")]
+                vals = h.get("values", {})
+                for q in display_quarters:
+                    v = vals.get(q)
+                    if v is not None:
+                        try:
+                            row.append(f"{float(v):.2f}%")
+                        except (ValueError, TypeError):
+                            row.append(str(v))
+                    else:
+                        row.append("—")
+                table.add_row(*row)
+
+            console.print(table)
+            console.print()
+
+    except ScreenerError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)

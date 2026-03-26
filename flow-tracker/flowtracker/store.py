@@ -381,6 +381,65 @@ CREATE TABLE IF NOT EXISTS screener_ratios (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, fiscal_year_end)
 );
+
+CREATE TABLE IF NOT EXISTS screener_ids (
+    symbol TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    warehouse_id TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS screener_charts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    chart_type TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    date TEXT NOT NULL,
+    value REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, chart_type, metric, date)
+);
+
+CREATE TABLE IF NOT EXISTS peer_comparison (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    peer_symbol TEXT,
+    peer_name TEXT NOT NULL,
+    cmp REAL,
+    pe REAL,
+    market_cap REAL,
+    div_yield REAL,
+    np_qtr REAL,
+    qtr_profit_var REAL,
+    sales_qtr REAL,
+    qtr_sales_var REAL,
+    roce REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, peer_name)
+);
+
+CREATE TABLE IF NOT EXISTS shareholder_detail (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    classification TEXT NOT NULL,
+    holder_name TEXT NOT NULL,
+    quarter TEXT NOT NULL,
+    percentage REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, classification, holder_name, quarter)
+);
+
+CREATE TABLE IF NOT EXISTS financial_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    section TEXT NOT NULL,
+    parent_item TEXT NOT NULL,
+    sub_item TEXT NOT NULL,
+    period TEXT NOT NULL,
+    value REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, section, parent_item, sub_item, period)
+);
 """
 
 
@@ -2044,6 +2103,195 @@ class FlowStore:
             file_size=r["file_size"], news_id=r["news_id"],
             local_path=r["local_path"],
         ) for r in rows]
+
+    # -- Screener IDs cache --
+
+    def upsert_screener_ids(self, symbol: str, company_id: str, warehouse_id: str) -> None:
+        """Cache Screener.in company_id and warehouse_id for a symbol."""
+        self._conn.execute(
+            "INSERT INTO screener_ids (symbol, company_id, warehouse_id, updated_at) "
+            "VALUES (?, ?, ?, datetime('now')) "
+            "ON CONFLICT(symbol) DO UPDATE SET company_id=excluded.company_id, "
+            "warehouse_id=excluded.warehouse_id, updated_at=excluded.updated_at",
+            (symbol, company_id, warehouse_id),
+        )
+        self._conn.commit()
+
+    def get_screener_ids(self, symbol: str) -> tuple[str, str] | None:
+        """Get cached (company_id, warehouse_id) or None."""
+        row = self._conn.execute(
+            "SELECT company_id, warehouse_id FROM screener_ids WHERE symbol = ?",
+            (symbol,),
+        ).fetchone()
+        return (row["company_id"], row["warehouse_id"]) if row else None
+
+    # -- Chart data --
+
+    def upsert_chart_data(self, symbol: str, chart_type: str, datasets: list[dict]) -> int:
+        """Store chart API datasets. Each dataset has metric, label, values."""
+        count = 0
+        for ds in datasets:
+            metric = ds.get("metric", "")
+            for date_val, value in ds.get("values", []):
+                self._conn.execute(
+                    "INSERT INTO screener_charts (symbol, chart_type, metric, date, value) "
+                    "VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(symbol, chart_type, metric, date) DO UPDATE SET value=excluded.value",
+                    (symbol, chart_type, metric, str(date_val), value),
+                )
+                count += 1
+        self._conn.commit()
+        return count
+
+    def get_chart_data(self, symbol: str, chart_type: str) -> list[dict]:
+        """Get stored chart data grouped by metric."""
+        rows = self._conn.execute(
+            "SELECT metric, date, value FROM screener_charts "
+            "WHERE symbol = ? AND chart_type = ? ORDER BY metric, date",
+            (symbol, chart_type),
+        ).fetchall()
+        from collections import defaultdict
+
+        grouped: dict[str, list[dict]] = defaultdict(list)
+        for r in rows:
+            grouped[r["metric"]].append({"date": r["date"], "value": r["value"]})
+        return [{"metric": m, "values": v} for m, v in grouped.items()]
+
+    # -- Peer comparison --
+
+    def upsert_peers(self, symbol: str, peers: list[dict]) -> int:
+        """Store peer comparison data."""
+        count = 0
+        for p in peers:
+            name = p.get("name", p.get("sno", ""))
+            if not name:
+                continue
+            self._conn.execute(
+                "INSERT INTO peer_comparison "
+                "(symbol, peer_name, cmp, pe, market_cap, div_yield, "
+                "np_qtr, qtr_profit_var, sales_qtr, qtr_sales_var, roce) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(symbol, peer_name) DO UPDATE SET "
+                "cmp=excluded.cmp, pe=excluded.pe, market_cap=excluded.market_cap, "
+                "div_yield=excluded.div_yield, np_qtr=excluded.np_qtr, "
+                "qtr_profit_var=excluded.qtr_profit_var, sales_qtr=excluded.sales_qtr, "
+                "qtr_sales_var=excluded.qtr_sales_var, roce=excluded.roce, "
+                "fetched_at=datetime('now')",
+                (
+                    symbol,
+                    name,
+                    p.get("cmp") or p.get("cmp_rs"),
+                    p.get("pe") or p.get("p_e"),
+                    p.get("market_cap") or p.get("market_cap_cr"),
+                    p.get("div_yield") or p.get("div_yld_pct"),
+                    p.get("np_qtr") or p.get("np_qtr_cr"),
+                    p.get("qtr_profit_var") or p.get("qtr_profit_var_pct"),
+                    p.get("sales_qtr") or p.get("sales_qtr_cr"),
+                    p.get("qtr_sales_var") or p.get("qtr_sales_var_pct"),
+                    p.get("roce") or p.get("roce_pct"),
+                ),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_peers(self, symbol: str) -> list[dict]:
+        """Get stored peer comparison data."""
+        rows = self._conn.execute(
+            "SELECT * FROM peer_comparison WHERE symbol = ? ORDER BY market_cap DESC",
+            (symbol,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- Shareholder details --
+
+    def upsert_shareholder_details(self, symbol: str, data: dict[str, list[dict]]) -> int:
+        """Store individual shareholder data from Screener API."""
+        count = 0
+        for classification, holders in data.items():
+            for holder in holders:
+                name = holder.get("name", "")
+                for quarter, pct in holder.get("values", {}).items():
+                    if pct is None:
+                        continue
+                    try:
+                        pct_val = float(pct)
+                    except (ValueError, TypeError):
+                        continue
+                    self._conn.execute(
+                        "INSERT INTO shareholder_detail "
+                        "(symbol, classification, holder_name, quarter, percentage) "
+                        "VALUES (?, ?, ?, ?, ?) "
+                        "ON CONFLICT(symbol, classification, holder_name, quarter) "
+                        "DO UPDATE SET percentage=excluded.percentage, fetched_at=datetime('now')",
+                        (symbol, classification, name, quarter, pct_val),
+                    )
+                    count += 1
+        self._conn.commit()
+        return count
+
+    def get_shareholder_details(
+        self, symbol: str, classification: str | None = None
+    ) -> list[dict]:
+        """Get stored shareholder details, optionally filtered by classification."""
+        if classification:
+            rows = self._conn.execute(
+                "SELECT * FROM shareholder_detail "
+                "WHERE symbol = ? AND classification = ? "
+                "ORDER BY quarter DESC, percentage DESC",
+                (symbol, classification),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM shareholder_detail WHERE symbol = ? "
+                "ORDER BY classification, quarter DESC, percentage DESC",
+                (symbol,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- Financial schedules --
+
+    def upsert_schedules(self, symbol: str, section: str, parent: str, data: dict) -> int:
+        """Store schedule (sub-item breakdown) data."""
+        count = 0
+        for sub_item, periods in data.items():
+            if not isinstance(periods, dict):
+                continue
+            for period, value in periods.items():
+                if value is None:
+                    continue
+                try:
+                    val = float(str(value).replace(",", "").replace("%", ""))
+                except (ValueError, TypeError):
+                    continue
+                self._conn.execute(
+                    "INSERT INTO financial_schedules "
+                    "(symbol, section, parent_item, sub_item, period, value) "
+                    "VALUES (?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(symbol, section, parent_item, sub_item, period) "
+                    "DO UPDATE SET value=excluded.value, fetched_at=datetime('now')",
+                    (symbol, section, parent, sub_item, period, val),
+                )
+                count += 1
+        self._conn.commit()
+        return count
+
+    def get_schedules(self, symbol: str, section: str | None = None) -> list[dict]:
+        """Get stored schedule data, optionally filtered by section."""
+        if section:
+            rows = self._conn.execute(
+                "SELECT * FROM financial_schedules "
+                "WHERE symbol = ? AND section = ? "
+                "ORDER BY parent_item, sub_item, period",
+                (symbol, section),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM financial_schedules WHERE symbol = ? "
+                "ORDER BY section, parent_item, sub_item, period",
+                (symbol,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""

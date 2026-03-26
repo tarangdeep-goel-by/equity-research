@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ symbol }} — Screener Clone</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root{--bg:#0f1117;--card:#1a1d28;--border:#2a2d3a;--text:#e4e4e7;--dim:#71717a;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#eab308;--cyan:#06b6d4;--purple:#a855f7;--orange:#f97316}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;line-height:1.6;padding:1.5rem}
+a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}
+
+/* Layout */
+.container{max-width:1400px;margin:0 auto}
+section{margin-bottom:2rem}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+.card h2{font-size:1.1rem;color:var(--cyan);margin-bottom:0.8rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem}
+.full-width{width:100%}
+
+/* Header */
+.header{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:0.25rem}
+.header h1{font-size:2rem;font-weight:700}
+.header .price{font-size:1.5rem;font-weight:700;margin-left:auto}
+.header .change-up{color:var(--green)}
+.header .change-down{color:var(--red)}
+.header-links{display:flex;gap:1rem;font-size:0.82rem;color:var(--dim);margin-bottom:0.25rem}
+.header-links a{font-size:0.82rem}
+.subtitle{color:var(--dim);font-size:0.82rem;margin-bottom:2rem}
+
+/* Summary Ratios Grid */
+.ratio-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem}
+.ratio-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.8rem 1rem}
+.ratio-label{font-size:0.75rem;color:var(--dim);margin-bottom:0.2rem}
+.ratio-value{font-size:1.05rem;font-weight:600;color:var(--text)}
+
+/* About + Pros/Cons */
+.about-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.about-text{font-size:0.88rem;line-height:1.7;color:var(--text)}
+.pros-cons h3{font-size:0.9rem;margin-bottom:0.5rem;font-weight:600}
+.pros-cons h3.pro-title{color:var(--green)}
+.pros-cons h3.con-title{color:var(--red)}
+.pros-cons ul{list-style:none;padding:0;margin-bottom:1rem}
+.pros-cons li{padding:0.25rem 0;font-size:0.84rem;padding-left:1.2rem;position:relative}
+.pros-cons li::before{position:absolute;left:0}
+.pros-cons .pro li::before{content:"+";color:var(--green);font-weight:700}
+.pros-cons .con li::before{content:"-";color:var(--red);font-weight:700}
+
+/* Chart Controls */
+.chart-controls{display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem}
+.chart-type-btn,.chart-period-btn{background:var(--card);border:1px solid var(--border);color:var(--dim);padding:0.35rem 0.9rem;border-radius:6px;cursor:pointer;font-size:0.8rem;transition:all 0.15s}
+.chart-type-btn:hover,.chart-period-btn:hover{border-color:var(--blue);color:var(--text)}
+.chart-type-btn.active,.chart-period-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.chart-container{position:relative;height:400px;margin-bottom:0.5rem}
+.chart-divider{display:flex;align-items:center;gap:0.75rem;margin:0.5rem 0}
+.chart-divider span{color:var(--dim);font-size:0.75rem;white-space:nowrap}
+.chart-divider hr{flex:1;border:none;border-top:1px solid var(--border)}
+
+/* Tables */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:0.82rem}
+th{text-align:left;padding:0.4rem 0.6rem;color:var(--dim);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap}
+td{padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);white-space:nowrap}
+th.r,td.r{text-align:right}
+tr:hover{background:rgba(255,255,255,0.03)}
+
+/* Expandable rows */
+.expandable{cursor:pointer}.expandable:hover{background:rgba(6,182,212,0.05)}
+.expand-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);font-size:0.75rem;color:var(--dim);margin-left:0.4rem;vertical-align:middle;line-height:1}
+.sub-row td{padding-left:2rem;color:var(--dim);font-size:0.8rem}
+.hidden{display:none}
+
+/* Peers */
+.peers-card table{width:100%;border-collapse:collapse;font-size:0.82rem}
+.peers-card th{text-align:left;padding:0.4rem 0.6rem;color:var(--dim);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap}
+.peers-card td{padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);white-space:nowrap}
+.peers-card th.r,.peers-card td.r{text-align:right}
+.peers-card a{color:var(--cyan)}
+
+/* Growth Rates */
+.growth-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.growth-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1rem}
+.growth-card h3{font-size:0.9rem;color:var(--cyan);margin-bottom:0.6rem}
+.growth-row{display:flex;justify-content:space-between;padding:0.25rem 0;font-size:0.84rem}
+.growth-row .period{color:var(--dim)}
+.growth-row .value{font-weight:600}
+
+/* Shareholding detail */
+.sh-detail-card{margin-top:1rem}
+.sh-detail-card h3{font-size:0.9rem;color:var(--cyan);margin-bottom:0.5rem;margin-top:1rem}
+
+/* Documents */
+.doc-list{list-style:none;padding:0}
+.doc-list li{padding:0.6rem 0;border-bottom:1px solid var(--border);font-size:0.84rem}
+.doc-list li:last-child{border-bottom:none}
+.doc-meta{color:var(--dim);font-size:0.75rem;margin-top:0.15rem}
+.show-more-btn{background:none;border:1px solid var(--border);color:var(--cyan);padding:0.35rem 1rem;border-radius:6px;cursor:pointer;font-size:0.8rem;margin-top:0.75rem}
+.show-more-btn:hover{border-color:var(--cyan)}
+
+/* Nav */
+.nav{display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:2rem;padding:0.75rem;background:var(--card);border:1px solid var(--border);border-radius:8px}
+.nav a{color:var(--dim);font-size:0.8rem;padding:0.3rem 0.7rem;border-radius:4px;transition:all 0.15s}
+.nav a:hover{color:var(--text);background:rgba(255,255,255,0.05);text-decoration:none}
+
+/* Footer */
+.footer{text-align:center;color:var(--dim);font-size:0.75rem;padding:2rem 0 1rem;border-top:1px solid var(--border);margin-top:2rem}
+
+/* Responsive */
+@media(max-width:768px){
+  .ratio-grid{grid-template-columns:1fr}
+  .about-grid{grid-template-columns:1fr}
+  .growth-grid{grid-template-columns:1fr}
+  .header{flex-direction:column;gap:0.25rem}
+  .header .price{margin-left:0}
+  body{padding:0.75rem}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+{# ========== SECTION 1: HEADER ========== #}
+<section id="header">
+  <div class="header">
+    <h1>{{ company_name }}</h1>
+    <span class="price">
+      ₹{{ price }}
+      {% if change_pct %}
+        <span class="{{ 'change-up' if change_pct|replace(',','')|float >= 0 else 'change-down' }}" style="font-size:1rem;margin-left:0.4rem">
+          {{ "+" if change_pct|replace(',','')|float >= 0 else "" }}{{ change_pct }}%
+        </span>
+      {% endif %}
+    </span>
+  </div>
+  <div class="header-links">
+    {% if bse_code %}<a href="https://www.bseindia.com/stock-share-price/x/y/{{ bse_code }}" target="_blank">BSE: {{ bse_code }}</a>{% endif %}
+    {% if nse_symbol %}<a href="https://www.nseindia.com/get-quotes/equity?symbol={{ nse_symbol }}" target="_blank">NSE: {{ nse_symbol }}</a>{% endif %}
+    {% if website %}<a href="{{ website }}" target="_blank">{{ website }}</a>{% endif %}
+  </div>
+  <p class="subtitle">Screener Clone &mdash; Generated {{ generated_at }}</p>
+</section>
+
+{# ========== NAVIGATION ========== #}
+<nav class="nav">
+  <a href="#summary">Summary</a>
+  <a href="#about">About</a>
+  <a href="#charts">Charts</a>
+  {% if peers_html %}<a href="#peers">Peers</a>{% endif %}
+  {% if tables %}<a href="#quarters">Quarterly</a>
+  <a href="#profit-loss">P&amp;L</a>
+  <a href="#balance-sheet">Balance Sheet</a>
+  <a href="#cash-flow">Cash Flow</a>
+  <a href="#ratios">Ratios</a>{% endif %}
+  {% if growth_rates %}<a href="#growth">Growth</a>{% endif %}
+  {% if shareholding %}<a href="#shareholding">Shareholding</a>{% endif %}
+  {% if documents %}<a href="#documents">Documents</a>{% endif %}
+</nav>
+
+{# ========== SECTION 2: SUMMARY RATIOS ========== #}
+{% if summary_ratios %}
+<section id="summary">
+  <div class="ratio-grid">
+    {% for r in summary_ratios %}
+    <div class="ratio-card">
+      <div class="ratio-label">{{ r.label }}</div>
+      <div class="ratio-value">{{ r.value }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# ========== SECTION 3: ABOUT + PROS / CONS ========== #}
+<section id="about">
+  <div class="about-grid">
+    <div class="card">
+      <h2>About {{ symbol }}</h2>
+      {% if about %}
+        <div class="about-text">{{ about }}</div>
+      {% else %}
+        <p style="color:var(--dim);font-size:0.85rem">No description available.</p>
+      {% endif %}
+    </div>
+    <div class="card pros-cons">
+      {% if pros %}
+      <h3 class="pro-title">Strengths</h3>
+      <ul class="pro">
+        {% for p in pros %}
+        <li>{{ p }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if cons %}
+      <h3 class="con-title">Weaknesses</h3>
+      <ul class="con">
+        {% for c in cons %}
+        <li>{{ c }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if not pros and not cons %}
+      <p style="color:var(--dim);font-size:0.85rem">No analysis available.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{# ========== SECTION 4: CHARTS ========== #}
+{% if charts %}
+<section id="charts">
+  <div class="card full-width">
+    <h2>Charts</h2>
+    <div class="chart-controls">
+      <button class="chart-type-btn active" data-type="price">Price</button>
+      <button class="chart-type-btn" data-type="pe">PE Ratio</button>
+      <button class="chart-type-btn" data-type="sales_margin">Sales &amp; Margin</button>
+      <button class="chart-type-btn" data-type="ev_ebitda">EV / EBITDA</button>
+      <button class="chart-type-btn" data-type="pbv">Price to Book</button>
+      <button class="chart-type-btn" data-type="mcap_sales">MCap / Sales</button>
+    </div>
+    <div class="chart-divider"><hr><span>Time Period</span><hr></div>
+    <div class="chart-controls">
+      <button class="chart-period-btn" data-period="1M">1M</button>
+      <button class="chart-period-btn" data-period="6M">6M</button>
+      <button class="chart-period-btn active" data-period="1Y">1Y</button>
+      <button class="chart-period-btn" data-period="3Y">3Y</button>
+      <button class="chart-period-btn" data-period="5Y">5Y</button>
+      <button class="chart-period-btn" data-period="10Y">10Y</button>
+      <button class="chart-period-btn" data-period="Max">Max</button>
+    </div>
+    <div class="chart-container">
+      <canvas id="main-chart"></canvas>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ========== SECTION 5: PEERS ========== #}
+{% if peers_html %}
+<section id="peers">
+  <div class="card full-width peers-card">
+    <h2>Peer Comparison</h2>
+    <div class="table-scroll">
+      {{ peers_html | safe }}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ========== SECTION 6: FINANCIAL TABLES ========== #}
+{% macro render_table(section_id, title, table_data) %}
+{% if table_data %}
+<section id="{{ section_id }}">
+  <div class="card full-width">
+    <h2>{{ title }}</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            {% for h in table_data.headers %}
+            <th{% if loop.index0 > 0 %} class="r"{% endif %}>{{ h }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in table_data.rows %}
+          <tr class="{% if row.expandable %}expandable{% endif %}"
+              {% if row.expandable %}onclick="toggleSubRows(this)"{% endif %}>
+            <td>{{ row.label }}{% if row.expandable %} <span class="expand-icon">+</span>{% endif %}</td>
+            {% for v in row['values'] %}
+            <td class="r">{{ v }}</td>
+            {% endfor %}
+          </tr>
+          {% if row.sub_rows %}
+          {% for sub in row.sub_rows %}
+          <tr class="sub-row hidden">
+            <td class="indent">{{ sub.label }}</td>
+            {% for v in sub['values'] %}
+            <td class="r">{{ v }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endmacro %}
+
+{% if tables %}
+{{ render_table("quarters", "Quarterly Results", tables.quarters) }}
+{{ render_table("profit-loss", "Profit & Loss", tables.profit_loss) }}
+{{ render_table("balance-sheet", "Balance Sheet", tables.balance_sheet) }}
+{{ render_table("cash-flow", "Cash Flow", tables.cash_flow) }}
+{{ render_table("ratios", "Ratios", tables.ratios) }}
+{% endif %}
+
+{# ========== SECTION 7: GROWTH RATES ========== #}
+{% if growth_rates %}
+<section id="growth">
+  <div class="card full-width">
+    <h2>Growth Rates</h2>
+    <div class="growth-grid">
+      {% for g in growth_rates %}
+      <div class="growth-card">
+        <h3>{{ g.label }}</h3>
+        {% for r in g.rows %}
+        <div class="growth-row">
+          <span class="period">{{ r.period }}</span>
+          <span class="value">{{ r.value }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ========== SECTION 8: SHAREHOLDING ========== #}
+{% if shareholding %}
+<section id="shareholding">
+  <div class="card full-width">
+    <h2>Shareholding Pattern</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            {% for h in shareholding.headers %}
+            <th{% if loop.index0 > 0 %} class="r"{% endif %}>{{ h }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in shareholding.rows %}
+          <tr class="{% if row.expandable %}expandable{% endif %}"
+              {% if row.expandable %}onclick="toggleSubRows(this)"{% endif %}>
+            <td>{{ row.label }}{% if row.expandable %} <span class="expand-icon">+</span>{% endif %}</td>
+            {% for v in row['values'] %}
+            <td class="r">{{ v }}</td>
+            {% endfor %}
+          </tr>
+          {% if row.sub_rows %}
+          {% for sub in row.sub_rows %}
+          <tr class="sub-row hidden">
+            <td class="indent">{{ sub.label }}</td>
+            {% for v in sub['values'] %}
+            <td class="r">{{ v }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+{% endif %}
+
+{# ========== SECTION 9: DOCUMENTS ========== #}
+{% if documents %}
+<section id="documents">
+  <div class="card full-width">
+    <h2>Documents &amp; Announcements</h2>
+    <ul class="doc-list" id="doc-list">
+      {% for doc in documents %}
+      <li{% if loop.index > 10 %} class="doc-extra hidden"{% endif %}>
+        <a href="{{ doc.url }}" target="_blank">{{ doc.title }}</a>
+        {% if doc.meta %}<div class="doc-meta">{{ doc.meta }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% if documents | length > 10 %}
+    <button class="show-more-btn" onclick="toggleDocs(this)">Show {{ documents | length - 10 }} more</button>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{# ========== FOOTER ========== #}
+<div class="footer">
+  Screener Clone &mdash; Data sourced from Screener.in | Generated {{ generated_at }}
+</div>
+
+</div>{# /.container #}
+
+{# ========== JAVASCRIPT ========== #}
+<script>
+/* ---------- Expandable sub-rows ---------- */
+function toggleSubRows(row) {
+    var icon = row.querySelector('.expand-icon');
+    var next = row.nextElementSibling;
+    while (next && next.classList.contains('sub-row')) {
+        next.classList.toggle('hidden');
+        next = next.nextElementSibling;
+    }
+    if (icon) icon.textContent = icon.textContent === '+' ? '\u2212' : '+';
+}
+
+/* ---------- Documents show-more ---------- */
+function toggleDocs(btn) {
+    var extras = document.querySelectorAll('.doc-extra');
+    var showing = !extras[0].classList.contains('hidden');
+    extras.forEach(function(el) {
+        if (showing) el.classList.add('hidden');
+        else el.classList.remove('hidden');
+    });
+    btn.textContent = showing ? 'Show ' + extras.length + ' more' : 'Show less';
+}
+
+/* ---------- Charts ---------- */
+{% if charts %}
+var CHART_DATA = {{ charts | tojson }};
+
+var CHART_CONFIGS = {
+    price:        { title: "Price", defaultDays: 365 },
+    pe:           { title: "PE Ratio", defaultDays: 10000 },
+    sales_margin: { title: "Sales & Margin", defaultDays: 10000 },
+    ev_ebitda:    { title: "EV / EBITDA", defaultDays: 10000 },
+    pbv:          { title: "Price to Book", defaultDays: 10000 },
+    mcap_sales:   { title: "Market Cap / Sales", defaultDays: 10000 }
+};
+
+var METRIC_STYLES = {
+    "Price":                     { type: "line", yAxisID: "y-right", color: "#3b82f6", borderWidth: 2 },
+    "DMA50":                     { type: "line", yAxisID: "y-right", color: "#eab308", borderWidth: 1.5 },
+    "DMA200":                    { type: "line", yAxisID: "y-right", color: "#ef4444", borderWidth: 1.5 },
+    "Volume":                    { type: "bar",  yAxisID: "y-left",  color: "rgba(100,150,200,0.3)", borderWidth: 0 },
+    "Price to Earning":          { type: "line", yAxisID: "y-right", color: "#3b82f6", borderWidth: 2 },
+    "Median PE":                 { type: "line", yAxisID: "y-right", color: "#ef4444", borderWidth: 1.5, borderDash: [5,5] },
+    "EPS":                       { type: "bar",  yAxisID: "y-left",  color: "rgba(34,197,94,0.5)" },
+    "GPM":                       { type: "line", yAxisID: "y-right", color: "#22c55e", borderWidth: 2 },
+    "OPM":                       { type: "line", yAxisID: "y-right", color: "#3b82f6", borderWidth: 2 },
+    "NPM":                       { type: "line", yAxisID: "y-right", color: "#a855f7", borderWidth: 2 },
+    "Quarter Sales":             { type: "bar",  yAxisID: "y-left",  color: "rgba(100,150,200,0.3)" },
+    "EV Multiple":               { type: "line", yAxisID: "y-right", color: "#3b82f6", borderWidth: 2 },
+    "Median EV Multiple":        { type: "line", yAxisID: "y-right", color: "#ef4444", borderWidth: 1.5, borderDash: [5,5] },
+    "EBITDA":                    { type: "bar",  yAxisID: "y-left",  color: "rgba(34,197,94,0.5)" },
+    "Price to book value":       { type: "line", yAxisID: "y-right", color: "#3b82f6", borderWidth: 2 },
+    "Median PBV":                { type: "line", yAxisID: "y-right", color: "#ef4444", borderWidth: 1.5, borderDash: [5,5] },
+    "Book value":                { type: "bar",  yAxisID: "y-left",  color: "rgba(34,197,94,0.5)" },
+    "Market Cap to Sales":       { type: "line", yAxisID: "y-right", color: "#3b82f6", borderWidth: 2 },
+    "Median Market Cap to Sales":{ type: "line", yAxisID: "y-right", color: "#ef4444", borderWidth: 1.5, borderDash: [5,5] },
+    "Sales":                     { type: "bar",  yAxisID: "y-left",  color: "rgba(100,150,200,0.3)" }
+};
+
+var PERIOD_DAYS = { "1M": 30, "6M": 180, "1Y": 365, "3Y": 1095, "5Y": 1825, "10Y": 3650, "Max": 100000 };
+
+var currentChart = null;
+var activeChartType = "price";
+var activePeriod = "1Y";
+
+function renderChart() {
+    var chartData = CHART_DATA[activeChartType];
+    if (!chartData) return;
+
+    var cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - PERIOD_DAYS[activePeriod]);
+
+    var datasets = chartData.datasets.map(function(ds) {
+        var style = METRIC_STYLES[ds.metric] || { type: "line", yAxisID: "y-right", color: "#888", borderWidth: 2 };
+        var filteredValues = ds.values.filter(function(v) { return new Date(v[0]) >= cutoffDate; });
+        return {
+            label: ds.label,
+            data: filteredValues.map(function(v) { return { x: v[0], y: v[1] }; }),
+            type: style.type,
+            yAxisID: style.yAxisID,
+            borderColor: style.color,
+            backgroundColor: style.type === "bar" ? style.color : "transparent",
+            borderWidth: style.borderWidth || 2,
+            borderDash: style.borderDash || [],
+            pointRadius: 0,
+            tension: 0.1,
+            order: style.type === "bar" ? 1 : 0
+        };
+    });
+
+    var hasLeftAxis = datasets.some(function(d) { return d.yAxisID === "y-left"; });
+    var hasRightAxis = datasets.some(function(d) { return d.yAxisID === "y-right"; });
+
+    if (currentChart) currentChart.destroy();
+
+    var ctx = document.getElementById("main-chart").getContext("2d");
+    currentChart = new Chart(ctx, {
+        type: "line",
+        data: { datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: "bottom",
+                    labels: { color: "#e4e4e7", usePointStyle: true, padding: 16, font: { size: 11 } }
+                },
+                tooltip: {
+                    mode: "index",
+                    intersect: false,
+                    backgroundColor: "#1a1d28",
+                    borderColor: "#2a2d3a",
+                    borderWidth: 1,
+                    titleColor: "#e4e4e7",
+                    bodyColor: "#e4e4e7",
+                    padding: 10,
+                    cornerRadius: 6
+                }
+            },
+            scales: {
+                x: {
+                    type: "time",
+                    time: {
+                        unit: activePeriod === "1M" ? "day" : activePeriod === "6M" ? "week" : "month",
+                        displayFormats: { day: "dd MMM", week: "dd MMM yy", month: "MMM yy" }
+                    },
+                    grid: { color: "rgba(255,255,255,0.05)" },
+                    ticks: { color: "#71717a", maxRotation: 0, font: { size: 10 } }
+                },
+                "y-left": {
+                    display: hasLeftAxis,
+                    position: "left",
+                    grid: { color: "rgba(255,255,255,0.05)" },
+                    ticks: { color: "#71717a", font: { size: 10 } }
+                },
+                "y-right": {
+                    display: hasRightAxis,
+                    position: "right",
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: "#71717a", font: { size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+/* Chart type buttons */
+document.querySelectorAll('.chart-type-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var prev = document.querySelector('.chart-type-btn.active');
+        if (prev) prev.classList.remove('active');
+        btn.classList.add('active');
+        activeChartType = btn.dataset.type;
+        renderChart();
+    });
+});
+
+/* Time period buttons */
+document.querySelectorAll('.chart-period-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var prev = document.querySelector('.chart-period-btn.active');
+        if (prev) prev.classList.remove('active');
+        btn.classList.add('active');
+        activePeriod = btn.dataset.period;
+        renderChart();
+    });
+});
+
+/* Initial render */
+renderChart();
+{% endif %}
+</script>
+</body>
+</html>

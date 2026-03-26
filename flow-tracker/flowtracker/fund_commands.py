@@ -332,3 +332,221 @@ def backfill(
         console.print(f"[yellow]Errors ({len(errors)}):[/]")
         for e in errors:
             console.print(f"  [red]• {e}[/]")
+
+
+def _resolve_screener_ids(
+    sc: ScreenerClient, store: FlowStore, symbol: str
+) -> tuple[str, str]:
+    """Get (company_id, warehouse_id) from cache or fetch + cache."""
+    cached = store.get_screener_ids(symbol)
+    if cached:
+        return cached
+    company_id, warehouse_id = sc._get_both_ids(symbol)
+    store.upsert_screener_ids(symbol, company_id, warehouse_id)
+    return company_id, warehouse_id
+
+
+@app.command()
+def charts(
+    symbol: Annotated[
+        str, typer.Option("-s", "--symbol", help="Stock symbol")
+    ],
+    chart_type: Annotated[
+        str,
+        typer.Option(
+            "-t",
+            "--type",
+            help="Chart type: price, pe, sales_margin, ev_ebitda, pbv, mcap_sales",
+        ),
+    ] = "pe",
+) -> None:
+    """Fetch and display Screener.in chart data."""
+    symbol = symbol.upper()
+    try:
+        with ScreenerClient() as sc:
+            with FlowStore() as store:
+                company_id, _ = _resolve_screener_ids(sc, store, symbol)
+                console.print(f"[dim]Fetching {chart_type} chart for {symbol}...[/]")
+                data = sc.fetch_chart_data(company_id, chart_type)
+                datasets = data.get("datasets", [])
+                if not datasets:
+                    console.print("[yellow]No chart data returned.[/]")
+                    raise typer.Exit(1)
+                count = store.upsert_chart_data(symbol, chart_type, datasets)
+                console.print(f"[green]Stored {count} data points.[/]")
+
+        # Display summary table
+        from rich.table import Table
+
+        table = Table(
+            title=f"{symbol} — {chart_type} chart",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        table.add_column("Metric", style="bold")
+        table.add_column("Points", justify="right")
+        table.add_column("Latest Date")
+        table.add_column("Latest Value", justify="right")
+
+        for ds in datasets:
+            metric = ds.get("metric", ds.get("label", "?"))
+            values = ds.get("values", [])
+            if values:
+                latest = values[-1]
+                latest_date = str(latest[0])
+                latest_val = f"{latest[1]:,.2f}" if latest[1] is not None else "—"
+            else:
+                latest_date = "—"
+                latest_val = "—"
+            table.add_row(metric, str(len(values)), latest_date, latest_val)
+
+        console.print(table)
+
+    except ScreenerError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def peer(
+    symbol: Annotated[
+        str, typer.Option("-s", "--symbol", help="Stock symbol")
+    ],
+) -> None:
+    """Fetch and display peer comparison from Screener.in."""
+    symbol = symbol.upper()
+    try:
+        with ScreenerClient() as sc:
+            with FlowStore() as store:
+                _, warehouse_id = _resolve_screener_ids(sc, store, symbol)
+                console.print(f"[dim]Fetching peers for {symbol}...[/]")
+                peers = sc.fetch_peers(warehouse_id)
+                if not peers:
+                    console.print("[yellow]No peer data returned.[/]")
+                    raise typer.Exit(1)
+                count = store.upsert_peers(symbol, peers)
+                console.print(f"[green]Stored {count} peers.[/]")
+
+        # Display table
+        from rich.table import Table
+
+        table = Table(
+            title=f"{symbol} — Peer Comparison",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        table.add_column("Name", style="bold", max_width=25)
+        table.add_column("CMP", justify="right")
+        table.add_column("P/E", justify="right")
+        table.add_column("Mkt Cap (Cr)", justify="right")
+        table.add_column("Div Yld %", justify="right")
+        table.add_column("NP Qtr", justify="right")
+        table.add_column("Qtr Profit Var %", justify="right")
+        table.add_column("Sales Qtr", justify="right")
+        table.add_column("ROCE %", justify="right")
+
+        def _fv(val: object) -> str:
+            if val is None or val == "":
+                return "—"
+            if isinstance(val, float):
+                return f"{val:,.1f}"
+            return str(val)
+
+        for p in peers:
+            name = p.get("name", p.get("sno", "?"))
+            table.add_row(
+                str(name),
+                _fv(p.get("cmp") or p.get("cmp_rs")),
+                _fv(p.get("pe") or p.get("p_e")),
+                _fv(p.get("market_cap") or p.get("market_cap_cr")),
+                _fv(p.get("div_yield") or p.get("div_yld_pct")),
+                _fv(p.get("np_qtr") or p.get("np_qtr_cr")),
+                _fv(p.get("qtr_profit_var") or p.get("qtr_profit_var_pct")),
+                _fv(p.get("sales_qtr") or p.get("sales_qtr_cr")),
+                _fv(p.get("roce") or p.get("roce_pct")),
+            )
+
+        console.print(table)
+
+    except ScreenerError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def schedules(
+    symbol: Annotated[
+        str, typer.Option("-s", "--symbol", help="Stock symbol")
+    ],
+    section: Annotated[
+        str,
+        typer.Option(
+            "--section",
+            help="Section: quarters, profit-loss, balance-sheet, cash-flow",
+        ),
+    ] = "profit-loss",
+    parent: Annotated[
+        str,
+        typer.Option(
+            "--parent",
+            help="Parent line item (e.g. Sales, Expenses, Borrowings)",
+        ),
+    ] = "Sales",
+) -> None:
+    """Fetch and display schedule breakdowns from Screener.in."""
+    symbol = symbol.upper()
+    try:
+        with ScreenerClient() as sc:
+            with FlowStore() as store:
+                company_id, _ = _resolve_screener_ids(sc, store, symbol)
+                console.print(f"[dim]Fetching {section}/{parent} schedule for {symbol}...[/]")
+                data = sc.fetch_schedules(company_id, section, parent)
+                if not data:
+                    console.print("[yellow]No schedule data returned.[/]")
+                    raise typer.Exit(1)
+                count = store.upsert_schedules(symbol, section, parent, data)
+                console.print(f"[green]Stored {count} schedule data points.[/]")
+
+        # Display table
+        from rich.table import Table
+
+        # Collect all periods from sub-items
+        all_periods: list[str] = []
+        for sub_item, periods in data.items():
+            if isinstance(periods, dict):
+                for p in periods:
+                    if p not in all_periods:
+                        all_periods.append(p)
+
+        # Show last 8 periods
+        display_periods = all_periods[-8:] if len(all_periods) > 8 else all_periods
+
+        table = Table(
+            title=f"{symbol} — {section} / {parent}",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        table.add_column("Sub-item", style="bold", max_width=30)
+        for p in display_periods:
+            table.add_column(p, justify="right")
+
+        for sub_item, periods in data.items():
+            if not isinstance(periods, dict):
+                continue
+            row = [sub_item]
+            for p in display_periods:
+                val = periods.get(p)
+                if val is None:
+                    row.append("—")
+                else:
+                    try:
+                        row.append(f"{float(str(val).replace(',', '').replace('%', '')):,.1f}")
+                    except (ValueError, TypeError):
+                        row.append(str(val))
+            table.add_row(*row)
+
+        console.print(table)
+
+    except ScreenerError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)
