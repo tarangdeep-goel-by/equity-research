@@ -6,11 +6,7 @@ import json
 from collections import defaultdict
 
 from flowtracker.store import FlowStore
-
-
-def _clean(obj):
-    """Force all values to JSON-serializable Python types (handles numpy, Decimal, etc.)."""
-    return json.loads(json.dumps(obj, default=str))
+from flowtracker.utils import _clean
 
 
 def apply_screener_charts(data: dict) -> None:

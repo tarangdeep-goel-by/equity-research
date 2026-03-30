@@ -1047,10 +1047,12 @@ class ScreenerClient:
         return match.group(1) if match else None
 
     def fetch_chart_data(self, symbol: str, html: str | None = None) -> dict:
-        """Fetch all chart datasets from Screener's chart API.
+        """Fetch ALL 6 chart datasets from Screener's chart API in one call.
 
-        Returns dict with keys: price_chart, pe_chart, margins_chart.
-        Each contains the raw datasets from Screener's API.
+        For fetching a single chart type, use fetch_chart_data_by_type() instead.
+
+        Returns dict with keys: price_chart, pe_chart, margins_chart,
+        ev_ebitda_chart, pb_chart, mcap_sales_chart.
         """
         if html is None:
             html = self.fetch_company_page(symbol)
@@ -1111,7 +1113,7 @@ class ScreenerClient:
         resp.raise_for_status()
         return resp.json()
 
-    def fetch_chart_data_single(self, company_id: str, chart_type: str, days: int = 10000) -> dict:
+    def fetch_chart_data_by_type(self, company_id: str, chart_type: str, days: int = 10000) -> dict:
         """Fetch a single chart type from Chart API.
 
         chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'
@@ -1132,6 +1134,9 @@ class ScreenerClient:
         resp = self._client.get(url)
         resp.raise_for_status()
         return resp.json()
+
+    # Deprecated alias
+    fetch_chart_data_single = fetch_chart_data_by_type
 
     def fetch_peers(self, warehouse_id: str) -> list[dict]:
         """Fetch peer comparison table. Returns list of peer dicts."""
