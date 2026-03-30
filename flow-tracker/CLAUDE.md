@@ -79,7 +79,7 @@ Both the `thesis` command (agent) and `data` command (interactive) use the same 
 - `screener_client.py` (1232 lines) — Screener.in HTTP client. 11 API methods: HTML scraping, Excel export, Chart API, Peers API, Shareholders API, Schedules API.
 - `screener_engine.py` — 8-factor composite scoring engine (ownership, insider, valuation, earnings, quality, delivery, estimates, risk).
 - `main.py` — Top-level Typer app, registers all 15 subcommand groups via `add_typer()`.
-- `utils.py` — Formatting helpers (`fmt_crores`, `parse_period`, `normalize_category`).
+- `utils.py` — Formatting helpers (`fmt_crores`, `parse_period`, `normalize_category`, `_clean`).
 
 ### Standalone Tools
 

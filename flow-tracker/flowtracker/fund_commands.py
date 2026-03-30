@@ -367,7 +367,7 @@ def charts(
             with FlowStore() as store:
                 company_id, _ = _resolve_screener_ids(sc, store, symbol)
                 console.print(f"[dim]Fetching {chart_type} chart for {symbol}...[/]")
-                data = sc.fetch_chart_data(company_id, chart_type)
+                data = sc.fetch_chart_data_by_type(company_id, chart_type)
                 datasets = data.get("datasets", [])
                 if not datasets:
                     console.print("[yellow]No chart data returned.[/]")

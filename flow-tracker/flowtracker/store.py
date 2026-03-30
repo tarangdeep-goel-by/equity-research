@@ -712,28 +712,6 @@ class FlowStore:
         self._conn.commit()
         return count
 
-    def get_mf_daily_flows(self, days: int = 30, category: str | None = None) -> list[MFDailyFlow]:
-        """Get daily MF flows for the last N days, optionally filtered by category."""
-        if category:
-            rows = self._conn.execute(
-                "SELECT * FROM mf_daily_flows "
-                "WHERE date >= date('now', ? || ' days') AND category = ? "
-                "ORDER BY date DESC, category",
-                (f"-{days}", category),
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT * FROM mf_daily_flows "
-                "WHERE date >= date('now', ? || ' days') "
-                "ORDER BY date DESC, category",
-                (f"-{days}",),
-            ).fetchall()
-        return [MFDailyFlow(
-            date=r["date"], category=r["category"],
-            gross_purchase=r["gross_purchase"], gross_sale=r["gross_sale"],
-            net_investment=r["net_investment"],
-        ) for r in rows]
-
     def get_mf_daily_latest(self) -> list[MFDailyFlow]:
         """Get the most recent day's MF flows (both equity and debt)."""
         rows = self._conn.execute(
@@ -922,14 +900,6 @@ class FlowStore:
             "SELECT DISTINCT symbol FROM index_constituents ORDER BY symbol"
         ).fetchall()
         return [r["symbol"] for r in rows]
-
-    def get_symbols_with_quarter(self, quarter_end: str) -> set[str]:
-        """Get set of symbols that have shareholding data for a specific quarter."""
-        rows = self._conn.execute(
-            "SELECT DISTINCT symbol FROM shareholding WHERE quarter_end = ?",
-            (quarter_end,),
-        ).fetchall()
-        return {r["symbol"] for r in rows}
 
     def get_scanner_deviations(
         self, category: str | None = None, limit: int = 20, min_change: float = 0.0,
@@ -1696,21 +1666,6 @@ class FlowStore:
             "AND transaction_type = 'Buy' "
             "AND date >= date('now', ? || ' days') "
             "ORDER BY value DESC",
-            (f"-{days}",),
-        ).fetchall()
-        return [InsiderTransaction(
-            date=r["date"], symbol=r["symbol"], person_name=r["person_name"],
-            person_category=r["person_category"], transaction_type=r["transaction_type"],
-            quantity=r["quantity"], value=r["value"], mode=r["mode"],
-            holding_before_pct=r["holding_before_pct"], holding_after_pct=r["holding_after_pct"],
-        ) for r in rows]
-
-    def get_insider_recent(self, days: int = 7) -> list[InsiderTransaction]:
-        """Get all recent insider transactions."""
-        rows = self._conn.execute(
-            "SELECT * FROM insider_transactions "
-            "WHERE date >= date('now', ? || ' days') "
-            "ORDER BY date DESC, value DESC",
             (f"-{days}",),
         ).fetchall()
         return [InsiderTransaction(

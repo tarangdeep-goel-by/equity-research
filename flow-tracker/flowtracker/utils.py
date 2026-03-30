@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime
+
+
+def _clean(obj):
+    """Force all values to JSON-serializable Python types (handles numpy, Decimal, etc.)."""
+    return json.loads(json.dumps(obj, default=str))
 
 
 def fmt_crores(value: float | None) -> str:
