@@ -125,7 +125,7 @@ def refresh_for_research(symbol: str, console: Console | None = None) -> dict[st
                 if company_id:
                     for chart_type in ("pe", "price"):
                         try:
-                            data = sc.fetch_chart_data_single(company_id, chart_type)
+                            data = sc.fetch_chart_data_by_type(company_id, chart_type)
                             datasets = data.get("datasets", [])
                             count = store.upsert_chart_data(symbol, chart_type, datasets)
                             _ok(f"chart_{chart_type}", count)
