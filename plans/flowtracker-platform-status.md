@@ -1,4 +1,4 @@
-# FlowTracker Platform — Complete Reference
+# FlowTracker Platform — What We Have
 
 *Last updated: 2026-03-30*
 
@@ -114,8 +114,6 @@ flowtrack research thesis -s HDFCBANK
 
 ## Database — 30 Tables, 4.5M+ Records
 
-### Table Inventory (as of 2026-03-30)
-
 | Table | Rows | Symbols | Latest | Source | Cron |
 |-------|-----:|--------:|--------|--------|------|
 | **daily_stock_data** | 3,702,157 | 3,025 | 2026-03-30 | NSE bhavcopy | daily |
@@ -153,11 +151,9 @@ flowtrack research thesis -s HDFCBANK
 
 ---
 
-## 14 Data Sources
+## 14 Data Sources — Source Authority Map
 
-### Source Authority Map (No Conflicts)
-
-Each data type has exactly one authoritative source. No overlaps.
+Each data type has exactly one authoritative source. No overlaps, no conflicts.
 
 | Data Type | Authority | Why Not The Other |
 |-----------|-----------|-------------------|
@@ -481,88 +477,7 @@ flow-tracker/
 
 ---
 
-## What We Have vs What We Need
-
-### Current Capabilities (Strong)
-
-- **Screening:** 8-factor composite across Nifty 500
-- **Fundamental Research:** AI thesis (10-20 turn agent), document-grounded HTML reports
-- **Ownership Analysis:** Quarterly patterns, MF scheme-level, insider SAST, FII/DII flows
-- **Data Completeness:** 14 sources, 30 tables, 4.5M rows, all crons automated
-- **Source Discipline:** Single source of truth per data type, no conflicts
-- **Qualitative Layer:** Concall transcript reading, management commentary extraction
-
-### Buy-Side Gaps (Priority — These Generate Returns)
-
-#### 1. Valuation Model (High Priority, Easy)
-Earnings-based fair value estimate using PE band method. "At historical median PE of 25x and FY27E EPS of ₹42, fair value is ₹1,050. Current price ₹890 implies 18% margin of safety."
-
-**Why it matters:** Turns research into actionable price targets. Without this, you know *what's good* but not *what's cheap*. Buy-side lives on the gap between quality and price.
-
-**Implementation:** New `get_fair_value_estimate(symbol)` in ResearchDataAPI. Inputs already exist: historical PE band, consensus forward EPS, trailing EPS. Output: bear/base/bull fair value range. Add as section in thesis report.
-
-#### 2. Thesis Tracker (High Priority, Medium)
-Structured "why I own this" with 3-4 falsifiable conditions per stock. e.g., "Buy INDIAMART if: (1) paid subs grow >10% QoQ, (2) ARPU holds above ₹50K, (3) FII selling decelerates." Each condition has a current status (intact/warning/broken).
-
-**Why it matters:** Prevents two failure modes — holding forever (no exit discipline) and panic-selling (no conviction framework). The thesis tells you when you're wrong vs when the market is wrong.
-
-**Implementation:** Structured markdown per stock at `~/vault/stocks/{SYMBOL}/thesis-tracker.md`. Agent checks conditions against fresh data on each research run. Alert when a condition breaks.
-
-#### 3. Portfolio View (Medium Priority, Medium)
-Aggregate view across all holdings — concentration %, sector exposure, total FII/DII alignment, correlation between positions. "You have 40% in IT services — if rupee strengthens, all 3 positions lose."
-
-**Why it matters:** Knowing 5 stocks are individually good doesn't mean owning all 5 is smart. Correlated positions = hidden concentration risk.
-
-**Implementation:** Needs `portfolio` table (symbol, qty, avg_cost). New `flowtrack portfolio` command group. Aggregate ResearchDataAPI across holdings.
-
-#### 4. Alert / Monitoring System (Medium Priority, Medium)
-Condition-based alerts. "Notify me when FII ownership in INDIAMART drops below 20%", "promoter pledge crosses 5%", "PE goes below 15x."
-
-**Why it matters:** Buy-side alpha comes from reacting to ownership/valuation changes faster than the market prices them.
-
-**Implementation:** Alert rules in DB, checked by daily cron. Notifications via terminal output or Telegram (n8n integration path exists).
-
-### Sell-Side Gaps (Lower Priority — Completeness)
-
-#### 5. DuPont Decomposition (Easy)
-ROE = Net Margin × Asset Turnover × Equity Multiplier. Shows whether ROE improvement is from better operations, efficiency, or leverage. All inputs exist in annual_financials.
-
-#### 6. Relative Valuation Matrix (Medium)
-PE/PB/EV matrix across 15-20 peers, each with historical band context. Currently have single-peer table but not with per-peer historical bands.
-
-#### 7. Technical Indicators (Easy)
-RSI, MACD, Bollinger bands from bhavcopy OHLCV data (3.7M rows). Currently have 50/200 DMA from Screener charts only. Standard formulas on existing data.
-
-#### 8. Segment-wise Revenue (Medium)
-Revenue by business segment. Partially available via Screener schedules, but parsing is inconsistent across companies.
-
-#### 9. Quarterly Balance Sheet (Medium)
-We have annual BS (10yr) but not quarterly. Shows working capital trends, debt changes intra-year. Screener Excel export may have this.
-
-#### 10. Credit Metrics (Medium-Hard)
-Interest coverage trend, debt maturity profile, credit ratings. Partial from existing data, full picture needs CRISIL/ICRA as new source.
-
-#### 11. Index Rebalance Impact (Hard)
-MSCI/Nifty rebalance additions/deletions — predictable passive fund flows. Needs free-float MCap prediction model.
-
-#### 12. Options / Sentiment Data (Medium)
-Put-call ratio, OI buildup, max pain from NSE options chain API.
-
-### Recommended Build Order
-
-```
-Phase 1 (next):     Valuation Model + DuPont          ← Easy, high impact
-Phase 2:            Thesis Tracker + Technicals         ← Medium, completes buy-side loop
-Phase 3:            Portfolio View + Alerts             ← New module, transforms into trading system
-Phase 4:            Peer Matrix + Segments              ← Sell-side completeness
-Later:              Credit, Index Rebalance, Options    ← As needed
-```
-
----
-
 ## Consolidation Changelog (2026-03-30)
-
-Changes made during platform consolidation:
 
 ### Bug Fixes
 - Fixed `fund_commands.py:370` — was calling `fetch_chart_data(company_id, chart_type)` with wrong signature. Changed to `fetch_chart_data_by_type()`.
