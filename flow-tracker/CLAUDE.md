@@ -75,7 +75,7 @@ Both the `thesis` command (agent) and `data` command (interactive) use the same 
 
 ### Shared Infrastructure
 
-- `store.py` (2331 lines) — Single `FlowStore` class wrapping SQLite. 28 tables, 95 methods. DB at `~/.local/share/flowtracker/flows.db`.
+- `store.py` (~2300 lines) — Single `FlowStore` class wrapping SQLite. 30 tables, ~92 methods. DB at `~/.local/share/flowtracker/flows.db`.
 - `screener_client.py` (1232 lines) — Screener.in HTTP client. 11 API methods: HTML scraping, Excel export, Chart API, Peers API, Shareholders API, Schedules API.
 - `screener_engine.py` — 8-factor composite scoring engine (ownership, insider, valuation, earnings, quality, delivery, estimates, risk).
 - `main.py` — Top-level Typer app, registers all 15 subcommand groups via `add_typer()`.
@@ -93,15 +93,17 @@ Screener.in has two company IDs per stock (extracted from `#company-info` HTML e
 - `data-company-id` — used for Charts, Schedules, Shareholders APIs
 - `data-warehouse-id` — used for Peers, Excel Export APIs
 
-Full API map: `docs/screener-api-map.md`
+Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-source-comparison.md`.
 
 ## Cron / Scheduled Jobs
 
-`scripts/` contains shell wrappers for scheduled fetches, managed via macOS LaunchAgents:
-- `daily-fetch.sh` — FII/DII + gold/silver (weekdays 7pm IST, 3 retries with 5min backoff)
-- `monthly-mf.sh` — AMFI data (6th of month)
-- `quarterly-scan.sh` — Nifty 250 shareholding scan (quarterly)
-- `quarterly-results.sh` / `weekly-valuation.sh` — Fundamentals
+`scripts/` contains shell wrappers for scheduled fetches, managed via macOS LaunchAgents at `~/.local/share/flowtracker/scripts/`:
+- `daily-fetch.sh` — FII/DII, gold, MF daily, macro, bhavcopy, deals, insider, valuation (weekdays 7pm IST, 3 retries)
+- `weekly-valuation.sh` — Consensus estimates + earnings surprises (Sunday 2:30pm)
+- `monthly-mf.sh` — AMFI monthly flows (6th of month)
+- `monthly-mfportfolio.sh` — MF scheme holdings from 5 AMCs (12th of month)
+- `quarterly-scan.sh` — Nifty 250 shareholding + pledges (quarterly)
+- `quarterly-results.sh` — Screener financials + ratios + BSE filings (20th of month)
 - `setup-crons.sh` — Registers all LaunchAgent plists
 
 ## Key Patterns
