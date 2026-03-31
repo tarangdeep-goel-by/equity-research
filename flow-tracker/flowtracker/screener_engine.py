@@ -187,9 +187,27 @@ class ScreenerEngine:
             elif est.forward_pe > 50:
                 score -= 10
 
+        # DCF margin of safety (FMP)
+        dcf_detail = ""
+        try:
+            dcf = self._store.get_fmp_dcf_latest(symbol)
+            if dcf and dcf.dcf and dcf.stock_price and dcf.stock_price > 0:
+                dcf_margin = (dcf.dcf - dcf.stock_price) / dcf.stock_price * 100
+                if dcf_margin > 30:
+                    score += 15
+                    dcf_detail = f" DCF +{dcf_margin:.0f}%"
+                elif dcf_margin < -20:
+                    score -= 10
+                    dcf_detail = f" DCF {dcf_margin:.0f}%"
+                else:
+                    dcf_detail = f" DCF {dcf_margin:+.0f}%"
+        except Exception:
+            pass
+
         detail = f"Upside {upside:+.0f}%" if upside else "No target"
         if est.forward_pe:
             detail += f" FwdPE {est.forward_pe:.0f}"
+        detail += dcf_detail
         return FactorScore(
             factor="valuation", score=_clamp(score), raw_value=upside, detail=detail,
         )

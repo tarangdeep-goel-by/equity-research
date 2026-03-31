@@ -238,6 +238,9 @@ _DATA_TOOLS = [
     "macro_snapshot", "fii_dii_streak", "fii_dii_flows",
     "chart_data", "peer_comparison", "shareholder_detail", "expense_breakdown",
     "recent_filings", "composite_score",
+    "dcf_valuation", "dcf_history", "technical_indicators",
+    "dupont_decomposition", "key_metrics_history", "financial_growth_rates",
+    "analyst_grades", "price_targets", "fair_value",
 ]
 
 
@@ -296,6 +299,15 @@ def data(
         "expense_breakdown": lambda api: api.get_expense_breakdown(symbol),
         "recent_filings": lambda api: api.get_recent_filings(symbol),
         "composite_score": lambda api: _get_score(symbol),
+        "dcf_valuation": lambda api: api.get_dcf_valuation(symbol),
+        "dcf_history": lambda api: api.get_dcf_history(symbol),
+        "technical_indicators": lambda api: api.get_technical_indicators(symbol),
+        "dupont_decomposition": lambda api: api.get_dupont_decomposition(symbol),
+        "key_metrics_history": lambda api: api.get_key_metrics_history(symbol),
+        "financial_growth_rates": lambda api: api.get_financial_growth_rates(symbol),
+        "analyst_grades": lambda api: api.get_analyst_grades(symbol),
+        "price_targets": lambda api: api.get_price_targets(symbol),
+        "fair_value": lambda api: api.get_fair_value(symbol),
     }
 
     with ResearchDataAPI() as api:
@@ -305,6 +317,113 @@ def data(
         print(json.dumps(result, default=str))
     else:
         console.print_json(json.dumps(result, default=str))
+
+
+@app.command("thesis-check")
+def thesis_check(
+    symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")],
+) -> None:
+    """Quick condition check for a tracked stock's thesis.
+
+    Reads the tracker file at ~/vault/stocks/{SYMBOL}/thesis-tracker.md,
+    evaluates conditions against fresh data, and updates statuses.
+    """
+    symbol = symbol.upper()
+    from flowtracker.research.thesis_tracker import (
+        load_tracker, evaluate_conditions, update_tracker_file,
+    )
+    from flowtracker.store import FlowStore
+
+    tracker = load_tracker(symbol)
+    if not tracker:
+        console.print(f"[yellow]No thesis tracker found for {symbol}.[/]")
+        console.print(f"[dim]Expected: ~/vault/stocks/{symbol}/thesis-tracker.md[/]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]Thesis Check — {symbol}[/]")
+    if tracker.entry_price:
+        console.print(f"[dim]Entry: ₹{tracker.entry_price:,.2f} on {tracker.entry_date or '?'}[/]")
+
+    with FlowStore() as store:
+        conditions = evaluate_conditions(tracker, store)
+
+    update_tracker_file(tracker)
+
+    from rich.table import Table
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Status", width=8)
+    table.add_column("Condition", min_width=30)
+    table.add_column("Metric", width=35)
+    table.add_column("Threshold", justify="right", width=12)
+
+    for c in conditions:
+        status_map = {
+            "passing": "[green]✓ PASS[/]",
+            "failing": "[red]✗ FAIL[/]",
+            "stale": "[yellow]? STALE[/]",
+            "pending": "[dim]· PEND[/]",
+        }
+        table.add_row(
+            status_map.get(c.status, c.status),
+            c.label,
+            c.metric,
+            f"{c.operator} {c.threshold}",
+        )
+
+    console.print(table)
+
+    passing = sum(1 for c in conditions if c.status == "passing")
+    total = len(conditions)
+    color = "green" if passing == total else "yellow" if passing > total // 2 else "red"
+    console.print(f"\n[{color}]{passing}/{total} conditions passing[/{color}]")
+
+
+@app.command("thesis-status")
+def thesis_status() -> None:
+    """Summary of all tracked stocks with condition status."""
+    from flowtracker.research.thesis_tracker import get_all_trackers, evaluate_conditions
+    from flowtracker.store import FlowStore
+
+    trackers = get_all_trackers()
+    if not trackers:
+        console.print("[yellow]No thesis trackers found in ~/vault/stocks/.[/]")
+        raise typer.Exit(1)
+
+    from rich.table import Table
+    table = Table(title="Thesis Tracker Status", show_header=True, header_style="bold cyan")
+    table.add_column("Symbol", width=12)
+    table.add_column("Entry ₹", justify="right", width=10)
+    table.add_column("Conditions", width=15)
+    table.add_column("Status", width=10)
+
+    with FlowStore() as store:
+        for tracker in trackers:
+            evaluate_conditions(tracker, store)
+
+            passing = sum(1 for c in tracker.conditions if c.status == "passing")
+            failing = sum(1 for c in tracker.conditions if c.status == "failing")
+            stale = sum(1 for c in tracker.conditions if c.status == "stale")
+            total = len(tracker.conditions)
+
+            cond_str = f"[green]{passing}✓[/] [red]{failing}✗[/]"
+            if stale:
+                cond_str += f" [yellow]{stale}?[/]"
+
+            if passing == total:
+                status = "[green]STRONG[/]"
+            elif passing > total // 2:
+                status = "[yellow]MIXED[/]"
+            else:
+                status = "[red]WEAK[/]"
+
+            table.add_row(
+                tracker.symbol,
+                f"{tracker.entry_price:,.2f}" if tracker.entry_price else "—",
+                cond_str,
+                status,
+            )
+
+    console.print(table)
 
 
 def _get_score(symbol: str) -> dict:

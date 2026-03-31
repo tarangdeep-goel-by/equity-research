@@ -20,6 +20,12 @@ from flowtracker.insider_models import InsiderTransaction
 from flowtracker.estimates_models import ConsensusEstimate, EarningsSurprise
 from flowtracker.mfportfolio_models import MFSchemeHolding, MFHoldingChange
 from flowtracker.filing_models import CorporateFiling
+from flowtracker.fmp_models import (
+    FMPDcfValue, FMPTechnicalIndicator, FMPKeyMetrics,
+    FMPFinancialGrowth, FMPAnalystGrade, FMPPriceTarget,
+)
+from flowtracker.portfolio_models import PortfolioHolding
+from flowtracker.alert_models import Alert
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
 _DEFAULT_DB_NAME = "flows.db"
@@ -457,6 +463,143 @@ CREATE TABLE IF NOT EXISTS company_documents (
     url TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, doc_type, period)
+);
+
+CREATE TABLE IF NOT EXISTS fmp_dcf (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    dcf REAL,
+    stock_price REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, date)
+);
+
+CREATE TABLE IF NOT EXISTS fmp_technical_indicators (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    indicator TEXT NOT NULL,
+    value REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, date, indicator)
+);
+
+CREATE TABLE IF NOT EXISTS fmp_key_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    revenue_per_share REAL,
+    net_income_per_share REAL,
+    operating_cash_flow_per_share REAL,
+    free_cash_flow_per_share REAL,
+    cash_per_share REAL,
+    book_value_per_share REAL,
+    tangible_book_value_per_share REAL,
+    shareholders_equity_per_share REAL,
+    interest_debt_per_share REAL,
+    market_cap REAL,
+    enterprise_value REAL,
+    pe_ratio REAL,
+    price_to_sales_ratio REAL,
+    pb_ratio REAL,
+    ev_to_sales REAL,
+    ev_to_ebitda REAL,
+    ev_to_operating_cash_flow REAL,
+    ev_to_free_cash_flow REAL,
+    earnings_yield REAL,
+    free_cash_flow_yield REAL,
+    debt_to_equity REAL,
+    debt_to_assets REAL,
+    dividend_yield REAL,
+    payout_ratio REAL,
+    roe REAL,
+    roa REAL,
+    roic REAL,
+    net_profit_margin_dupont REAL,
+    asset_turnover REAL,
+    equity_multiplier REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, date)
+);
+
+CREATE TABLE IF NOT EXISTS fmp_financial_growth (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    revenue_growth REAL,
+    gross_profit_growth REAL,
+    ebitda_growth REAL,
+    operating_income_growth REAL,
+    net_income_growth REAL,
+    eps_growth REAL,
+    eps_diluted_growth REAL,
+    dividends_per_share_growth REAL,
+    operating_cash_flow_growth REAL,
+    free_cash_flow_growth REAL,
+    asset_growth REAL,
+    debt_growth REAL,
+    book_value_per_share_growth REAL,
+    revenue_growth_3y REAL,
+    revenue_growth_5y REAL,
+    revenue_growth_10y REAL,
+    net_income_growth_3y REAL,
+    net_income_growth_5y REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, date)
+);
+
+CREATE TABLE IF NOT EXISTS fmp_analyst_grades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    grading_company TEXT NOT NULL,
+    previous_grade TEXT,
+    new_grade TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, date, grading_company)
+);
+
+CREATE TABLE IF NOT EXISTS fmp_price_targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    published_date TEXT NOT NULL,
+    analyst_name TEXT,
+    analyst_company TEXT,
+    price_target REAL,
+    price_when_posted REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, published_date, analyst_company)
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_holdings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    avg_cost REAL NOT NULL,
+    buy_date TEXT,
+    notes TEXT,
+    added_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol)
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    condition_type TEXT NOT NULL,
+    threshold REAL NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    last_triggered TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS alert_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_id INTEGER NOT NULL,
+    triggered_at TEXT NOT NULL DEFAULT (datetime('now')),
+    current_value REAL,
+    message TEXT
 );
 """
 
@@ -2354,6 +2497,347 @@ class FlowStore:
                 "SELECT * FROM company_documents WHERE symbol = ? ORDER BY doc_type, period DESC",
                 (symbol.upper(),),
             ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- FMP Data --
+
+    def upsert_fmp_dcf(self, records: list[FMPDcfValue]) -> int:
+        """Insert or replace FMP DCF records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO fmp_dcf "
+                "(symbol, date, dcf, stock_price) "
+                "VALUES (?, ?, ?, ?)",
+                (r.symbol, r.date, r.dcf, r.stock_price),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def upsert_fmp_technical_indicators(self, records: list[FMPTechnicalIndicator]) -> int:
+        """Insert or replace FMP technical indicator records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO fmp_technical_indicators "
+                "(symbol, date, indicator, value) "
+                "VALUES (?, ?, ?, ?)",
+                (r.symbol, r.date, r.indicator, r.value),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def upsert_fmp_key_metrics(self, records: list[FMPKeyMetrics]) -> int:
+        """Insert or replace FMP key metrics records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO fmp_key_metrics "
+                "(symbol, date, revenue_per_share, net_income_per_share, "
+                "operating_cash_flow_per_share, free_cash_flow_per_share, "
+                "cash_per_share, book_value_per_share, tangible_book_value_per_share, "
+                "shareholders_equity_per_share, interest_debt_per_share, "
+                "market_cap, enterprise_value, pe_ratio, price_to_sales_ratio, "
+                "pb_ratio, ev_to_sales, ev_to_ebitda, ev_to_operating_cash_flow, "
+                "ev_to_free_cash_flow, earnings_yield, free_cash_flow_yield, "
+                "debt_to_equity, debt_to_assets, dividend_yield, payout_ratio, "
+                "roe, roa, roic, net_profit_margin_dupont, asset_turnover, "
+                "equity_multiplier) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (r.symbol, r.date, r.revenue_per_share, r.net_income_per_share,
+                 r.operating_cash_flow_per_share, r.free_cash_flow_per_share,
+                 r.cash_per_share, r.book_value_per_share, r.tangible_book_value_per_share,
+                 r.shareholders_equity_per_share, r.interest_debt_per_share,
+                 r.market_cap, r.enterprise_value, r.pe_ratio, r.price_to_sales_ratio,
+                 r.pb_ratio, r.ev_to_sales, r.ev_to_ebitda, r.ev_to_operating_cash_flow,
+                 r.ev_to_free_cash_flow, r.earnings_yield, r.free_cash_flow_yield,
+                 r.debt_to_equity, r.debt_to_assets, r.dividend_yield, r.payout_ratio,
+                 r.roe, r.roa, r.roic, r.net_profit_margin_dupont, r.asset_turnover,
+                 r.equity_multiplier),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def upsert_fmp_financial_growth(self, records: list[FMPFinancialGrowth]) -> int:
+        """Insert or replace FMP financial growth records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO fmp_financial_growth "
+                "(symbol, date, revenue_growth, gross_profit_growth, ebitda_growth, "
+                "operating_income_growth, net_income_growth, eps_growth, "
+                "eps_diluted_growth, dividends_per_share_growth, "
+                "operating_cash_flow_growth, free_cash_flow_growth, "
+                "asset_growth, debt_growth, book_value_per_share_growth, "
+                "revenue_growth_3y, revenue_growth_5y, revenue_growth_10y, "
+                "net_income_growth_3y, net_income_growth_5y) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (r.symbol, r.date, r.revenue_growth, r.gross_profit_growth,
+                 r.ebitda_growth, r.operating_income_growth, r.net_income_growth,
+                 r.eps_growth, r.eps_diluted_growth, r.dividends_per_share_growth,
+                 r.operating_cash_flow_growth, r.free_cash_flow_growth,
+                 r.asset_growth, r.debt_growth, r.book_value_per_share_growth,
+                 r.revenue_growth_3y, r.revenue_growth_5y, r.revenue_growth_10y,
+                 r.net_income_growth_3y, r.net_income_growth_5y),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def upsert_fmp_analyst_grades(self, records: list[FMPAnalystGrade]) -> int:
+        """Insert or replace FMP analyst grade records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO fmp_analyst_grades "
+                "(symbol, date, grading_company, previous_grade, new_grade) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (r.symbol, r.date, r.grading_company, r.previous_grade, r.new_grade),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def upsert_fmp_price_targets(self, records: list[FMPPriceTarget]) -> int:
+        """Insert or replace FMP price target records."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO fmp_price_targets "
+                "(symbol, published_date, analyst_name, analyst_company, "
+                "price_target, price_when_posted) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (r.symbol, r.published_date, r.analyst_name, r.analyst_company,
+                 r.price_target, r.price_when_posted),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_fmp_dcf_latest(self, symbol: str) -> FMPDcfValue | None:
+        """Get the most recent DCF value for a symbol."""
+        row = self._conn.execute(
+            "SELECT * FROM fmp_dcf WHERE symbol = ? ORDER BY date DESC LIMIT 1",
+            (symbol,),
+        ).fetchone()
+        if not row:
+            return None
+        return FMPDcfValue(
+            symbol=row["symbol"], date=row["date"],
+            dcf=row["dcf"], stock_price=row["stock_price"],
+        )
+
+    def get_fmp_dcf_history(self, symbol: str, limit: int = 10) -> list[FMPDcfValue]:
+        """Get DCF history for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM fmp_dcf WHERE symbol = ? ORDER BY date DESC LIMIT ?",
+            (symbol, limit),
+        ).fetchall()
+        return [FMPDcfValue(
+            symbol=r["symbol"], date=r["date"],
+            dcf=r["dcf"], stock_price=r["stock_price"],
+        ) for r in rows]
+
+    def get_fmp_technical_indicators(self, symbol: str) -> list[FMPTechnicalIndicator]:
+        """Get latest value per indicator for a symbol."""
+        rows = self._conn.execute(
+            "SELECT t1.* FROM fmp_technical_indicators t1 "
+            "INNER JOIN (SELECT symbol, indicator, MAX(date) as max_date "
+            "FROM fmp_technical_indicators WHERE symbol = ? "
+            "GROUP BY symbol, indicator) t2 "
+            "ON t1.symbol = t2.symbol AND t1.indicator = t2.indicator "
+            "AND t1.date = t2.max_date",
+            (symbol,),
+        ).fetchall()
+        return [FMPTechnicalIndicator(
+            symbol=r["symbol"], date=r["date"],
+            indicator=r["indicator"], value=r["value"],
+        ) for r in rows]
+
+    def get_fmp_key_metrics(self, symbol: str, limit: int = 10) -> list[FMPKeyMetrics]:
+        """Get key metrics history for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM fmp_key_metrics WHERE symbol = ? ORDER BY date DESC LIMIT ?",
+            (symbol, limit),
+        ).fetchall()
+        return [FMPKeyMetrics(
+            symbol=r["symbol"], date=r["date"],
+            revenue_per_share=r["revenue_per_share"],
+            net_income_per_share=r["net_income_per_share"],
+            operating_cash_flow_per_share=r["operating_cash_flow_per_share"],
+            free_cash_flow_per_share=r["free_cash_flow_per_share"],
+            cash_per_share=r["cash_per_share"],
+            book_value_per_share=r["book_value_per_share"],
+            tangible_book_value_per_share=r["tangible_book_value_per_share"],
+            shareholders_equity_per_share=r["shareholders_equity_per_share"],
+            interest_debt_per_share=r["interest_debt_per_share"],
+            market_cap=r["market_cap"], enterprise_value=r["enterprise_value"],
+            pe_ratio=r["pe_ratio"], price_to_sales_ratio=r["price_to_sales_ratio"],
+            pb_ratio=r["pb_ratio"], ev_to_sales=r["ev_to_sales"],
+            ev_to_ebitda=r["ev_to_ebitda"],
+            ev_to_operating_cash_flow=r["ev_to_operating_cash_flow"],
+            ev_to_free_cash_flow=r["ev_to_free_cash_flow"],
+            earnings_yield=r["earnings_yield"],
+            free_cash_flow_yield=r["free_cash_flow_yield"],
+            debt_to_equity=r["debt_to_equity"], debt_to_assets=r["debt_to_assets"],
+            dividend_yield=r["dividend_yield"], payout_ratio=r["payout_ratio"],
+            roe=r["roe"], roa=r["roa"], roic=r["roic"],
+            net_profit_margin_dupont=r["net_profit_margin_dupont"],
+            asset_turnover=r["asset_turnover"],
+            equity_multiplier=r["equity_multiplier"],
+        ) for r in rows]
+
+    def get_fmp_financial_growth(self, symbol: str, limit: int = 10) -> list[FMPFinancialGrowth]:
+        """Get financial growth history for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM fmp_financial_growth WHERE symbol = ? ORDER BY date DESC LIMIT ?",
+            (symbol, limit),
+        ).fetchall()
+        return [FMPFinancialGrowth(
+            symbol=r["symbol"], date=r["date"],
+            revenue_growth=r["revenue_growth"],
+            gross_profit_growth=r["gross_profit_growth"],
+            ebitda_growth=r["ebitda_growth"],
+            operating_income_growth=r["operating_income_growth"],
+            net_income_growth=r["net_income_growth"],
+            eps_growth=r["eps_growth"],
+            eps_diluted_growth=r["eps_diluted_growth"],
+            dividends_per_share_growth=r["dividends_per_share_growth"],
+            operating_cash_flow_growth=r["operating_cash_flow_growth"],
+            free_cash_flow_growth=r["free_cash_flow_growth"],
+            asset_growth=r["asset_growth"], debt_growth=r["debt_growth"],
+            book_value_per_share_growth=r["book_value_per_share_growth"],
+            revenue_growth_3y=r["revenue_growth_3y"],
+            revenue_growth_5y=r["revenue_growth_5y"],
+            revenue_growth_10y=r["revenue_growth_10y"],
+            net_income_growth_3y=r["net_income_growth_3y"],
+            net_income_growth_5y=r["net_income_growth_5y"],
+        ) for r in rows]
+
+    def get_fmp_analyst_grades(self, symbol: str, limit: int = 20) -> list[FMPAnalystGrade]:
+        """Get analyst grades for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM fmp_analyst_grades WHERE symbol = ? ORDER BY date DESC LIMIT ?",
+            (symbol, limit),
+        ).fetchall()
+        return [FMPAnalystGrade(
+            symbol=r["symbol"], date=r["date"],
+            grading_company=r["grading_company"],
+            previous_grade=r["previous_grade"],
+            new_grade=r["new_grade"],
+        ) for r in rows]
+
+    def get_fmp_price_targets(self, symbol: str, limit: int = 20) -> list[FMPPriceTarget]:
+        """Get price targets for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM fmp_price_targets WHERE symbol = ? "
+            "ORDER BY published_date DESC LIMIT ?",
+            (symbol, limit),
+        ).fetchall()
+        return [FMPPriceTarget(
+            symbol=r["symbol"], published_date=r["published_date"],
+            analyst_name=r["analyst_name"], analyst_company=r["analyst_company"],
+            price_target=r["price_target"], price_when_posted=r["price_when_posted"],
+        ) for r in rows]
+
+    # -- Portfolio --
+
+    def upsert_portfolio_holding(self, holding: PortfolioHolding) -> int:
+        """Insert or replace a portfolio holding."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO portfolio_holdings "
+            "(symbol, quantity, avg_cost, buy_date, notes) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (holding.symbol, holding.quantity, holding.avg_cost,
+             holding.buy_date, holding.notes),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def get_portfolio_holdings(self) -> list[PortfolioHolding]:
+        """Get all portfolio holdings."""
+        rows = self._conn.execute(
+            "SELECT * FROM portfolio_holdings ORDER BY symbol"
+        ).fetchall()
+        return [PortfolioHolding(
+            symbol=r["symbol"], quantity=r["quantity"],
+            avg_cost=r["avg_cost"], buy_date=r["buy_date"],
+            notes=r["notes"], added_at=r["added_at"],
+        ) for r in rows]
+
+    def remove_portfolio_holding(self, symbol: str) -> bool:
+        """Remove a holding. Returns True if deleted."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "DELETE FROM portfolio_holdings WHERE symbol = ?", (symbol,)
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    # -- Alerts --
+
+    def upsert_alert(self, alert: Alert) -> int:
+        """Insert a new alert. Returns the alert ID."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "INSERT INTO alerts (symbol, condition_type, threshold, notes) "
+            "VALUES (?, ?, ?, ?)",
+            (alert.symbol, alert.condition_type, alert.threshold, alert.notes),
+        )
+        self._conn.commit()
+        return cursor.lastrowid
+
+    def get_active_alerts(self) -> list[Alert]:
+        """Get all active alerts."""
+        rows = self._conn.execute(
+            "SELECT * FROM alerts WHERE active = 1 ORDER BY symbol, condition_type"
+        ).fetchall()
+        return [Alert(
+            id=r["id"], symbol=r["symbol"], condition_type=r["condition_type"],
+            threshold=r["threshold"], active=bool(r["active"]),
+            last_triggered=r["last_triggered"], created_at=r["created_at"],
+            notes=r["notes"],
+        ) for r in rows]
+
+    def deactivate_alert(self, alert_id: int) -> bool:
+        """Deactivate an alert. Returns True if found."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "UPDATE alerts SET active = 0 WHERE id = ?", (alert_id,)
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def log_alert_trigger(self, alert_id: int, value: float | None, message: str) -> None:
+        """Log an alert trigger and update last_triggered."""
+        self._conn.execute(
+            "INSERT INTO alert_history (alert_id, current_value, message) VALUES (?, ?, ?)",
+            (alert_id, value, message),
+        )
+        self._conn.execute(
+            "UPDATE alerts SET last_triggered = datetime('now') WHERE id = ?",
+            (alert_id,),
+        )
+        self._conn.commit()
+
+    def get_alert_history(self, limit: int = 20) -> list[dict]:
+        """Get recent alert trigger history."""
+        rows = self._conn.execute(
+            "SELECT ah.*, a.symbol, a.condition_type, a.threshold "
+            "FROM alert_history ah JOIN alerts a ON ah.alert_id = a.id "
+            "ORDER BY ah.triggered_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def close(self) -> None:

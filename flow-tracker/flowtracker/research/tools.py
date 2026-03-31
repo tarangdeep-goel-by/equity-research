@@ -373,6 +373,108 @@ async def save_business_profile(args):
     return {"content": [{"type": "text", "text": f"Saved business profile to {path}"}]}
 
 
+# --- FMP Data ---
+
+
+@tool(
+    "get_dcf_valuation",
+    "Get DCF intrinsic value and margin of safety for a stock. Shows how much the stock is over/under-valued according to discounted cash flow model.",
+    {"symbol": str},
+)
+async def get_dcf_valuation(args):
+    with ResearchDataAPI() as api:
+        data = api.get_dcf_valuation(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_dcf_history",
+    "Get historical DCF intrinsic value trajectory. Shows how fair value has changed over time.",
+    {"symbol": str},
+)
+async def get_dcf_history(args):
+    with ResearchDataAPI() as api:
+        data = api.get_dcf_history(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_technical_indicators",
+    "Get latest RSI, SMA-50, SMA-200, MACD, ADX. Use for entry timing context — NOT for buy/sell decisions alone.",
+    {"symbol": str},
+)
+async def get_technical_indicators(args):
+    with ResearchDataAPI() as api:
+        data = api.get_technical_indicators(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_dupont_decomposition",
+    "Decompose ROE into Net Profit Margin × Asset Turnover × Equity Multiplier (10yr history). Shows what's driving ROE — margin, efficiency, or leverage.",
+    {"symbol": str},
+)
+async def get_dupont_decomposition(args):
+    with ResearchDataAPI() as api:
+        data = api.get_dupont_decomposition(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_key_metrics_history",
+    "Get comprehensive per-share metrics and valuation ratios history (up to 10 years). Includes PE, PB, EV/EBITDA, ROE, ROIC, FCF yield, etc.",
+    {"symbol": str, "years": int},
+)
+async def get_key_metrics_history(args):
+    with ResearchDataAPI() as api:
+        data = api.get_key_metrics_history(args["symbol"], args.get("years", 10))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_financial_growth_rates",
+    "Get pre-computed annual growth rates: revenue, EBITDA, net income, EPS, FCF. Includes 3yr, 5yr, 10yr CAGRs.",
+    {"symbol": str},
+)
+async def get_financial_growth_rates(args):
+    with ResearchDataAPI() as api:
+        data = api.get_financial_growth_rates(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_analyst_grades",
+    "Get analyst upgrade/downgrade history. Shows which firms are changing ratings and the direction — useful for sell-side sentiment momentum.",
+    {"symbol": str},
+)
+async def get_analyst_grades(args):
+    with ResearchDataAPI() as api:
+        data = api.get_analyst_grades(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_price_targets",
+    "Get individual analyst price targets with consensus mean, high, low. Shows analyst dispersion and conviction.",
+    {"symbol": str},
+)
+async def get_price_targets(args):
+    with ResearchDataAPI() as api:
+        data = api.get_price_targets(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_fair_value",
+    "Get combined fair value estimate from PE band + DCF + analyst consensus. Returns bear/base/bull range, margin of safety %, and signal (DEEP VALUE / UNDERVALUED / FAIR VALUE / EXPENSIVE).",
+    {"symbol": str},
+)
+async def get_fair_value(args):
+    with ResearchDataAPI() as api:
+        data = api.get_fair_value(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
 # --- Scoring ---
 
 
@@ -434,6 +536,15 @@ RESEARCH_TOOLS = [
     get_company_documents,
     get_business_profile,
     save_business_profile,
+    get_dcf_valuation,
+    get_dcf_history,
+    get_technical_indicators,
+    get_dupont_decomposition,
+    get_key_metrics_history,
+    get_financial_growth_rates,
+    get_analyst_grades,
+    get_price_targets,
+    get_fair_value,
 ]
 
 # Subset for business research — qualitative + key financials for context
