@@ -43,14 +43,14 @@ _REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 # --- Multi-agent specialist defaults ---
 
 DEFAULT_MODELS: dict[str, str] = {
-    "business": "claude-opus-4-20250514",
+    "business": "claude-sonnet-4-20250514",
     "financials": "claude-sonnet-4-20250514",
     "ownership": "claude-sonnet-4-20250514",
     "valuation": "claude-sonnet-4-20250514",
     "risk": "claude-sonnet-4-20250514",
     "technical": "claude-sonnet-4-20250514",
-    "synthesis": "claude-opus-4-20250514",
-    "verifier": "claude-haiku-4-20250506",
+    "synthesis": "claude-sonnet-4-20250514",
+    "verifier": "claude-haiku-4-5-20251001",
 }
 
 AGENT_TOOLS: dict[str, list] = {
@@ -473,7 +473,7 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
             ),
             max_turns=1,
             permission_mode="bypassPermissions",
-            model="claude-haiku-4-20250506",
+            model="claude-haiku-4-5-20251001",
         )
 
         result_text = ""

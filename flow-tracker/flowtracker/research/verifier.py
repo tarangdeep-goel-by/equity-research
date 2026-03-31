@@ -33,7 +33,7 @@ from flowtracker.research.briefing import (
 # Verifier gets same tools as specialist MINUS write operations
 _WRITE_TOOLS = {"save_business_profile"}
 
-DEFAULT_VERIFY_MODEL = "claude-haiku-4-20250506"
+DEFAULT_VERIFY_MODEL = "claude-haiku-4-5-20251001"
 
 
 def _get_verifier_tools(agent_name: str) -> list:
