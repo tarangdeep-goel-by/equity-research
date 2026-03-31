@@ -190,3 +190,14 @@ class ResearchDataAPI:
         if match:
             return {"symbol": symbol, "company_name": match[0].company_name, "industry": match[0].industry}
         return {"symbol": symbol, "company_name": symbol, "industry": "Unknown"}
+
+    # --- Company Profile & Documents ---
+
+    def get_company_profile(self, symbol: str) -> dict:
+        """Company about text, key points, and Screener URL from stored profile."""
+        profile = self._store.get_company_profile(symbol)
+        return _clean(profile) if profile else {}
+
+    def get_company_documents(self, symbol: str, doc_type: str | None = None) -> list[dict]:
+        """Concall transcripts, PPTs, recordings, and annual report URLs."""
+        return _clean(self._store.get_documents(symbol, doc_type))

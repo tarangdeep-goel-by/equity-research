@@ -316,6 +316,63 @@ async def get_company_info(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+# --- Company Profile & Documents ---
+
+
+@tool(
+    "get_company_profile",
+    "Get company business description, key points, and Screener URL. Use to understand what the company does.",
+    {"symbol": str},
+)
+async def get_company_profile(args):
+    with ResearchDataAPI() as api:
+        data = api.get_company_profile(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_company_documents",
+    "Get concall transcript/PPT/recording URLs and annual report URLs. Optionally filter by doc_type: 'concall_transcript', 'concall_ppt', 'annual_report'.",
+    {"symbol": str, "doc_type": str},
+)
+async def get_company_documents(args):
+    with ResearchDataAPI() as api:
+        data = api.get_company_documents(args["symbol"], args.get("doc_type"))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Business Profile (Vault) ---
+
+
+@tool(
+    "get_business_profile",
+    "Read cached business profile from vault. Returns markdown content if exists, empty if not. Check this BEFORE doing web research.",
+    {"symbol": str},
+)
+async def get_business_profile(args):
+    from pathlib import Path
+    symbol = args["symbol"].upper()
+    path = Path.home() / "vault" / "stocks" / symbol / "profile.md"
+    if path.exists():
+        content = path.read_text()
+        return {"content": [{"type": "text", "text": content}]}
+    return {"content": [{"type": "text", "text": ""}]}
+
+
+@tool(
+    "save_business_profile",
+    "Save a business profile to vault for future reuse. Content should be structured markdown covering: what they do, how they make money, competitive position, industry dynamics, key risks.",
+    {"symbol": str, "content": str},
+)
+async def save_business_profile(args):
+    from pathlib import Path
+    symbol = args["symbol"].upper()
+    path = Path.home() / "vault" / "stocks" / symbol / "profile.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(args["content"])
+    return {"content": [{"type": "text", "text": f"Saved business profile to {path}"}]}
+
+
 # --- Scoring ---
 
 
@@ -373,4 +430,31 @@ RESEARCH_TOOLS = [
     get_recent_filings,
     get_company_info,
     get_composite_score,
+    get_company_profile,
+    get_company_documents,
+    get_business_profile,
+    save_business_profile,
+]
+
+# Subset for business research — qualitative + key financials for context
+# Excludes: market signals (delivery, pledge), macro, FII/DII flows, bulk deals
+BUSINESS_TOOLS = [
+    # Qualitative context
+    get_company_info,
+    get_company_profile,
+    get_company_documents,
+    get_business_profile,
+    save_business_profile,
+    # Financial data (for backing claims with numbers and trends)
+    get_quarterly_results,
+    get_annual_financials,
+    get_screener_ratios,
+    get_valuation_snapshot,
+    get_peer_comparison,
+    get_expense_breakdown,
+    # Analyst consensus
+    get_consensus_estimate,
+    get_earnings_surprises,
+    # Chart data for trends
+    get_chart_data,
 ]

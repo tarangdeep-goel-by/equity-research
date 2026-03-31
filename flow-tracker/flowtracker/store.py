@@ -440,6 +440,24 @@ CREATE TABLE IF NOT EXISTS financial_schedules (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, section, parent_item, sub_item, period)
 );
+
+CREATE TABLE IF NOT EXISTS company_profiles (
+    symbol TEXT PRIMARY KEY,
+    about_text TEXT,
+    key_points_json TEXT,
+    screener_url TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS company_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    doc_type TEXT NOT NULL,
+    period TEXT NOT NULL,
+    url TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, doc_type, period)
+);
 """
 
 
@@ -2290,6 +2308,96 @@ class FlowStore:
                 "SELECT * FROM financial_schedules WHERE symbol = ? "
                 "ORDER BY section, parent_item, sub_item, period",
                 (symbol,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- Company Profiles ---
+
+    def upsert_company_profile(self, symbol: str, data: dict) -> None:
+        """Insert or update company profile (about text, key points)."""
+        import json as _json
+        self._conn.execute(
+            "INSERT INTO company_profiles (symbol, about_text, key_points_json, screener_url, updated_at) "
+            "VALUES (?, ?, ?, ?, datetime('now')) "
+            "ON CONFLICT(symbol) DO UPDATE SET "
+            "about_text=excluded.about_text, key_points_json=excluded.key_points_json, "
+            "screener_url=excluded.screener_url, updated_at=datetime('now')",
+            (
+                symbol.upper(),
+                data.get("about_text", ""),
+                _json.dumps(data.get("key_points", []), ensure_ascii=False),
+                data.get("screener_url", ""),
+            ),
+        )
+        self._conn.commit()
+
+    def get_company_profile(self, symbol: str) -> dict | None:
+        """Get company profile. Returns dict with about_text, key_points, screener_url."""
+        import json as _json
+        row = self._conn.execute(
+            "SELECT * FROM company_profiles WHERE symbol = ?", (symbol.upper(),)
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["key_points"] = _json.loads(d.pop("key_points_json", "[]") or "[]")
+        return d
+
+    # --- Company Documents ---
+
+    def upsert_documents(self, symbol: str, docs_dict: dict) -> int:
+        """Store concall/annual report URLs from Screener documents section.
+
+        docs_dict: output of ScreenerClient.parse_documents_from_html
+        """
+        count = 0
+        symbol = symbol.upper()
+        for concall in docs_dict.get("concalls", []):
+            period = concall.get("quarter", "")
+            for doc_type, key in [
+                ("concall_transcript", "transcript_url"),
+                ("concall_ppt", "ppt_url"),
+                ("concall_recording", "recording_url"),
+            ]:
+                url = concall.get(key, "")
+                if url and period:
+                    self._conn.execute(
+                        "INSERT INTO company_documents (symbol, doc_type, period, url, updated_at) "
+                        "VALUES (?, ?, ?, ?, datetime('now')) "
+                        "ON CONFLICT(symbol, doc_type, period) DO UPDATE SET "
+                        "url=excluded.url, updated_at=datetime('now')",
+                        (symbol, doc_type, period, url),
+                    )
+                    count += 1
+
+        for ar in docs_dict.get("annual_reports", []):
+            period = ar.get("year", "")
+            url = ar.get("url", "")
+            if url and period:
+                self._conn.execute(
+                    "INSERT INTO company_documents (symbol, doc_type, period, url, updated_at) "
+                    "VALUES (?, ?, ?, ?, datetime('now')) "
+                    "ON CONFLICT(symbol, doc_type, period) DO UPDATE SET "
+                    "url=excluded.url, updated_at=datetime('now')",
+                    (symbol, "annual_report", period, url),
+                )
+                count += 1
+
+        self._conn.commit()
+        return count
+
+    def get_documents(self, symbol: str, doc_type: str | None = None) -> list[dict]:
+        """Get stored company documents, optionally filtered by type."""
+        if doc_type:
+            rows = self._conn.execute(
+                "SELECT * FROM company_documents WHERE symbol = ? AND doc_type = ? "
+                "ORDER BY period DESC",
+                (symbol.upper(), doc_type),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM company_documents WHERE symbol = ? ORDER BY doc_type, period DESC",
+                (symbol.upper(),),
             ).fetchall()
         return [dict(r) for r in rows]
 

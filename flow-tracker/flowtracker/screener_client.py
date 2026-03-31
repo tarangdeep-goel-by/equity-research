@@ -964,6 +964,49 @@ class ScreenerClient:
 
         return result
 
+    def parse_about_from_html(self, symbol: str, html: str) -> dict:
+        """Parse company description and key points from Screener company page.
+
+        Returns dict with: about_text, key_points (list of {heading, text}),
+        screener_url.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        result: dict = {
+            "symbol": symbol.upper(),
+            "about_text": "",
+            "key_points": [],
+            "screener_url": f"{_SCREENER_BASE}/company/{symbol.upper()}/consolidated/",
+        }
+
+        cp = soup.find("div", class_="company-profile")
+        if not cp:
+            return result
+
+        # About text — div.about inside div.company-profile
+        about_div = cp.find("div", class_="about")
+        if about_div:
+            # Clean footnote markers like [1]
+            text = about_div.get_text(strip=True)
+            text = re.sub(r"\[\d+\]", "", text).strip()
+            result["about_text"] = text
+
+        # Key points — div.commentary with <strong> headings and <p> blocks
+        commentary = cp.find("div", class_="commentary")
+        if commentary:
+            for p_tag in commentary.find_all("p"):
+                strong = p_tag.find("strong")
+                if not strong:
+                    continue
+                heading = strong.get_text(strip=True)
+                body = p_tag.get_text(strip=True)
+                # Remove heading from body, clean footnote markers
+                body = body.replace(heading, "", 1).strip()
+                body = re.sub(r"\[\d+\]", "", body).strip()
+                if heading and body:
+                    result["key_points"].append({"heading": heading, "text": body})
+
+        return result
+
     @staticmethod
     def _parse_quarter_key(q: str) -> str:
         """Convert 'Dec 2025' to '2025-12' for proper chronological sorting."""

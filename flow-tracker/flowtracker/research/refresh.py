@@ -65,6 +65,28 @@ def refresh_for_research(symbol: str, console: Console | None = None) -> dict[st
                 # Company page + parse
                 html = sc.fetch_company_page(symbol)
 
+                # Company profile (about text + key points)
+                try:
+                    profile = sc.parse_about_from_html(symbol, html)
+                    if profile.get("about_text"):
+                        store.upsert_company_profile(symbol, profile)
+                        _ok("company_profile", 1)
+                    else:
+                        _skip("company_profile", "no about text found")
+                except Exception as e:
+                    _skip("company_profile", str(e))
+
+                # Company documents (concalls + annual reports)
+                try:
+                    docs = sc.parse_documents_from_html(html)
+                    doc_count = store.upsert_documents(symbol, docs)
+                    if doc_count:
+                        _ok("company_documents", doc_count)
+                    else:
+                        _skip("company_documents", "no documents found")
+                except Exception as e:
+                    _skip("company_documents", str(e))
+
                 quarters = sc.parse_quarterly_from_html(symbol, html)
                 if quarters:
                     store.upsert_quarterly_results(quarters)
@@ -257,5 +279,83 @@ def refresh_for_research(symbol: str, console: Console | None = None) -> dict[st
                     _skip("filings", "no data")
         except Exception as e:
             _skip("filings", str(e))
+
+    return summary
+
+
+def refresh_for_business(symbol: str, console: Console | None = None) -> dict[str, int]:
+    """Light refresh for business profile — only Screener page data (about, docs, peers).
+
+    Much faster than refresh_for_research — ~5 API calls vs ~50.
+    """
+    symbol = symbol.upper()
+    summary: dict[str, int] = {}
+
+    def _log(msg: str) -> None:
+        if console:
+            console.print(msg)
+
+    def _ok(name: str, count: int) -> None:
+        summary[name] = count
+        _log(f"  [green]\u2713[/] {name}: {count} records")
+
+    def _skip(name: str, err: str) -> None:
+        summary[name] = 0
+        _log(f"  [yellow]\u2717[/] {name}: {err}")
+
+    from flowtracker.store import FlowStore
+
+    with FlowStore() as store:
+        _log("\n[bold]Screener.in (business data only)[/]")
+        try:
+            from flowtracker.screener_client import ScreenerClient
+
+            with ScreenerClient() as sc:
+                html = sc.fetch_company_page(symbol)
+
+                # Company profile (about + key points)
+                try:
+                    profile = sc.parse_about_from_html(symbol, html)
+                    if profile.get("about_text"):
+                        store.upsert_company_profile(symbol, profile)
+                        _ok("company_profile", 1)
+                    else:
+                        _skip("company_profile", "no about text")
+                except Exception as e:
+                    _skip("company_profile", str(e))
+
+                # Company documents (concalls + annual reports)
+                try:
+                    docs = sc.parse_documents_from_html(html)
+                    doc_count = store.upsert_documents(symbol, docs)
+                    if doc_count:
+                        _ok("company_documents", doc_count)
+                    else:
+                        _skip("company_documents", "no documents")
+                except Exception as e:
+                    _skip("company_documents", str(e))
+
+                # Peers (for competitive context)
+                company_id, warehouse_id = _extract_ids_from_html(html)
+                if warehouse_id:
+                    try:
+                        peers = sc.fetch_peers(warehouse_id)
+                        count = store.upsert_peers(symbol, peers)
+                        _ok("peers", count)
+                    except Exception as e:
+                        _skip("peers", str(e))
+
+                # Expense breakdown (cost structure insight)
+                if company_id:
+                    for parent in ("Sales", "Expenses"):
+                        try:
+                            data = sc.fetch_schedules(company_id, "profit-loss", parent)
+                            count = store.upsert_schedules(symbol, "profit-loss", parent, data)
+                            _ok(f"schedules_{parent.lower()}", count)
+                        except Exception as e:
+                            _skip(f"schedules_{parent.lower()}", str(e))
+
+        except Exception as e:
+            _skip("screener", str(e))
 
     return summary
