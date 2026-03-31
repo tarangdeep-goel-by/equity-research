@@ -2,7 +2,7 @@
 
 Indian equity research platform. Tracks institutional flows, screens stocks, and generates AI-powered research reports — the same data stack a sell-side analyst at Nomura uses, built for independent buy-side analysis.
 
-**85+ CLI commands | 14 data sources | 30 SQLite tables | 4.5M+ records | Fully automated crons**
+**100+ CLI commands | 15 data sources | 39 SQLite tables | 4.5M+ records | Fully automated crons**
 
 ---
 
@@ -50,7 +50,7 @@ uv run flowtrack summary                        # today's FII/DII flows
                            │
               ┌────────────▼────────────┐
               │   Claude Agent (SDK)    │
-              │   26 MCP tools          │
+              │   39 MCP tools          │
               │   10-20 turn analysis   │
               └────────────┬────────────┘
                            │
@@ -118,6 +118,43 @@ uv run flowtrack mfport top-buys                         # biggest MF buys this 
 uv run flowtrack estimates upside                        # stocks with most analyst upside
 ```
 
+### Track Your Portfolio
+
+```bash
+uv run flowtrack portfolio add SBIN --qty 50 --cost 920
+uv run flowtrack portfolio add HDFCBANK --qty 30 --cost 1750
+uv run flowtrack portfolio view                          # live P&L per stock
+uv run flowtrack portfolio summary                       # total P&L, top gainer/loser
+uv run flowtrack portfolio concentration                 # sector weight breakdown
+```
+
+### Set Alerts
+
+```bash
+uv run flowtrack alert add SBIN price_below 750 --notes "support level"
+uv run flowtrack alert add HDFCBANK pe_below 18
+uv run flowtrack alert add RELIANCE rsi_below 30         # needs FMP data
+uv run flowtrack alert list                              # see all active
+uv run flowtrack alert check                             # evaluate against latest data
+```
+
+### Track Your Thesis
+
+Create `~/vault/stocks/SBIN/thesis-tracker.md` with conditions, then:
+```bash
+uv run flowtrack research thesis-check -s SBIN           # evaluate conditions
+uv run flowtrack research thesis-status                  # all tracked stocks
+```
+
+### Valuation Tools
+
+```bash
+uv run flowtrack research data fair_value -s SBIN        # PE band + DCF + consensus
+uv run flowtrack research data dupont_decomposition -s SBIN  # ROE quality breakdown
+uv run flowtrack fmp fetch -s RELIANCE                   # DCF, technicals, grades (paid key)
+uv run flowtrack fmp dcf -s RELIANCE                     # intrinsic value vs market
+```
+
 ### Check Macro
 
 ```bash
@@ -158,8 +195,10 @@ Every data type has one authoritative source. No overlaps.
 | Gold ETF NAVs | mfapi.in | Daily |
 | Macro (VIX, FX, crude, G-sec) | yfinance | Daily |
 | Corporate filings (concalls, results) | BSE | Quarterly |
+| DCF, technicals, key metrics, growth | FMP | On-demand |
+| Analyst grades & price targets | FMP | On-demand |
 
-**Key rule:** Screener.in is the source of truth for Indian financials and historical valuations. yfinance provides live snapshots and analyst consensus. They don't overlap.
+**Key rule:** Screener.in is the source of truth for Indian financials and historical valuations. yfinance provides live snapshots and analyst consensus. FMP adds DCF valuations, technical indicators, and sell-side analyst data (requires paid API key).
 
 ---
 
@@ -201,8 +240,8 @@ Every Nifty 500 stock gets a composite score from 0-100:
 
 ```
 flowtracker/
-├── main.py                     # Typer app, 16 command groups
-├── store.py                    # FlowStore — SQLite, ~92 methods, 30 tables
+├── main.py                     # Typer app, 18 command groups
+├── store.py                    # FlowStore — SQLite, ~117 methods, 39 tables
 ├── screener_client.py          # Screener.in — 11 API methods
 ├── screener_engine.py          # 8-factor composite scorer
 ├── utils.py                    # Shared helpers
@@ -212,12 +251,16 @@ flowtracker/
 ├── {module}_commands.py        # Typer subcommands
 ├── {module}_display.py         # Rich terminal tables
 │
+├── fmp_client.py               # FMP API — DCF, technicals, metrics, grades
+├── alert_engine.py             # Alert condition evaluator
+│
 └── research/
-    ├── refresh.py              # Pre-fetch 5 sources before agent runs
-    ├── data_api.py             # ResearchDataAPI — 26 methods (unified data layer)
-    ├── tools.py                # 26 MCP tools wrapping the API
+    ├── refresh.py              # Pre-fetch 6 sources before agent runs
+    ├── data_api.py             # ResearchDataAPI — ~35 methods (unified data layer)
+    ├── tools.py                # 39 MCP tools wrapping the API
     ├── agent.py                # Claude Agent SDK integration
     ├── prompts.py              # Analysis framework + output format
+    ├── thesis_tracker.py       # YAML-based thesis condition tracking
     └── data_collector.py       # HTML report data builder
 ```
 
@@ -259,7 +302,7 @@ bash scripts/setup-crons.sh
 |------|-------------|
 | `store.py` | Single SQLite wrapper. Every table, every query. Start here to understand the data model. |
 | `screener_client.py` | All Screener.in API interactions. Two company IDs per stock (`company_id` for charts, `warehouse_id` for peers). See `docs/screener-api-map.md`. |
-| `research/data_api.py` | The 26-method API the AI agent uses. If you want to query data programmatically, this is the interface. |
+| `research/data_api.py` | The ~35-method API the AI agent uses. Includes fair value model and DuPont decomposition. |
 | `research/agent.py` | How the AI thesis generation works — Agent SDK, MCP tools, multi-turn reasoning. |
 | `screener_engine.py` | The composite scoring logic. Each factor's calculation and weighting. |
 
@@ -269,7 +312,7 @@ bash scripts/setup-crons.sh
 
 SQLite at `~/.local/share/flowtracker/flows.db` (795 MB).
 
-30 tables, 4.5M+ rows. The biggest:
+39 tables, 4.5M+ rows. The biggest:
 - `daily_stock_data` — 3.7M rows of OHLCV + delivery % for 3K stocks
 - `mf_scheme_holdings` — 345K rows, which MF schemes hold which stocks
 - `insider_transactions` — 313K rows of SAST filings
@@ -283,4 +326,4 @@ All monetary values are in crores (₹1 Cr = ₹10 million).
 
 - `docs/screener-api-map.md` — Every Screener.in API endpoint, parameters, auth, response format
 - `docs/data-source-comparison.md` — Which source is authoritative for each data type
-- `plans/flowtracker-roadmap.md` — What's planned next (valuation model, thesis tracker, portfolio view)
+- `plans/flowtracker-roadmap.md` — Roadmap and future plans
