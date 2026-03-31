@@ -360,3 +360,58 @@ class ResearchDataAPI:
     def get_company_documents(self, symbol: str, doc_type: str | None = None) -> list[dict]:
         """Concall transcripts, PPTs, recordings, and annual report URLs."""
         return _clean(self._store.get_documents(symbol, doc_type))
+
+    # --- Peer Benchmarking ---
+
+    def get_peer_metrics(self, symbol: str) -> dict:
+        """FMP key metrics for subject + all peers with populated FMP data."""
+        peers = self._store.get_peers(symbol)
+
+        # Subject metrics (latest)
+        subject_rows = self._store.get_fmp_key_metrics(symbol, limit=1)
+        subject = _clean(subject_rows[0].model_dump()) if subject_rows else {}
+        if subject:
+            subject["symbol"] = symbol
+
+        # Peer metrics — use peer_symbol if available, else peer_name as symbol
+        peer_data = []
+        for p in peers:
+            psym = p.get("peer_symbol") or p.get("peer_name")
+            if not psym or psym == symbol:
+                continue
+            rows = self._store.get_fmp_key_metrics(psym, limit=1)
+            if rows:
+                d = _clean(rows[0].model_dump())
+                d["symbol"] = psym
+                peer_data.append(d)
+
+        return {"subject": subject, "peers": peer_data, "peer_count": len(peer_data)}
+
+    def get_peer_growth(self, symbol: str) -> dict:
+        """FMP financial growth rates for subject + all peers."""
+        peers = self._store.get_peers(symbol)
+
+        subject_rows = self._store.get_fmp_financial_growth(symbol, limit=1)
+        subject = _clean(subject_rows[0].model_dump()) if subject_rows else {}
+        if subject:
+            subject["symbol"] = symbol
+
+        peer_data = []
+        for p in peers:
+            psym = p.get("peer_symbol") or p.get("peer_name")
+            if not psym or psym == symbol:
+                continue
+            rows = self._store.get_fmp_financial_growth(psym, limit=1)
+            if rows:
+                d = _clean(rows[0].model_dump())
+                d["symbol"] = psym
+                peer_data.append(d)
+
+        return {"subject": subject, "peers": peer_data, "peer_count": len(peer_data)}
+
+    def get_sector_benchmarks(self, symbol: str, metric: str | None = None) -> list[dict] | dict:
+        """Sector benchmark statistics — single metric or all."""
+        if metric:
+            result = self._store.get_sector_benchmark(symbol, metric)
+            return _clean(result) if result else {}
+        return _clean(self._store.get_all_sector_benchmarks(symbol))

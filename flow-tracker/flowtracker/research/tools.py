@@ -503,6 +503,45 @@ async def get_composite_score(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+# --- Peer Benchmarking ---
+
+
+@tool(
+    "get_peer_metrics",
+    "Get FMP key financial metrics (PE, PB, EV/EBITDA, ROE, ROIC, FCF yield, debt/equity, margins) for the subject company and all its peers. Returns subject data, individual peer data, and peer count.",
+    {"symbol": str},
+)
+async def get_peer_metrics(args):
+    with ResearchDataAPI() as api:
+        data = api.get_peer_metrics(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_peer_growth",
+    "Get FMP growth rates (revenue, EBITDA, net income, EPS, FCF growth + 3yr/5yr CAGRs) for the subject company and all its peers.",
+    {"symbol": str},
+)
+async def get_peer_growth(args):
+    with ResearchDataAPI() as api:
+        data = api.get_peer_growth(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_sector_benchmarks",
+    "Get computed sector benchmark statistics for a metric: subject value, sector median, P25/P75, min/max, and the subject's percentile rank. If no metric specified, returns all benchmarks.",
+    {"symbol": str, "metric": str},
+)
+async def get_sector_benchmarks(args):
+    with ResearchDataAPI() as api:
+        data = api.get_sector_benchmarks(args["symbol"], args.get("metric"))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+_PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_sector_benchmarks]
+
+
 # --- Tool Registry ---
 
 RESEARCH_TOOLS = [
@@ -569,3 +608,53 @@ BUSINESS_TOOLS = [
     # Chart data for trends
     get_chart_data,
 ]
+
+# --- Specialist Agent Tool Registries ---
+
+BUSINESS_AGENT_TOOLS = [
+    get_company_info, get_company_profile, get_company_documents,
+    get_business_profile, save_business_profile,
+    get_quarterly_results, get_annual_financials, get_screener_ratios,
+    get_valuation_snapshot, get_peer_comparison, get_expense_breakdown,
+    get_consensus_estimate, get_earnings_surprises,
+    *_PEER_TOOLS,  # get_peer_metrics, get_peer_growth, get_sector_benchmarks
+]  # 16 tools
+
+FINANCIAL_AGENT_TOOLS = [
+    get_company_info, get_quarterly_results, get_annual_financials,
+    get_screener_ratios, get_expense_breakdown, get_financial_growth_rates,
+    get_dupont_decomposition, get_key_metrics_history,
+    get_chart_data, get_earnings_surprises,
+    *_PEER_TOOLS,
+]  # 13 tools
+
+OWNERSHIP_AGENT_TOOLS = [
+    get_shareholding, get_shareholding_changes, get_insider_transactions,
+    get_bulk_block_deals, get_mf_holdings, get_mf_holding_changes,
+    get_shareholder_detail, get_promoter_pledge, get_delivery_trend,
+    get_fii_dii_flows, get_fii_dii_streak,
+    get_sector_benchmarks,  # just sector_benchmarks, not full peer tools
+]  # 12 tools
+
+VALUATION_AGENT_TOOLS = [
+    get_valuation_snapshot, get_valuation_band, get_pe_history,
+    get_fair_value, get_dcf_valuation, get_dcf_history,
+    get_price_targets, get_analyst_grades, get_peer_comparison,
+    get_chart_data, get_consensus_estimate,
+    *_PEER_TOOLS,
+]  # 14 tools
+
+RISK_AGENT_TOOLS = [
+    get_quarterly_results, get_annual_financials, get_promoter_pledge,
+    get_insider_transactions, get_macro_snapshot, get_fii_dii_streak,
+    get_composite_score, get_earnings_surprises, get_recent_filings,
+    get_valuation_snapshot, get_peer_comparison,
+    *_PEER_TOOLS,
+]  # 14 tools
+
+TECHNICAL_AGENT_TOOLS = [
+    get_technical_indicators, get_chart_data, get_delivery_trend,
+    get_valuation_snapshot, get_bulk_block_deals,
+    get_fii_dii_flows, get_fii_dii_streak,
+    get_sector_benchmarks,  # just sector_benchmarks for beta/delivery benchmarking
+]  # 8 tools

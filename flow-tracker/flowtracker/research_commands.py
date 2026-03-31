@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import sys
@@ -183,19 +184,28 @@ def business(
 
 @app.command()
 def thesis(
-    symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")],
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
     no_agent: Annotated[bool, typer.Option("--no-agent", help="Skip agent, use data-only report (fallback to fundamentals)")] = False,
-    skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Skip data refresh, use cached DB data")] = False,
-    model: Annotated[str | None, typer.Option("--model", help="Claude model override")] = None,
+    skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Skip data refresh")] = False,
+    skip_verify: Annotated[bool, typer.Option("--skip-verify", help="Skip verification step")] = False,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for all agents")] = None,
+    verify_model: Annotated[str | None, typer.Option("--verify-model", help="Override model for verifiers")] = None,
 ) -> None:
-    """Generate an AI-powered equity research thesis.
+    """Generate comprehensive multi-agent equity research thesis.
 
-    Uses Claude as a multi-turn research agent with access to all FlowTracker data.
-    The agent queries data, cross-references signals, and produces a Markdown report.
+    Runs 6 specialist agents in parallel (business, financials, ownership,
+    valuation, risk, technical), verifies their reports, then synthesizes
+    everything into a final research document.
 
     Use --no-agent to fall back to the data-only HTML fundamentals report.
     Use --skip-fetch to skip refreshing data from live sources.
+    Use --skip-verify to skip the verification step.
     """
+    import webbrowser
+
+    from flowtracker.research.agent import format_cost_summary, run_all_agents, run_synthesis_agent
+    from flowtracker.research.assembly import assemble_final_report
+
     symbol = symbol.upper()
 
     if no_agent:
@@ -203,28 +213,57 @@ def thesis(
         fundamentals(symbol=symbol)
         return
 
+    # Phase 0: Data refresh
     if not skip_fetch:
-        console.print(f"\n[bold]Refreshing data for {symbol}...[/]")
+        console.print(f"\n[bold]Phase 0: Data Refresh for {symbol}[/]")
         from flowtracker.research.refresh import refresh_for_research
-        summary = refresh_for_research(symbol, console)
-        total = sum(summary.values())
-        console.print(f"\n[dim]Refresh complete: {total} total records across {len(summary)} sources[/]")
+        refresh_for_research(symbol, console)
 
-    console.print(f"\n[bold]Generating research thesis for {symbol}...[/]")
-    console.print("[dim]Agent will query data, analyze, and produce a Markdown report.[/]")
-    console.print("[dim]This may take 1-3 minutes.[/]\n")
+        console.print("\n[bold]Refreshing peer data...[/]")
+        from flowtracker.research.peer_refresh import refresh_peers
+        refresh_peers(symbol, console)
 
-    try:
-        from flowtracker.research.agent import generate_thesis
-        output_path = generate_thesis(symbol, model=model)
-        console.print(f"\n[bold green]Done.[/] Report: [cyan]{output_path}[/]")
+    # Phase 1 + 1.5: Specialist agents (parallel) + Verification
+    console.print(f"\n[bold]Phase 1: Running 6 specialist agents for {symbol}...[/]")
+    console.print("Agents: business, financials, ownership, valuation, risk, technical")
+    console.print("This may take 3-8 minutes.\n")
 
-        reports_path = Path(__file__).parent.parent / "reports" / f"{symbol.lower()}-thesis.md"
-        if reports_path.exists():
-            console.print(f"  Also: [cyan]{reports_path}[/]")
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/]")
+    envelopes = asyncio.run(run_all_agents(
+        symbol=symbol,
+        model=model,
+        verify=not skip_verify,
+        verify_model=verify_model,
+    ))
+
+    if not envelopes:
+        console.print("[red]All agents failed. No reports generated.[/]")
         raise typer.Exit(1)
+
+    console.print(f"\n[green]✓[/] {len(envelopes)} specialist reports complete")
+
+    # Phase 2: Synthesis
+    console.print(f"\n[bold]Phase 2: Synthesis agent[/]")
+    synthesis = asyncio.run(run_synthesis_agent(symbol, model))
+    console.print("[green]✓[/] Synthesis complete")
+
+    # Phase 3: Assembly
+    console.print(f"\n[bold]Phase 3: Assembling final report[/]")
+    md_path, html_path = assemble_final_report(symbol, envelopes, synthesis)
+    console.print(f"[green]✓[/] Report assembled")
+
+    # Cost summary
+    all_envelopes = {**envelopes, "synthesis": synthesis}
+    console.print(format_cost_summary(all_envelopes))
+
+    # Output paths
+    console.print(f"\n[bold]Output:[/]")
+    console.print(f"  Markdown: {md_path}")
+    console.print(f"  HTML:     {html_path}")
+    console.print(f"  Reports:  ~/vault/stocks/{symbol}/reports/")
+    console.print(f"  Briefings: ~/vault/stocks/{symbol}/briefings/")
+
+    # Open HTML in browser
+    webbrowser.open(f"file://{html_path}")
 
 
 # All available tool names for the data command
@@ -424,6 +463,91 @@ def thesis_status() -> None:
             )
 
     console.print(table)
+
+
+VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical"}
+
+
+@app.command("run")
+def run_agent(
+    agent: Annotated[str, typer.Argument(help="Agent: business|financials|ownership|valuation|risk|technical")],
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol (e.g. INDIAMART)")],
+    skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Skip data refresh")] = False,
+    verify: Annotated[bool, typer.Option("--verify", help="Run verification after agent")] = False,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for agent")] = None,
+) -> None:
+    """Run a specialist research agent on a stock."""
+    agent = agent.lower()
+    symbol = symbol.upper()
+
+    if agent not in VALID_AGENTS:
+        console.print(f"[red]Unknown agent: {agent}[/]")
+        console.print(f"Valid agents: {', '.join(sorted(VALID_AGENTS))}")
+        raise typer.Exit(1)
+
+    if not skip_fetch:
+        console.print(f"\n[bold]Refreshing data for {symbol}...[/]")
+        if agent == "business":
+            from flowtracker.research.refresh import refresh_for_business
+            summary = refresh_for_business(symbol, console)
+        else:
+            from flowtracker.research.refresh import refresh_for_research
+            summary = refresh_for_research(symbol, console)
+        total = sum(summary.values())
+        console.print(f"\n[dim]Refresh complete: {total} records across {len(summary)} sources[/]")
+
+        # Fetch peer data for cross-comparison
+        from flowtracker.research.peer_refresh import refresh_peers
+        console.print(f"\n[bold]Refreshing peer data...[/]")
+        peer_summary = refresh_peers(symbol, console)
+        console.print(f"[dim]Peers: {peer_summary.get('peers_found', 0)} found, {peer_summary.get('peers_fetched', 0)} fetched[/]")
+
+    # TODO: Replace with specialist prompts from prompts.py (T8-T14)
+    try:
+        from flowtracker.research.prompts import AGENT_PROMPTS
+        prompt = AGENT_PROMPTS[agent]
+    except (ImportError, KeyError):
+        prompt = f"You are a {agent} research analyst. Analyze {symbol} using your available tools. Produce a detailed report."
+
+    console.print(f"\n[bold]Running {agent} agent for {symbol}...[/]")
+    console.print("[dim]This may take 1-3 minutes.[/]\n")
+
+    try:
+        from flowtracker.research.agent import run_single_agent
+        envelope = asyncio.run(run_single_agent(agent, symbol, prompt, model))
+    except Exception as e:
+        console.print(f"[red]Agent error: {e}[/]")
+        raise typer.Exit(1)
+
+    # Display cost summary
+    cost = envelope.cost
+    duration_m = int(cost.duration_seconds) // 60
+    duration_s = int(cost.duration_seconds) % 60
+
+    console.print(f"\n[bold green]✓ {agent} agent complete for {symbol}[/]\n")
+    console.print(f"  Model:    {cost.model or 'default'}")
+    console.print(f"  Tokens:   {cost.input_tokens:,} in / {cost.output_tokens:,} out")
+    console.print(f"  Cost:     ${cost.total_cost_usd:.2f}")
+    console.print(f"  Duration: {duration_m}m {duration_s:02d}s")
+
+    vault_base = Path.home() / "vault" / "stocks" / symbol
+    report_path = vault_base / "reports" / f"{agent}.md"
+    briefing_path = vault_base / "briefings" / f"{agent}.json"
+    console.print(f"\n  Report:   [cyan]{report_path}[/]")
+    console.print(f"  Briefing: [cyan]{briefing_path}[/]")
+
+    if verify:
+        console.print("\n[yellow]Verification not yet implemented — coming in T16[/yellow]")
+
+
+@app.command()
+def verify(
+    agent: Annotated[str, typer.Argument(help="Agent to verify: business|financials|ownership|valuation|risk|technical")],
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for verifier")] = None,
+) -> None:
+    """Verify an existing specialist report (checks data accuracy)."""
+    console.print("[yellow]Verification not yet implemented — coming in T16[/yellow]")
 
 
 def _get_score(symbol: str) -> dict:

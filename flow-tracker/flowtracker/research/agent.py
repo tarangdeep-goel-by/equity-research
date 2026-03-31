@@ -3,19 +3,87 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+import hashlib
+import json
+import time
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from claude_agent_sdk import (
+    AssistantMessage,
     ClaudeAgentOptions,
     ResultMessage,
+    ToolResultBlock,
+    ToolUseBlock,
     create_sdk_mcp_server,
     query,
+)
+
+from flowtracker.research.briefing import (
+    AgentCost,
+    BriefingEnvelope,
+    ToolEvidence,
+    parse_briefing_from_markdown,
+    save_envelope,
+)
+from flowtracker.research.tools import (
+    BUSINESS_AGENT_TOOLS,
+    FINANCIAL_AGENT_TOOLS,
+    OWNERSHIP_AGENT_TOOLS,
+    RISK_AGENT_TOOLS,
+    TECHNICAL_AGENT_TOOLS,
+    VALUATION_AGENT_TOOLS,
 )
 
 
 _VAULT_BASE = Path.home() / "vault" / "stocks"
 _REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
+
+
+# --- Multi-agent specialist defaults ---
+
+DEFAULT_MODELS: dict[str, str] = {
+    "business": "claude-opus-4-20250514",
+    "financials": "claude-sonnet-4-20250514",
+    "ownership": "claude-sonnet-4-20250514",
+    "valuation": "claude-sonnet-4-20250514",
+    "risk": "claude-sonnet-4-20250514",
+    "technical": "claude-sonnet-4-20250514",
+    "synthesis": "claude-opus-4-20250514",
+    "verifier": "claude-haiku-4-20250506",
+}
+
+AGENT_TOOLS: dict[str, list] = {
+    "business": BUSINESS_AGENT_TOOLS,
+    "financials": FINANCIAL_AGENT_TOOLS,
+    "ownership": OWNERSHIP_AGENT_TOOLS,
+    "valuation": VALUATION_AGENT_TOOLS,
+    "risk": RISK_AGENT_TOOLS,
+    "technical": TECHNICAL_AGENT_TOOLS,
+}
+
+AGENT_MAX_TURNS: dict[str, int] = {
+    "business": 25,
+    "financials": 20,
+    "ownership": 18,
+    "valuation": 18,
+    "risk": 15,
+    "technical": 12,
+}
+
+AGENT_MAX_BUDGET: dict[str, float] = {
+    "business": 0.50,
+    "financials": 0.40,
+    "ownership": 0.35,
+    "valuation": 0.35,
+    "risk": 0.30,
+    "technical": 0.25,
+}
+
+# Business agent needs web search for industry research
+AGENT_EXTRA_TOOLS: dict[str, list[str]] = {
+    "business": ["WebSearch", "WebFetch"],
+}
 
 
 async def _run_agent(symbol: str, model: str | None = None) -> str:
@@ -215,3 +283,363 @@ def generate_business_profile(symbol: str, model: str | None = None) -> Path:
     html_path.write_text(html)
 
     return html_path
+
+
+# --- Multi-agent specialist functions ---
+
+
+async def _run_specialist(
+    name: str,
+    symbol: str,
+    system_prompt: str,
+    tools: list | None = None,
+    max_turns: int | None = None,
+    max_budget: float | None = None,
+    model: str | None = None,
+    user_prompt: str | None = None,
+) -> BriefingEnvelope:
+    """Run a single specialist agent. Returns BriefingEnvelope with report, briefing, evidence, cost."""
+
+    tools = tools or AGENT_TOOLS.get(name, [])
+    max_turns = max_turns or AGENT_MAX_TURNS.get(name, 20)
+    max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
+    model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-20250514")
+
+    # Create MCP server with agent's tool subset
+    server = create_sdk_mcp_server(f"{name}-data", tools=tools)
+
+    # Build options
+    options = ClaudeAgentOptions(
+        system_prompt=system_prompt,
+        mcp_servers={name: server},
+        max_turns=max_turns,
+        max_budget_usd=max_budget,
+        permission_mode="bypassPermissions",
+        model=model,
+    )
+
+    # Add allowed_tools if agent needs extra tools (e.g. WebSearch for business)
+    extra = AGENT_EXTRA_TOOLS.get(name, [])
+    if extra:
+        options.allowed_tools = extra  # SDK adds MCP tools automatically
+
+    # Phase 1: Generate report with thinking
+    start_time = time.time()
+    evidence: list[ToolEvidence] = []
+    report_text = ""
+    text_blocks: list[str] = []  # fallback: collect text from AssistantMessages
+    total_cost = 0.0
+    input_tokens = 0
+    output_tokens = 0
+    agent_model = model
+
+    # Track tool calls for evidence capture
+    pending_tool_calls: dict[str, dict] = {}  # tool_use_id -> {tool, args}
+
+    try:
+        async for message in query(
+            prompt=user_prompt or f"Analyze {symbol}. Pull all relevant data using your tools. Produce your full report section.",
+            options=options,
+        ):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    block_type = type(block).__name__
+                    if block_type == "TextBlock":
+                        text_blocks.append(block.text)
+                    elif isinstance(block, ToolUseBlock):
+                        pending_tool_calls[block.id] = {
+                            "tool": block.name,
+                            "args": block.input or {},
+                        }
+                    elif isinstance(block, ToolResultBlock):
+                        tool_id = block.tool_use_id
+                        if tool_id in pending_tool_calls:
+                            call = pending_tool_calls.pop(tool_id)
+                            result_str = str(block.content) if block.content else ""
+                            evidence.append(ToolEvidence(
+                                tool=call["tool"],
+                                args=call["args"],
+                                result_summary=result_str[:500],
+                                result_hash=hashlib.sha256(result_str.encode()).hexdigest(),
+                                is_error=getattr(block, "is_error", False) or False,
+                            ))
+            elif isinstance(message, ResultMessage):
+                report_text = message.result or ""
+                total_cost = getattr(message, "total_cost_usd", 0.0) or 0.0
+                usage = getattr(message, "usage", None)
+                if usage:
+                    input_tokens = getattr(usage, "input_tokens", 0) or 0
+                    output_tokens = getattr(usage, "output_tokens", 0) or 0
+    except Exception:
+        # Claude CLI may exit with code 1 after delivering results.
+        # If we already captured text, proceed with what we have.
+        pass
+
+    # Use collected TextBlocks as fallback if ResultMessage.result was empty
+    if not report_text and text_blocks:
+        report_text = "\n\n".join(text_blocks)
+
+    duration = time.time() - start_time
+
+    # Phase 2: Extract structured briefing (two-pass approach)
+    briefing = await _extract_briefing(name, symbol, report_text)
+
+    # Build envelope
+    envelope = BriefingEnvelope(
+        agent=name,
+        symbol=symbol.upper(),
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        report=report_text,
+        briefing=briefing,
+        evidence=evidence,
+        cost=AgentCost(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_cost_usd=total_cost,
+            duration_seconds=duration,
+            model=agent_model,
+        ),
+    )
+
+    # Save to vault
+    save_envelope(envelope)
+
+    return envelope
+
+
+async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
+    """Extract structured briefing JSON from a report using a cheap second pass.
+
+    Falls back to parse_briefing_from_markdown if the second pass fails.
+    """
+    # First try: parse from markdown (if agent included a JSON block)
+    briefing = parse_briefing_from_markdown(report_text)
+    if briefing:
+        return briefing
+
+    # Second pass: use a cheap model to extract structured data
+    try:
+        extraction_prompt = (
+            f"Extract a structured briefing from this {name} analysis report for {symbol}.\n\n"
+            "Return a JSON object with these fields:\n"
+            f'- agent: "{name}"\n'
+            f'- symbol: "{symbol}"\n'
+            "- confidence: float 0-1 (how confident the analysis is)\n"
+            "- key_metrics: dict of important numerical metrics found in the report\n"
+            "- key_findings: list of 3-5 key findings as strings\n"
+            '- signal: overall signal (e.g. "bullish", "bearish", "neutral", "mixed")\n\n'
+            f"Report:\n{report_text[:8000]}"
+        )
+
+        options = ClaudeAgentOptions(
+            system_prompt=(
+                "You are a data extraction assistant. Extract structured data "
+                "from research reports. Return only valid JSON."
+            ),
+            max_turns=1,
+            permission_mode="bypassPermissions",
+            model="claude-haiku-4-20250506",
+        )
+
+        result_text = ""
+        text_parts: list[str] = []
+        try:
+            async for message in query(prompt=extraction_prompt, options=options):
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if type(block).__name__ == "TextBlock":
+                            text_parts.append(block.text)
+                elif isinstance(message, ResultMessage):
+                    result_text = message.result or ""
+        except Exception:
+            pass
+        if not result_text and text_parts:
+            result_text = "\n".join(text_parts)
+
+        extracted = parse_briefing_from_markdown(result_text)
+        if extracted:
+            return extracted
+
+        # Try parsing the raw text as JSON
+        return json.loads(result_text.strip())
+    except Exception:
+        # Final fallback: return minimal briefing
+        return {"agent": name, "symbol": symbol, "extraction_failed": True}
+
+
+async def run_single_agent(
+    agent_name: str,
+    symbol: str,
+    system_prompt: str,
+    model: str | None = None,
+) -> BriefingEnvelope:
+    """Run a single specialist agent. Public API for CLI."""
+    return await _run_specialist(
+        name=agent_name,
+        symbol=symbol.upper(),
+        system_prompt=system_prompt,
+        model=model,
+    )
+
+
+async def run_all_agents(
+    symbol: str,
+    model: str | None = None,
+    verify: bool = True,
+    verify_model: str | None = None,
+) -> dict[str, BriefingEnvelope]:
+    """Run all 6 specialist agents in parallel, optionally verify, return results."""
+    from flowtracker.research.prompts import AGENT_PROMPTS
+
+    symbol = symbol.upper()
+    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical"]
+
+    # Phase 1: Run all specialists in parallel
+    specialist_tasks = []
+    for name in agent_names:
+        prompt = AGENT_PROMPTS.get(name)
+        if not prompt:
+            continue
+        specialist_tasks.append(
+            _run_specialist(name=name, symbol=symbol, system_prompt=prompt, model=model)
+        )
+
+    results = await asyncio.gather(*specialist_tasks, return_exceptions=True)
+
+    # Collect successful results
+    envelopes: dict[str, BriefingEnvelope] = {}
+    for name, result in zip(agent_names, results):
+        if isinstance(result, Exception):
+            # Log but continue — partial results are fine
+            print(f"  ⚠ {name} agent failed: {result}")
+            continue
+        envelopes[name] = result
+
+    # Phase 1.5: Verification (parallel, one per specialist)
+    if verify and envelopes:
+        from flowtracker.research.verifier import _run_verifier, apply_corrections
+
+        verify_tasks = []
+        verify_names = []
+        for name, envelope in envelopes.items():
+            verify_tasks.append(
+                _run_verifier(name, symbol, envelope, model=verify_model)
+            )
+            verify_names.append(name)
+
+        verify_results = await asyncio.gather(*verify_tasks, return_exceptions=True)
+
+        # Apply corrections
+        for name, vresult in zip(verify_names, verify_results):
+            if isinstance(vresult, Exception):
+                print(f"  ⚠ {name} verifier failed: {vresult}")
+                continue
+            envelopes[name] = apply_corrections(envelopes[name], vresult)
+
+            # Re-save corrected envelope
+            save_envelope(envelopes[name])
+
+            # If verification failed, try one re-run
+            if vresult.verdict == "fail":
+                print(f"  🔄 {name} failed verification — re-running with corrections")
+                correction_prompt = AGENT_PROMPTS.get(name, "")
+                correction_prompt += f"""
+
+## IMPORTANT: Corrections Required
+Your previous report for {symbol} was flagged by the verification agent.
+Issues found:
+{json.dumps(vresult.issues, indent=2)}
+
+Required corrections:
+{json.dumps(vresult.corrections, indent=2)}
+
+Generate a corrected report. Pay special attention to the flagged sections.
+"""
+                try:
+                    rerun = await _run_specialist(
+                        name=name, symbol=symbol, system_prompt=correction_prompt, model=model,
+                    )
+                    envelopes[name] = rerun
+                except Exception as e:
+                    print(f"  ⚠ {name} re-run failed: {e}")
+
+    return envelopes
+
+
+async def run_synthesis_agent(
+    symbol: str,
+    model: str | None = None,
+) -> BriefingEnvelope:
+    """Run the synthesis agent on existing briefings."""
+    from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT
+    from flowtracker.research.briefing import load_all_briefings
+    from flowtracker.research.tools import get_composite_score, get_fair_value
+
+    symbol = symbol.upper()
+    briefings = load_all_briefings(symbol)
+
+    if not briefings:
+        raise ValueError(f"No briefings found for {symbol}. Run specialist agents first.")
+
+    # Format briefings for the synthesis prompt
+    briefing_text = ""
+    for agent_name, data in briefings.items():
+        briefing_text += f"\n### {agent_name.upper()} Briefing\n```json\n{json.dumps(data, indent=2)}\n```\n"
+
+    # Synthesis tools: just composite_score and fair_value
+    synthesis_tools = [get_composite_score, get_fair_value]
+
+    model = model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-20250514")
+
+    user_prompt = (
+        f"Synthesize the analysis for {symbol}. "
+        f"Here are the 6 specialist briefings:\n{briefing_text}\n\n"
+        "Produce your synthesis sections: Verdict, Executive Summary, Key Signals, "
+        "Catalysts, The Big Question."
+    )
+
+    return await _run_specialist(
+        name="synthesis",
+        symbol=symbol,
+        system_prompt=SYNTHESIS_AGENT_PROMPT,
+        tools=synthesis_tools,
+        max_turns=10,
+        max_budget=0.30,
+        model=model,
+        user_prompt=user_prompt,
+    )
+
+
+def format_cost_summary(envelopes: dict[str, BriefingEnvelope]) -> str:
+    """Format a Rich-compatible cost summary table."""
+    lines = []
+    lines.append("\n[bold]Agent Cost Summary[/]")
+    lines.append(f"{'Agent':<14} {'Tokens (in/out)':<20} {'Cost':>8} {'Time':>8}")
+    lines.append("─" * 54)
+
+    total_cost = 0.0
+    total_in = 0
+    total_out = 0
+    total_time = 0.0
+
+    for name, env in envelopes.items():
+        c = env.cost
+        total_cost += c.total_cost_usd
+        total_in += c.input_tokens
+        total_out += c.output_tokens
+        total_time += c.duration_seconds
+
+        mins = int(c.duration_seconds // 60)
+        secs = int(c.duration_seconds % 60)
+        lines.append(
+            f"{name:<14} {c.input_tokens:>8,} / {c.output_tokens:<8,} ${c.total_cost_usd:>6.2f} {mins}m {secs:02d}s"
+        )
+
+    lines.append("─" * 54)
+    total_mins = int(total_time // 60)
+    total_secs = int(total_time % 60)
+    lines.append(
+        f"{'TOTAL':<14} {total_in:>8,} / {total_out:<8,} ${total_cost:>6.2f} {total_mins}m {total_secs:02d}s"
+    )
+
+    return "\n".join(lines)

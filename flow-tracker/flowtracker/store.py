@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import statistics
 from datetime import date
 from pathlib import Path
 
@@ -600,6 +601,22 @@ CREATE TABLE IF NOT EXISTS alert_history (
     triggered_at TEXT NOT NULL DEFAULT (datetime('now')),
     current_value REAL,
     message TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sector_benchmarks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_symbol TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    subject_value REAL,
+    peer_count INTEGER,
+    sector_median REAL,
+    sector_p25 REAL,
+    sector_p75 REAL,
+    sector_min REAL,
+    sector_max REAL,
+    percentile REAL,
+    computed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(subject_symbol, metric)
 );
 """
 
@@ -2284,10 +2301,11 @@ class FlowStore:
                 continue
             self._conn.execute(
                 "INSERT INTO peer_comparison "
-                "(symbol, peer_name, cmp, pe, market_cap, div_yield, "
+                "(symbol, peer_name, peer_symbol, cmp, pe, market_cap, div_yield, "
                 "np_qtr, qtr_profit_var, sales_qtr, qtr_sales_var, roce) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(symbol, peer_name) DO UPDATE SET "
+                "peer_symbol=excluded.peer_symbol, "
                 "cmp=excluded.cmp, pe=excluded.pe, market_cap=excluded.market_cap, "
                 "div_yield=excluded.div_yield, np_qtr=excluded.np_qtr, "
                 "qtr_profit_var=excluded.qtr_profit_var, sales_qtr=excluded.sales_qtr, "
@@ -2296,15 +2314,16 @@ class FlowStore:
                 (
                     symbol,
                     name,
-                    p.get("cmp") or p.get("cmp_rs"),
+                    p.get("peer_symbol"),
+                    p.get("cmp") or p.get("cmp_rs") or p.get("cmprs"),
                     p.get("pe") or p.get("p_e"),
-                    p.get("market_cap") or p.get("market_cap_cr"),
-                    p.get("div_yield") or p.get("div_yld_pct"),
-                    p.get("np_qtr") or p.get("np_qtr_cr"),
-                    p.get("qtr_profit_var") or p.get("qtr_profit_var_pct"),
-                    p.get("sales_qtr") or p.get("sales_qtr_cr"),
-                    p.get("qtr_sales_var") or p.get("qtr_sales_var_pct"),
-                    p.get("roce") or p.get("roce_pct"),
+                    p.get("market_cap") or p.get("market_cap_cr") or p.get("mar_caprscr"),
+                    p.get("div_yield") or p.get("div_yld_pct") or p.get("div_yldpct"),
+                    p.get("np_qtr") or p.get("np_qtr_cr") or p.get("np_qtrrscr"),
+                    p.get("qtr_profit_var") or p.get("qtr_profit_var_pct") or p.get("qtr_profit_varpct"),
+                    p.get("sales_qtr") or p.get("sales_qtr_cr") or p.get("sales_qtrrscr"),
+                    p.get("qtr_sales_var") or p.get("qtr_sales_var_pct") or p.get("qtr_sales_varpct"),
+                    p.get("roce") or p.get("roce_pct") or p.get("rocepct"),
                 ),
             )
             count += 1
@@ -2839,6 +2858,69 @@ class FlowStore:
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # ── sector benchmarks ──────────────────────────────────────────
+
+    def upsert_sector_benchmark(
+        self,
+        symbol: str,
+        metric: str,
+        subject_value: float | None,
+        peer_values: list[float],
+    ) -> None:
+        """Insert or replace a sector benchmark row for symbol+metric."""
+        peer_count = len(peer_values)
+        if peer_count == 0:
+            sector_median = sector_p25 = sector_p75 = sector_min = sector_max = None
+            percentile = None
+        else:
+            sorted_vals = sorted(peer_values)
+            sector_median = statistics.median(sorted_vals)
+            quantiles = statistics.quantiles(sorted_vals, n=4) if peer_count >= 2 else [sorted_vals[0]] * 3
+            sector_p25 = quantiles[0]
+            sector_p75 = quantiles[-1]
+            sector_min = sorted_vals[0]
+            sector_max = sorted_vals[-1]
+            if subject_value is not None:
+                percentile = sum(1 for v in peer_values if v <= subject_value) / peer_count * 100
+            else:
+                percentile = None
+
+        self._conn.execute(
+            "INSERT OR REPLACE INTO sector_benchmarks "
+            "(subject_symbol, metric, subject_value, peer_count, "
+            "sector_median, sector_p25, sector_p75, sector_min, sector_max, "
+            "percentile, computed_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (symbol, metric, subject_value, peer_count,
+             sector_median, sector_p25, sector_p75, sector_min, sector_max,
+             percentile),
+        )
+        self._conn.commit()
+
+    def get_sector_benchmark(self, symbol: str, metric: str) -> dict | None:
+        """Get a single sector benchmark row."""
+        row = self._conn.execute(
+            "SELECT * FROM sector_benchmarks WHERE subject_symbol = ? AND metric = ?",
+            (symbol, metric),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_all_sector_benchmarks(self, symbol: str) -> list[dict]:
+        """Get all sector benchmark rows for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM sector_benchmarks WHERE subject_symbol = ? ORDER BY metric",
+            (symbol,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def clear_sector_benchmarks(self, symbol: str) -> None:
+        """Delete all sector benchmark rows for a symbol."""
+        self._conn.execute(
+            "DELETE FROM sector_benchmarks WHERE subject_symbol = ?",
+            (symbol,),
+        )
+        self._conn.commit()
 
     def close(self) -> None:
         """Close the database connection."""

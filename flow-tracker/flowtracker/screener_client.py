@@ -1199,7 +1199,7 @@ class ScreenerClient:
             row: dict = {}
             for i, td in enumerate(tds):
                 if i < len(headers):
-                    key = headers[i].lower().replace(" ", "_").replace(".", "").replace("(", "").replace(")", "").replace("%", "pct")
+                    key = headers[i].lower().replace(" ", "_").replace(".", "").replace("(", "").replace(")", "").replace("%", "pct").replace("/", "_")
                     val = td.get_text(strip=True).replace(",", "")
                     try:
                         row[key] = float(val)
@@ -1207,7 +1207,11 @@ class ScreenerClient:
                         row[key] = val
                     a = td.find("a")
                     if a:
-                        row["url"] = a.get("href", "")
+                        href = a.get("href", "")
+                        row["url"] = href
+                        m = re.search(r'/company/([A-Z0-9&-]+)/', href)
+                        if m:
+                            row["peer_symbol"] = m.group(1)
             peers.append(row)
         return peers
 
