@@ -30,9 +30,47 @@ def _extract_ids_from_html(html: str) -> tuple[str, str]:
     return company_id, warehouse_id
 
 
-def refresh_for_research(symbol: str, console: Console | None = None) -> dict[str, int]:
-    """Fetch all fresh data for a stock. Returns {source: record_count} summary.
+def _is_fresh(store, symbol: str, table: str, hours: int = 6) -> bool:
+    """Check if data in a table for this symbol was fetched within `hours` hours.
 
+    Uses fetched_at, updated_at, or date columns depending on table schema.
+    Returns True if fresh data exists, False if stale or missing.
+    """
+    from datetime import datetime, timedelta
+
+    cutoff = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+
+    for col in ["fetched_at", "updated_at"]:
+        try:
+            row = store._conn.execute(
+                f"SELECT MAX({col}) FROM {table} WHERE symbol = ?",  # noqa: S608
+                (symbol,),
+            ).fetchone()
+            if row and row[0] and row[0] >= cutoff:
+                return True
+        except Exception:
+            continue
+
+    # Fallback: check date column
+    try:
+        row = store._conn.execute(
+            f"SELECT MAX(date) FROM {table} WHERE symbol = ?",  # noqa: S608
+            (symbol,),
+        ).fetchone()
+        if row and row[0] and row[0] >= cutoff[:10]:  # date only, no time
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+def refresh_for_research(
+    symbol: str, console: Console | None = None, max_age_hours: int = 6,
+) -> dict[str, int]:
+    """Fetch fresh data for a stock. Skips sources with data < max_age_hours old.
+
+    Returns {source: record_count} summary.
     Called before the research agent to ensure tools read current data.
     Errors in individual fetches are logged but don't stop the process.
     """
@@ -54,6 +92,20 @@ def refresh_for_research(symbol: str, console: Console | None = None) -> dict[st
     from flowtracker.store import FlowStore
 
     with FlowStore() as store:
+        # --- Freshness gate: skip if data is recent ---
+        key_tables = ["quarterly_results", "valuation_snapshot", "company_profiles"]
+        fresh_count = sum(1 for t in key_tables if _is_fresh(store, symbol, t, hours=max_age_hours))
+        if fresh_count >= 2:
+            _log(f"\n[dim]Data for {symbol} is fresh (<{max_age_hours}h old across {fresh_count}/{len(key_tables)} key tables). Skipping refresh.[/]")
+            _log("[dim]Use --force-refresh or wait for data to age to re-fetch.[/]")
+            # Return existing counts so caller knows data exists
+            for t in key_tables:
+                row = store._conn.execute(
+                    f"SELECT COUNT(*) FROM {t} WHERE symbol = ?", (symbol,),  # noqa: S608
+                ).fetchone()
+                summary[t] = row[0] if row else 0
+            return summary
+
         # --- 1. Screener.in ---
         _log("\n[bold]Screener.in[/]")
         company_id = ""
@@ -378,6 +430,11 @@ def refresh_for_business(symbol: str, console: Console | None = None) -> dict[st
     from flowtracker.store import FlowStore
 
     with FlowStore() as store:
+        # Freshness gate
+        if _is_fresh(store, symbol, "company_profiles", hours=6):
+            _log(f"\n[dim]Business data for {symbol} is fresh (<6h). Skipping refresh.[/]")
+            return summary
+
         _log("\n[bold]Screener.in (business data only)[/]")
         try:
             from flowtracker.screener_client import ScreenerClient
