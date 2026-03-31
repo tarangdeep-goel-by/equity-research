@@ -63,21 +63,21 @@ AGENT_TOOLS: dict[str, list] = {
 }
 
 AGENT_MAX_TURNS: dict[str, int] = {
-    "business": 25,
-    "financials": 20,
-    "ownership": 18,
-    "valuation": 18,
-    "risk": 15,
-    "technical": 12,
+    "business": 40,
+    "financials": 35,
+    "ownership": 30,
+    "valuation": 30,
+    "risk": 30,
+    "technical": 25,
 }
 
 AGENT_MAX_BUDGET: dict[str, float] = {
-    "business": 0.50,
-    "financials": 0.40,
-    "ownership": 0.35,
-    "valuation": 0.35,
-    "risk": 0.30,
-    "technical": 0.25,
+    "business": 1.00,
+    "financials": 0.75,
+    "ownership": 0.60,
+    "valuation": 0.60,
+    "risk": 0.60,
+    "technical": 0.50,
 }
 
 # Claude Code built-ins that agents should NOT have access to.
