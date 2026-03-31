@@ -10,7 +10,7 @@ Indian equity research workspace — CLI tools for tracking institutional flows,
 
 ### flow-tracker/ — Institutional Flow Tracker (`flowtrack`)
 
-Primary project. 100+ CLI commands, 39 SQLite tables, 15 data sources. Tracks FII/DII flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and generates AI research reports. Includes portfolio tracking, alerts, fair value model, and thesis tracker.
+Primary project. 100+ CLI commands, 40 SQLite tables, 44 MCP tools, 15 data sources. Tracks FII/DII flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and generates multi-agent AI research reports (6 specialist agents + verification + synthesis). Includes portfolio tracking, alerts, fair value model, and thesis tracker.
 
 ```bash
 cd flow-tracker
@@ -19,9 +19,9 @@ uv run flowtrack <command>
 ```
 
 Has its own `CLAUDE.md` with full architecture docs. Key entry points:
-- `store.py` (~2900 lines) — single `FlowStore` class, 39 tables, ~117 methods
+- `store.py` (~2900 lines) — single `FlowStore` class, 40 tables, ~117 methods
 - `screener_client.py` (1232 lines) — Screener.in HTTP client, 11 API methods
-- `research/` — AI agent layer (39 MCP tools, Agent SDK, live refresh)
+- `research/` — multi-agent research system (44 MCP tools, 6 specialist agents, verification, synthesis)
 - DB: `~/.local/share/flowtracker/flows.db`
 - Screener.in creds: `~/.config/flowtracker/screener.env`
 - FMP creds: `~/.config/flowtracker/fmp.env` (paid plan required for most endpoints)

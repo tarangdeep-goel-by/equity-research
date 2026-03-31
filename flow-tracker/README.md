@@ -2,7 +2,7 @@
 
 Indian equity research platform. Tracks institutional flows, screens stocks, and generates AI-powered research reports — the same data stack a sell-side analyst at Nomura uses, built for independent buy-side analysis.
 
-**100+ CLI commands | 15 data sources | 39 SQLite tables | 4.5M+ records | Fully automated crons**
+**100+ CLI commands | 15 data sources | 40 SQLite tables | 44 MCP tools | 6 specialist agents | Fully automated crons**
 
 ---
 
@@ -21,47 +21,61 @@ uv run flowtrack summary                        # today's FII/DII flows
 ## How It Works
 
 ```
-                    ┌─────────────┐
-                    │  You ask:   │
-                    │  "Analyze   │
-                    │  HDFCBANK"  │
-                    └──────┬──────┘
-                           │
-              ┌────────────▼────────────┐
-              │   refresh_for_research  │
-              │   Fetches live data     │
-              │   from 5 sources        │
-              └────────────┬────────────┘
-                           │
-        ┌──────────┬───────┼───────┬──────────┐
-        ▼          ▼       ▼       ▼          ▼
-   Screener.in  yfinance  NSE    Macro      BSE
-   financials   valuation flows  VIX/FX   filings
-   charts       consensus insider crude    concalls
-   peers        surprises delivery G-sec
-   ratios
-        │          │       │       │          │
-        └──────────┴───────┼───────┴──────────┘
-                           ▼
-              ┌────────────────────────┐
-              │     SQLite (795 MB)    │
-              │     30 tables          │
-              └────────────┬───────────┘
-                           │
-              ┌────────────▼────────────┐
-              │   Claude Agent (SDK)    │
-              │   39 MCP tools          │
-              │   10-20 turn analysis   │
-              └────────────┬────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │   Markdown thesis       │
-              │   with conviction,      │
-              │   risks, and targets    │
-              └─────────────────────────┘
+                         ┌─────────────┐
+                         │  You ask:   │
+                         │  "Analyze   │
+                         │  HDFCBANK"  │
+                         └──────┬──────┘
+                                │
+               ┌────────────────▼────────────────┐
+               │  Phase 0: Data Refresh           │
+               │  6 sources + peers + concalls    │
+               └────────────────┬────────────────┘
+                                │
+         ┌──────────┬───────────┼───────────┬──────────┐
+         ▼          ▼           ▼           ▼          ▼
+    Screener.in  yfinance     NSE        Macro       BSE
+    financials   valuation    flows      VIX/FX    filings
+    charts       consensus    insider    crude     concalls
+    peers        surprises    delivery   G-sec
+    ratios
+         │          │           │           │          │
+         └──────────┴───────────┼───────────┴──────────┘
+                                ▼
+               ┌────────────────────────────────┐
+               │     SQLite (40 tables)         │
+               └────────────────┬───────────────┘
+                                │
+               ┌────────────────▼────────────────┐
+               │  Phase 1: 6 Specialist Agents   │
+               │  (parallel, 44 MCP tools)       │
+               │                                 │
+               │  Business · Financial · Owner-  │
+               │  ship · Valuation · Risk ·      │
+               │  Technical                      │
+               └────────────────┬────────────────┘
+                                │
+               ┌────────────────▼────────────────┐
+               │  Phase 1.5: Verification        │
+               │  Independent agents spot-check  │
+               │  data accuracy (different model)│
+               └────────────────┬────────────────┘
+                                │
+               ┌────────────────▼────────────────┐
+               │  Phase 2: Synthesis Agent       │
+               │  Cross-references 6 briefings → │
+               │  Verdict + Executive Summary +  │
+               │  Key Signals                    │
+               └────────────────┬────────────────┘
+                                │
+               ┌────────────────▼────────────────┐
+               │  Phase 3: Assembly              │
+               │  Markdown + HTML report with    │
+               │  charts (13 types via mpl)      │
+               └────────────────────────────────┘
 ```
 
-The AI agent doesn't just summarize — it reasons across data sources. It sees FII selling, checks if insiders are buying, cross-references delivery data, compares peer valuations, and forms a view.
+Six specialist agents run in parallel, each with an expert persona and curated tool subset. Each produces a standalone beginner-friendly report. A verification layer spot-checks data accuracy using a different model. The synthesis agent then cross-references all six briefings to produce a unified verdict, executive summary, and key signals. The final report is assembled as Markdown + HTML with embedded charts.
 
 ---
 
@@ -70,9 +84,20 @@ The AI agent doesn't just summarize — it reasons across data sources. It sees 
 ### Research a Stock
 
 ```bash
-# Full AI thesis — the agent pulls all data, reasons across it, writes a report
+# Full multi-agent thesis — 6 specialists + verification + synthesis → final report
 uv run flowtrack research thesis -s INDIAMART
-# → ~/vault/stocks/INDIAMART/thesis/2026-03-30.md
+# → ~/vault/stocks/INDIAMART/thesis/2026-03-30.md + .html
+
+# Run a single specialist agent
+uv run flowtrack research run business -s INDIAMART    # business quality analysis
+uv run flowtrack research run financial -s INDIAMART   # financial deep-dive
+uv run flowtrack research run valuation -s INDIAMART   # valuation & fair value
+
+# Verify an existing specialist report (spot-checks with different model)
+uv run flowtrack research verify financial -s INDIAMART
+
+# Extract structured insights from concall PDFs
+uv run flowtrack filings extract -s INDIAMART
 
 # Document-grounded fundamentals — reads concall PDFs, cites page numbers
 uv run flowtrack research fundamentals -s INDIAMART
@@ -241,7 +266,7 @@ Every Nifty 500 stock gets a composite score from 0-100:
 ```
 flowtracker/
 ├── main.py                     # Typer app, 18 command groups
-├── store.py                    # FlowStore — SQLite, ~117 methods, 39 tables
+├── store.py                    # FlowStore — SQLite, ~117 methods, 40 tables
 ├── screener_client.py          # Screener.in — 11 API methods
 ├── screener_engine.py          # 8-factor composite scorer
 ├── utils.py                    # Shared helpers
@@ -255,16 +280,22 @@ flowtracker/
 ├── alert_engine.py             # Alert condition evaluator
 │
 └── research/
-    ├── refresh.py              # Pre-fetch 6 sources before agent runs
+    ├── refresh.py              # Pre-fetch 6 sources + peers + concalls
     ├── data_api.py             # ResearchDataAPI — ~35 methods (unified data layer)
-    ├── tools.py                # 39 MCP tools wrapping the API
-    ├── agent.py                # Claude Agent SDK integration
-    ├── prompts.py              # Analysis framework + output format
+    ├── tools.py                # 44 MCP tools (6 specialist registries)
+    ├── agent.py                # Multi-agent orchestrator (6 specialists + synthesis)
+    ├── prompts.py              # 7 agent prompts (6 specialists + synthesis)
+    ├── briefing.py             # BriefingEnvelope model, save/load
+    ├── verifier.py             # Verification agent (spot-check + corrections)
+    ├── assembly.py             # Final report assembly, HTML rendering
+    ├── charts.py               # 13 chart types via matplotlib
+    ├── peer_refresh.py         # Peer data refresh + sector benchmarks
+    ├── concall_extractor.py    # PDF extraction pipeline via Agent SDK
     ├── thesis_tracker.py       # YAML-based thesis condition tracking
     └── data_collector.py       # HTML report data builder
 ```
 
-Every module follows the same 4-file pattern: **models → client → commands → display**. The `research/` layer sits on top, using `ResearchDataAPI` as the single data access point for the AI agent.
+Every module follows the same 4-file pattern: **models → client → commands → display**. The `research/` layer sits on top, using `ResearchDataAPI` as the single data access point for all agents.
 
 ---
 
@@ -302,8 +333,10 @@ bash scripts/setup-crons.sh
 |------|-------------|
 | `store.py` | Single SQLite wrapper. Every table, every query. Start here to understand the data model. |
 | `screener_client.py` | All Screener.in API interactions. Two company IDs per stock (`company_id` for charts, `warehouse_id` for peers). See `docs/screener-api-map.md`. |
-| `research/data_api.py` | The ~35-method API the AI agent uses. Includes fair value model and DuPont decomposition. |
-| `research/agent.py` | How the AI thesis generation works — Agent SDK, MCP tools, multi-turn reasoning. |
+| `research/data_api.py` | The ~35-method API all agents use. Includes fair value model and DuPont decomposition. |
+| `research/agent.py` | Multi-agent orchestrator — 6 specialists, verification, synthesis, assembly. |
+| `research/prompts.py` | 7 agent prompts (6 specialists + synthesis), shared preamble with 14 rules. |
+| `research/tools.py` | 44 MCP tools organized into 6 specialist registries. |
 | `screener_engine.py` | The composite scoring logic. Each factor's calculation and weighting. |
 
 ---
@@ -312,7 +345,7 @@ bash scripts/setup-crons.sh
 
 SQLite at `~/.local/share/flowtracker/flows.db` (795 MB).
 
-39 tables, 4.5M+ rows. The biggest:
+40 tables, 4.5M+ rows. The biggest:
 - `daily_stock_data` — 3.7M rows of OHLCV + delivery % for 3K stocks
 - `mf_scheme_holdings` — 345K rows, which MF schemes hold which stocks
 - `insider_transactions` — 313K rows of SAST filings
