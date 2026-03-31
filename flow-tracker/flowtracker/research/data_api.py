@@ -409,6 +409,29 @@ class ResearchDataAPI:
 
         return {"subject": subject, "peers": peer_data, "peer_count": len(peer_data)}
 
+    def get_concall_insights(self, symbol: str) -> dict:
+        """Get pre-extracted concall insights from the vault.
+
+        Returns structured concall data covering the last 4 quarters:
+        operational metrics, financial metrics, management commentary,
+        subsidiary updates, flags, and cross-quarter narrative themes.
+        Falls back to v1 extraction if v2 doesn't exist.
+        """
+        import json
+        from pathlib import Path
+
+        vault = Path.home() / "vault" / "stocks" / symbol.upper() / "fundamentals"
+        for filename in ["concall_extraction_v2.json", "concall_extraction.json"]:
+            path = vault / filename
+            if path.exists():
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                    data["_source_file"] = filename
+                    return data
+                except (json.JSONDecodeError, OSError):
+                    continue
+        return {"error": f"No concall extraction found for {symbol}", "hint": "Run concall pipeline first"}
+
     def get_sector_benchmarks(self, symbol: str, metric: str | None = None) -> list[dict] | dict:
         """Sector benchmark statistics — single metric or all."""
         if metric:

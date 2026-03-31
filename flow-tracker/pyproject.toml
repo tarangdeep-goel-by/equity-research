@@ -16,6 +16,8 @@ dependencies = [
     "claude-agent-sdk>=0.1.50",
     "markdown>=3.10.2",
     "pyyaml>=6,<7",
+    "matplotlib>=3.9",
+    "pdfplumber>=0.11",
 ]
 
 [project.scripts]

@@ -223,6 +223,44 @@ def thesis(
         from flowtracker.research.peer_refresh import refresh_peers
         refresh_peers(symbol, console)
 
+    # Phase 0b: Concall extraction (auto-run if stale or missing)
+    from pathlib import Path
+    from datetime import date, timedelta
+    extraction_path = Path.home() / "vault" / "stocks" / symbol / "fundamentals" / "concall_extraction_v2.json"
+    extraction_fresh = False
+    if extraction_path.exists():
+        import os
+        mtime = date.fromtimestamp(os.path.getmtime(extraction_path))
+        extraction_fresh = (date.today() - mtime) < timedelta(days=30)
+
+    if not extraction_fresh:
+        from flowtracker.research.concall_extractor import _find_concall_pdfs
+        concall_pdfs = _find_concall_pdfs(symbol, quarters=4)
+        if concall_pdfs:
+            console.print(f"\n[bold]Phase 0b: Concall Extraction[/] ({len(concall_pdfs)} PDFs found)")
+            if not skip_fetch:
+                # Download latest filings first
+                try:
+                    from flowtracker.filing_client import FilingClient
+                    fc = FilingClient()
+                    fc.fetch_research_filings(symbol)
+                    console.print("  [green]✓[/] Filings refreshed")
+                except Exception as e:
+                    console.print(f"  [yellow]⚠[/] Filing fetch: {e}")
+
+            console.print("  Extracting concall insights (this costs ~$0.20-0.40)...")
+            try:
+                from flowtracker.research.concall_extractor import extract_concalls
+                result = asyncio.run(extract_concalls(symbol, quarters=4))
+                console.print(f"  [green]✓[/] Extracted {result.get('quarters_analyzed', 0)} quarters")
+            except Exception as e:
+                console.print(f"  [yellow]⚠[/] Concall extraction failed: {e}")
+                console.print("  [dim]Agents will work without concall data[/]")
+        else:
+            console.print(f"\n[dim]No concall PDFs found for {symbol}. Run 'flowtrack filings fetch -s {symbol} --download' first.[/]")
+    else:
+        console.print(f"\n[dim]Concall extraction is fresh (<30 days). Skipping.[/]")
+
     # Phase 1 + 1.5: Specialist agents (parallel) + Verification
     console.print(f"\n[bold]Phase 1: Running 6 specialist agents for {symbol}...[/]")
     console.print("Agents: business, financials, ownership, valuation, risk, technical")

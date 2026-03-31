@@ -80,9 +80,18 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "technical": 0.25,
 }
 
-# Business agent needs web search for industry research
-AGENT_EXTRA_TOOLS: dict[str, list[str]] = {
-    "business": ["WebSearch", "WebFetch"],
+# Claude Code built-ins that agents should NOT have access to.
+# MCP tools (our custom research tools) are registered separately via mcp_servers
+# and are always available regardless of this list.
+_DISALLOWED_BUILTINS = [
+    "Bash", "Write", "Edit", "Read", "Glob", "Grep",
+    "NotebookEdit", "Agent", "TodoWrite",
+]
+
+# Additional Claude Code built-ins that specific agents ARE allowed to use.
+# These get added to allowed_tools (whitelist) on top of MCP tools.
+AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
+    "business": ["WebSearch", "WebFetch"],  # needs web research for industry context
 }
 
 
@@ -318,10 +327,14 @@ async def _run_specialist(
         model=model,
     )
 
-    # Add allowed_tools if agent needs extra tools (e.g. WebSearch for business)
-    extra = AGENT_EXTRA_TOOLS.get(name, [])
-    if extra:
-        options.allowed_tools = extra  # SDK adds MCP tools automatically
+    # Block dangerous Claude Code built-ins (Bash, Write, Edit, etc.)
+    # MCP tools registered via mcp_servers are available regardless.
+    options.disallowed_tools = list(_DISALLOWED_BUILTINS)
+
+    # Add specific built-ins for agents that need them (e.g. WebSearch for business)
+    extra_builtins = AGENT_ALLOWED_BUILTINS.get(name, [])
+    if extra_builtins:
+        options.allowed_tools = extra_builtins
 
     # Phase 1: Generate report with thinking
     start_time = time.time()
@@ -342,6 +355,12 @@ async def _run_specialist(
             options=options,
         ):
             if isinstance(message, AssistantMessage):
+                # Accumulate tokens from each assistant turn (usage is a dict)
+                msg_usage = getattr(message, "usage", None)
+                if isinstance(msg_usage, dict):
+                    input_tokens += msg_usage.get("input_tokens", 0) or 0
+                    output_tokens += msg_usage.get("output_tokens", 0) or 0
+
                 for block in message.content:
                     block_type = type(block).__name__
                     if block_type == "TextBlock":
@@ -365,11 +384,16 @@ async def _run_specialist(
                             ))
             elif isinstance(message, ResultMessage):
                 report_text = message.result or ""
-                total_cost = getattr(message, "total_cost_usd", 0.0) or 0.0
-                usage = getattr(message, "usage", None)
-                if usage:
-                    input_tokens = getattr(usage, "input_tokens", 0) or 0
-                    output_tokens = getattr(usage, "output_tokens", 0) or 0
+                total_cost = message.total_cost_usd or 0.0
+                # ResultMessage.usage is a dict, not an object — use .get()
+                usage = message.usage
+                if isinstance(usage, dict):
+                    # Prefer ResultMessage totals over accumulated per-turn counts
+                    result_in = usage.get("input_tokens", 0) or 0
+                    result_out = usage.get("output_tokens", 0) or 0
+                    if result_in or result_out:
+                        input_tokens = result_in
+                        output_tokens = result_out
     except Exception:
         # Claude CLI may exit with code 1 after delivering results.
         # If we already captured text, proceed with what we have.
@@ -378,6 +402,17 @@ async def _run_specialist(
     # Use collected TextBlocks as fallback if ResultMessage.result was empty
     if not report_text and text_blocks:
         report_text = "\n\n".join(text_blocks)
+
+    # Strip agent "thinking out loud" preamble (tool-calling chatter before the report).
+    # The agent produces intermediate text ("I'll analyze...", "Now let me pull...")
+    # before the actual report which starts with a # or --- header.
+    if report_text:
+        lines = report_text.split("\n")
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith("---"):
+                report_text = "\n".join(lines[i:])
+                break
 
     duration = time.time() - start_time
 
@@ -482,6 +517,83 @@ async def run_single_agent(
     )
 
 
+def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
+    """Pre-analyze briefings to find agreements, contradictions, and cross-signals.
+
+    This gives the synthesis agent a directed starting point instead of raw data.
+    The orchestrator does the pattern-matching; the synthesis agent resolves and narrates.
+    """
+    lines = []
+
+    # Collect signals from each agent
+    signals = {}
+    for name, b in briefings.items():
+        signals[name] = b.get("signal", "unknown")
+
+    # Count agreement
+    signal_values = [s for s in signals.values() if s != "unknown"]
+    if signal_values:
+        from collections import Counter
+        counts = Counter(signal_values)
+        majority = counts.most_common(1)[0]
+        agreement = majority[1] / len(signal_values) * 100
+        lines.append(f"**Agent agreement:** {len(signal_values)} agents responded. "
+                      f"Majority signal: {majority[0]} ({majority[1]}/{len(signal_values)} = {agreement:.0f}%)")
+        lines.append(f"**Signal breakdown:** {dict(counts)}")
+
+        # Flag contradictions
+        if len(counts) > 1:
+            dissenters = [(name, sig) for name, sig in signals.items() if sig != majority[0] and sig != "unknown"]
+            if dissenters:
+                lines.append(f"**Contradictions to resolve:** {', '.join(f'{n} says {s}' for n, s in dissenters)} "
+                              f"vs majority {majority[0]}. WHY do these agents disagree? Your synthesis must address this.")
+
+    # Cross-signal detection
+    cross_signals = []
+
+    biz = briefings.get("business", {})
+    fin = briefings.get("financials", {})
+    own = briefings.get("ownership", {})
+    val = briefings.get("valuation", {})
+    risk = briefings.get("risk", {})
+    tech = briefings.get("technical", {})
+
+    # Growth vs ownership: decelerating growth + institutional accumulation = contrarian signal
+    growth = fin.get("growth_trajectory") or biz.get("signal", "")
+    mf_trend = own.get("mf_trend", "")
+    fii_trend = own.get("fii_trend", "")
+    if "decelerat" in str(growth).lower() and mf_trend == "increasing":
+        cross_signals.append("Growth decelerating BUT MF accumulating — smart money sees value despite slowing growth?")
+    if fii_trend == "decreasing" and mf_trend == "increasing":
+        cross_signals.append("FII selling + MF buying = institutional handoff. Historically medium-term bullish in Indian markets.")
+
+    # Quality vs valuation: high ROCE + low PE = quality at reasonable price
+    roce = biz.get("key_metrics", {}).get("roce_pct") or fin.get("roce_current")
+    val_signal = val.get("signal", "")
+    if roce and float(roce) > 20 and "UNDERVALUED" in str(val_signal).upper():
+        cross_signals.append(f"High ROCE ({roce}%) + undervalued signal = quality at reasonable price.")
+
+    # Insider + technical: insider buying at weakness
+    insider = own.get("insider_signal", "")
+    tech_signal = tech.get("signal", "")
+    if insider == "net_buying" and "bearish" in str(tech_signal).lower():
+        cross_signals.append("Insider buying while technicals are bearish — management conviction at weakness.")
+
+    # Risk vs valuation: high risk + cheap = value trap or opportunity
+    risk_signal = risk.get("signal", "")
+    if "bearish" in str(risk_signal).lower() and "UNDERVALUED" in str(val_signal).upper():
+        cross_signals.append("Risk agent bearish but valuation says undervalued — potential value trap. Dig into whether risks are priced in.")
+
+    if cross_signals:
+        lines.append("\n**Cross-signals detected (investigate these):**")
+        for i, sig in enumerate(cross_signals, 1):
+            lines.append(f"  {i}. {sig}")
+    else:
+        lines.append("\n**No strong cross-signals detected.** Look for subtler connections in the briefing data.")
+
+    return "\n".join(lines)
+
+
 async def run_all_agents(
     symbol: str,
     model: str | None = None,
@@ -539,25 +651,26 @@ async def run_all_agents(
             # Re-save corrected envelope
             save_envelope(envelopes[name])
 
-            # If verification failed, try one re-run
+            # If verification failed, re-run with corrections injected into prompt.
+            # We use the SAME specialist prompt + correction context so the agent
+            # starts with full domain knowledge and knows exactly what to fix.
             if vresult.verdict == "fail":
                 print(f"  🔄 {name} failed verification — re-running with corrections")
-                correction_prompt = AGENT_PROMPTS.get(name, "")
-                correction_prompt += f"""
-
-## IMPORTANT: Corrections Required
-Your previous report for {symbol} was flagged by the verification agent.
-Issues found:
-{json.dumps(vresult.issues, indent=2)}
-
-Required corrections:
-{json.dumps(vresult.corrections, indent=2)}
-
-Generate a corrected report. Pay special attention to the flagged sections.
-"""
+                base_prompt = AGENT_PROMPTS.get(name, "")
+                corrections_context = (
+                    f"\n\n## CORRECTIONS REQUIRED (from verification agent)\n"
+                    f"Your previous report was independently verified and flagged.\n"
+                    f"**Issues found:**\n{json.dumps(vresult.issues, indent=2)}\n\n"
+                    f"**Required corrections:**\n{json.dumps(vresult.corrections, indent=2)}\n\n"
+                    f"Re-generate your report. Fix the flagged issues. "
+                    f"Re-fetch the specific data points that were wrong — don't guess."
+                )
                 try:
                     rerun = await _run_specialist(
-                        name=name, symbol=symbol, system_prompt=correction_prompt, model=model,
+                        name=name,
+                        symbol=symbol,
+                        system_prompt=base_prompt + corrections_context,
+                        model=model,
                     )
                     envelopes[name] = rerun
                 except Exception as e:
@@ -586,15 +699,20 @@ async def run_synthesis_agent(
     for agent_name, data in briefings.items():
         briefing_text += f"\n### {agent_name.upper()} Briefing\n```json\n{json.dumps(data, indent=2)}\n```\n"
 
+    # --- Directed synthesis: pre-analyze briefings for the synthesis agent ---
+    signals_analysis = _analyze_briefing_signals(briefings)
+
     # Synthesis tools: just composite_score and fair_value
     synthesis_tools = [get_composite_score, get_fair_value]
 
     model = model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-20250514")
 
     user_prompt = (
-        f"Synthesize the analysis for {symbol}. "
-        f"Here are the 6 specialist briefings:\n{briefing_text}\n\n"
-        "Produce your synthesis sections: Verdict, Executive Summary, Key Signals, "
+        f"Synthesize the analysis for {symbol}.\n\n"
+        f"## Pre-Analysis (signals detected by orchestrator)\n{signals_analysis}\n\n"
+        f"## Specialist Briefings\n{briefing_text}\n\n"
+        "Use the pre-analysis to guide your cross-referencing. Resolve contradictions, "
+        "amplify agreements, and produce: Verdict, Executive Summary, Key Signals, "
         "Catalysts, The Big Question."
     )
 

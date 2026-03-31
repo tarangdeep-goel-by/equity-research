@@ -184,6 +184,25 @@ def open_filing(
         console.print(f"[yellow]PDF not downloaded. Run 'filings download {symbol}' first.[/]")
 
 
+@app.command(name="extract")
+def extract_concalls_cmd(
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
+    quarters: Annotated[int, typer.Option("--quarters", "-q", help="Number of quarters to extract")] = 4,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Claude model to use")] = None,
+) -> None:
+    """Extract structured insights from concall PDFs using AI."""
+    import asyncio
+
+    from flowtracker.research.concall_extractor import extract_concalls
+
+    result = asyncio.run(
+        extract_concalls(symbol.upper(), quarters, model or "claude-sonnet-4-20250514")
+    )
+
+    console.print(f"[green]\u2713[/] Extracted {result['quarters_analyzed']} quarters for {symbol.upper()}")
+    console.print(f"  Saved to: ~/vault/stocks/{symbol.upper()}/fundamentals/concall_extraction_v2.json")
+
+
 def _show_filing_summary(filings: list, symbol: str) -> None:
     """Show summary of fetched filings by category."""
     cats: dict[str, int] = {}

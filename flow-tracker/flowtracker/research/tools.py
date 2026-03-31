@@ -539,6 +539,50 @@ async def get_sector_benchmarks(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+get_concall_insights = tool(
+    "get_concall_insights",
+    "Get pre-extracted concall insights from the vault: 4 quarters of operational metrics, financial metrics, management commentary, subsidiary updates, risk flags, and cross-quarter narrative themes. This is structured data already extracted from concall transcripts — much richer and faster than reading raw PDFs.",
+    {"symbol": str},
+)
+
+
+@get_concall_insights
+async def get_concall_insights(args):
+    with ResearchDataAPI() as api:
+        data = api.get_concall_insights(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+render_chart = tool(
+    "render_chart",
+    "Generate a PNG chart and return the file path for embedding in your report. "
+    "Use the embed_markdown value directly in your report to show the chart. "
+    "chart_type options: "
+    "'price' (price + SMA50/200, 7yr), "
+    "'pe' (PE ratio history, 7yr), "
+    "'delivery' (delivery % + volume bars, 90 days), "
+    "'revenue_profit' (10yr annual revenue & profit bars), "
+    "'quarterly' (12-quarter revenue & profit bars), "
+    "'margin_trend' (10yr OPM & NPM lines), "
+    "'roce_trend' (10yr ROCE bars, color-coded by quality), "
+    "'dupont' (DuPont decomposition: margin × turnover × leverage → ROE), "
+    "'cashflow' (10yr operating & free cash flow bars), "
+    "'shareholding' (12-quarter ownership trend lines), "
+    "'fair_value_range' (bear/base/bull vs current price horizontal bar), "
+    "'expense_pie' (expense breakdown pie chart), "
+    "'composite_radar' (8-factor quality score spider chart). "
+    "Returns: {path, embed_markdown}.",
+    {"symbol": str, "chart_type": str},
+)
+
+
+@render_chart
+async def render_chart(args):
+    from flowtracker.research.charts import render_chart as _render
+    result = _render(args["symbol"], args["chart_type"])
+    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+
+
 _PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_sector_benchmarks]
 
 
@@ -614,47 +658,56 @@ BUSINESS_TOOLS = [
 BUSINESS_AGENT_TOOLS = [
     get_company_info, get_company_profile, get_company_documents,
     get_business_profile, save_business_profile,
+    get_concall_insights,  # pre-extracted concall data (4 quarters)
     get_quarterly_results, get_annual_financials, get_screener_ratios,
     get_valuation_snapshot, get_peer_comparison, get_expense_breakdown,
     get_consensus_estimate, get_earnings_surprises,
-    *_PEER_TOOLS,  # get_peer_metrics, get_peer_growth, get_sector_benchmarks
-]  # 16 tools
+    render_chart,  # generate PNG charts for embedding
+    *_PEER_TOOLS,
+]  # 18 tools
 
 FINANCIAL_AGENT_TOOLS = [
     get_company_info, get_quarterly_results, get_annual_financials,
     get_screener_ratios, get_expense_breakdown, get_financial_growth_rates,
     get_dupont_decomposition, get_key_metrics_history,
     get_chart_data, get_earnings_surprises,
+    get_concall_insights,  # management commentary on margins, guidance, segment performance
+    render_chart,
     *_PEER_TOOLS,
-]  # 13 tools
+]  # 15 tools
 
 OWNERSHIP_AGENT_TOOLS = [
     get_shareholding, get_shareholding_changes, get_insider_transactions,
     get_bulk_block_deals, get_mf_holdings, get_mf_holding_changes,
     get_shareholder_detail, get_promoter_pledge, get_delivery_trend,
     get_fii_dii_flows, get_fii_dii_streak,
-    get_sector_benchmarks,  # just sector_benchmarks, not full peer tools
-]  # 12 tools
+    get_sector_benchmarks,
+    render_chart,
+]  # 13 tools — no concall (ownership data comes from filings, not concalls)
 
 VALUATION_AGENT_TOOLS = [
     get_valuation_snapshot, get_valuation_band, get_pe_history,
     get_fair_value, get_dcf_valuation, get_dcf_history,
     get_price_targets, get_analyst_grades, get_peer_comparison,
     get_chart_data, get_consensus_estimate,
+    get_concall_insights,  # management guidance affects forward valuation
+    render_chart,
     *_PEER_TOOLS,
-]  # 14 tools
+]  # 16 tools
 
 RISK_AGENT_TOOLS = [
     get_quarterly_results, get_annual_financials, get_promoter_pledge,
     get_insider_transactions, get_macro_snapshot, get_fii_dii_streak,
     get_composite_score, get_earnings_surprises, get_recent_filings,
     get_valuation_snapshot, get_peer_comparison,
+    get_concall_insights,  # red flags, evasive answers, risk acknowledgments from management
     *_PEER_TOOLS,
-]  # 14 tools
+]  # 15 tools
 
 TECHNICAL_AGENT_TOOLS = [
     get_technical_indicators, get_chart_data, get_delivery_trend,
     get_valuation_snapshot, get_bulk_block_deals,
     get_fii_dii_flows, get_fii_dii_streak,
-    get_sector_benchmarks,  # just sector_benchmarks for beta/delivery benchmarking
-]  # 8 tools
+    get_sector_benchmarks,
+    render_chart,  # price + delivery charts
+]  # 9 tools
