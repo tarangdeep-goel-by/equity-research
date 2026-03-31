@@ -43,13 +43,13 @@ _REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 # --- Multi-agent specialist defaults ---
 
 DEFAULT_MODELS: dict[str, str] = {
-    "business": "claude-sonnet-4-20250514",
-    "financials": "claude-sonnet-4-20250514",
-    "ownership": "claude-sonnet-4-20250514",
-    "valuation": "claude-sonnet-4-20250514",
-    "risk": "claude-sonnet-4-20250514",
-    "technical": "claude-sonnet-4-20250514",
-    "synthesis": "claude-sonnet-4-20250514",
+    "business": "claude-sonnet-4-6",
+    "financials": "claude-sonnet-4-6",
+    "ownership": "claude-sonnet-4-6",
+    "valuation": "claude-sonnet-4-6",
+    "risk": "claude-sonnet-4-6",
+    "technical": "claude-sonnet-4-6",
+    "synthesis": "claude-sonnet-4-6",
     "verifier": "claude-haiku-4-5-20251001",
 }
 
@@ -312,7 +312,7 @@ async def _run_specialist(
     tools = tools or AGENT_TOOLS.get(name, [])
     max_turns = max_turns or AGENT_MAX_TURNS.get(name, 20)
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
-    model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-20250514")
+    model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
 
     # Create MCP server with agent's tool subset
     server = create_sdk_mcp_server(f"{name}-data", tools=tools)
