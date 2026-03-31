@@ -140,6 +140,48 @@ def fundamentals(
 
 
 @app.command()
+def business(
+    symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")],
+    skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Skip data refresh, use cached DB data")] = False,
+    model: Annotated[str | None, typer.Option("--model", help="Claude model override")] = None,
+) -> None:
+    """Generate a business profile — what the company does, how it makes money.
+
+    Lightweight qualitative analysis. Skips financial pipeline entirely.
+    Uses Screener about text + web search to build a business profile.
+    """
+    symbol = symbol.upper()
+
+    if not skip_fetch:
+        console.print(f"\n[bold]Refreshing data for {symbol}...[/]")
+        from flowtracker.research.refresh import refresh_for_research
+        summary = refresh_for_research(symbol, console)
+        total = sum(summary.values())
+        console.print(f"\n[dim]Refresh complete: {total} records across {len(summary)} sources[/]")
+
+    console.print(f"\n[bold]Generating business profile for {symbol}...[/]")
+    console.print("[dim]Agent will research the business and produce a profile.[/]\n")
+
+    try:
+        from flowtracker.research.agent import generate_business_profile
+        output_path = generate_business_profile(symbol, model=model)
+        console.print(f"\n[bold green]Done.[/] Report: [cyan]{output_path}[/]")
+
+        # Also show vault path
+        from pathlib import Path as _P
+        vault_md = _P.home() / "vault" / "stocks" / symbol / "profile.md"
+        if vault_md.exists():
+            console.print(f"  Markdown: [cyan]{vault_md}[/]")
+
+        # Open HTML in browser
+        subprocess.run(["open", str(output_path)], check=False)
+        console.print(f"\n[bold green]Report opened in browser.[/]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def thesis(
     symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")],
     no_agent: Annotated[bool, typer.Option("--no-agent", help="Skip agent, use data-only report (fallback to fundamentals)")] = False,
@@ -187,7 +229,8 @@ def thesis(
 
 # All available tool names for the data command
 _DATA_TOOLS = [
-    "company_info", "quarterly_results", "annual_financials", "screener_ratios",
+    "company_info", "company_profile", "company_documents",
+    "quarterly_results", "annual_financials", "screener_ratios",
     "valuation_snapshot", "valuation_band", "pe_history",
     "shareholding", "shareholding_changes", "insider_transactions",
     "bulk_block_deals", "mf_holdings", "delivery_trend", "promoter_pledge",
@@ -227,6 +270,8 @@ def data(
 
     method_map = {
         "company_info": lambda api: api.get_company_info(symbol),
+        "company_profile": lambda api: api.get_company_profile(symbol),
+        "company_documents": lambda api: api.get_company_documents(symbol),
         "quarterly_results": lambda api: api.get_quarterly_results(symbol),
         "annual_financials": lambda api: api.get_annual_financials(symbol),
         "screener_ratios": lambda api: api.get_screener_ratios(symbol),
