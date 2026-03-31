@@ -58,7 +58,19 @@ def download_filings_for_symbol(fc: FilingClient, symbol: str, from_date=None) -
         result["error_msg"] = str(e)[:100]
         return result
 
+    # Only download concalls and investor decks — skip results, dividends, etc.
+    _RELEVANT_KEYWORDS = ["transcript", "concall", "earnings call", "investor presentation", "investor deck"]
+
     for filing in filings:
+        hl = filing.headline.lower()
+        sc = (filing.subcategory or "").lower()
+        is_relevant = any(kw in hl or kw in sc for kw in _RELEVANT_KEYWORDS)
+        # Also include "Analyst / Investor Meet" — often concalls or decks
+        if "analyst" in sc and ("investor" in hl or "transcript" in hl or "presentation" in hl or "earnings" in hl):
+            is_relevant = True
+        if not is_relevant:
+            continue
+
         try:
             path = fc.download_filing(filing)
             if path:
