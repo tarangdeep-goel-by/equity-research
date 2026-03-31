@@ -46,12 +46,12 @@ def count_existing_concalls(symbol: str) -> int:
     return len(list(vault.glob("*/concall.pdf")))
 
 
-def download_filings_for_symbol(fc: FilingClient, symbol: str) -> dict:
+def download_filings_for_symbol(fc: FilingClient, symbol: str, from_date=None) -> dict:
     """Download research filings for one stock. Returns summary."""
     result = {"symbol": symbol, "filings_found": 0, "downloaded": 0, "errors": 0}
 
     try:
-        filings = fc.fetch_research_filings(symbol)
+        filings = fc.fetch_research_filings(symbol, from_date=from_date)
         result["filings_found"] = len(filings)
     except Exception as e:
         result["errors"] = 1
@@ -72,12 +72,17 @@ def download_filings_for_symbol(fc: FilingClient, symbol: str) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="Batch download concall PDFs for Nifty 250")
     parser.add_argument("--limit", type=int, default=250, help="Number of stocks (default: 250)")
+    parser.add_argument("--years", type=int, default=5, help="Download filings from last N years (default: 5)")
     parser.add_argument("--resume", action="store_true", help="Skip stocks with >=4 concalls already")
     parser.add_argument("--sleep", type=float, default=1.0, help="Seconds between stocks (rate limit)")
     args = parser.parse_args()
 
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+    cutoff_date = date.today() - relativedelta(years=args.years)
+
     symbols = get_nifty_250_symbols()[:args.limit]
-    console.print(f"\n[bold]Batch Filing Download — {len(symbols)} stocks[/]\n")
+    console.print(f"\n[bold]Batch Filing Download — {len(symbols)} stocks, last {args.years} years (since {cutoff_date})[/]\n")
 
     # Check what's already downloaded
     if args.resume:
@@ -110,7 +115,7 @@ def main():
         for i, symbol in enumerate(symbols):
             progress.update(task, description=f"{symbol:12s}")
 
-            result = download_filings_for_symbol(fc, symbol)
+            result = download_filings_for_symbol(fc, symbol, from_date=cutoff_date)
             total_downloaded += result["downloaded"]
             total_errors += result["errors"]
 
