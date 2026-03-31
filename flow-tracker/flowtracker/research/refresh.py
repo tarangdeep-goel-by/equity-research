@@ -258,4 +258,76 @@ def refresh_for_research(symbol: str, console: Console | None = None) -> dict[st
         except Exception as e:
             _skip("filings", str(e))
 
+        # --- 6. FMP (Financial Modeling Prep) ---
+        _log("\n[bold]FMP[/]")
+        try:
+            from flowtracker.fmp_client import FMPClient
+
+            fmp = FMPClient()
+
+            try:
+                dcf = fmp.fetch_dcf(symbol)
+                if dcf:
+                    store.upsert_fmp_dcf([dcf])
+                    _ok("fmp_dcf", 1)
+                else:
+                    _skip("fmp_dcf", "no data")
+            except Exception as e:
+                _skip("fmp_dcf", str(e))
+
+            try:
+                techs = fmp.fetch_technicals_all(symbol)
+                if techs:
+                    store.upsert_fmp_technical_indicators(techs)
+                    _ok("fmp_technicals", len(techs))
+                else:
+                    _skip("fmp_technicals", "no data")
+            except Exception as e:
+                _skip("fmp_technicals", str(e))
+
+            try:
+                metrics = fmp.fetch_key_metrics(symbol)
+                if metrics:
+                    store.upsert_fmp_key_metrics(metrics)
+                    _ok("fmp_key_metrics", len(metrics))
+                else:
+                    _skip("fmp_key_metrics", "no data")
+            except Exception as e:
+                _skip("fmp_key_metrics", str(e))
+
+            try:
+                growth = fmp.fetch_financial_growth(symbol)
+                if growth:
+                    store.upsert_fmp_financial_growth(growth)
+                    _ok("fmp_growth", len(growth))
+                else:
+                    _skip("fmp_growth", "no data")
+            except Exception as e:
+                _skip("fmp_growth", str(e))
+
+            try:
+                grades = fmp.fetch_analyst_grades(symbol)
+                if grades:
+                    store.upsert_fmp_analyst_grades(grades)
+                    _ok("fmp_grades", len(grades))
+                else:
+                    _skip("fmp_grades", "no data")
+            except Exception as e:
+                _skip("fmp_grades", str(e))
+
+            try:
+                targets = fmp.fetch_price_targets(symbol)
+                if targets:
+                    store.upsert_fmp_price_targets(targets)
+                    _ok("fmp_targets", len(targets))
+                else:
+                    _skip("fmp_targets", "no data")
+            except Exception as e:
+                _skip("fmp_targets", str(e))
+
+        except FileNotFoundError:
+            _skip("fmp", "no API key — create ~/.config/flowtracker/fmp.env")
+        except Exception as e:
+            _skip("fmp", str(e))
+
     return summary

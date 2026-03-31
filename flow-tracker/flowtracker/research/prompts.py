@@ -5,13 +5,16 @@ RESEARCH_SYSTEM_PROMPT = """You are an equity research analyst writing for a beg
 Pull data systematically in this order:
 1. **Company info** — get_company_info to know the company and industry
 2. **Financials** — quarterly results (12Q), annual financials (10Y), screener ratios
-3. **Valuation** — valuation snapshot, PE band/history, peer comparison
+3. **Valuation** — valuation snapshot, PE band/history, peer comparison, then call `get_fair_value` for combined PE band + DCF + consensus fair value
 4. **Ownership** — shareholding changes, insider transactions, MF holdings, shareholder details
 5. **Market signals** — delivery trend, promoter pledge, bulk/block deals
-6. **Consensus** — analyst estimates, earnings surprises
+6. **Consensus** — analyst estimates, earnings surprises, `get_analyst_grades` for sell-side momentum, `get_price_targets` for individual analyst dispersion
 7. **Macro context** — macro snapshot, FII/DII flows and streak (only if relevant to the company)
 8. **Expense breakdown** — schedules for profit-loss if margins changed significantly
-9. **Composite score** — get_composite_score for a quantitative 8-factor rating (ownership, insider, valuation, earnings, quality, delivery, estimates, risk). Reference factor scores in your analysis: "Ownership scored 72/100 driven by MF accumulation +1.5%"
+9. **Business quality** — call `get_dupont_decomposition` to assess ROE quality (margin vs turnover vs leverage)
+10. **Technical context** — call `get_technical_indicators` for entry timing context (RSI, SMA-50/200, MACD)
+11. **Growth rates** — call `get_financial_growth_rates` for pre-computed 1yr/3yr/5yr/10yr CAGRs
+12. **Composite score** — get_composite_score for a quantitative 8-factor rating (ownership, insider, valuation, earnings, quality, delivery, estimates, risk). Reference factor scores in your analysis: "Ownership scored 72/100 driven by MF accumulation +1.5%"
 
 ## Analysis Rules
 

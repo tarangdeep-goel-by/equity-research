@@ -175,6 +175,171 @@ class ResearchDataAPI:
         """Schedule sub-item breakdowns (e.g., Expenses → Employee Cost, Raw Material)."""
         return self._store.get_schedules(symbol, section)
 
+    # --- FMP Data ---
+
+    def get_dcf_valuation(self, symbol: str) -> dict:
+        """Latest DCF intrinsic value + margin of safety."""
+        dcf = self._store.get_fmp_dcf_latest(symbol)
+        if not dcf:
+            return {}
+        result = _clean(dcf.model_dump())
+        if dcf.dcf and dcf.stock_price and dcf.stock_price > 0:
+            result["margin_of_safety_pct"] = round(
+                (dcf.dcf - dcf.stock_price) / dcf.stock_price * 100, 2
+            )
+        return result
+
+    def get_dcf_history(self, symbol: str, days: int = 365) -> list[dict]:
+        """Historical DCF trajectory."""
+        rows = self._store.get_fmp_dcf_history(symbol, limit=10)
+        return _clean([r.model_dump() for r in rows])
+
+    def get_technical_indicators(self, symbol: str) -> list[dict]:
+        """Latest RSI, MACD, SMA-50, SMA-200, ADX."""
+        rows = self._store.get_fmp_technical_indicators(symbol)
+        return _clean([r.model_dump() for r in rows])
+
+    def get_dupont_decomposition(self, symbol: str) -> dict:
+        """ROE = margin × turnover × leverage (10yr). Uses Screener annual_financials, falls back to FMP key_metrics."""
+        # Try Screener data first
+        annuals = self._store.get_annual_financials(symbol, limit=10)
+        if annuals:
+            decomp = []
+            for a in annuals:
+                total_equity = (a.equity_capital or 0) + (a.reserves or 0)
+                if a.revenue and a.revenue > 0 and a.net_income is not None and a.total_assets and a.total_assets > 0 and total_equity and total_equity > 0:
+                    npm = a.net_income / a.revenue
+                    at = a.revenue / a.total_assets
+                    em = a.total_assets / total_equity
+                    roe = npm * at * em
+                    decomp.append({
+                        "fiscal_year_end": a.fiscal_year_end,
+                        "net_profit_margin": round(npm, 4),
+                        "asset_turnover": round(at, 4),
+                        "equity_multiplier": round(em, 4),
+                        "roe_dupont": round(roe, 4),
+                    })
+            if decomp:
+                return {"source": "screener", "years": decomp}
+
+        # Fallback to FMP
+        metrics = self._store.get_fmp_key_metrics(symbol, limit=10)
+        if metrics:
+            decomp = []
+            for m in metrics:
+                if m.net_profit_margin_dupont is not None and m.asset_turnover is not None and m.equity_multiplier is not None:
+                    roe = m.net_profit_margin_dupont * m.asset_turnover * m.equity_multiplier
+                    decomp.append({
+                        "date": m.date,
+                        "net_profit_margin": round(m.net_profit_margin_dupont, 4),
+                        "asset_turnover": round(m.asset_turnover, 4),
+                        "equity_multiplier": round(m.equity_multiplier, 4),
+                        "roe_dupont": round(roe, 4),
+                    })
+            if decomp:
+                return {"source": "fmp", "years": decomp}
+
+        return {}
+
+    def get_key_metrics_history(self, symbol: str, years: int = 10) -> list[dict]:
+        """Comprehensive per-share + ratio history from FMP."""
+        rows = self._store.get_fmp_key_metrics(symbol, limit=years)
+        return _clean([r.model_dump() for r in rows])
+
+    def get_financial_growth_rates(self, symbol: str) -> list[dict]:
+        """Pre-computed 1yr/3yr/5yr/10yr growth from FMP."""
+        rows = self._store.get_fmp_financial_growth(symbol, limit=10)
+        return _clean([r.model_dump() for r in rows])
+
+    def get_analyst_grades(self, symbol: str) -> list[dict]:
+        """Upgrade/downgrade history from FMP."""
+        rows = self._store.get_fmp_analyst_grades(symbol, limit=20)
+        return _clean([r.model_dump() for r in rows])
+
+    def get_price_targets(self, symbol: str) -> list[dict]:
+        """Individual analyst targets with dispersion from FMP."""
+        rows = self._store.get_fmp_price_targets(symbol, limit=20)
+        result = _clean([r.model_dump() for r in rows])
+        # Add summary stats
+        valid = [r["price_target"] for r in result if r.get("price_target")]
+        if valid:
+            return {
+                "targets": result,
+                "consensus_mean": round(sum(valid) / len(valid), 2),
+                "high": max(valid),
+                "low": min(valid),
+                "count": len(valid),
+            }
+        return {"targets": result}
+
+    def get_fair_value(self, symbol: str) -> dict:
+        """Combined fair value from PE band + DCF + consensus target.
+
+        Returns bear/base/bull range, margin of safety %, signal.
+        """
+        result: dict = {"symbol": symbol}
+
+        # 1. PE band fair value
+        pe_band = self._store.get_valuation_band(symbol, "pe_trailing", days=2500)
+        est = self._store.get_estimate_latest(symbol)
+        snap_rows = self._store.get_valuation_history(symbol, days=7)
+        current_price = snap_rows[-1].price if snap_rows else None
+
+        forward_eps = None
+        if est and est.forward_eps:
+            forward_eps = est.forward_eps
+
+        pe_fair = None
+        if pe_band and forward_eps:
+            # ValuationBand has min_val, median_val, max_val, percentile
+            # bear = min-to-median midpoint, base = median, bull = median-to-max midpoint
+            bear = ((pe_band.min_val + pe_band.median_val) / 2) * forward_eps
+            base = pe_band.median_val * forward_eps
+            bull = ((pe_band.median_val + pe_band.max_val) / 2) * forward_eps
+            result["pe_band"] = {
+                "bear": round(bear, 2), "base": round(base, 2), "bull": round(bull, 2),
+                "forward_eps": forward_eps, "pe_percentile": pe_band.percentile,
+            }
+            pe_fair = base
+
+        # 2. FMP DCF
+        dcf = self._store.get_fmp_dcf_latest(symbol)
+        dcf_value = dcf.dcf if dcf else None
+        if dcf_value:
+            result["dcf"] = dcf_value
+
+        # 3. Analyst consensus target
+        target_mean = est.target_mean if est else None
+        if target_mean:
+            result["consensus_target"] = target_mean
+
+        # Combined fair value = average of available
+        values = [v for v in [pe_fair, dcf_value, target_mean] if v]
+        if values and current_price:
+            combined = sum(values) / len(values)
+            margin = (combined - current_price) / combined * 100
+            result["combined_fair_value"] = round(combined, 2)
+            result["current_price"] = current_price
+            result["margin_of_safety_pct"] = round(margin, 2)
+            result["sources_used"] = len(values)
+
+            # Signal
+            bear = result.get("pe_band", {}).get("bear")
+            bull = result.get("pe_band", {}).get("bull")
+            if bear and current_price < bear:
+                result["signal"] = "DEEP VALUE"
+            elif current_price < combined:
+                result["signal"] = "UNDERVALUED"
+            elif bull and current_price > bull:
+                result["signal"] = "EXPENSIVE"
+            else:
+                result["signal"] = "FAIR VALUE"
+        elif current_price:
+            result["current_price"] = current_price
+            result["signal"] = "INSUFFICIENT DATA"
+
+        return _clean(result)
+
     # --- Company Info ---
 
     def get_company_info(self, symbol: str) -> dict:
