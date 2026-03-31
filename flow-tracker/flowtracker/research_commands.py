@@ -512,78 +512,134 @@ def thesis_status() -> None:
 
 
 VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical"}
+VALID_AGENTS_WITH_SYNTHESIS = VALID_AGENTS | {"synthesis"}
 
 
 @app.command("run")
 def run_agent(
-    agent: Annotated[str, typer.Argument(help="Agent: business|financials|ownership|valuation|risk|technical")],
+    agents: Annotated[str, typer.Argument(help="Agents to run: business,risk,synthesis (comma-separated) or 'all'")],
     symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol (e.g. INDIAMART)")],
     skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Skip data refresh")] = False,
-    verify: Annotated[bool, typer.Option("--verify", help="Run verification after agent")] = False,
+    verify: Annotated[bool, typer.Option("--verify", help="Run verification after agents")] = False,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for agent")] = None,
+    assemble: Annotated[bool, typer.Option("--assemble", help="Assemble final report from all existing briefings after running")] = False,
 ) -> None:
-    """Run a specialist research agent on a stock."""
-    agent = agent.lower()
+    """Run specialist research agents on a stock.
+
+    Run one or more agents by name (comma-separated), then optionally
+    synthesize and assemble using existing briefings for the rest.
+
+    Examples:
+      flowtrack research run business -s HDFCBANK          # just business
+      flowtrack research run business,risk -s HDFCBANK     # re-run two agents
+      flowtrack research run synthesis -s HDFCBANK         # just re-synthesize from existing briefings
+      flowtrack research run business,risk,synthesis -s HDFCBANK --assemble  # re-run two + synthesize + assemble HTML
+    """
     symbol = symbol.upper()
+    agent_list = [a.strip().lower() for a in agents.split(",")]
 
-    if agent not in VALID_AGENTS:
-        console.print(f"[red]Unknown agent: {agent}[/]")
-        console.print(f"Valid agents: {', '.join(sorted(VALID_AGENTS))}")
-        raise typer.Exit(1)
+    # Validate
+    for agent in agent_list:
+        if agent not in VALID_AGENTS_WITH_SYNTHESIS:
+            console.print(f"[red]Unknown agent: {agent}[/]")
+            console.print(f"Valid agents: {', '.join(sorted(VALID_AGENTS_WITH_SYNTHESIS))}")
+            raise typer.Exit(1)
 
-    if not skip_fetch:
+    specialist_agents = [a for a in agent_list if a in VALID_AGENTS]
+    run_synthesis = "synthesis" in agent_list
+
+    # Show what exists in vault
+    from flowtracker.research.briefing import load_all_briefings
+    existing = load_all_briefings(symbol)
+    if existing:
+        console.print(f"\n[dim]Existing briefings in vault: {', '.join(sorted(existing.keys()))}[/]")
+        reusing = set(existing.keys()) - set(specialist_agents) - {"synthesis"}
+        if reusing:
+            console.print(f"[dim]Will reuse: {', '.join(sorted(reusing))}[/]")
+
+    # Data refresh (only if running specialists, not for synthesis-only)
+    if specialist_agents and not skip_fetch:
         console.print(f"\n[bold]Refreshing data for {symbol}...[/]")
-        if agent == "business":
-            from flowtracker.research.refresh import refresh_for_business
-            summary = refresh_for_business(symbol, console)
-        else:
+        needs_full = any(a != "business" for a in specialist_agents)
+        if needs_full:
             from flowtracker.research.refresh import refresh_for_research
             summary = refresh_for_research(symbol, console)
+        else:
+            from flowtracker.research.refresh import refresh_for_business
+            summary = refresh_for_business(symbol, console)
         total = sum(summary.values())
-        console.print(f"\n[dim]Refresh complete: {total} records across {len(summary)} sources[/]")
+        console.print(f"[dim]Refresh complete: {total} records across {len(summary)} sources[/]")
 
-        # Fetch peer data for cross-comparison
         from flowtracker.research.peer_refresh import refresh_peers
         console.print(f"\n[bold]Refreshing peer data...[/]")
-        peer_summary = refresh_peers(symbol, console)
-        console.print(f"[dim]Peers: {peer_summary.get('peers_found', 0)} found, {peer_summary.get('peers_fetched', 0)} fetched[/]")
+        refresh_peers(symbol, console)
 
-    # TODO: Replace with specialist prompts from prompts.py (T8-T14)
-    try:
-        from flowtracker.research.prompts import AGENT_PROMPTS
-        prompt = AGENT_PROMPTS[agent]
-    except (ImportError, KeyError):
-        prompt = f"You are a {agent} research analyst. Analyze {symbol} using your available tools. Produce a detailed report."
+    # Run specialist agents
+    total_cost = 0.0
+    for agent in specialist_agents:
+        try:
+            from flowtracker.research.prompts import AGENT_PROMPTS
+            prompt = AGENT_PROMPTS[agent]
+        except (ImportError, KeyError):
+            prompt = f"You are a {agent} research analyst. Analyze {symbol} using your available tools. Produce a detailed report."
 
-    console.print(f"\n[bold]Running {agent} agent for {symbol}...[/]")
-    console.print("[dim]This may take 1-3 minutes.[/]\n")
+        console.print(f"\n[bold]Running {agent} agent for {symbol}...[/]")
 
-    try:
-        from flowtracker.research.agent import run_single_agent
-        envelope = asyncio.run(run_single_agent(agent, symbol, prompt, model))
-    except Exception as e:
-        console.print(f"[red]Agent error: {e}[/]")
-        raise typer.Exit(1)
+        try:
+            from flowtracker.research.agent import run_single_agent
+            envelope = asyncio.run(run_single_agent(agent, symbol, prompt, model))
+        except Exception as e:
+            console.print(f"[red]{agent} agent error: {e}[/]")
+            continue
 
-    # Display cost summary
-    cost = envelope.cost
-    duration_m = int(cost.duration_seconds) // 60
-    duration_s = int(cost.duration_seconds) % 60
+        cost = envelope.cost
+        total_cost += cost.total_cost_usd
+        duration_m = int(cost.duration_seconds) // 60
+        duration_s = int(cost.duration_seconds) % 60
+        console.print(f"  [green]✓[/] {agent}: {len(envelope.report):,} chars, ${cost.total_cost_usd:.2f}, {duration_m}m {duration_s:02d}s")
 
-    console.print(f"\n[bold green]✓ {agent} agent complete for {symbol}[/]\n")
-    console.print(f"  Model:    {cost.model or 'default'}")
-    console.print(f"  Tokens:   {cost.input_tokens:,} in / {cost.output_tokens:,} out")
-    console.print(f"  Cost:     ${cost.total_cost_usd:.2f}")
-    console.print(f"  Duration: {duration_m}m {duration_s:02d}s")
+    # Run synthesis
+    if run_synthesis:
+        console.print(f"\n[bold]Running synthesis agent for {symbol}...[/]")
+        try:
+            from flowtracker.research.agent import run_synthesis_agent
+            synthesis = asyncio.run(run_synthesis_agent(symbol, model))
+            total_cost += synthesis.cost.total_cost_usd
+            console.print(f"  [green]✓[/] synthesis: {len(synthesis.report):,} chars, ${synthesis.cost.total_cost_usd:.2f}")
+        except Exception as e:
+            console.print(f"[red]Synthesis error: {e}[/]")
 
-    vault_base = Path.home() / "vault" / "stocks" / symbol
-    report_path = vault_base / "reports" / f"{agent}.md"
-    briefing_path = vault_base / "briefings" / f"{agent}.json"
-    console.print(f"\n  Report:   [cyan]{report_path}[/]")
-    console.print(f"  Briefing: [cyan]{briefing_path}[/]")
+    # Assemble final report if requested
+    if assemble:
+        console.print(f"\n[bold]Assembling final report...[/]")
+        try:
+            from flowtracker.research.agent import run_synthesis_agent
+            from flowtracker.research.assembly import assemble_final_report
+            from flowtracker.research.briefing import load_envelope
 
-    if verify:
-        console.print("\n[yellow]Verification not yet implemented — coming in T16[/yellow]")
+            # Load all specialist envelopes (mix of fresh + existing)
+            specialist_envelopes = {}
+            for name in VALID_AGENTS:
+                env = load_envelope(symbol, name)
+                if env and env.report:
+                    specialist_envelopes[name] = env
+
+            # Load synthesis (just ran or from vault)
+            syn_env = load_envelope(symbol, "synthesis")
+            if syn_env and syn_env.report:
+                md_path, html_path = assemble_final_report(symbol, specialist_envelopes, syn_env)
+                console.print(f"  [green]✓[/] Assembled: {html_path}")
+
+                import webbrowser
+                webbrowser.open(f"file://{html_path}")
+            else:
+                console.print("[yellow]No synthesis report found — run synthesis first[/]")
+        except Exception as e:
+            console.print(f"[red]Assembly error: {e}[/]")
+
+    console.print(f"\n[bold]Total cost: ${total_cost:.2f}[/]")
+    console.print(f"[dim]Reports: ~/vault/stocks/{symbol}/reports/[/]")
+    console.print(f"[dim]Briefings: ~/vault/stocks/{symbol}/briefings/[/]")
 
 
 @app.command()
