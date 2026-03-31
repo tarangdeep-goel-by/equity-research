@@ -234,20 +234,28 @@ def thesis(
         extraction_fresh = (date.today() - mtime) < timedelta(days=30)
 
     if not extraction_fresh:
+        console.print(f"\n[bold]Phase 0b: Concall Pipeline[/]")
+
+        # Step 1: Fetch + download filing PDFs from BSE
+        if not skip_fetch:
+            try:
+                from flowtracker.filing_client import FilingClient
+                fc = FilingClient()
+                filings = fc.fetch_research_filings(symbol)
+                downloaded = 0
+                for filing in filings:
+                    path = fc.download_filing(filing)
+                    if path:
+                        downloaded += 1
+                console.print(f"  [green]✓[/] Filings: {len(filings)} found, {downloaded} PDFs downloaded")
+            except Exception as e:
+                console.print(f"  [yellow]⚠[/] Filing download: {e}")
+
+        # Step 2: Check for concall PDFs now that we've downloaded
         from flowtracker.research.concall_extractor import _find_concall_pdfs
         concall_pdfs = _find_concall_pdfs(symbol, quarters=4)
         if concall_pdfs:
-            console.print(f"\n[bold]Phase 0b: Concall Extraction[/] ({len(concall_pdfs)} PDFs found)")
-            if not skip_fetch:
-                # Download latest filings first
-                try:
-                    from flowtracker.filing_client import FilingClient
-                    fc = FilingClient()
-                    fc.fetch_research_filings(symbol)
-                    console.print("  [green]✓[/] Filings refreshed")
-                except Exception as e:
-                    console.print(f"  [yellow]⚠[/] Filing fetch: {e}")
-
+            console.print(f"  Found {len(concall_pdfs)} concall PDFs")
             console.print("  Extracting concall insights (this costs ~$0.20-0.40)...")
             try:
                 from flowtracker.research.concall_extractor import extract_concalls
@@ -257,7 +265,7 @@ def thesis(
                 console.print(f"  [yellow]⚠[/] Concall extraction failed: {e}")
                 console.print("  [dim]Agents will work without concall data[/]")
         else:
-            console.print(f"\n[dim]No concall PDFs found for {symbol}. Run 'flowtrack filings fetch -s {symbol} --download' first.[/]")
+            console.print(f"  [dim]No concall PDFs found for {symbol} after download. Agents will work without concall data.[/]")
     else:
         console.print(f"\n[dim]Concall extraction is fresh (<30 days). Skipping.[/]")
 
