@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -31,6 +34,7 @@ from flowtracker.research.tools import (
     FINANCIAL_AGENT_TOOLS,
     OWNERSHIP_AGENT_TOOLS,
     RISK_AGENT_TOOLS,
+    SECTOR_AGENT_TOOLS,
     TECHNICAL_AGENT_TOOLS,
     VALUATION_AGENT_TOOLS,
 )
@@ -49,6 +53,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "valuation": "claude-sonnet-4-6",
     "risk": "claude-sonnet-4-6",
     "technical": "claude-sonnet-4-6",
+    "sector": "claude-sonnet-4-6",
     "synthesis": "claude-sonnet-4-6",
     "verifier": "claude-haiku-4-5-20251001",
 }
@@ -60,6 +65,7 @@ AGENT_TOOLS: dict[str, list] = {
     "valuation": VALUATION_AGENT_TOOLS,
     "risk": RISK_AGENT_TOOLS,
     "technical": TECHNICAL_AGENT_TOOLS,
+    "sector": SECTOR_AGENT_TOOLS,
 }
 
 AGENT_MAX_TURNS: dict[str, int] = {
@@ -69,6 +75,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "valuation": 30,
     "risk": 30,
     "technical": 25,
+    "sector": 25,
 }
 
 AGENT_MAX_BUDGET: dict[str, float] = {
@@ -78,6 +85,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "valuation": 0.60,
     "risk": 0.60,
     "technical": 0.50,
+    "sector": 0.50,
 }
 
 # Claude Code built-ins that agents should NOT have access to.
@@ -92,6 +100,7 @@ _DISALLOWED_BUILTINS = [
 # These get added to allowed_tools (whitelist) on top of MCP tools.
 AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
     "business": ["WebSearch", "WebFetch"],  # needs web research for industry context
+    "sector": ["WebSearch", "WebFetch"],  # needs web research for sector dynamics
 }
 
 
@@ -394,14 +403,29 @@ async def _run_specialist(
                     if result_in or result_out:
                         input_tokens = result_in
                         output_tokens = result_out
-    except Exception:
+    except Exception as exc:
         # Claude CLI may exit with code 1 after delivering results.
         # If we already captured text, proceed with what we have.
-        pass
+        has_content = bool(report_text or text_blocks)
+        if has_content:
+            logger.warning(
+                "Agent '%s' for %s raised %s after producing content — proceeding with partial output",
+                name, symbol, type(exc).__name__,
+            )
+        else:
+            logger.error(
+                "Agent '%s' for %s FAILED with no output: %s: %s",
+                name, symbol, type(exc).__name__, exc,
+                exc_info=True,
+            )
 
     # Use collected TextBlocks as fallback if ResultMessage.result was empty
     if not report_text and text_blocks:
+        logger.info("Agent '%s' %s: no ResultMessage, using %d TextBlocks as fallback", name, symbol, len(text_blocks))
         report_text = "\n\n".join(text_blocks)
+
+    if not report_text:
+        logger.error("Agent '%s' %s: EMPTY REPORT — no ResultMessage and no TextBlocks captured", name, symbol)
 
     # Strip agent "thinking out loud" preamble (tool-calling chatter before the report).
     # The agent produces intermediate text ("I'll analyze...", "Now let me pull...")
@@ -497,8 +521,12 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
 
         # Try parsing the raw text as JSON
         return json.loads(result_text.strip())
-    except Exception:
+    except Exception as exc:
         # Final fallback: return minimal briefing
+        logger.warning(
+            "Briefing extraction failed for '%s' %s: %s: %s (report length: %d chars)",
+            name, symbol, type(exc).__name__, exc, len(report_text),
+        )
         return {"agent": name, "symbol": symbol, "extraction_failed": True}
 
 
@@ -584,6 +612,17 @@ def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
     if "bearish" in str(risk_signal).lower() and "UNDERVALUED" in str(val_signal).upper():
         cross_signals.append("Risk agent bearish but valuation says undervalued — potential value trap. Dig into whether risks are priced in.")
 
+    # Sector signals
+    sector = briefings.get("sector", {})
+    sector_signal = sector.get("sector_growth_signal", "")
+    sector_valuation = sector.get("sector_valuation_signal", "")
+
+    if sector_signal == "growing" and "UNDERVALUED" in str(val_signal).upper():
+        cross_signals.append("Sector growing + stock undervalued = riding sector tailwind at a discount.")
+
+    if sector_valuation == "expensive" and "EXPENSIVE" in str(val_signal).upper():
+        cross_signals.append("Both sector and stock are expensive — correction risk is amplified.")
+
     if cross_signals:
         lines.append("\n**Cross-signals detected (investigate these):**")
         for i, sig in enumerate(cross_signals, 1):
@@ -600,53 +639,98 @@ async def run_all_agents(
     verify: bool = True,
     verify_model: str | None = None,
 ) -> dict[str, BriefingEnvelope]:
-    """Run all 6 specialist agents in parallel, optionally verify, return results."""
+    """Run all 7 specialist agents in parallel, optionally verify, return results."""
     from flowtracker.research.prompts import AGENT_PROMPTS
 
     symbol = symbol.upper()
-    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical"]
+    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector"]
 
-    # Phase 1: Run all specialists in parallel
+    # Phase 1: Run specialists with concurrency limit and retry
+    MAX_CONCURRENT = 3  # max agents running simultaneously
+    MAX_RETRIES = 1     # retry once on failure
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+
+    async def _run_with_limit(name: str, prompt: str) -> tuple[str, BriefingEnvelope | Exception]:
+        """Run a specialist with concurrency limiting and retry."""
+        for attempt in range(1 + MAX_RETRIES):
+            async with semaphore:
+                try:
+                    envelope = await _run_specialist(
+                        name=name, symbol=symbol, system_prompt=prompt, model=model,
+                    )
+                    # Check if agent actually produced content
+                    if envelope.report and len(envelope.report.strip()) > 100:
+                        return name, envelope
+                    # Empty report — treat as failure for retry
+                    if attempt < MAX_RETRIES:
+                        logger.warning(
+                            "Agent '%s' for %s produced empty report (attempt %d/%d) — retrying in 5s",
+                            name, symbol, attempt + 1, 1 + MAX_RETRIES,
+                        )
+                        await asyncio.sleep(5)
+                        continue
+                    return name, envelope  # return empty on last attempt
+                except Exception as exc:
+                    if attempt < MAX_RETRIES:
+                        logger.warning(
+                            "Agent '%s' for %s failed (attempt %d/%d): %s — retrying in 5s",
+                            name, symbol, attempt + 1, 1 + MAX_RETRIES, exc,
+                        )
+                        await asyncio.sleep(5)
+                        continue
+                    logger.error(
+                        "Agent '%s' for %s failed after %d attempts: %s",
+                        name, symbol, 1 + MAX_RETRIES, exc,
+                    )
+                    return name, exc
+        # Should not reach here, but just in case
+        return name, Exception(f"Agent {name} exhausted retries")
+
+    # Build tasks for all agents that have prompts
     specialist_tasks = []
     for name in agent_names:
         prompt = AGENT_PROMPTS.get(name)
         if not prompt:
             continue
-        specialist_tasks.append(
-            _run_specialist(name=name, symbol=symbol, system_prompt=prompt, model=model)
-        )
+        specialist_tasks.append(_run_with_limit(name, prompt))
 
-    results = await asyncio.gather(*specialist_tasks, return_exceptions=True)
+    # Run with concurrency limit — gather still handles parallelism,
+    # but the semaphore ensures only MAX_CONCURRENT run at once
+    results = await asyncio.gather(*specialist_tasks)
 
     # Collect successful results
     envelopes: dict[str, BriefingEnvelope] = {}
-    for name, result in zip(agent_names, results):
+    for name, result in results:
         if isinstance(result, Exception):
-            # Log but continue — partial results are fine
             print(f"  ⚠ {name} agent failed: {result}")
             continue
         envelopes[name] = result
 
-    # Phase 1.5: Verification (parallel, one per specialist)
+    # Phase 1.5: Verification (with concurrency limit)
     if verify and envelopes:
         from flowtracker.research.verifier import _run_verifier, apply_corrections
 
+        verify_sem = asyncio.Semaphore(MAX_CONCURRENT)
+
+        async def _verify_with_limit(name: str, envelope: BriefingEnvelope):
+            async with verify_sem:
+                return name, await _run_verifier(name, symbol, envelope, model=verify_model)
+
         verify_tasks = []
-        verify_names = []
         for name, envelope in envelopes.items():
-            verify_tasks.append(
-                _run_verifier(name, symbol, envelope, model=verify_model)
-            )
-            verify_names.append(name)
+            verify_tasks.append(_verify_with_limit(name, envelope))
 
         verify_results = await asyncio.gather(*verify_tasks, return_exceptions=True)
 
         # Apply corrections
-        for name, vresult in zip(verify_names, verify_results):
+        for vresult in verify_results:
             if isinstance(vresult, Exception):
-                print(f"  ⚠ {name} verifier failed: {vresult}")
                 continue
-            envelopes[name] = apply_corrections(envelopes[name], vresult)
+            name, vdata = vresult
+            if isinstance(vdata, Exception):
+                print(f"  ⚠ {name} verifier failed: {vdata}")
+                continue
+            envelopes[name] = apply_corrections(envelopes[name], vdata)
 
             # Re-save corrected envelope
             save_envelope(envelopes[name])
@@ -654,14 +738,14 @@ async def run_all_agents(
             # If verification failed, re-run with corrections injected into prompt.
             # We use the SAME specialist prompt + correction context so the agent
             # starts with full domain knowledge and knows exactly what to fix.
-            if vresult.verdict == "fail":
+            if vdata.verdict == "fail":
                 print(f"  🔄 {name} failed verification — re-running with corrections")
                 base_prompt = AGENT_PROMPTS.get(name, "")
                 corrections_context = (
                     f"\n\n## CORRECTIONS REQUIRED (from verification agent)\n"
                     f"Your previous report was independently verified and flagged.\n"
-                    f"**Issues found:**\n{json.dumps(vresult.issues, indent=2)}\n\n"
-                    f"**Required corrections:**\n{json.dumps(vresult.corrections, indent=2)}\n\n"
+                    f"**Issues found:**\n{json.dumps(vdata.issues, indent=2)}\n\n"
+                    f"**Required corrections:**\n{json.dumps(vdata.corrections, indent=2)}\n\n"
                     f"Re-generate your report. Fix the flagged issues. "
                     f"Re-fetch the specific data points that were wrong — don't guess."
                 )
@@ -761,3 +845,113 @@ def format_cost_summary(envelopes: dict[str, BriefingEnvelope]) -> str:
     )
 
     return "\n".join(lines)
+
+
+# --- Briefing freshness + comparison agent ---
+
+
+def _briefings_fresh(symbol: str, max_age_days: int = 7) -> bool:
+    """Check if ALL briefings for a stock are recent enough."""
+    briefing_dir = Path.home() / "vault" / "stocks" / symbol.upper() / "briefings"
+    if not briefing_dir.exists():
+        return False
+    agents = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector"]
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    for agent in agents:
+        path = briefing_dir / f"{agent}.json"
+        if not path.exists():
+            return False
+        try:
+            data = json.loads(path.read_text())
+            gen_at = data.get("generated_at", "")
+            if not gen_at:
+                return False
+            gen_dt = datetime.fromisoformat(gen_at)
+            if gen_dt < cutoff:
+                return False
+        except (json.JSONDecodeError, ValueError):
+            return False
+    return True
+
+
+async def _ensure_briefings(
+    symbols: list[str],
+    force: bool = False,
+    skip_fetch: bool = False,
+    model: str | None = None,
+) -> dict[str, dict[str, dict]]:
+    """Ensure all stocks have fresh briefings. Returns {symbol: {agent_name: briefing_dict}}."""
+    from flowtracker.research.briefing import load_all_briefings
+
+    result: dict[str, dict[str, dict]] = {}
+    for symbol in symbols:
+        briefings = load_all_briefings(symbol)
+        if not force and briefings and _briefings_fresh(symbol, max_age_days=7):
+            result[symbol] = briefings
+        else:
+            if not skip_fetch:
+                from flowtracker.research.refresh import refresh_for_research
+                from flowtracker.research.peer_refresh import refresh_peers
+
+                refresh_for_research(symbol)
+                refresh_peers(symbol)
+            envelopes = await run_all_agents(symbol, model=model, verify=True)
+            result[symbol] = {name: env.briefing for name, env in envelopes.items()}
+    return result
+
+
+async def run_comparison_agent(
+    symbols: list[str],
+    model: str | None = None,
+    skip_fetch: bool = False,
+    force: bool = False,
+) -> BriefingEnvelope:
+    """Run the comparison agent across multiple stocks. Returns BriefingEnvelope."""
+    from flowtracker.research.prompts import COMPARISON_AGENT_PROMPT
+    from flowtracker.research.tools import (
+        get_fair_value,
+        get_composite_score,
+        get_valuation_snapshot,
+        get_peer_comparison,
+        get_upcoming_catalysts,
+        get_sector_overview_metrics,
+        get_sector_benchmarks,
+        render_chart,
+        get_annual_financials,
+        get_shareholding_changes,
+    )
+
+    # Step 1: Ensure briefings exist and are fresh
+    all_briefings = await _ensure_briefings(symbols, force, skip_fetch, model)
+
+    # Step 2: Format briefings for the comparison agent
+    briefing_text = ""
+    for symbol, briefings in all_briefings.items():
+        briefing_text += f"\n### {symbol}\n"
+        for agent_name, data in briefings.items():
+            briefing_text += f"**{agent_name}:** {json.dumps(data, indent=2)}\n"
+
+    # Step 3: Run comparison agent
+    comparison_tools = [get_fair_value, get_composite_score,
+                        get_valuation_snapshot, get_peer_comparison,
+                        get_upcoming_catalysts, get_sector_overview_metrics,
+                        get_sector_benchmarks, render_chart,
+                        get_annual_financials, get_shareholding_changes]
+
+    user_prompt = (
+        f"Compare these {len(symbols)} stocks: {', '.join(symbols)}.\n\n"
+        f"## Specialist Briefings\n{briefing_text}\n\n"
+        "Use your tools to get current fair value and composite scores for EACH stock. "
+        "Produce the full comparative analysis with side-by-side tables."
+    )
+
+    return await _run_specialist(
+        name="comparison",
+        symbol="_vs_".join(symbols),
+        system_prompt=COMPARISON_AGENT_PROMPT,
+        tools=comparison_tools,
+        max_turns=20,
+        max_budget=1.00,
+        model=model or DEFAULT_MODELS.get("synthesis", "claude-sonnet-4-6"),
+        user_prompt=user_prompt,
+    )

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from statistics import mean, median
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -21,6 +24,17 @@ _FACTOR_LABELS = {
     "risk": "Risk",
 }
 
+_INDUSTRY_MAX = 18
+
+
+def _truncate_industry(industry: str | None) -> str:
+    """Truncate industry name to _INDUSTRY_MAX chars with ellipsis."""
+    if not industry:
+        return "—"
+    if len(industry) <= _INDUSTRY_MAX:
+        return industry
+    return industry[: _INDUSTRY_MAX - 1] + "\u2026"
+
 
 def display_screen_results(scores: list[StockScore], limit: int = 30) -> None:
     """Show ranked stock screening results."""
@@ -35,7 +49,7 @@ def display_screen_results(scores: list[StockScore], limit: int = 30) -> None:
     )
     table.add_column("#", justify="right", width=4)
     table.add_column("Symbol", width=12)
-    table.add_column("Industry", width=20)
+    table.add_column("Industry", width=_INDUSTRY_MAX + 2)
     table.add_column("Score", justify="right", width=6)
     table.add_column("Own", justify="right", width=5)
     table.add_column("Ins", justify="right", width=5)
@@ -61,7 +75,7 @@ def display_screen_results(scores: list[StockScore], limit: int = 30) -> None:
         table.add_row(
             str(s.rank),
             s.symbol,
-            (s.industry or "—")[:20],
+            _truncate_industry(s.industry),
             score_str,
             _factor_cell(factors.get("ownership", -1)),
             _factor_cell(factors.get("insider", -1)),
@@ -75,6 +89,30 @@ def display_screen_results(scores: list[StockScore], limit: int = 30) -> None:
 
     console.print(table)
     console.print(f"[dim]Showing top {min(limit, len(scores))} of {len(scores)} stocks[/]")
+
+
+def display_screen_summary(scores: list[StockScore]) -> None:
+    """Show summary statistics for screening results."""
+    if not scores:
+        return
+
+    composites = [s.composite_score for s in scores]
+    avg = mean(composites)
+    med = median(composites)
+
+    # Top represented industry
+    industries = [s.industry for s in scores if s.industry]
+    top_industry = "—"
+    if industries:
+        counter = Counter(industries)
+        top_industry, top_count = counter.most_common(1)[0]
+        top_industry = f"{top_industry} ({top_count})"
+
+    console.print(
+        f"\n[bold]Summary:[/] {len(scores)} stocks scored  |  "
+        f"Mean: [cyan]{avg:.1f}[/]  |  Median: [cyan]{med:.1f}[/]  |  "
+        f"Top industry: [cyan]{top_industry}[/]"
+    )
 
 
 def display_stock_scorecard(score: StockScore) -> None:
@@ -117,9 +155,9 @@ def _factor_cell(score: float) -> str:
     """Format a factor score as a colored cell."""
     if score < 0:
         return "[dim]—[/]"
-    if score >= 70:
+    if score > 70:
         return f"[green]{score:.0f}[/]"
-    elif score >= 50:
+    elif score >= 40:
         return f"[yellow]{score:.0f}[/]"
     else:
         return f"[red]{score:.0f}[/]"

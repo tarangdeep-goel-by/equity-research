@@ -61,7 +61,12 @@ class FilingClient:
     # -- BSE Scrip Code Lookup --
 
     def get_bse_code(self, symbol: str) -> str | None:
-        """Look up BSE scrip code for an NSE symbol."""
+        """Look up BSE scrip code for an NSE symbol.
+
+        Searches BSE and validates against known company name from
+        index_constituents to avoid symbol collisions (e.g., NSE HAL =
+        Hindustan Aeronautics, not BSE's Haldyn Glass).
+        """
         if symbol in self._scrip_cache:
             return self._scrip_cache[symbol]
 
@@ -73,17 +78,86 @@ class FilingClient:
             resp.raise_for_status()
             html = resp.text
 
-            # Parse: liclick('542726','IndiaMART InterMESH Ltd')
-            match = re.search(r"liclick\('(\d+)','([^']+)'\)", html)
-            if match:
-                code = match.group(1)
-                self._scrip_cache[symbol] = code
-                return code
+            # Parse ALL candidates: liclick('542726','IndiaMART InterMESH Ltd')
+            candidates = re.findall(r"liclick\('(\d+)','([^']+)'\)", html)
+            if not candidates:
+                return None
 
-            return None
+            # Try to validate against known company name
+            known_name = self._get_known_company_name(symbol)
+            if known_name and len(candidates) > 1:
+                best_code = self._match_bse_candidate(candidates, known_name, symbol)
+                if best_code:
+                    self._scrip_cache[symbol] = best_code
+                    return best_code
+
+            # Fallback: first result (original behavior)
+            code = candidates[0][0]
+            self._scrip_cache[symbol] = code
+            return code
         except Exception as e:
             logger.warning("BSE code lookup failed for %s: %s", symbol, e)
             return None
+
+    def _get_known_company_name(self, symbol: str) -> str | None:
+        """Get company name from index_constituents for validation."""
+        try:
+            from flowtracker.store import FlowStore
+            with FlowStore() as store:
+                row = store._conn.execute(
+                    "SELECT company_name FROM index_constituents WHERE symbol = ? LIMIT 1",
+                    (symbol,),
+                ).fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+
+    def _match_bse_candidate(
+        self, candidates: list[tuple[str, str]], known_name: str, symbol: str,
+    ) -> str | None:
+        """Find the BSE candidate that best matches the known company name.
+
+        Uses word overlap scoring — the candidate sharing the most significant
+        words with the known name wins.
+        """
+        # Normalize for comparison
+        stop_words = {"ltd", "limited", "the", "of", "and", "&", "co", "inc", "corp"}
+
+        def _significant_words(name: str) -> set[str]:
+            return {w.lower() for w in re.split(r'[\s\-\.\,]+', name)
+                    if len(w) > 1 and w.lower() not in stop_words}
+
+        known_words = _significant_words(known_name)
+        if not known_words:
+            return None
+
+        best_code = None
+        best_score = 0
+
+        for code, bse_name in candidates:
+            bse_words = _significant_words(bse_name)
+            overlap = len(known_words & bse_words)
+            score = overlap / max(len(known_words), 1)
+
+            if score > best_score:
+                best_score = score
+                best_code = code
+
+        # Require at least 30% word overlap to accept
+        if best_score >= 0.3:
+            logger.info(
+                "BSE lookup for %s: matched '%s' (score=%.2f) from %d candidates",
+                symbol,
+                next((name for code, name in candidates if code == best_code), "?"),
+                best_score, len(candidates),
+            )
+            return best_code
+
+        logger.warning(
+            "BSE lookup for %s: no good match for '%s' among %d candidates (best score=%.2f)",
+            symbol, known_name, len(candidates), best_score,
+        )
+        return None
 
     # -- Fetch Filings --
 

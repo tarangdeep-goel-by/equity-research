@@ -721,13 +721,789 @@ def render_composite_radar(symbol: str, score_data: dict) -> str:
     return str(path)
 
 
+# --- Sector-level charts ---
+
+
+def render_sector_mcap_bar(symbol: str, ranked_data: list[dict]) -> str:
+    """Horizontal bar chart of all stocks in the sector ranked by market cap.
+
+    Highlights the subject stock in accent color.
+    ranked_data: list of {symbol, company_name, mcap_cr, pe, ...} from
+                 get_sector_stocks_ranked().
+    """
+    if not ranked_data or len(ranked_data) < 2:
+        return ""
+
+    # Top 15 to keep readable
+    data = ranked_data[:15]
+    symbols = [d.get("symbol", "?") for d in data]
+    mcaps = [float(d.get("mcap_cr", 0)) for d in data]
+
+    # Reverse for horizontal bar (top at top)
+    symbols = symbols[::-1]
+    mcaps = mcaps[::-1]
+
+    fig, ax = plt.subplots(figsize=(10, max(5, len(symbols) * 0.45)))
+
+    colors = [_ACCENT_1 if s == symbol.upper() else _ACCENT_2 for s in symbols]
+    bars = ax.barh(symbols, mcaps, color=colors, edgecolor=_GRID, linewidth=0.5)
+
+    # Add value labels
+    max_mcap = max(mcaps) if mcaps else 1
+    for bar, val in zip(bars, mcaps):
+        if val >= 1e12:
+            label = f"₹{val / 1e12:.1f}T"
+        elif val >= 1e9:
+            label = f"₹{val / 1e9:.0f}K Cr"
+        elif val >= 1e7:
+            label = f"₹{val / 1e7:.0f}L Cr"
+        else:
+            label = f"₹{val:,.0f} Cr"
+        ax.text(bar.get_width() + max_mcap * 0.01, bar.get_y() + bar.get_height() / 2,
+                label, va="center", fontsize=9, color=_TEXT)
+
+    ax.set_title(f"Sector Market Cap — {symbol}'s Industry", fontsize=14,
+                 fontweight="bold", pad=12)
+    ax.set_xlabel("Market Cap")
+    ax.grid(axis="x", alpha=0.2)
+    ax.set_xlim(0, max_mcap * 1.2)
+
+    path = _chart_dir(symbol) / "sector_mcap.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_sector_valuation_scatter(symbol: str, ranked_data: list[dict]) -> str:
+    """Scatter plot of PE vs ROCE for all stocks in the sector.
+
+    Quadrants: high ROCE + low PE = bargain, low ROCE + high PE = avoid.
+    Highlights the subject stock.
+    ranked_data: list of {symbol, pe, roce_pct, mcap_cr, ...}.
+    """
+    if not ranked_data or len(ranked_data) < 2:
+        return ""
+
+    # Filter stocks with valid PE and ROCE
+    valid = [d for d in ranked_data
+             if d.get("pe") and d.get("roce_pct")
+             and float(d["pe"]) > 0 and float(d["roce_pct"]) > 0]
+    if len(valid) < 2:
+        return ""
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    for d in valid:
+        pe = float(d["pe"])
+        roce = float(d["roce_pct"])
+        mcap = float(d.get("mcap_cr", 1))
+        sym = d.get("symbol", "?")
+        is_subject = sym == symbol.upper()
+
+        size = max(40, min(300, mcap / (max(float(v.get("mcap_cr", 1)) for v in valid)) * 300))
+        color = _ACCENT_1 if is_subject else _ACCENT_2
+        alpha = 1.0 if is_subject else 0.6
+        zorder = 10 if is_subject else 5
+
+        ax.scatter(pe, roce, s=size, c=color, alpha=alpha, edgecolors=_TEXT if is_subject else _GRID,
+                   linewidths=2 if is_subject else 0.5, zorder=zorder)
+        ax.annotate(sym, (pe, roce), textcoords="offset points", xytext=(6, 6),
+                    fontsize=8 if not is_subject else 10,
+                    fontweight="bold" if is_subject else "normal",
+                    color=_TEXT, alpha=0.9 if is_subject else 0.7)
+
+    # Median lines for quadrant boundaries
+    pes = [float(d["pe"]) for d in valid]
+    roces = [float(d["roce_pct"]) for d in valid]
+    med_pe = sorted(pes)[len(pes) // 2]
+    med_roce = sorted(roces)[len(roces) // 2]
+
+    ax.axvline(med_pe, color=_YELLOW, linestyle="--", alpha=0.4, label=f"Median PE: {med_pe:.1f}")
+    ax.axhline(med_roce, color=_GREEN, linestyle="--", alpha=0.4, label=f"Median ROCE: {med_roce:.1f}%")
+
+    # Quadrant labels
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    ax.text(xlim[0] + (med_pe - xlim[0]) * 0.5, ylim[1] - (ylim[1] - med_roce) * 0.15,
+            "BARGAIN\n(Low PE, High ROCE)", ha="center", fontsize=9, color=_GREEN, alpha=0.6)
+    ax.text(xlim[1] - (xlim[1] - med_pe) * 0.5, ylim[0] + (med_roce - ylim[0]) * 0.15,
+            "AVOID\n(High PE, Low ROCE)", ha="center", fontsize=9, color=_RED, alpha=0.6)
+
+    ax.set_xlabel("PE Ratio (lower = cheaper)", fontsize=11)
+    ax.set_ylabel("ROCE % (higher = better quality)", fontsize=11)
+    ax.set_title(f"Sector Valuation vs Quality — {symbol}'s Industry",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.legend(loc="upper right", fontsize=9)
+    ax.grid(alpha=0.2)
+
+    path = _chart_dir(symbol) / "sector_valuation_scatter.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_sector_ownership_flow(symbol: str, flow_data: dict) -> str:
+    """Bar chart of MF ownership changes across the sector.
+
+    Shows top additions and reductions side by side.
+    flow_data: dict from get_sector_mf_flows() with top_additions and top_reductions.
+    """
+    additions = flow_data.get("top_additions", [])
+    reductions = flow_data.get("top_reductions", [])
+    if not additions and not reductions:
+        return ""
+
+    # Combine into one chart
+    all_items = []
+    for d in additions:
+        all_items.append((d.get("symbol", "?"), float(d.get("mf_change_pct", 0))))
+    for d in reductions:
+        all_items.append((d.get("symbol", "?"), float(d.get("mf_change_pct", 0))))
+
+    # Sort by change value
+    all_items.sort(key=lambda x: x[1])
+
+    if not all_items:
+        return ""
+
+    symbols_list = [x[0] for x in all_items]
+    changes = [x[1] for x in all_items]
+
+    fig, ax = plt.subplots(figsize=(10, max(4, len(all_items) * 0.45)))
+
+    colors = [_GREEN if c > 0 else _RED for c in changes]
+    bars = ax.barh(symbols_list, changes, color=colors, edgecolor=_GRID, linewidth=0.5)
+
+    # Add value labels
+    for bar, val in zip(bars, changes):
+        label = f"{val:+.2f}%"
+        x_pos = bar.get_width() + 0.05 if val >= 0 else bar.get_width() - 0.05
+        ha = "left" if val >= 0 else "right"
+        ax.text(x_pos, bar.get_y() + bar.get_height() / 2,
+                label, va="center", ha=ha, fontsize=9, color=_TEXT)
+
+    # Highlight subject stock
+    for i, sym in enumerate(symbols_list):
+        if sym == symbol.upper():
+            bars[i].set_edgecolor(_YELLOW)
+            bars[i].set_linewidth(2)
+
+    ax.axvline(0, color=_TEXT, linewidth=0.8, alpha=0.5)
+    ax.set_xlabel("MF Holding Change (% points, QoQ)")
+    ax.set_title(f"Sector MF Flow — Who's Being Accumulated vs Exited",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.grid(axis="x", alpha=0.2)
+
+    # Summary annotation
+    total = flow_data.get("total_stocks", 0)
+    increased = flow_data.get("mf_increased", 0)
+    decreased = flow_data.get("mf_decreased", 0)
+    ax.text(0.98, 0.02, f"Sector: {increased} stocks ↑  |  {decreased} stocks ↓  |  {total} total",
+            transform=ax.transAxes, ha="right", va="bottom", fontsize=9,
+            color=_TEXT, alpha=0.7,
+            bbox=dict(boxstyle="round,pad=0.3", facecolor=_SURFACE, edgecolor=_GRID, alpha=0.8))
+
+    path = _chart_dir(symbol) / "sector_ownership_flow.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+# --- New sector charts ---
+
+
+def render_sector_growth_bars(symbol: str, peer_data: list[dict]) -> str:
+    """Horizontal bar chart of quarterly sales growth for sector peers."""
+    if not peer_data or len(peer_data) < 2:
+        return ""
+
+    # Extract peers with valid quarterly sales variance (YoY growth proxy)
+    items = []
+    for d in peer_data:
+        sym = d.get("peer_symbol") or d.get("symbol") or d.get("peer_name", "?")
+        growth = d.get("qtr_sales_var")
+        if growth is not None:
+            try:
+                items.append((sym, float(growth)))
+            except (ValueError, TypeError):
+                continue
+
+    if len(items) < 2:
+        return ""
+
+    # Sort by growth descending
+    items.sort(key=lambda x: x[1], reverse=True)
+    items = items[:20]  # cap at 20 for readability
+
+    syms = [x[0] for x in items]
+    growths = [x[1] for x in items]
+
+    # Reverse for horizontal bar (top at top)
+    syms = syms[::-1]
+    growths = growths[::-1]
+
+    # Sector median
+    median_growth = sorted(growths)[len(growths) // 2]
+
+    fig, ax = plt.subplots(figsize=(10, max(5, len(syms) * 0.4)))
+
+    colors = []
+    for s, g in zip(syms, growths):
+        if s == symbol.upper():
+            colors.append(_ACCENT_1)
+        elif g >= 0:
+            colors.append(_GREEN)
+        else:
+            colors.append(_RED)
+
+    bars = ax.barh(syms, growths, color=colors, edgecolor=_GRID, linewidth=0.5)
+
+    # Value labels
+    for bar, val in zip(bars, growths):
+        label = f"{val:+.1f}%"
+        x_pos = bar.get_width() + 0.3 if val >= 0 else bar.get_width() - 0.3
+        ha = "left" if val >= 0 else "right"
+        ax.text(x_pos, bar.get_y() + bar.get_height() / 2,
+                label, va="center", ha=ha, fontsize=9, color=_TEXT)
+
+    ax.axvline(median_growth, color=_YELLOW, linestyle="--", alpha=0.6,
+               label=f"Median: {median_growth:.1f}%")
+    ax.axvline(0, color=_TEXT, linewidth=0.5, alpha=0.3)
+
+    ax.set_title(f"Sector Revenue Growth (QoQ) — {symbol}'s Industry",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.set_xlabel("Quarterly Sales Var %")
+    ax.legend(loc="lower right", fontsize=9)
+    ax.grid(axis="x", alpha=0.2)
+
+    path = _chart_dir(symbol) / "sector_growth_bars.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_sector_profitability_bars(symbol: str, ranked_data: list[dict]) -> str:
+    """Horizontal bar chart of ROCE for all sector peers."""
+    if not ranked_data or len(ranked_data) < 2:
+        return ""
+
+    items = []
+    for d in ranked_data:
+        sym = d.get("symbol", "?")
+        roce = d.get("roce_pct")
+        if roce is not None:
+            try:
+                items.append((sym, float(roce)))
+            except (ValueError, TypeError):
+                continue
+
+    if len(items) < 2:
+        return ""
+
+    items.sort(key=lambda x: x[1], reverse=True)
+    items = items[:20]
+
+    syms = [x[0] for x in items]
+    roces = [x[1] for x in items]
+
+    syms = syms[::-1]
+    roces = roces[::-1]
+
+    median_roce = sorted(roces)[len(roces) // 2]
+
+    fig, ax = plt.subplots(figsize=(10, max(5, len(syms) * 0.4)))
+
+    colors = []
+    for s, r in zip(syms, roces):
+        if s == symbol.upper():
+            colors.append(_ACCENT_1)
+        elif r >= median_roce:
+            colors.append(_GREEN)
+        else:
+            colors.append(_RED)
+
+    bars = ax.barh(syms, roces, color=colors, edgecolor=_GRID, linewidth=0.5)
+
+    for bar, val in zip(bars, roces):
+        label = f"{val:.1f}%"
+        ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2,
+                label, va="center", fontsize=9, color=_TEXT)
+
+    ax.axvline(median_roce, color=_YELLOW, linestyle="--", alpha=0.6,
+               label=f"Median ROCE: {median_roce:.1f}%")
+
+    ax.set_title(f"Sector ROCE — {symbol}'s Industry",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.set_xlabel("ROCE %")
+    ax.legend(loc="lower right", fontsize=9)
+    ax.grid(axis="x", alpha=0.2)
+
+    path = _chart_dir(symbol) / "sector_profitability_bars.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_sector_pe_distribution(symbol: str, ranked_data: list[dict]) -> str:
+    """Histogram of PE ratios across the sector with subject stock marked."""
+    if not ranked_data or len(ranked_data) < 3:
+        return ""
+
+    # Filter valid PE values
+    pe_map = {}
+    for d in ranked_data:
+        sym = d.get("symbol", "?")
+        pe = d.get("pe")
+        if pe is not None:
+            try:
+                pv = float(pe)
+                if pv > 0:
+                    pe_map[sym] = pv
+            except (ValueError, TypeError):
+                continue
+
+    if len(pe_map) < 3:
+        return ""
+
+    all_pes = list(pe_map.values())
+    subject_pe = pe_map.get(symbol.upper())
+    median_pe = sorted(all_pes)[len(all_pes) // 2]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    n_bins = min(10, max(5, len(all_pes) // 3))
+    ax.hist(all_pes, bins=n_bins, color=_ACCENT_2, alpha=0.7, edgecolor=_GRID)
+
+    # Median line
+    ax.axvline(median_pe, color=_YELLOW, linestyle="--", linewidth=2, alpha=0.8,
+               label=f"Median: {median_pe:.1f}x")
+
+    # Subject stock line
+    if subject_pe:
+        ax.axvline(subject_pe, color=_ACCENT_1, linestyle="-", linewidth=2.5,
+                   label=f"{symbol}: {subject_pe:.1f}x")
+
+    ax.set_title(f"Sector PE Distribution — {symbol}'s Industry",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.set_xlabel("PE Ratio")
+    ax.set_ylabel("Number of Stocks")
+    ax.legend(loc="upper right", fontsize=10)
+    ax.grid(axis="y", alpha=0.2)
+
+    path = _chart_dir(symbol) / "sector_pe_distribution.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+# --- Comparison charts (multi-symbol) ---
+
+_COMPARISON_COLORS = ["#4ecca3", "#e94560", "#f0a500", "#2B5EA7", "#8B5CF6",
+                      "#EC4899", "#C4533A", "#F5F0EB"]
+
+
+def render_comparison_revenue(symbols: list[str], annual_data_map: dict[str, list[dict]]) -> str:
+    """Multi-stock revenue trajectory, indexed to 100 at earliest common year."""
+    if not annual_data_map or len(symbols) < 2:
+        return ""
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    for i, sym in enumerate(symbols):
+        raw = annual_data_map.get(sym, [])
+        if not raw:
+            continue
+        sorted_data = sorted(raw, key=lambda x: x.get("fiscal_year_end", x.get("year", "")))
+        years = []
+        revs = []
+        for d in sorted_data:
+            yr = d.get("fiscal_year_end", d.get("year", ""))
+            rev = d.get("revenue", d.get("sales", 0)) or 0
+            if yr and rev > 0:
+                years.append(_fy_label(yr))
+                revs.append(float(rev))
+        if not revs:
+            continue
+
+        # Index to 100 at base year
+        base = revs[0]
+        indexed = [r / base * 100 for r in revs]
+
+        color = _COMPARISON_COLORS[i % len(_COMPARISON_COLORS)]
+        ax.plot(years, indexed, color=color, linewidth=2, marker="o", markersize=4, label=sym)
+
+    ax.set_title(f"Revenue Growth: {' vs '.join(symbols)} (Indexed to 100)",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel("Indexed Revenue (100 = base year)")
+    ax.legend(loc="upper left", framealpha=0.8)
+    ax.grid(True, alpha=0.3)
+    plt.xticks(rotation=45, ha="right")
+
+    path = _chart_dir(symbols[0]) / "comparison_revenue.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_comparison_pe(symbols: list[str], pe_data_map: dict[str, list[dict]]) -> str:
+    """PE ratio history lines overlaid for multiple stocks."""
+    if not pe_data_map or len(symbols) < 2:
+        return ""
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    has_data = False
+    for i, sym in enumerate(symbols):
+        chart_data = pe_data_map.get(sym, [])
+        if not chart_data:
+            continue
+        # chart_data is list of {metric, values: [{date, value}]}
+        for series in chart_data:
+            metric = series.get("metric", "")
+            if "PE" not in metric.upper() and "Industry" not in metric:
+                continue
+            values = series.get("values", [])
+            if not values:
+                continue
+            dates = [date.fromisoformat(v["date"]) for v in values]
+            vals = [v["value"] for v in values]
+            color = _COMPARISON_COLORS[i % len(_COMPARISON_COLORS)]
+            lbl = f"{sym}" if "Industry" not in metric else f"{sym} (Industry)"
+            ax.plot(dates, vals, color=color, linewidth=1.8,
+                    alpha=1.0 if "Industry" not in metric else 0.5, label=lbl)
+            has_data = True
+
+    if not has_data:
+        plt.close(fig)
+        return ""
+
+    ax.set_title(f"PE History: {' vs '.join(symbols)}",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel("P/E Ratio (x)")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+    fig.autofmt_xdate(rotation=30)
+    ax.legend(loc="upper left", framealpha=0.8)
+    ax.grid(True, alpha=0.3)
+
+    path = _chart_dir(symbols[0]) / "comparison_pe.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_comparison_shareholding(symbols: list[str], shareholding_map: dict[str, list[dict]]) -> str:
+    """FII + MF ownership trends overlaid for multiple stocks."""
+    if not shareholding_map or len(symbols) < 2:
+        return ""
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    has_data = False
+    for i, sym in enumerate(symbols):
+        raw = shareholding_map.get(sym, [])
+        if not raw:
+            continue
+
+        # Pivot: {quarter: {category: pct}}
+        qmap: dict[str, dict[str, float]] = {}
+        for row in raw:
+            q = row.get("quarter_end", "")
+            cat = row.get("category", "")
+            pct = row.get("percentage", 0) or 0
+            if q and cat:
+                qmap.setdefault(q, {})[cat] = float(pct)
+
+        if not qmap:
+            continue
+
+        quarters = sorted(qmap.keys())
+        fii_vals = []
+        mf_vals = []
+        for q in quarters:
+            qd = qmap.get(q, {})
+            fii_v = qd.get("FII", qd.get("Foreign Institutions", qd.get("FPI", 0)))
+            mf_v = qd.get("MF", qd.get("DII", qd.get("Domestic Institutions", 0)))
+            fii_vals.append(float(fii_v))
+            mf_vals.append(float(mf_v))
+
+        color = _COMPARISON_COLORS[i % len(_COMPARISON_COLORS)]
+        if any(v > 0 for v in fii_vals):
+            ax.plot(quarters, fii_vals, color=color, linewidth=2, marker="o",
+                    markersize=3, label=f"{sym} FII", linestyle="-")
+            has_data = True
+        if any(v > 0 for v in mf_vals):
+            ax.plot(quarters, mf_vals, color=color, linewidth=2, marker="s",
+                    markersize=3, label=f"{sym} MF", linestyle="--")
+            has_data = True
+
+    if not has_data:
+        plt.close(fig)
+        return ""
+
+    ax.set_title(f"Ownership Trends: {' vs '.join(symbols)}",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel("Holding %")
+    ax.yaxis.set_major_formatter(FuncFormatter(_pct_fmt))
+    ax.legend(loc="upper right", framealpha=0.8, fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.xticks(rotation=45, ha="right", fontsize=9)
+
+    path = _chart_dir(symbols[0]) / "comparison_shareholding.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_comparison_radar(symbols: list[str], score_data_map: dict[str, dict]) -> str:
+    """Composite score radars overlaid for multiple stocks."""
+    if not score_data_map or len(symbols) < 2:
+        return ""
+
+    import numpy as np
+
+    # Collect valid scores
+    valid = {}
+    factor_names = None
+    for sym in symbols:
+        sd = score_data_map.get(sym, {})
+        if not sd or "factors" not in sd:
+            continue
+        factors = sd["factors"]
+        if isinstance(factors, dict):
+            names = list(factors.keys())
+            vals = [float(v) for v in factors.values()]
+        elif isinstance(factors, list):
+            names = [f.get("factor", f.get("name", f"F{i}")) for i, f in enumerate(factors)]
+            vals = [float(f.get("score", f.get("value", 50))) for f in factors]
+        else:
+            continue
+        if not names:
+            continue
+        if factor_names is None:
+            factor_names = names
+        valid[sym] = vals
+
+    if len(valid) < 2 or factor_names is None:
+        return ""
+
+    # Use grouped bar chart for >3 stocks (radar gets unreadable)
+    if len(valid) > 3:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        x = range(len(factor_names))
+        width = 0.8 / len(valid)
+        for i, (sym, vals) in enumerate(valid.items()):
+            offset = (i - len(valid) / 2 + 0.5) * width
+            color = _COMPARISON_COLORS[i % len(_COMPARISON_COLORS)]
+            overall = score_data_map[sym].get("composite_score", sum(vals) / len(vals))
+            ax.bar([xi + offset for xi in x], vals, width, label=f"{sym} ({overall:.0f})",
+                   color=color, alpha=0.8)
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(factor_names, rotation=45, ha="right", fontsize=9)
+        ax.set_ylabel("Score (0-100)")
+        ax.set_ylim(0, 100)
+        ax.set_title(f"Quality Comparison: {' vs '.join(symbols)}",
+                     fontsize=14, fontweight="bold", pad=12)
+        ax.legend(loc="upper right", framealpha=0.8)
+        ax.grid(axis="y", alpha=0.3)
+    else:
+        # Radar chart
+        fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+        N = len(factor_names)
+        angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
+        angles_closed = angles + [angles[0]]
+
+        for i, (sym, vals) in enumerate(valid.items()):
+            vals_closed = vals + [vals[0]]
+            color = _COMPARISON_COLORS[i % len(_COMPARISON_COLORS)]
+            overall = score_data_map[sym].get("composite_score", sum(vals) / len(vals))
+            ax.plot(angles_closed, vals_closed, color=color, linewidth=2,
+                    label=f"{sym} ({overall:.0f})")
+            ax.fill(angles_closed, vals_closed, color=color, alpha=0.15)
+
+        ref = [50] * (N + 1)
+        ax.plot(angles_closed, ref, color=_TEXT, linewidth=0.5, linestyle="--", alpha=0.3)
+
+        ax.set_xticks(angles)
+        ax.set_xticklabels(factor_names, fontsize=10)
+        ax.set_ylim(0, 100)
+        ax.set_yticks([25, 50, 75, 100])
+        ax.set_yticklabels(["25", "50", "75", "100"], fontsize=8)
+        ax.set_title(f"Quality Comparison: {' vs '.join(symbols)}",
+                     fontsize=14, fontweight="bold", pad=20)
+        ax.legend(loc="upper right", framealpha=0.8, fontsize=9)
+
+    path = _chart_dir(symbols[0]) / "comparison_radar.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_comparison_margins(symbols: list[str], annual_data_map: dict[str, list[dict]]) -> str:
+    """OPM and NPM lines overlaid for multiple stocks."""
+    if not annual_data_map or len(symbols) < 2:
+        return ""
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    has_data = False
+    for i, sym in enumerate(symbols):
+        raw = annual_data_map.get(sym, [])
+        if not raw:
+            continue
+        sorted_data = sorted(raw, key=lambda x: x.get("fiscal_year_end", x.get("year", "")))
+
+        years = []
+        opms = []
+        npms = []
+        for d in sorted_data:
+            yr = d.get("fiscal_year_end", d.get("year", ""))
+            rev = d.get("revenue", d.get("sales", 0)) or 0
+            opm = d.get("opm", d.get("operating_profit_margin", None))
+            npm = d.get("npm", d.get("net_profit_margin", None))
+            op = d.get("operating_profit") or 0
+            if not op and rev:
+                pbt = d.get("profit_before_tax", 0) or 0
+                interest = d.get("interest", 0) or 0
+                dep = d.get("depreciation", 0) or 0
+                oi = d.get("other_income", 0) or 0
+                if pbt:
+                    op = pbt + interest + dep - oi
+            np_ = d.get("net_income", d.get("net_profit", d.get("profit_after_tax", 0))) or 0
+
+            if yr and rev:
+                years.append(_fy_label(yr))
+                opms.append(float(opm) if opm else (float(op) / float(rev) * 100 if rev else 0))
+                npms.append(float(npm) if npm else (float(np_) / float(rev) * 100 if rev else 0))
+
+        if not years:
+            continue
+
+        color = _COMPARISON_COLORS[i % len(_COMPARISON_COLORS)]
+        ax.plot(years, opms, color=color, linewidth=2, marker="o", markersize=3,
+                label=f"{sym} OPM", linestyle="-")
+        ax.plot(years, npms, color=color, linewidth=1.5, marker="s", markersize=3,
+                label=f"{sym} NPM", linestyle="--")
+        has_data = True
+
+    if not has_data:
+        plt.close(fig)
+        return ""
+
+    ax.set_title(f"Margin Trends: {' vs '.join(symbols)}",
+                 fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel("Margin %")
+    ax.yaxis.set_major_formatter(FuncFormatter(_pct_fmt))
+    ax.legend(loc="upper left", framealpha=0.8, fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.xticks(rotation=45, ha="right")
+
+    path = _chart_dir(symbols[0]) / "comparison_margins.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
+def render_dividend_history(symbol: str, annual_data: list[dict]) -> str:
+    """Dividend payout ratio and yield over time from annual financials."""
+    if not annual_data:
+        return ""
+
+    sorted_data = sorted(annual_data, key=lambda x: x.get("fiscal_year_end", x.get("year", "")))
+
+    years = []
+    payout_ratios = []
+    div_per_share = []
+    for d in sorted_data:
+        yr = d.get("fiscal_year_end", d.get("year", ""))
+        div_amt = d.get("dividend_amount", 0) or 0
+        net_income = d.get("net_income", d.get("net_profit", d.get("profit_after_tax", 0))) or 0
+        eps = d.get("eps", 0) or 0
+        num_shares = d.get("num_shares", 0) or 0
+
+        if yr:
+            years.append(_fy_label(yr))
+            # Payout ratio: dividend / net income * 100
+            if net_income > 0 and div_amt > 0:
+                payout_ratios.append(float(div_amt) / float(net_income) * 100)
+            else:
+                payout_ratios.append(0)
+            # Dividend per share: dividend_amount / num_shares (both in Cr → per share)
+            if num_shares > 0 and div_amt > 0:
+                dps = float(div_amt) / float(num_shares)  # both in crores
+                div_per_share.append(dps)
+            else:
+                div_per_share.append(0)
+
+    if not years or all(p == 0 for p in payout_ratios):
+        return ""
+
+    fig, ax1 = plt.subplots(figsize=(12, 5))
+
+    x = range(len(years))
+
+    # Payout ratio bars
+    bar_colors = [_ACCENT_2 if p > 0 else _GRID for p in payout_ratios]
+    ax1.bar(list(x), payout_ratios, color=bar_colors, alpha=0.7, width=0.6,
+            label="Payout Ratio %")
+    ax1.set_ylabel("Payout Ratio %", color=_ACCENT_2)
+    ax1.yaxis.set_major_formatter(FuncFormatter(_pct_fmt))
+
+    # DPS line on secondary axis
+    ax2 = ax1.twinx()
+    ax2.plot(list(x), div_per_share, color=_GREEN, linewidth=2, marker="o",
+             markersize=5, label="Dividend / Share (₹)")
+    ax2.set_ylabel("Dividend per Share (₹)", color=_GREEN)
+    ax2.tick_params(axis="y", labelcolor=_GREEN)
+
+    ax1.set_title(f"{symbol} — Dividend History", fontsize=14, fontweight="bold", pad=12)
+    ax1.set_xticks(list(x))
+    ax1.set_xticklabels(years, rotation=45, ha="right")
+    ax1.grid(True, axis="y", alpha=0.3)
+
+    # Combined legend
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left", framealpha=0.8)
+
+    path = _chart_dir(symbol) / "dividend_history.png"
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_DARK_BG)
+    plt.close(fig)
+    return str(path)
+
+
 # --- Master render function for MCP tool ---
 
 _AVAILABLE_CHARTS = [
     "price", "pe", "delivery", "revenue_profit", "shareholding",
     "quarterly", "margin_trend", "roce_trend", "dupont", "cashflow",
     "fair_value_range", "expense_pie", "composite_radar",
+    "sector_mcap", "sector_valuation_scatter", "sector_ownership_flow",
+    "sector_growth_bars", "sector_profitability_bars", "sector_pe_distribution",
+    "comparison_revenue", "comparison_pe", "comparison_shareholding",
+    "comparison_radar", "comparison_margins",
+    "dividend_history",
 ]
+
+
+def _get_composite_score(symbol: str) -> dict:
+    """Fetch composite score for a symbol via ScreenerEngine."""
+    from flowtracker.screener_engine import ScreenerEngine
+    from flowtracker.store import FlowStore
+
+    with FlowStore() as store:
+        engine = ScreenerEngine(store)
+        score = engine.score_stock(symbol)
+    if score is None:
+        return {}
+    return {
+        "symbol": score.symbol,
+        "composite_score": score.composite_score,
+        "factors": [
+            {"factor": f.factor, "score": f.score, "raw_value": f.raw_value, "detail": f.detail}
+            for f in score.factors
+        ],
+    }
 
 
 def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) -> dict:
@@ -747,12 +1523,26 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
       fair_value_range — Bear/base/bull vs current price
       expense_pie     — Expense breakdown pie
       composite_radar — 8-factor quality score radar
+      sector_growth_bars — Sector peer revenue growth bars
+      sector_profitability_bars — Sector peer ROCE bars
+      sector_pe_distribution — Sector PE histogram
+      comparison_revenue — Multi-stock indexed revenue (comma-separated symbols)
+      comparison_pe — Multi-stock PE overlay (comma-separated symbols)
+      comparison_shareholding — Multi-stock FII/MF trends (comma-separated symbols)
+      comparison_radar — Multi-stock quality radar (comma-separated symbols)
+      comparison_margins — Multi-stock OPM/NPM overlay (comma-separated symbols)
+      dividend_history — Dividend payout ratio & DPS over time
 
     data: Optional pre-fetched data. If None, fetches from DB.
     """
     from flowtracker.research.data_api import ResearchDataAPI
 
-    symbol = symbol.upper()
+    # Multi-symbol support for comparison charts
+    symbols = [s.strip().upper() for s in symbol.split(",")] if "," in symbol else [symbol.upper()]
+    symbol = symbols[0]
+
+    if chart_type.startswith("comparison_") and len(symbols) < 2:
+        return {"error": "Comparison charts require multiple symbols (comma-separated)"}
 
     if chart_type not in _AVAILABLE_CHARTS:
         return {"error": f"Unknown chart type: {chart_type}", "available": _AVAILABLE_CHARTS}
@@ -783,7 +1573,49 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
         elif chart_type == "expense_pie":
             path = render_expense_pie(symbol, data or api.get_expense_breakdown(symbol))
         elif chart_type == "composite_radar":
-            path = render_composite_radar(symbol, data or api.get_composite_score(symbol))
+            path = render_composite_radar(symbol, data or _get_composite_score(symbol))
+
+        # Existing sector charts
+        elif chart_type == "sector_mcap":
+            path = render_sector_mcap_bar(symbol, data or api.get_sector_valuations(symbol))
+        elif chart_type == "sector_valuation_scatter":
+            path = render_sector_valuation_scatter(symbol, data or api.get_sector_valuations(symbol))
+        elif chart_type == "sector_ownership_flow":
+            path = render_sector_ownership_flow(symbol, data or api.get_sector_flows(symbol))
+
+        # New sector charts
+        elif chart_type == "sector_growth_bars":
+            path = render_sector_growth_bars(symbol, data or api.get_peer_comparison(symbol))
+        elif chart_type == "sector_profitability_bars":
+            path = render_sector_profitability_bars(symbol, data or api.get_sector_valuations(symbol))
+        elif chart_type == "sector_pe_distribution":
+            path = render_sector_pe_distribution(symbol, data or api.get_sector_valuations(symbol))
+
+        # Comparison charts (multi-symbol)
+        elif chart_type == "comparison_revenue":
+            if data is None:
+                data = {s: api.get_annual_financials(s, years=10) for s in symbols}
+            path = render_comparison_revenue(symbols, data)
+        elif chart_type == "comparison_pe":
+            if data is None:
+                data = {s: api.get_chart_data(s, "pe") for s in symbols}
+            path = render_comparison_pe(symbols, data)
+        elif chart_type == "comparison_shareholding":
+            if data is None:
+                data = {s: api.get_shareholding(s, quarters=12) for s in symbols}
+            path = render_comparison_shareholding(symbols, data)
+        elif chart_type == "comparison_radar":
+            if data is None:
+                data = {s: _get_composite_score(s) for s in symbols}
+            path = render_comparison_radar(symbols, data)
+        elif chart_type == "comparison_margins":
+            if data is None:
+                data = {s: api.get_annual_financials(s, years=10) for s in symbols}
+            path = render_comparison_margins(symbols, data)
+
+        # Other
+        elif chart_type == "dividend_history":
+            path = render_dividend_history(symbol, data or api.get_annual_financials(symbol, years=10))
         else:
             path = ""
 

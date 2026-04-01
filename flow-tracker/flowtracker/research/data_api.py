@@ -438,3 +438,35 @@ class ResearchDataAPI:
             result = self._store.get_sector_benchmark(symbol, metric)
             return _clean(result) if result else {}
         return _clean(self._store.get_all_sector_benchmarks(symbol))
+
+    def get_sector_overview_metrics(self, symbol: str) -> dict:
+        """Industry-level overview: stock count, total market cap, median PE/PB/ROCE, valuation range, top stocks."""
+        info = self.get_company_info(symbol)
+        industry = info.get("industry", "Unknown")
+        if industry == "Unknown":
+            return {"error": f"No industry found for {symbol}"}
+        return _clean(self._store.get_sector_valuation_summary(industry))
+
+    def get_sector_flows(self, symbol: str) -> dict:
+        """Aggregate MF ownership changes across all stocks in the subject's industry."""
+        info = self.get_company_info(symbol)
+        industry = info.get("industry", "Unknown")
+        if industry == "Unknown":
+            return {"error": f"No industry found for {symbol}"}
+        return _clean(self._store.get_sector_mf_flows(industry))
+
+    def get_sector_valuations(self, symbol: str) -> list[dict]:
+        """All stocks in the subject's industry ranked by market cap with key metrics."""
+        info = self.get_company_info(symbol)
+        industry = info.get("industry", "Unknown")
+        if industry == "Unknown":
+            return []
+        return _clean(self._store.get_sector_stocks_ranked(industry))
+
+    # --- Catalysts ---
+
+    def get_upcoming_catalysts(self, symbol: str, days: int = 90) -> list[dict]:
+        """Upcoming events that could move the stock: earnings, board meetings, ex-dividend, RBI policy."""
+        from flowtracker.catalyst_client import gather_catalysts
+        events = gather_catalysts(symbol, self._store, days)
+        return _clean([e.model_dump() for e in events])

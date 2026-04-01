@@ -193,15 +193,23 @@ def thesis(
 ) -> None:
     """Generate comprehensive multi-agent equity research thesis.
 
-    Runs 6 specialist agents in parallel (business, financials, ownership,
-    valuation, risk, technical), verifies their reports, then synthesizes
+    Runs 7 specialist agents in parallel (business, financials, ownership,
+    valuation, risk, technical, sector), verifies their reports, then synthesizes
     everything into a final research document.
 
     Use --no-agent to fall back to the data-only HTML fundamentals report.
     Use --skip-fetch to skip refreshing data from live sources.
     Use --skip-verify to skip the verification step.
     """
+    import logging
     import webbrowser
+
+    # Ensure agent logs are visible in CLI output
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     from flowtracker.research.agent import format_cost_summary, run_all_agents, run_synthesis_agent
     from flowtracker.research.assembly import assemble_final_report
@@ -270,8 +278,8 @@ def thesis(
         console.print(f"\n[dim]Concall extraction is fresh (<30 days). Skipping.[/]")
 
     # Phase 1 + 1.5: Specialist agents (parallel) + Verification
-    console.print(f"\n[bold]Phase 1: Running 6 specialist agents for {symbol}...[/]")
-    console.print("Agents: business, financials, ownership, valuation, risk, technical")
+    console.print(f"\n[bold]Phase 1: Running 7 specialist agents for {symbol}...[/]")
+    console.print("Agents: business, financials, ownership, valuation, risk, technical, sector")
     console.print("This may take 3-8 minutes.\n")
 
     envelopes = asyncio.run(run_all_agents(
@@ -326,6 +334,8 @@ _DATA_TOOLS = [
     "dcf_valuation", "dcf_history", "technical_indicators",
     "dupont_decomposition", "key_metrics_history", "financial_growth_rates",
     "analyst_grades", "price_targets", "fair_value",
+    "upcoming_catalysts",
+    "sector_overview", "sector_flows", "sector_valuations",
 ]
 
 
@@ -393,6 +403,10 @@ def data(
         "analyst_grades": lambda api: api.get_analyst_grades(symbol),
         "price_targets": lambda api: api.get_price_targets(symbol),
         "fair_value": lambda api: api.get_fair_value(symbol),
+        "upcoming_catalysts": lambda api: api.get_upcoming_catalysts(symbol),
+        "sector_overview": lambda api: api.get_sector_overview_metrics(symbol),
+        "sector_flows": lambda api: api.get_sector_flows(symbol),
+        "sector_valuations": lambda api: api.get_sector_valuations(symbol),
     }
 
     with ResearchDataAPI() as api:
@@ -511,7 +525,45 @@ def thesis_status() -> None:
     console.print(table)
 
 
-VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical"}
+@app.command()
+def compare(
+    symbols: Annotated[list[str], typer.Argument(help="2-5 stock symbols to compare")],
+    skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Use cached data only")] = False,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Override model")] = None,
+    force: Annotated[bool, typer.Option("--force", help="Re-run agents even if briefings exist")] = False,
+) -> None:
+    """Compare 2-5 stocks side-by-side with AI-generated comparative analysis."""
+    import webbrowser
+
+    if len(symbols) < 2:
+        console.print("[red]Need at least 2 symbols to compare[/red]")
+        raise typer.Exit(1)
+    if len(symbols) > 5:
+        console.print("[red]Maximum 5 symbols for comparison[/red]")
+        raise typer.Exit(1)
+
+    symbols = [s.upper() for s in symbols]
+    console.print(f"[bold]Comparing: {' vs '.join(symbols)}[/bold]")
+
+    from flowtracker.research.agent import run_comparison_agent
+
+    envelope = asyncio.run(run_comparison_agent(
+        symbols=symbols,
+        model=model,
+        skip_fetch=skip_fetch,
+        force=force,
+    ))
+
+    from flowtracker.research.assembly import assemble_comparison_report
+
+    html_path, md_path = assemble_comparison_report(symbols, envelope)
+
+    console.print(f"\n[green]Report saved:[/green] {html_path}")
+
+    webbrowser.open(f"file://{html_path}")
+
+
+VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical", "sector"}
 VALID_AGENTS_WITH_SYNTHESIS = VALID_AGENTS | {"synthesis"}
 
 

@@ -2062,6 +2062,180 @@ class FlowStore:
         ).fetchall()
         return [r["industry"] for r in rows]
 
+    def get_sector_valuation_summary(self, industry: str) -> dict:
+        """Get aggregate valuation metrics for a sector/industry.
+
+        Joins index_constituents → valuation_snapshot (latest per stock)
+        → screener_ratios (latest ROCE per stock).
+        Returns stock count, total mcap, median PE/PB/ROCE, PE range, top 5 by mcap.
+        """
+        rows = self._conn.execute("""
+            SELECT
+                ic.symbol, ic.company_name,
+                vs.market_cap, vs.pe_trailing, vs.pb_ratio,
+                sr.roce_pct
+            FROM index_constituents ic
+            LEFT JOIN valuation_snapshot vs ON ic.symbol = vs.symbol
+                AND vs.date = (
+                    SELECT MAX(v2.date) FROM valuation_snapshot v2
+                    WHERE v2.symbol = ic.symbol
+                )
+            LEFT JOIN screener_ratios sr ON ic.symbol = sr.symbol
+                AND sr.fiscal_year_end = (
+                    SELECT MAX(sr2.fiscal_year_end) FROM screener_ratios sr2
+                    WHERE sr2.symbol = ic.symbol
+                )
+            WHERE ic.industry = ?
+        """, (industry,)).fetchall()
+
+        if not rows:
+            return {
+                "industry": industry, "stock_count": 0, "total_mcap_cr": 0.0,
+                "median_pe": None, "median_pb": None, "median_roce": None,
+                "pe_range": {"min": None, "max": None},
+                "top_by_mcap": [],
+            }
+
+        def _median(vals: list[float]) -> float | None:
+            if not vals:
+                return None
+            s = sorted(vals)
+            n = len(s)
+            if n % 2 == 1:
+                return round(s[n // 2], 2)
+            return round((s[n // 2 - 1] + s[n // 2]) / 2, 2)
+
+        pe_vals = [r["pe_trailing"] for r in rows if r["pe_trailing"] and r["pe_trailing"] > 0]
+        pb_vals = [r["pb_ratio"] for r in rows if r["pb_ratio"] and r["pb_ratio"] > 0]
+        roce_vals = [r["roce_pct"] for r in rows if r["roce_pct"] is not None]
+        mcaps = [(r["symbol"], r["company_name"], r["market_cap"] or 0, r["pe_trailing"]) for r in rows]
+        mcaps.sort(key=lambda x: x[2], reverse=True)
+
+        return {
+            "industry": industry,
+            "stock_count": len(rows),
+            "total_mcap_cr": round(sum(r["market_cap"] or 0 for r in rows), 2),
+            "median_pe": _median(pe_vals),
+            "median_pb": _median(pb_vals),
+            "median_roce": _median(roce_vals),
+            "pe_range": {
+                "min": round(min(pe_vals), 2) if pe_vals else None,
+                "max": round(max(pe_vals), 2) if pe_vals else None,
+            },
+            "top_by_mcap": [
+                {"symbol": s, "company_name": cn, "mcap_cr": round(mc, 2), "pe": round(pe, 2) if pe else None}
+                for s, cn, mc, pe in mcaps[:5]
+            ],
+        }
+
+    def get_sector_mf_flows(self, industry: str) -> dict:
+        """Get MF ownership change summary for a sector/industry.
+
+        Joins index_constituents → shareholding (latest vs previous quarter,
+        category='MF'). Returns counts of stocks where MF% increased/decreased,
+        avg change, and top additions/reductions.
+        """
+        rows = self._conn.execute("""
+            SELECT
+                ic.symbol,
+                s1.percentage AS curr_pct,
+                s2.percentage AS prev_pct,
+                s1.percentage - s2.percentage AS mf_change
+            FROM index_constituents ic
+            INNER JOIN shareholding s1 ON ic.symbol = s1.symbol
+                AND s1.category = 'MF'
+                AND s1.quarter_end = (
+                    SELECT MAX(s3.quarter_end) FROM shareholding s3
+                    WHERE s3.symbol = ic.symbol AND s3.category = 'MF'
+                )
+            INNER JOIN shareholding s2 ON s1.symbol = s2.symbol
+                AND s2.category = 'MF'
+                AND s2.quarter_end = (
+                    SELECT MAX(s4.quarter_end) FROM shareholding s4
+                    WHERE s4.symbol = s1.symbol AND s4.category = 'MF'
+                    AND s4.quarter_end < s1.quarter_end
+                )
+            WHERE ic.industry = ?
+        """, (industry,)).fetchall()
+
+        if not rows:
+            return {
+                "industry": industry, "total_stocks": 0,
+                "mf_increased": 0, "mf_decreased": 0, "avg_mf_change_pct": 0.0,
+                "top_additions": [], "top_reductions": [],
+            }
+
+        changes = [{"symbol": r["symbol"], "mf_change_pct": round(r["mf_change"], 2)} for r in rows]
+        increased = [c for c in changes if c["mf_change_pct"] > 0]
+        decreased = [c for c in changes if c["mf_change_pct"] < 0]
+        avg_change = round(sum(c["mf_change_pct"] for c in changes) / len(changes), 2)
+
+        top_additions = sorted(increased, key=lambda x: x["mf_change_pct"], reverse=True)[:5]
+        top_reductions = sorted(decreased, key=lambda x: x["mf_change_pct"])[:5]
+
+        return {
+            "industry": industry,
+            "total_stocks": len(changes),
+            "mf_increased": len(increased),
+            "mf_decreased": len(decreased),
+            "avg_mf_change_pct": avg_change,
+            "top_additions": top_additions,
+            "top_reductions": top_reductions,
+        }
+
+    def get_sector_stocks_ranked(self, industry: str) -> list[dict]:
+        """Get all stocks in a sector ranked by market cap, with key metrics.
+
+        Joins index_constituents → valuation_snapshot (latest) →
+        shareholding (latest FII/MF %) → screener_ratios (latest ROCE).
+        Returns list of dicts sorted by mcap descending.
+        """
+        rows = self._conn.execute("""
+            SELECT
+                ic.symbol, ic.company_name,
+                vs.market_cap, vs.pe_trailing,
+                sr.roce_pct,
+                fii.percentage AS fii_pct,
+                mf.percentage AS mf_pct,
+                vs.earnings_growth AS price_change_1yr_pct
+            FROM index_constituents ic
+            LEFT JOIN valuation_snapshot vs ON ic.symbol = vs.symbol
+                AND vs.date = (
+                    SELECT MAX(v2.date) FROM valuation_snapshot v2
+                    WHERE v2.symbol = ic.symbol
+                )
+            LEFT JOIN screener_ratios sr ON ic.symbol = sr.symbol
+                AND sr.fiscal_year_end = (
+                    SELECT MAX(sr2.fiscal_year_end) FROM screener_ratios sr2
+                    WHERE sr2.symbol = ic.symbol
+                )
+            LEFT JOIN shareholding fii ON ic.symbol = fii.symbol
+                AND fii.category = 'FII'
+                AND fii.quarter_end = (
+                    SELECT MAX(f2.quarter_end) FROM shareholding f2
+                    WHERE f2.symbol = ic.symbol AND f2.category = 'FII'
+                )
+            LEFT JOIN shareholding mf ON ic.symbol = mf.symbol
+                AND mf.category = 'MF'
+                AND mf.quarter_end = (
+                    SELECT MAX(m2.quarter_end) FROM shareholding m2
+                    WHERE m2.symbol = ic.symbol AND m2.category = 'MF'
+                )
+            WHERE ic.industry = ?
+            ORDER BY vs.market_cap DESC
+        """, (industry,)).fetchall()
+
+        return [{
+            "symbol": r["symbol"],
+            "company_name": r["company_name"],
+            "mcap_cr": round(r["market_cap"], 2) if r["market_cap"] else None,
+            "pe": round(r["pe_trailing"], 2) if r["pe_trailing"] else None,
+            "roce_pct": round(r["roce_pct"], 2) if r["roce_pct"] else None,
+            "fii_pct": round(r["fii_pct"], 2) if r["fii_pct"] else None,
+            "mf_pct": round(r["mf_pct"], 2) if r["mf_pct"] else None,
+            "price_change_1yr_pct": round(r["price_change_1yr_pct"], 2) if r["price_change_1yr_pct"] else None,
+        } for r in rows]
+
     # -- MF Scheme Holdings --
 
     def upsert_mf_scheme_holdings(self, holdings: list[MFSchemeHolding]) -> int:
