@@ -47,6 +47,30 @@ async def get_screener_ratios(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+@tool(
+    "get_quarterly_balance_sheet",
+    "Get quarterly balance sheet from yfinance: total assets, debt, equity, cash, investments, shares outstanding. "
+    "Up to 8 quarters. Values in crores. Not available for all stocks (some return empty).",
+    {"symbol": str, "quarters": int},
+)
+async def get_quarterly_balance_sheet(args):
+    with ResearchDataAPI() as api:
+        data = api.get_quarterly_balance_sheet(args["symbol"], args.get("quarters", 8))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_quarterly_cash_flow",
+    "Get quarterly cash flow from yfinance: operating CF, free CF, capex, investing CF, financing CF, working capital changes. "
+    "Up to 8 quarters. Values in crores. NOT available for banks or many Indian stocks — if empty, use annual CF from get_annual_financials.",
+    {"symbol": str, "quarters": int},
+)
+async def get_quarterly_cash_flow(args):
+    with ResearchDataAPI() as api:
+        data = api.get_quarterly_cash_flow(args["symbol"], args.get("quarters", 8))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
 # --- Valuation ---
 
 
@@ -203,6 +227,60 @@ async def get_consensus_estimate(args):
 async def get_earnings_surprises(args):
     with ResearchDataAPI() as api:
         data = api.get_earnings_surprises(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_estimate_revisions",
+    "Get EPS estimate revision trends: current vs 7/30/60/90 day ago estimates, plus analyst upgrade/downgrade counts. "
+    "Shows if consensus is moving up or down for current quarter, next quarter, current FY, and next FY.",
+    {"symbol": str},
+)
+async def get_estimate_revisions(args):
+    with ResearchDataAPI() as api:
+        data = api.get_estimate_revisions(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_estimate_momentum",
+    "Get computed estimate momentum signal: score (0-1), direction (positive/neutral/negative), "
+    "and narrative summary of revision trends. Rising estimates = fundamental momentum.",
+    {"symbol": str},
+)
+async def get_estimate_momentum(args):
+    with ResearchDataAPI() as api:
+        data = api.get_estimate_momentum(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Events & Calendar ---
+
+
+@tool(
+    "get_events_calendar",
+    "Get upcoming events: next earnings date (with days until), ex-dividend date, consensus EPS and revenue estimates. "
+    "Live fetch — always current. Check before any research to set temporal context.",
+    {"symbol": str},
+)
+async def get_events_calendar(args):
+    with ResearchDataAPI() as api:
+        data = api.get_events_calendar(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Dividend History ---
+
+
+@tool(
+    "get_dividend_history",
+    "Get annual dividend per share, payout ratio, and yield history (up to 10 years). "
+    "Computed from corporate actions + annual financials. Shows dividend growth trends.",
+    {"symbol": str, "years": int},
+)
+async def get_dividend_history(args):
+    with ResearchDataAPI() as api:
+        data = api.get_dividend_history(args["symbol"], args.get("years", 10))
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -708,6 +786,8 @@ RESEARCH_TOOLS = [
     get_quarterly_results,
     get_annual_financials,
     get_screener_ratios,
+    get_quarterly_balance_sheet,
+    get_quarterly_cash_flow,
     get_valuation_snapshot,
     get_valuation_band,
     get_pe_history,
@@ -721,6 +801,7 @@ RESEARCH_TOOLS = [
     get_promoter_pledge,
     get_consensus_estimate,
     get_earnings_surprises,
+    get_estimate_momentum,
     get_macro_snapshot,
     get_fii_dii_streak,
     get_fii_dii_flows,
@@ -769,6 +850,11 @@ BUSINESS_TOOLS = [
     # Analyst consensus
     get_consensus_estimate,
     get_earnings_surprises,
+    get_estimate_momentum,
+    # Events & calendar
+    get_events_calendar,
+    # Dividend history
+    get_dividend_history,
     # Chart data for trends
     get_chart_data,
 ]
@@ -789,15 +875,18 @@ BUSINESS_AGENT_TOOLS = [
 
 FINANCIAL_AGENT_TOOLS = [
     get_company_info, get_quarterly_results, get_annual_financials,
-    get_screener_ratios, get_expense_breakdown, get_financial_growth_rates,
+    get_screener_ratios, get_quarterly_balance_sheet, get_quarterly_cash_flow,
+    get_expense_breakdown, get_financial_growth_rates,
     get_dupont_decomposition, get_key_metrics_history,
     get_chart_data, get_earnings_surprises,
     get_concall_insights,  # management commentary on margins, guidance, segment performance
     get_corporate_actions, get_adjusted_eps,
     get_financial_projections,
+    get_estimate_revisions, get_estimate_momentum,
+    get_dividend_history,
     render_chart,
     *_PEER_TOOLS,
-]  # 18 tools
+]  # 21 tools
 
 OWNERSHIP_AGENT_TOOLS = [
     get_shareholding, get_shareholding_changes, get_insider_transactions,
@@ -816,13 +905,17 @@ VALUATION_AGENT_TOOLS = [
     get_concall_insights,  # management guidance affects forward valuation
     get_corporate_actions, get_adjusted_eps,
     get_financial_projections,
+    get_estimate_revisions, get_estimate_momentum,
+    get_events_calendar,
+    get_dividend_history,
     get_upcoming_catalysts,
     render_chart,
     *_PEER_TOOLS,
 ]
 
 RISK_AGENT_TOOLS = [
-    get_quarterly_results, get_annual_financials, get_promoter_pledge,
+    get_quarterly_results, get_annual_financials, get_quarterly_balance_sheet,
+    get_promoter_pledge,
     get_insider_transactions, get_macro_snapshot, get_fii_dii_streak,
     get_composite_score, get_earnings_surprises, get_recent_filings,
     get_valuation_snapshot, get_peer_comparison,

@@ -194,6 +194,82 @@ class FundClient:
             shares_outstanding=info.get("sharesOutstanding"),
         )
 
+    def fetch_quarterly_bs_cf(self, symbol: str) -> dict:
+        """Fetch quarterly balance sheet and cash flow from yfinance.
+        Returns {'balance_sheet': [list of quarter dicts], 'cash_flow': [list of quarter dicts]}
+        Values converted from raw INR to crores (÷1e7).
+        """
+        ticker = self._ticker(symbol)
+        result = {"symbol": symbol.upper(), "balance_sheet": [], "cash_flow": []}
+
+        # -- Balance Sheet --
+        try:
+            bs = ticker.quarterly_balance_sheet
+            if bs is not None and not bs.empty:
+                _BS_FIELDS = {
+                    "Total Assets": "total_assets",
+                    "Total Debt": "total_debt",
+                    "Long Term Debt": "long_term_debt",
+                    "Stockholders Equity": "stockholders_equity",
+                    "Cash And Cash Equivalents": "cash_and_equivalents",
+                    "Net Debt": "net_debt",
+                    "Investments And Advances": "investments",
+                    "Net PPE": "net_ppe",
+                    "Ordinary Shares Number": "shares_outstanding",
+                    "Total Liabilities Net Minority Interest": "total_liabilities",
+                    "Minority Interest": "minority_interest",
+                }
+                for col in bs.columns:
+                    quarter_end = col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col)
+                    row_data = {"quarter_end": quarter_end}
+                    has_data = False
+                    for yf_field, our_field in _BS_FIELDS.items():
+                        val = _safe_get(bs, yf_field, col)
+                        if val is not None:
+                            # Convert to crores (shares_outstanding stays as-is)
+                            if our_field != "shares_outstanding":
+                                val = round(val / 1e7, 2)
+                            else:
+                                val = round(val)
+                            row_data[our_field] = val
+                            has_data = True
+                    if has_data:
+                        result["balance_sheet"].append(row_data)
+        except Exception:
+            pass
+
+        # -- Cash Flow --
+        try:
+            cf = ticker.quarterly_cashflow
+            if cf is not None and not cf.empty:
+                _CF_FIELDS = {
+                    "Operating Cash Flow": "operating_cash_flow",
+                    "Free Cash Flow": "free_cash_flow",
+                    "Capital Expenditure": "capital_expenditure",
+                    "Investing Cash Flow": "investing_cash_flow",
+                    "Financing Cash Flow": "financing_cash_flow",
+                    "Change In Working Capital": "change_in_working_capital",
+                    "Depreciation And Amortization": "depreciation",
+                    "Cash Dividends Paid": "dividends_paid",
+                    "Net Income From Continuing Operations": "net_income",
+                }
+                for col in cf.columns:
+                    quarter_end = col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col)
+                    row_data = {"quarter_end": quarter_end}
+                    has_data = False
+                    for yf_field, our_field in _CF_FIELDS.items():
+                        val = _safe_get(cf, yf_field, col)
+                        if val is not None:
+                            val = round(val / 1e7, 2)  # Convert to crores
+                            row_data[our_field] = val
+                            has_data = True
+                    if has_data:
+                        result["cash_flow"].append(row_data)
+        except Exception:
+            pass
+
+        return result
+
     def compute_historical_pe(
         self, symbol: str, annual_eps: list, weekly_prices: list[tuple[str, float, int]] | None = None
     ) -> list:
