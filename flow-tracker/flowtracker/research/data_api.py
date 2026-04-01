@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import statistics
+
 from flowtracker.store import FlowStore
 from flowtracker.utils import _clean
+
+
+def _percentile_rank(values: list[float], value: float) -> float:
+    """Simple percentile rank: % of values strictly below the given value."""
+    below = sum(1 for v in values if v < value)
+    return round(100 * below / len(values)) if values else 0
 
 
 class ResearchDataAPI:
@@ -364,14 +372,23 @@ class ResearchDataAPI:
     # --- Peer Benchmarking ---
 
     def get_peer_metrics(self, symbol: str) -> dict:
-        """FMP key metrics for subject + all peers with populated FMP data."""
+        """FMP key metrics for subject + all peers, with yfinance valuation fallback."""
         peers = self._store.get_peers(symbol)
 
-        # Subject metrics (latest)
+        # Subject metrics (latest) — FMP first, fallback to valuation_snapshot
         subject_rows = self._store.get_fmp_key_metrics(symbol, limit=1)
-        subject = _clean(subject_rows[0].model_dump()) if subject_rows else {}
-        if subject:
+        if subject_rows:
+            subject = _clean(subject_rows[0].model_dump())
             subject["symbol"] = symbol
+            subject["source"] = "fmp"
+        else:
+            val_rows = self._store.get_valuation_history(symbol, days=7)
+            if val_rows:
+                subject = _clean(val_rows[-1].model_dump())
+                subject["symbol"] = symbol
+                subject["source"] = "yfinance"
+            else:
+                subject = {}
 
         # Peer metrics — use peer_symbol if available, else peer_name as symbol
         peer_data = []
@@ -383,7 +400,15 @@ class ResearchDataAPI:
             if rows:
                 d = _clean(rows[0].model_dump())
                 d["symbol"] = psym
+                d["source"] = "fmp"
                 peer_data.append(d)
+            else:
+                val_rows = self._store.get_valuation_history(psym, days=7)
+                if val_rows:
+                    d = _clean(val_rows[-1].model_dump())
+                    d["symbol"] = psym
+                    d["source"] = "yfinance"
+                    peer_data.append(d)
 
         return {"subject": subject, "peers": peer_data, "peer_count": len(peer_data)}
 
@@ -409,6 +434,69 @@ class ResearchDataAPI:
 
         return {"subject": subject, "peers": peer_data, "peer_count": len(peer_data)}
 
+    _MATRIX_METRICS = [
+        "pe_trailing", "pe_forward", "pb_ratio", "ev_ebitda", "ev_revenue",
+        "ps_ratio", "peg_ratio", "roe", "roa", "operating_margin", "net_margin",
+        "debt_to_equity", "dividend_yield", "revenue_growth", "earnings_growth",
+        "market_cap",
+    ]
+
+    def get_valuation_matrix(self, symbol: str) -> dict:
+        """Multi-metric valuation comparison matrix: subject vs all peers."""
+        peers = self._store.get_peers(symbol)
+
+        def _latest_snapshot(sym: str) -> dict | None:
+            rows = self._store.get_valuation_history(sym, days=7)
+            if not rows:
+                return None
+            d = _clean(rows[-1].model_dump())
+            return {k: d.get(k) for k in self._MATRIX_METRICS if d.get(k) is not None}
+
+        # Subject
+        subject_data = _latest_snapshot(symbol) or {}
+        subject_data["symbol"] = symbol
+
+        # Peers
+        peer_data = []
+        for p in peers:
+            psym = p.get("peer_symbol") or p.get("peer_name")
+            if not psym or psym == symbol:
+                continue
+            snap = _latest_snapshot(psym)
+            if snap:
+                snap["symbol"] = psym
+                peer_data.append(snap)
+
+        # Collect all entries for sector stats
+        all_entries = [subject_data] + peer_data
+
+        # Sector stats + subject percentiles
+        sector_stats: dict = {}
+        subject_percentiles: dict = {}
+        for metric in self._MATRIX_METRICS:
+            values = [e[metric] for e in all_entries if metric in e and e[metric] is not None]
+            if len(values) < 2:
+                continue
+            quantiles = statistics.quantiles(values, n=4)  # [p25, median, p75]
+            sector_stats[metric] = {
+                "median": quantiles[1],
+                "p25": quantiles[0],
+                "p75": quantiles[2],
+                "min": min(values),
+                "max": max(values),
+            }
+            subj_val = subject_data.get(metric)
+            if subj_val is not None:
+                subject_percentiles[metric] = _percentile_rank(values, subj_val)
+
+        return {
+            "subject": subject_data,
+            "peers": peer_data,
+            "sector_stats": sector_stats,
+            "subject_percentiles": subject_percentiles,
+            "peer_count": len(peer_data),
+        }
+
     def get_concall_insights(self, symbol: str) -> dict:
         """Get pre-extracted concall insights from the vault.
 
@@ -431,6 +519,105 @@ class ResearchDataAPI:
                 except (json.JSONDecodeError, OSError):
                     continue
         return {"error": f"No concall extraction found for {symbol}", "hint": "Run concall pipeline first"}
+
+    # --- Corporate Actions ---
+
+    def get_corporate_actions(self, symbol: str) -> list[dict]:
+        """All corporate actions (bonus, split, dividend, spinoff, buyback) for a stock."""
+        return _clean(self._store.get_corporate_actions(symbol))
+
+    def get_adjustment_factor(self, symbol: str, as_of_date: str | None = None) -> dict:
+        """Cumulative share adjustment factor for a stock.
+
+        Returns the factor to multiply old per-share numbers by to make them
+        comparable to current per-share numbers.
+        """
+        actions = self._store.get_split_bonus_actions(symbol)  # ordered by date ASC
+        if not actions:
+            return {"symbol": symbol, "cumulative_factor": 1.0, "actions": []}
+
+        cumulative = 1.0
+        action_log = []
+        for a in actions:
+            if as_of_date and a["ex_date"] > as_of_date:
+                break
+            mult = a.get("multiplier") or 1.0
+            cumulative *= mult
+            action_log.append({
+                "date": a["ex_date"],
+                "type": a["action_type"],
+                "ratio": a.get("ratio_text"),
+                "multiplier": mult,
+                "cumulative_factor": cumulative,
+            })
+
+        return {
+            "symbol": symbol,
+            "cumulative_factor": cumulative,
+            "actions": action_log,
+        }
+
+    def get_adjusted_eps(self, symbol: str, quarters: int = 12) -> list[dict]:
+        """Quarterly EPS adjusted for all splits and bonuses.
+
+        Takes raw quarterly EPS and divides by the adjustment factor at each date,
+        so all EPS values are comparable on the current share base.
+        """
+        quarterly = self._store.get_quarterly_results(symbol, limit=quarters)
+        actions = self._store.get_split_bonus_actions(symbol)  # ordered by date ASC
+
+        if not quarterly:
+            return []
+
+        # Build total cumulative factor
+        total_factor = 1.0
+        for a in actions:
+            total_factor *= (a.get("multiplier") or 1.0)
+
+        result = []
+        for q in quarterly:
+            d = q.model_dump()
+            period = d.get("quarter_end", "")
+            raw_eps = d.get("eps")
+
+            # Compute factor at this period
+            factor_at_period = 1.0
+            for a in actions:
+                if a["ex_date"] <= period:
+                    factor_at_period *= (a.get("multiplier") or 1.0)
+
+            # Normalize to current share base
+            adjustment = total_factor / factor_at_period if factor_at_period > 0 else 1.0
+            adjusted_eps = round(raw_eps / adjustment, 2) if raw_eps is not None and adjustment != 0 else raw_eps
+
+            result.append({
+                "period": period,
+                "raw_eps": raw_eps,
+                "adjusted_eps": adjusted_eps,
+                "adjustment_factor": round(adjustment, 4),
+                "revenue": d.get("revenue"),
+                "net_income": d.get("net_income"),
+            })
+
+        return _clean(result)
+
+    def get_financial_projections(self, symbol: str) -> dict:
+        """3-year bear/base/bull financial projections based on historical trends.
+
+        Uses last 3-5 years of actuals to project revenue, EBITDA, net income, and EPS.
+        Accounts for corporate actions (splits/bonuses) in per-share calculations.
+        """
+        from flowtracker.research.projections import build_projections
+
+        annual = self.get_annual_financials(symbol, years=10)
+        if not annual:
+            return {"error": f"No annual financial data for {symbol}"}
+
+        # Get adjustment factor for per-share calculations
+        adj = self.get_adjustment_factor(symbol)
+        factor = adj.get("cumulative_factor", 1.0)
+
+        return build_projections(annual, adjustment_factor=factor)
 
     def get_sector_benchmarks(self, symbol: str, metric: str | None = None) -> list[dict] | dict:
         """Sector benchmark statistics — single metric or all."""

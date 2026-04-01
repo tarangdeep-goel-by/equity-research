@@ -25,7 +25,9 @@ async def get_quarterly_results(args):
 
 @tool(
     "get_annual_financials",
-    "Get annual P&L + Balance Sheet + Cash Flow for up to 10 years. Revenue, profit, debt, FCF, etc.",
+    "Get 10 years of annual financials. P&L: revenue, expenses, operating profit, net income, EPS. "
+    "Balance Sheet: equity capital, reserves, borrowings, total assets, net block, CWIP, investments, receivables, inventory, cash. "
+    "Cash Flow: CFO, CFI, CFF, net cash flow. Also includes: expense breakdown (raw material, employee, power, selling costs), shares outstanding, dividend, and price.",
     {"symbol": str, "years": int},
 )
 async def get_annual_financials(args):
@@ -529,6 +531,17 @@ async def get_peer_growth(args):
 
 
 @tool(
+    "get_valuation_matrix",
+    "Get multi-metric valuation comparison matrix for a stock vs all its peers. Returns PE, PB, EV/EBITDA, EV/Sales, margins, ROE, growth for subject + all peers, with sector medians and subject percentile ranks. Use this for relative valuation analysis.",
+    {"symbol": str},
+)
+async def get_valuation_matrix(args):
+    with ResearchDataAPI() as api:
+        data = api.get_valuation_matrix(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
     "get_sector_benchmarks",
     "Get computed sector benchmark statistics for a metric: subject value, sector median, P25/P75, min/max, and the subject's percentile rank. If no metric specified, returns all benchmarks.",
     {"symbol": str, "metric": str},
@@ -583,7 +596,43 @@ async def render_chart(args):
     return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
 
 
-_PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_sector_benchmarks]
+@tool(
+    "get_corporate_actions",
+    "Get all corporate actions (bonuses, stock splits, dividends, spinoffs, buybacks) for a stock. Shows action type, date, ratio/multiplier, and source. Use to understand share capital changes and adjust historical per-share metrics.",
+    {"symbol": str},
+)
+async def get_corporate_actions(args):
+    with ResearchDataAPI() as api:
+        data = api.get_corporate_actions(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_adjusted_eps",
+    "Get quarterly EPS adjusted for all stock splits and bonuses. Returns both raw and adjusted EPS so you can see the true earnings trend without per-share discontinuities. Essential for any stock that has had a split or bonus.",
+    {"symbol": str, "quarters": int},
+)
+async def get_adjusted_eps(args):
+    with ResearchDataAPI() as api:
+        data = api.get_adjusted_eps(args["symbol"], args.get("quarters", 12))
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_financial_projections",
+    "Get 3-year bear/base/bull financial projections. Projects revenue, EBITDA, net income, and EPS "
+    "based on historical growth trends and margin patterns. Returns assumptions, projections for 3 scenarios, "
+    "and implied fair values at different PE multiples. The agent should refine assumptions using concall "
+    "guidance and sector context — these are starting estimates, not final answers.",
+    {"symbol": str},
+)
+async def get_financial_projections(args):
+    with ResearchDataAPI() as api:
+        data = api.get_financial_projections(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+_PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_valuation_matrix, get_sector_benchmarks]
 
 
 # --- Tool Registry ---
@@ -628,6 +677,10 @@ RESEARCH_TOOLS = [
     get_analyst_grades,
     get_price_targets,
     get_fair_value,
+    get_valuation_matrix,
+    get_corporate_actions,
+    get_adjusted_eps,
+    get_financial_projections,
 ]
 
 # Subset for business research — qualitative + key financials for context
@@ -672,9 +725,11 @@ FINANCIAL_AGENT_TOOLS = [
     get_dupont_decomposition, get_key_metrics_history,
     get_chart_data, get_earnings_surprises,
     get_concall_insights,  # management commentary on margins, guidance, segment performance
+    get_corporate_actions, get_adjusted_eps,
+    get_financial_projections,
     render_chart,
     *_PEER_TOOLS,
-]  # 15 tools
+]  # 18 tools
 
 OWNERSHIP_AGENT_TOOLS = [
     get_shareholding, get_shareholding_changes, get_insider_transactions,
@@ -691,9 +746,11 @@ VALUATION_AGENT_TOOLS = [
     get_price_targets, get_analyst_grades, get_peer_comparison,
     get_chart_data, get_consensus_estimate,
     get_concall_insights,  # management guidance affects forward valuation
+    get_corporate_actions, get_adjusted_eps,
+    get_financial_projections,
     render_chart,
     *_PEER_TOOLS,
-]  # 16 tools
+]  # 19 tools
 
 RISK_AGENT_TOOLS = [
     get_quarterly_results, get_annual_financials, get_promoter_pledge,
@@ -701,8 +758,9 @@ RISK_AGENT_TOOLS = [
     get_composite_score, get_earnings_surprises, get_recent_filings,
     get_valuation_snapshot, get_peer_comparison,
     get_concall_insights,  # red flags, evasive answers, risk acknowledgments from management
+    get_corporate_actions,  # share capital changes are a risk factor
     *_PEER_TOOLS,
-]  # 15 tools
+]  # 16 tools
 
 TECHNICAL_AGENT_TOOLS = [
     get_technical_indicators, get_chart_data, get_delivery_trend,

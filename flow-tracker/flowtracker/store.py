@@ -618,6 +618,18 @@ CREATE TABLE IF NOT EXISTS sector_benchmarks (
     computed_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(subject_symbol, metric)
 );
+
+CREATE TABLE IF NOT EXISTS corporate_actions (
+    symbol TEXT NOT NULL,
+    ex_date TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    ratio_text TEXT,
+    multiplier REAL,
+    dividend_amount REAL,
+    source TEXT NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, ex_date, action_type, source)
+);
 """
 
 
@@ -2921,6 +2933,61 @@ class FlowStore:
             (symbol,),
         )
         self._conn.commit()
+
+    # -- Corporate Actions --
+
+    def upsert_corporate_actions(self, actions: list[dict]) -> int:
+        """Store corporate actions."""
+        count = 0
+        for a in actions:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO corporate_actions "
+                "(symbol, ex_date, action_type, ratio_text, multiplier, dividend_amount, source) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (a["symbol"], a["ex_date"], a["action_type"], a.get("ratio_text"),
+                 a.get("multiplier"), a.get("dividend_amount"), a["source"]),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_corporate_actions(self, symbol: str) -> list[dict]:
+        """Get all corporate actions for a symbol, ordered by date desc."""
+        rows = self._conn.execute(
+            "SELECT * FROM corporate_actions WHERE symbol = ? ORDER BY ex_date DESC",
+            (symbol.upper(),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_split_bonus_actions(self, symbol: str) -> list[dict]:
+        """Get only split and bonus actions (for adjustment factor computation).
+
+        Deduplicates: if BSE has a bonus on a date, yfinance split on the same
+        date is skipped (yfinance can't distinguish bonus from split).
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM corporate_actions WHERE symbol = ? "
+            "AND action_type IN ('split', 'bonus') AND multiplier IS NOT NULL "
+            "ORDER BY ex_date ASC, source ASC",
+            (symbol.upper(),),
+        ).fetchall()
+        # Deduplicate: BSE source wins per date
+        seen_dates: dict[str, str] = {}  # date -> source that claimed it
+        result: list[dict] = []
+        for r in rows:
+            d = dict(r)
+            ex = d["ex_date"]
+            src = d["source"]
+            if ex in seen_dates:
+                # Skip yfinance if BSE already covers this date
+                if src == "yfinance":
+                    continue
+                # If BSE arrives after yfinance, replace (shouldn't happen with ASC sort, but safe)
+                if seen_dates[ex] == "yfinance" and src == "bse":
+                    result = [x for x in result if x["ex_date"] != ex]
+            seen_dates[ex] = src
+            result.append(d)
+        return result
 
     def close(self) -> None:
         """Close the database connection."""

@@ -196,12 +196,43 @@ def step_filings(symbols: list[str], sleep: float = 1.0):
     console.print(f"  [green]✓[/] {total_downloaded} PDFs downloaded across {len(symbols)} stocks")
 
 
+def step_corporate_actions(symbols: list[str], sleep: float = 0.3):
+    """Fetch corporate actions (bonuses, splits, dividends) from BSE + yfinance."""
+    from flowtracker.filing_client import FilingClient
+    from flowtracker.store import FlowStore
+
+    console.print("\n[bold]Step: Corporate Actions (BSE + yfinance)[/]")
+    fc = FilingClient()
+    store = FlowStore()
+    ok = 0
+
+    with Progress(SpinnerColumn(), TextColumn("{task.description}"), BarColumn(), MofNCompleteColumn(), console=console) as p:
+        task = p.add_task("Corp Actions", total=len(symbols))
+        for sym in symbols:
+            p.update(task, description=sym)
+            try:
+                bse = fc.fetch_corporate_actions(sym)
+                yf = fc.fetch_yfinance_corporate_actions(sym)
+                all_actions = bse + yf
+                if all_actions:
+                    store.upsert_corporate_actions(all_actions)
+                    ok += 1
+            except Exception:
+                pass
+            p.advance(task)
+            time.sleep(sleep)
+    fc.close()
+    store.close()
+    console.print(f"  [green]✓[/] {ok}/{len(symbols)} stocks with corporate actions")
+
+
 STEPS = {
     "valuation": step_valuation,
     "estimates": step_estimates,
     "shareholding": step_shareholding,
     "screener": step_screener,
     "filings": step_filings,
+    "corporate_actions": step_corporate_actions,
 }
 
 

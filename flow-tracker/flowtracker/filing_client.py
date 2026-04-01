@@ -47,6 +47,71 @@ _RESEARCH_KEYWORDS = [
 _DEFAULT_FILING_DIR = Path.home() / "vault" / "stocks"
 
 
+def _parse_bse_date(date_str: str) -> str | None:
+    """Parse BSE date formats to YYYY-MM-DD."""
+    if not date_str:
+        return None
+    date_str = date_str.strip()
+    # Handle .NET JSON date: /Date(1234567890000)/
+    m = re.search(r"/Date\((\d+)\)/", date_str)
+    if m:
+        ts = int(m.group(1)) / 1000
+        return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    # Handle common date formats (including "14 Aug 2025")
+    for fmt in ("%d %b %Y", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%d-%m-%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_bonus_multiplier(ratio_text: str) -> float | None:
+    """Parse bonus ratio text to share multiplier. '1:1' -> 2.0, '2:1' -> 1.5"""
+    if not ratio_text:
+        return None
+    m = re.search(r"(\d+)\s*:\s*(\d+)", ratio_text)
+    if m:
+        new_shares = int(m.group(1))
+        existing_shares = int(m.group(2))
+        if existing_shares > 0:
+            return (new_shares + existing_shares) / existing_shares
+    return None
+
+
+def _parse_split_multiplier(details: str) -> float | None:
+    """Parse split details to multiplier. 'Rs.10/- to Rs.2/-' -> 5.0"""
+    if not details:
+        return None
+    m = re.search(r"(?:from|From)\s*(?:Rs\.?|₹)\s*(\d+).*?(?:to|To)\s*(?:Rs\.?|₹)\s*(\d+)", details)
+    if m:
+        old_face = int(m.group(1))
+        new_face = int(m.group(2))
+        if new_face > 0:
+            return old_face / new_face
+    return None
+
+
+def _parse_dividend_amount(details: str) -> float | None:
+    """Parse dividend amount from details text."""
+    if not details:
+        return None
+    # Try "Rs. 10/- Per Share" or "Rs 5 Per Share" first
+    m = re.search(r"(?:Rs\.?|₹)\s*([\d.]+)", details)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
+    # Fallback: plain number like "5.50"
+    details = details.strip()
+    try:
+        return float(details)
+    except ValueError:
+        pass
+    return None
+
+
 class FilingClient:
     """Client for BSE/NSE corporate filings."""
 
@@ -337,6 +402,153 @@ class FilingClient:
         except Exception as e:
             logger.debug("Failed to parse filing: %s", e)
             return None
+
+    # -- Corporate Actions --
+
+    def fetch_corporate_actions(self, symbol: str) -> list[dict]:
+        """Fetch corporate actions from BSE API.
+
+        Returns list of dicts with keys: symbol, ex_date, action_type,
+        ratio_text, multiplier, dividend_amount, source.
+        """
+        bse_code = self.get_bse_code(symbol)
+        if not bse_code:
+            logger.warning("No BSE code found for %s", symbol)
+            return []
+
+        try:
+            resp = self._client.get(
+                f"{_BSE_API}/CorporateAction/w",
+                params={"scripcode": bse_code, "index": "", "sector": "", "status": ""},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.warning("BSE corporate actions failed for %s: %s", symbol, e)
+            return []
+
+        actions = []
+
+        # Table1 = Bonuses (better structured, has ratio)
+        for row in data.get("Table1", []):
+            ex_date = _parse_bse_date(row.get("BCRD_FROM", ""))
+            if not ex_date:
+                continue
+            ratio_text = row.get("VALUE", "")
+            multiplier = _parse_bonus_multiplier(ratio_text)
+            actions.append({
+                "symbol": symbol.upper(),
+                "ex_date": ex_date,
+                "action_type": "bonus",
+                "ratio_text": ratio_text,
+                "multiplier": multiplier,
+                "dividend_amount": None,
+                "source": "bse",
+            })
+
+        # Table2 = All actions (splits, spinoffs, buybacks, dividends)
+        for row in data.get("Table2", []):
+            purpose_code = (row.get("purpose_code") or row.get("Purpose_Code") or "").strip()
+            ex_date = _parse_bse_date(row.get("Ex_date") or row.get("ex_date") or "")
+            if not ex_date:
+                continue
+            details = row.get("Details") or row.get("details") or row.get("PURPOSE") or ""
+
+            if purpose_code == "SS":  # Stock Split
+                multiplier = _parse_split_multiplier(details)
+                actions.append({
+                    "symbol": symbol.upper(),
+                    "ex_date": ex_date,
+                    "action_type": "split",
+                    "ratio_text": details,
+                    "multiplier": multiplier,
+                    "dividend_amount": None,
+                    "source": "bse",
+                })
+            elif purpose_code == "SO":  # Spinoff/Demerger
+                actions.append({
+                    "symbol": symbol.upper(),
+                    "ex_date": ex_date,
+                    "action_type": "spinoff",
+                    "ratio_text": details,
+                    "multiplier": None,
+                    "dividend_amount": None,
+                    "source": "bse",
+                })
+            elif purpose_code == "BGM":  # Buyback
+                actions.append({
+                    "symbol": symbol.upper(),
+                    "ex_date": ex_date,
+                    "action_type": "buyback",
+                    "ratio_text": details,
+                    "multiplier": None,
+                    "dividend_amount": None,
+                    "source": "bse",
+                })
+            elif purpose_code == "DP":  # Dividend
+                amount = _parse_dividend_amount(details)
+                actions.append({
+                    "symbol": symbol.upper(),
+                    "ex_date": ex_date,
+                    "action_type": "dividend",
+                    "ratio_text": details,
+                    "multiplier": None,
+                    "dividend_amount": amount,
+                    "source": "bse",
+                })
+
+        # Deduplicate bonuses (Table1 + Table2 may overlap)
+        seen: set[tuple[str, str, str]] = set()
+        deduped: list[dict] = []
+        for a in actions:
+            key = (a["symbol"], a["ex_date"], a["action_type"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(a)
+
+        return deduped
+
+    def fetch_yfinance_corporate_actions(self, symbol: str) -> list[dict]:
+        """Fetch splits/dividends from yfinance for deeper history."""
+        import yfinance as yf
+
+        actions: list[dict] = []
+        try:
+            ticker = yf.Ticker(f"{symbol}.NS")
+
+            # Splits (includes bonuses -- yfinance can't distinguish)
+            splits = ticker.splits
+            if splits is not None and len(splits) > 0:
+                for date_idx, multiplier in splits.items():
+                    if multiplier != 0 and multiplier != 1.0:
+                        actions.append({
+                            "symbol": symbol.upper(),
+                            "ex_date": date_idx.strftime("%Y-%m-%d"),
+                            "action_type": "split",
+                            "ratio_text": f"yfinance: {multiplier:.1f}x",
+                            "multiplier": float(multiplier),
+                            "dividend_amount": None,
+                            "source": "yfinance",
+                        })
+
+            # Dividends
+            dividends = ticker.dividends
+            if dividends is not None and len(dividends) > 0:
+                for date_idx, amount in dividends.items():
+                    if amount > 0:
+                        actions.append({
+                            "symbol": symbol.upper(),
+                            "ex_date": date_idx.strftime("%Y-%m-%d"),
+                            "action_type": "dividend",
+                            "ratio_text": f"Rs.{amount:.2f} per share (split-adjusted)",
+                            "multiplier": None,
+                            "dividend_amount": float(amount),
+                            "source": "yfinance",
+                        })
+        except Exception as e:
+            logger.warning("yfinance corporate actions failed for %s: %s", symbol, e)
+
+        return actions
 
     def close(self) -> None:
         self._client.close()
