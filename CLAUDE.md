@@ -26,23 +26,10 @@ Has its own `CLAUDE.md` with full architecture docs. Key entry points:
 - Screener.in creds: `~/.config/flowtracker/screener.env`
 - FMP creds: `~/.config/flowtracker/fmp.env` (paid plan required for most endpoints)
 
-### stock-cli/ — Stock Screener CLI (`stock`)
-
-Stock screening and comparison for US and Indian markets via yfinance. Simpler 4-file layout.
-
-### portfolio/ — Standalone Scripts
-
-One-off portfolio analysis scripts. Not a package.
-
-### Supporting dataset/ — Raw Data
-
-CSV/ZIP archives of historical FII/DII data.
-
 ## Common Patterns
 
-- **Package manager:** `uv` everywhere. `uv sync` to install, `uv run` to execute.
-- **CLI framework:** Typer + Rich tables for all CLIs.
+- **Package manager:** `uv`. `uv sync` to install, `uv run` to execute.
+- **CLI framework:** Typer + Rich tables.
 - **Data models:** Pydantic v2 with `extra="ignore"` for safe dict passthrough.
 - **No test suites** exist. No linters configured.
-- **Monetary values** in flow-tracker are in crores (₹1 Cr = 10M).
-- Each project has independent `.venv` and `pyproject.toml`. Always `cd` into the project directory.
+- **Monetary values** are in crores (₹1 Cr = 10M).
