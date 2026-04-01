@@ -571,6 +571,7 @@ render_chart = tool(
     "Generate a PNG chart and return the file path for embedding in your report. "
     "Use the embed_markdown value directly in your report to show the chart. "
     "chart_type options: "
+    "STOCK CHARTS: "
     "'price' (price + SMA50/200, 7yr), "
     "'pe' (PE ratio history, 7yr), "
     "'delivery' (delivery % + volume bars, 90 days), "
@@ -583,7 +584,21 @@ render_chart = tool(
     "'shareholding' (12-quarter ownership trend lines), "
     "'fair_value_range' (bear/base/bull vs current price horizontal bar), "
     "'expense_pie' (expense breakdown pie chart), "
-    "'composite_radar' (8-factor quality score spider chart). "
+    "'composite_radar' (8-factor quality score spider chart), "
+    "'dividend_history' (dividend payout ratio & DPS over time). "
+    "SECTOR CHARTS: "
+    "'sector_mcap' (all sector stocks by market cap), "
+    "'sector_growth_bars' (sector peer revenue growth bars), "
+    "'sector_profitability_bars' (sector peer ROCE bars), "
+    "'sector_pe_distribution' (sector PE histogram with subject marked), "
+    "'sector_valuation_scatter' (PE vs ROCE scatter — bargain/avoid quadrants), "
+    "'sector_ownership_flow' (MF ownership changes — accumulation/exit). "
+    "COMPARISON CHARTS (use comma-separated symbols, e.g. symbol='HDFCBANK,ICICIBANK'): "
+    "'comparison_revenue' (indexed revenue trajectories), "
+    "'comparison_pe' (PE history overlay), "
+    "'comparison_shareholding' (FII/MF ownership trends overlay), "
+    "'comparison_radar' (quality score radars overlaid), "
+    "'comparison_margins' (OPM/NPM trends overlay). "
     "Returns: {path, embed_markdown}.",
     {"symbol": str, "chart_type": str},
 )
@@ -629,6 +644,58 @@ async def get_adjusted_eps(args):
 async def get_financial_projections(args):
     with ResearchDataAPI() as api:
         data = api.get_financial_projections(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- Sector Analysis ---
+
+
+@tool(
+    "get_sector_overview_metrics",
+    "Get industry-level overview: stock count, total market cap, median PE/PB/ROCE, "
+    "valuation range, top stocks. Looks up the industry from the given stock's classification.",
+    {"symbol": str},
+)
+async def get_sector_overview_metrics(args):
+    with ResearchDataAPI() as api:
+        data = api.get_sector_overview_metrics(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_sector_flows",
+    "Get aggregate institutional ownership changes across all stocks in the subject's industry. "
+    "Shows which stocks MFs are accumulating, which they're exiting, and net sector flow direction.",
+    {"symbol": str},
+)
+async def get_sector_flows(args):
+    with ResearchDataAPI() as api:
+        data = api.get_sector_flows(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_sector_valuations",
+    "Get all stocks in the subject's industry ranked by market cap, with key metrics: "
+    "PE, ROCE, FII%, MF%, price change. Shows where the subject ranks among peers.",
+    {"symbol": str},
+)
+async def get_sector_valuations(args):
+    with ResearchDataAPI() as api:
+        data = api.get_sector_valuations(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_upcoming_catalysts",
+    "Get upcoming events that could move the stock: earnings dates, board meetings, "
+    "ex-dividend, RBI policy, estimated results dates. Returns events within the next "
+    "N days sorted by date.",
+    {"symbol": str, "days": int},
+)
+async def get_upcoming_catalysts(args):
+    with ResearchDataAPI() as api:
+        data = api.get_upcoming_catalysts(args["symbol"], args.get("days", 90))
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -715,9 +782,10 @@ BUSINESS_AGENT_TOOLS = [
     get_quarterly_results, get_annual_financials, get_screener_ratios,
     get_valuation_snapshot, get_peer_comparison, get_expense_breakdown,
     get_consensus_estimate, get_earnings_surprises,
+    get_upcoming_catalysts,
     render_chart,  # generate PNG charts for embedding
     *_PEER_TOOLS,
-]  # 18 tools
+]  # 19 tools
 
 FINANCIAL_AGENT_TOOLS = [
     get_company_info, get_quarterly_results, get_annual_financials,
@@ -748,9 +816,10 @@ VALUATION_AGENT_TOOLS = [
     get_concall_insights,  # management guidance affects forward valuation
     get_corporate_actions, get_adjusted_eps,
     get_financial_projections,
+    get_upcoming_catalysts,
     render_chart,
     *_PEER_TOOLS,
-]  # 19 tools
+]
 
 RISK_AGENT_TOOLS = [
     get_quarterly_results, get_annual_financials, get_promoter_pledge,
@@ -759,6 +828,7 @@ RISK_AGENT_TOOLS = [
     get_valuation_snapshot, get_peer_comparison,
     get_concall_insights,  # red flags, evasive answers, risk acknowledgments from management
     get_corporate_actions,  # share capital changes are a risk factor
+    get_upcoming_catalysts,
     *_PEER_TOOLS,
 ]  # 16 tools
 
@@ -769,3 +839,11 @@ TECHNICAL_AGENT_TOOLS = [
     get_sector_benchmarks,
     render_chart,  # price + delivery charts
 ]  # 9 tools
+
+SECTOR_AGENT_TOOLS = [
+    get_company_info, get_sector_overview_metrics, get_sector_flows,
+    get_sector_valuations, get_peer_comparison,
+    get_peer_metrics, get_peer_growth, get_sector_benchmarks,
+    get_macro_snapshot, get_fii_dii_flows, get_fii_dii_streak,
+    render_chart,
+]  # 12 tools

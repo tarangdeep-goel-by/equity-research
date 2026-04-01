@@ -7,7 +7,11 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from flowtracker.screener_display import display_screen_results, display_stock_scorecard
+from flowtracker.screener_display import (
+    display_screen_results,
+    display_screen_summary,
+    display_stock_scorecard,
+)
 from flowtracker.screener_engine import ScreenerEngine
 from flowtracker.store import FlowStore
 
@@ -50,6 +54,39 @@ def screen_top(
         scores = engine.screen_all(symbols=symbols, factor=factor)
 
     display_screen_results(scores, limit)
+
+
+@app.command()
+def rank(
+    top: Annotated[int, typer.Option("--top", "-n", help="Number of stocks")] = 20,
+    factor: Annotated[str | None, typer.Option("--factor", help="Single factor ranking")] = None,
+    industry: Annotated[str | None, typer.Option("--industry", help="Filter by industry")] = None,
+    weight: Annotated[list[str] | None, typer.Option("--weight", help="Custom weight e.g. valuation=0.3")] = None,
+    min_score: Annotated[float, typer.Option("--min-score", help="Minimum composite score")] = 0,
+) -> None:
+    """Rank stocks with custom weights, industry filter, and score threshold."""
+    # Parse custom weights
+    parsed_weights: dict[str, float] | None = None
+    if weight:
+        parsed_weights = {}
+        for w in weight:
+            if "=" not in w:
+                console.print(f"[red]Invalid weight format '{w}' — use name=value (e.g. valuation=0.3)[/]")
+                raise typer.Exit(1)
+            name, val = w.split("=", 1)
+            try:
+                parsed_weights[name.strip()] = float(val.strip())
+            except ValueError:
+                console.print(f"[red]Invalid weight value in '{w}' — must be a number[/]")
+                raise typer.Exit(1)
+
+    with FlowStore() as store:
+        console.print("[dim]Scoring stocks...[/]")
+        engine = ScreenerEngine(store, weights=parsed_weights)
+        scores = engine.screen_all(factor=factor, industry=industry, min_score=min_score)
+
+    display_screen_results(scores, top)
+    display_screen_summary(scores)
 
 
 @app.command()

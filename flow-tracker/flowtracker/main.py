@@ -36,6 +36,7 @@ from flowtracker.filing_commands import app as filing_app
 from flowtracker.portfolio_commands import app as portfolio_app
 from flowtracker.alert_commands import app as alert_app
 from flowtracker.research_commands import app as research_app
+from flowtracker.catalyst_commands import app as catalyst_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -63,6 +64,7 @@ app.add_typer(filing_app)
 app.add_typer(portfolio_app)
 app.add_typer(alert_app)
 app.add_typer(research_app)
+app.add_typer(catalyst_app)
 console = Console()
 
 

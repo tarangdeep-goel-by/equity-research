@@ -41,7 +41,7 @@ def assemble_final_report(
     parts.append(f"# {company_name or symbol} ({symbol}) — Equity Research Report")
     parts.append(
         f"\n*Generated: {today} | Multi-agent research system"
-        f" (6 specialists + synthesis + verification)*\n"
+        f" (7 specialists + synthesis + verification)*\n"
     )
     parts.append("---\n")
 
@@ -59,6 +59,7 @@ def assemble_final_report(
         ("valuation", "Valuation"),
         ("ownership", "Ownership Intelligence"),
         ("risk", "Risk Assessment"),
+        ("sector", "Sector & Industry"),
         ("technical", "Technical & Market Context"),
     ]
 
@@ -191,6 +192,195 @@ def _render_html(
         )
 
     title = f"{company_name or symbol} ({symbol}) — Research Report"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        :root {{
+            --bg-dark: #1B1B1B;
+            --bg-light: #F5F0EB;
+            --surface: #EDE8E3;
+            --accent-1: #C4533A;
+            --accent-2: #2B5EA7;
+            --text-dark: #1A1612;
+            --text-light: #F5F0EB;
+            --green: #4ecca3;
+            --red: #e94560;
+            --yellow: #f0a500;
+        }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-light);
+            line-height: 1.7;
+            font-size: 16px;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }}
+        h1 {{
+            font-family: 'Raleway', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 300;
+            color: var(--accent-1);
+            margin: 1.5rem 0;
+            border-bottom: 2px solid var(--accent-1);
+            padding-bottom: 0.5rem;
+        }}
+        h2 {{
+            font-family: 'Raleway', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--accent-2);
+            margin: 2rem 0 1rem;
+        }}
+        h3 {{
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-light);
+            margin: 1.5rem 0 0.5rem;
+        }}
+        p {{ margin: 0.8rem 0; }}
+        a {{ color: var(--accent-2); text-decoration: underline; }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }}
+        th {{
+            background: var(--accent-2);
+            color: white;
+            padding: 0.6rem;
+            text-align: left;
+            font-weight: 700;
+        }}
+        td {{
+            padding: 0.5rem 0.6rem;
+            border-bottom: 1px solid #333;
+        }}
+        tr:nth-child(even) {{ background: rgba(255,255,255,0.03); }}
+        tr:hover {{ background: rgba(255,255,255,0.07); }}
+        strong {{ color: var(--accent-1); }}
+        em {{ color: #aaa; font-style: italic; }}
+        blockquote {{
+            border-left: 3px solid var(--accent-1);
+            padding: 0.5rem 1rem;
+            margin: 1rem 0;
+            background: rgba(255,255,255,0.03);
+            font-style: italic;
+        }}
+        code {{
+            background: rgba(255,255,255,0.08);
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.85em;
+        }}
+        pre {{
+            background: rgba(255,255,255,0.05);
+            padding: 1rem;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }}
+        pre.mermaid {{
+            background: transparent;
+            text-align: center;
+        }}
+        hr {{
+            border: none;
+            border-top: 1px solid #333;
+            margin: 2rem 0;
+        }}
+        ul, ol {{ padding-left: 1.5rem; margin: 0.5rem 0; }}
+        li {{ margin: 0.3rem 0; }}
+        .metadata {{
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }}
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    {html_body}
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({{ startOnLoad: true, theme: 'dark' }});
+    </script>
+</body>
+</html>"""
+
+
+def assemble_comparison_report(
+    symbols: list[str],
+    comparison_envelope,
+) -> tuple[Path, Path]:
+    """Assemble a comparison report from the comparison agent's output.
+
+    Returns (html_path, md_path).
+    """
+    report_md = comparison_envelope.report
+    today = date.today().isoformat()
+
+    sym_slug = "-vs-".join(s.lower() for s in symbols)
+
+    # Save markdown to vault
+    vault_dir = _VAULT_BASE / "_comparisons" / sym_slug
+    vault_dir.mkdir(parents=True, exist_ok=True)
+    md_path = vault_dir / f"{today}.md"
+    md_path.write_text(report_md, encoding="utf-8")
+
+    # Save HTML to reports dir
+    _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    html_path = _REPORTS_DIR / f"{sym_slug}-comparison.html"
+    html_content = _render_comparison_html(symbols, report_md)
+    html_path.write_text(html_content, encoding="utf-8")
+
+    return html_path, md_path
+
+
+def _render_comparison_html(symbols: list[str], md_content: str) -> str:
+    """Render comparison report as styled HTML, reusing thesis report styling."""
+    # Extract mermaid blocks before markdown conversion
+    mermaid_blocks: dict[str, str] = {}
+    counter = 0
+
+    def replace_mermaid(match: re.Match) -> str:
+        nonlocal counter
+        counter += 1
+        placeholder = f"MERMAID_PLACEHOLDER_{counter}"
+        mermaid_blocks[placeholder] = match.group(1).strip()
+        return placeholder
+
+    md_processed = re.sub(
+        r"```mermaid\s*\n(.*?)```",
+        replace_mermaid,
+        md_content,
+        flags=re.DOTALL,
+    )
+
+    html_body = markdown.markdown(
+        md_processed,
+        extensions=["tables", "fenced_code", "codehilite", "toc"],
+    )
+
+    for placeholder, mermaid_code in mermaid_blocks.items():
+        html_body = html_body.replace(
+            f"<p>{placeholder}</p>",
+            f'<pre class="mermaid">{mermaid_code}</pre>',
+        )
+        html_body = html_body.replace(
+            placeholder,
+            f'<pre class="mermaid">{mermaid_code}</pre>',
+        )
+
+    title = f"Comparison: {' vs '.join(symbols)}"
 
     return f"""<!DOCTYPE html>
 <html lang="en">

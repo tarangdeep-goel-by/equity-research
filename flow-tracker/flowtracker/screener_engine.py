@@ -23,12 +23,26 @@ _WEIGHTS = {
 }
 
 
+def _normalize_weights(weights: dict) -> dict:
+    """Validate keys against _WEIGHTS, fill missing with 0, normalize to sum 1.0."""
+    valid_keys = set(_WEIGHTS.keys())
+    unknown = set(weights.keys()) - valid_keys
+    if unknown:
+        logger.warning("Unknown weight keys ignored: %s", unknown)
+    merged = {k: weights.get(k, 0) for k in valid_keys}
+    total = sum(merged.values())
+    if total <= 0:
+        raise ValueError("Weights must sum to a positive number")
+    return {k: v / total for k, v in merged.items()}
+
+
 class ScreenerEngine:
     """Multi-factor stock screening engine."""
 
-    def __init__(self, store: FlowStore) -> None:
+    def __init__(self, store: FlowStore, weights: dict[str, float] | None = None) -> None:
         self._store = store
         self._cache: dict[str, dict] = {}
+        self._weights = _normalize_weights(weights) if weights else dict(_WEIGHTS)
 
     def score_stock(self, symbol: str) -> StockScore | None:
         """Compute full scorecard for a single stock."""
@@ -46,7 +60,7 @@ class ScreenerEngine:
         total_weight = 0.0
         weighted_sum = 0.0
         for f in factors:
-            w = _WEIGHTS.get(f.factor, 0)
+            w = self._weights.get(f.factor, 0)
             if f.score >= 0:  # -1 means no data
                 weighted_sum += f.score * w
                 total_weight += w
@@ -67,17 +81,31 @@ class ScreenerEngine:
         )
 
     def screen_all(
-        self, symbols: list[str] | None = None, factor: str | None = None,
+        self,
+        symbols: list[str] | None = None,
+        factor: str | None = None,
+        industry: str | None = None,
+        min_score: float = 0,
     ) -> list[StockScore]:
         """Score and rank all stocks. Optionally filter to a single factor."""
         if symbols is None:
             symbols = self._store.get_all_scanner_symbols()
+
+        # Filter by industry if requested
+        if industry:
+            constituents = self._store.get_index_constituents()
+            industry_symbols = {c.symbol for c in constituents if c.industry == industry}
+            symbols = [s for s in symbols if s in industry_symbols]
 
         scores: list[StockScore] = []
         for sym in symbols:
             score = self.score_stock(sym)
             if score:
                 scores.append(score)
+
+        # Filter by min_score
+        if min_score > 0:
+            scores = [s for s in scores if s.composite_score >= min_score]
 
         # Sort by composite or single factor
         if factor and factor in _WEIGHTS:
