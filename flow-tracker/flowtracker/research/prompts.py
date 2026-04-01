@@ -2138,13 +2138,35 @@ You will receive the stock symbol and company context in the user message. Throu
     - `sector_ownership_flow` — MF accumulation vs exit bar chart. Use in Section 4 (Institutional Money Flow).
     You can also use stock-level charts like `revenue_profit`, `roce_trend` for the subject company.
 
-### Phase 4: Web Research (for TAM, regulation, and industry trends)
-13. `WebSearch` — Search for industry reports, TAM estimates, regulatory developments, and sector news. Use queries like:
+### Phase 4: Price & Performance Context
+13. `get_price_performance` — Stock vs Nifty 50 and sector index returns (1M/3M/6M/1Y). Use this to assess whether the subject company is outperforming or underperforming its sector — and whether the sector itself is outperforming the broader market.
+
+### Phase 5: Web Research (for TAM, regulation, and sector-specific KPIs)
+14. `WebSearch` — Search for industry reports, TAM estimates, regulatory developments, and sector news. Use queries like:
     - "{industry} India market size TAM 2025"
     - "{industry} India regulatory framework"
     - "{industry} India growth drivers headwinds"
     - "{company} market share India"
-14. `WebFetch` — Fetch and read specific web pages for detailed industry data, government policy documents, or analyst sector reports.
+15. `WebFetch` — Fetch and read specific web pages for detailed industry data, government policy documents, or analyst sector reports.
+
+**IMPORTANT — Sector-Specific KPIs:** Every sector has non-financial metrics that drive stock prices more than reported earnings. You MUST search for and report on these. Here is your framework:
+
+| Sector | Key Non-Financial KPIs to Research |
+|--------|-----------------------------------|
+| **Banks/NBFCs** | CASA ratio, Gross NPA %, Net NPA %, Credit cost, Advances growth, Deposit growth, Slippage ratio |
+| **IT Services** | Attrition rate, Deal TCV (Total Contract Value), Revenue per employee, Utilization rate, Offshoring mix |
+| **Pharma** | ANDA pipeline, USFDA observations/warning letters, Domestic vs Export mix, API vs Formulations split |
+| **FMCG** | Volume growth vs Price-led growth, Rural vs Urban split, Distribution reach (direct/indirect), Category penetration |
+| **Auto & Auto Components** | Monthly dispatch numbers, Inventory days at dealer, EV mix %, Export share, Order book |
+| **Cement** | Capacity utilization, Realization per tonne, Power & fuel cost per tonne, Clinker ratio, Logistics cost |
+| **Metals & Mining** | Realization per tonne, Cost per tonne (AISC for gold), Capacity expansion plans, Global commodity price sensitivity |
+| **Real Estate** | Pre-sales value, Collections, Launch pipeline, Unsold inventory months, Net debt to equity |
+| **Telecom** | ARPU (Average Revenue Per User), Subscriber additions/churn, Data consumption per user, Capex/subscriber |
+| **Chemicals** | Capacity utilization, Product mix (commodity vs specialty), Import substitution share, China+1 beneficiary status |
+| **Power/Utilities** | PLF (Plant Load Factor), PPA mix (regulated vs merchant), Fuel cost trajectory, Renewable capacity addition |
+| **Insurance** | New Business Premium growth, Persistency ratios (13/61 month), Combined ratio, Solvency ratio, VNB margin |
+
+Use `WebSearch` to find the latest values for these KPIs from investor presentations, concall transcripts, or analyst reports. Present them in a dedicated section alongside the financial comparison.
 
 ## Report Sections (produce ALL of these)
 

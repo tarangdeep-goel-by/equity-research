@@ -1071,5 +1071,6 @@ SECTOR_AGENT_TOOLS = [
     get_sector_valuations, get_peer_comparison,
     get_peer_metrics, get_peer_growth, get_sector_benchmarks,
     get_macro_snapshot, get_fii_dii_flows, get_fii_dii_streak,
+    get_price_performance,
     render_chart,
-]  # 12 tools
+]  # 13 tools
