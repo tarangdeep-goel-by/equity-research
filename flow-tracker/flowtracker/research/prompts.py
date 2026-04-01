@@ -661,6 +661,21 @@ End your report with a JSON code block containing the structured briefing. This 
 - **Verify your arithmetic.** Before publishing any formula (Revenue = A × B = C), check that A × B actually equals C. If you show a breakdown that should sum to a total, verify it sums correctly. For banks: don't confuse gross interest earned with NII. For all companies: don't mix gross revenue with net revenue. If numbers from different sources don't reconcile, say so explicitly.
 - **Be honest about what you don't know.** "I couldn't find segment-level revenue data — the company doesn't disclose it" is fine. Never fabricate or guess numbers.
 - **No generic AI-speak.** If a sentence could apply to any company, delete it. "The company has a strong competitive position" says nothing. "A new supplier trying to match the company's 194M buyer base would need 10+ years of traffic building" says something.
+
+## Moat Classification (Morningstar Framework)
+For EVERY stock, classify the competitive advantage using these 5 pillars:
+1. **Switching Costs** — How painful is it for customers to leave? Consider contractual lock-in, data migration costs, workflow integration, regulatory barriers to switching.
+2. **Network Effects** — Does the product get better with more users? Consider marketplace dynamics (more buyers → more sellers), platform effects, data network effects.
+3. **Intangible Assets** — Patents, regulatory licenses, brand power? In India: RBI banking licenses, SEBI registrations, spectrum allocations, pharma ANDAs, FMCG brand recall.
+4. **Cost Advantage** — Scale, proprietary process, access to cheap inputs? Consider India-specific: proximity to raw materials, labor arbitrage, government subsidies, captive power.
+5. **Efficient Scale** — Natural monopoly or oligopoly limiting competition? Consider: airports, ports, gas pipelines, power transmission, exchanges.
+
+You MUST output a structured moat assessment in your report:
+- **Moat Width:** None / Narrow / Wide
+- **Primary Moat Source:** [one of the 5 pillars above]
+- **Evidence:** [specific data-backed evidence from the company's financials, market position, or concall commentary]
+- **Moat Trend:** Strengthening / Stable / Eroding — with evidence for your assessment
+
 - **Use mermaid diagrams** where they add clarity. At minimum include:
   1. Business model flow showing how value and money move between players
   2. Revenue breakdown pie chart (if multiple segments)
@@ -888,6 +903,30 @@ End your report with a JSON code block containing the structured briefing. This 
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
+
+## BFSI Adaptation Framework
+
+**CRITICAL:** If `get_company_info` returns a bank, NBFC, or financial services company, you MUST switch to the BFSI analysis framework:
+
+### BFSI-Specific Metrics (use `get_bfsi_metrics`)
+- **NIM (Net Interest Margin):** NII / Total Assets. The core profitability metric for banks — equivalent to operating margin for non-financials. NIM > 3% is good, > 4% is excellent for Indian banks.
+- **ROA:** Net Income / Total Assets. Banks operate on thin ROA (1-2% is excellent) because of high leverage.
+- **Cost-to-Income:** Operating expenses / Operating income. Below 45% = efficient bank. Above 55% = inefficient.
+- **Equity Multiplier:** Total Assets / Net Worth. True bank leverage including deposits. 10-15x is normal for Indian banks.
+- **P/B Ratio:** Price / Book Value per share. Banks trade at P/B, not P/E. P/B > 2.5x = premium bank (HDFC Bank), P/B < 1x = distressed or PSU bank.
+
+### What to SKIP for BFSI
+- Do NOT compute EBITDA, operating margin, or working capital metrics — they're meaningless for banks
+- CFO/PAT (cash conversion) is meaningless — use `get_earnings_quality` which will return "skipped" with explanation
+- Gross margin doesn't exist for banks
+- Capex cycle / CWIP is irrelevant — banks don't have manufacturing assets
+
+### What to EMPHASIZE for BFSI
+- NIM trend (expanding = more profitable lending, compressing = competitive pressure)
+- Credit cost / provisioning trajectory (not available in our data — note this limitation)
+- Deposit franchise strength (CASA ratio not available — note limitation)
+- Book value growth rate — the key long-term value driver for banks
+- Advances growth vs deposit growth (check from revenue/interest trends)
 
 ## Writing Rules
 
@@ -1487,6 +1526,17 @@ End your report with a JSON code block containing the structured briefing. This 
 - **Peer comparison is not optional.** No valuation is complete without showing how the company's multiples compare to its closest competitors. Use `get_peer_metrics` and `get_sector_benchmarks` in every report.
 - **Handle missing data gracefully.** If DCF data returns a 403 or is empty, say "DCF data is not available for this stock" and proceed with the other two methods. Never fabricate a DCF estimate.
 - **Use mermaid diagrams** where they clarify valuation context. An `xychart-beta` for PE band history or a bar chart comparing peer valuations can make the analysis more intuitive.
+
+## BFSI Valuation Framework
+
+**CRITICAL:** For banks and NBFCs, standard P/E-based valuation is secondary. Switch to these methods:
+
+1. **P/B-Based Valuation (Primary):** Banks should be valued on Price-to-Book. Use `get_bfsi_metrics` for book value per share and P/B trend. Compare current P/B with 5Y historical P/B band and peers.
+2. **Residual Income / Excess Return:** Fair P/B = ROE / Cost of Equity. If ROE = 16% and CoE = 14%, fair P/B = 1.14x. If actual P/B is 2.5x, the market is pricing in sustained high ROE.
+3. **Reverse DCF:** Use `get_reverse_dcf` which automatically switches to FCFE model (discounting net income at cost of equity) for BFSI. Compare implied growth with historical book value growth.
+4. **Gordon Growth Model:** For stable banks, P/B = (ROE - g) / (CoE - g). Use this for mature PSU banks with stable ROE.
+
+**Do NOT use for banks:** EV/EBITDA (meaningless), standard DCF on CFO (CFO is distorted by loan book growth), operating margin analysis.
 """
 
 AGENT_PROMPTS["valuation"] = VALUATION_AGENT_PROMPT

@@ -777,6 +777,126 @@ async def get_upcoming_catalysts(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+@tool(
+    "get_earnings_quality",
+    "Earnings quality analysis: CFO/PAT ratio, CFO/EBITDA ratio, accrual ratio (5-10Y trend). "
+    "Signals high/low cash conversion quality. NOT available for banks/NBFCs (requires NPA data).",
+    {"symbol": str},
+)
+async def get_earnings_quality(args):
+    with ResearchDataAPI() as api:
+        data = api.get_earnings_quality(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_piotroski_score",
+    "Piotroski F-Score (0-9): profitability, leverage, operating efficiency. Adapted for BFSI (NIM proxy for gross margin). Uses split/bonus-adjusted shares for dilution check.",
+    {"symbol": str},
+)
+async def get_piotroski_score(args):
+    with ResearchDataAPI() as api:
+        data = api.get_piotroski_score(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_beneish_score",
+    "Beneish M-Score: earnings manipulation probability. 8-variable model. Skipped for BFSI. Returns null if any variable can't be computed (no defaults).",
+    {"symbol": str},
+)
+async def get_beneish_score(args):
+    with ResearchDataAPI() as api:
+        data = api.get_beneish_score(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_reverse_dcf",
+    "Reverse DCF: solve for implied growth rate that justifies current market cap. "
+    "Uses FCFF model (WACC) for non-BFSI, FCFE model (Ke) for banks. "
+    "Compares implied growth with historical 3Y/5Y revenue CAGR.",
+    {"symbol": str},
+)
+async def get_reverse_dcf(args):
+    with ResearchDataAPI() as api:
+        data = api.get_reverse_dcf(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_capex_cycle",
+    "CWIP/Capex tracking with phase detection (Investing/Commissioning/Harvesting/Mature). "
+    "10Y trend of CWIP/NetBlock, asset turnover, capex intensity. Not applicable to BFSI.",
+    {"symbol": str},
+)
+async def get_capex_cycle(args):
+    with ResearchDataAPI() as api:
+        data = api.get_capex_cycle(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_common_size_pl",
+    "Common Size P&L: all expense items as %% of revenue (10Y trend). "
+    "For BFSI, denominator is Total Income (interest earned + other income). "
+    "Highlights biggest cost and fastest-growing cost category.",
+    {"symbol": str},
+)
+async def get_common_size_pl(args):
+    with ResearchDataAPI() as api:
+        data = api.get_common_size_pl(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_revenue_estimates",
+    "Consensus revenue estimates: avg/low/high for current and next quarter/year. "
+    "Values in crores. Coverage limited to ~Nifty 100-150 stocks.",
+    {"symbol": str},
+)
+async def get_revenue_estimates(args):
+    with ResearchDataAPI() as api:
+        data = api.get_revenue_estimates(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_growth_estimates",
+    "Growth estimates: stock growth vs index growth for current/next quarter and year. "
+    "Includes long-term growth (LTG) estimate. Coverage limited to ~Nifty 100-150 stocks.",
+    {"symbol": str},
+)
+async def get_growth_estimates(args):
+    with ResearchDataAPI() as api:
+        data = api.get_growth_estimates(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_price_performance",
+    "Price return vs Nifty 50 and sector index (1M/3M/6M/1Y). "
+    "Price return only — excludes dividends. Uses local DB for stock prices, live yfinance for index.",
+    {"symbol": str},
+)
+async def get_price_performance(args):
+    with ResearchDataAPI() as api:
+        data = api.get_price_performance(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_bfsi_metrics",
+    "Bank/NBFC-specific metrics: NIM, ROA, Cost-to-Income, P/B, equity multiplier (5Y trend). "
+    "Only for BFSI stocks — returns skipped for non-BFSI and insurance.",
+    {"symbol": str},
+)
+async def get_bfsi_metrics(args):
+    with ResearchDataAPI() as api:
+        data = api.get_bfsi_metrics(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
 _PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_valuation_matrix, get_sector_benchmarks]
 
 
@@ -829,6 +949,9 @@ RESEARCH_TOOLS = [
     get_corporate_actions,
     get_adjusted_eps,
     get_financial_projections,
+    get_piotroski_score,
+    get_reverse_dcf, get_capex_cycle, get_common_size_pl,
+    get_revenue_estimates, get_growth_estimates, get_price_performance,
 ]
 
 # Subset for business research — qualitative + key financials for context
@@ -884,9 +1007,13 @@ FINANCIAL_AGENT_TOOLS = [
     get_financial_projections,
     get_estimate_revisions, get_estimate_momentum,
     get_dividend_history,
+    get_earnings_quality, get_piotroski_score, get_beneish_score,
+    get_reverse_dcf, get_capex_cycle, get_common_size_pl,
+    get_revenue_estimates,
+    get_bfsi_metrics,
     render_chart,
     *_PEER_TOOLS,
-]  # 21 tools
+]  # 29 tools
 
 OWNERSHIP_AGENT_TOOLS = [
     get_shareholding, get_shareholding_changes, get_insider_transactions,
@@ -909,6 +1036,9 @@ VALUATION_AGENT_TOOLS = [
     get_events_calendar,
     get_dividend_history,
     get_upcoming_catalysts,
+    get_reverse_dcf,
+    get_revenue_estimates, get_growth_estimates, get_price_performance,
+    get_bfsi_metrics,
     render_chart,
     *_PEER_TOOLS,
 ]
@@ -922,16 +1052,19 @@ RISK_AGENT_TOOLS = [
     get_concall_insights,  # red flags, evasive answers, risk acknowledgments from management
     get_corporate_actions,  # share capital changes are a risk factor
     get_upcoming_catalysts,
+    get_earnings_quality, get_piotroski_score, get_beneish_score,
+    get_bfsi_metrics,
     *_PEER_TOOLS,
-]  # 16 tools
+]  # 20 tools
 
 TECHNICAL_AGENT_TOOLS = [
     get_technical_indicators, get_chart_data, get_delivery_trend,
     get_valuation_snapshot, get_bulk_block_deals,
     get_fii_dii_flows, get_fii_dii_streak,
     get_sector_benchmarks,
+    get_price_performance,
     render_chart,  # price + delivery charts
-]  # 9 tools
+]  # 10 tools
 
 SECTOR_AGENT_TOOLS = [
     get_company_info, get_sector_overview_metrics, get_sector_flows,
