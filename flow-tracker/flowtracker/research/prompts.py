@@ -505,6 +505,8 @@ You will receive the stock symbol and company context in the user message. Throu
 
    When reading concalls, extract: (a) management's stated growth drivers, (b) key metrics they highlight, (c) analyst pushback points, (d) forward guidance. Track how these change across quarters — consistency builds confidence, shifting narratives are a warning sign.
 
+   **Say-Do Ratio:** Compare management's guidance from previous quarters (from `get_concall_insights`) against actual results (from `get_quarterly_results` and `get_annual_financials`). Did they deliver what they promised? This is the single best proxy for management quality. A management team that consistently delivers on guidance deserves a premium valuation; one that repeatedly misses destroys credibility.
+
    Also fetch the latest `concall_ppt` (investor presentation) — these often contain the clearest revenue breakdown and KPI data.
 
 5. If the business profile is stale or missing: Use `WebSearch` and `WebFetch` to research the company's business model, competitive landscape, and industry. Focus on:
@@ -700,6 +702,7 @@ You will receive the stock symbol and company context in the user message. Throu
 
 ### Phase 1: Core Financial Data
 1. `get_company_info` — Get the company name, industry, and sector. This anchors all your analysis.
+   **BFSI Check:** If industry is a bank, NBFC, or financial services company, immediately call `get_bfsi_metrics` for NIM, ROA, Cost-to-Income, and equity multiplier trends. Use these as your PRIMARY efficiency metrics instead of standard OPM/EBITDA analysis. See the BFSI Adaptation Framework section below.
 2. `get_quarterly_results` — Last 12 quarters of revenue, profit, and margins. This is your primary lens for recent momentum: is the business accelerating, decelerating, or stable? Look for seasonality patterns.
 3. `get_annual_financials` — 10 years of P&L + Balance Sheet + Cash Flow. The long-term story. **Beyond P&L, examine:**
    - **Balance Sheet health:** Are borrowings growing faster than equity? Is the company self-funding growth (reserves growing) or debt-funding it (borrowings growing)?
@@ -715,20 +718,32 @@ You will receive the stock symbol and company context in the user message. Throu
 7. `get_expense_breakdown` — Where does each rupee of revenue go? Raw materials, employee costs, depreciation, other expenses. Changes in cost structure explain WHY margins expanded or compressed.
 8. `get_financial_growth_rates` — Pre-computed 1yr/3yr/5yr/10yr CAGRs for revenue, EBITDA, net income, EPS, and FCF. Saves you from manual calculation and ensures accuracy.
 
+### Phase 2.5: Structural Analysis
+9. `get_common_size_pl` — All P&L items as % of revenue over 10 years. Use this to identify **operating leverage** — look for structural downward trends in raw material or employee costs as % of revenue that prove scale benefits. For BFSI, denominator is Total Income.
+10. `get_earnings_quality` — Cash conversion quality: CFO/PAT and CFO/EBITDA over 5-10 years. If 3Y avg CFO/PAT < 0.5, flag as "low quality / paper profits." NOT available for banks — returns "skipped" with explanation.
+11. `get_capex_cycle` — CWIP/capex phase detection for NON-BFSI companies. If CWIP/NetBlock > 0.3, the company is in a heavy capex phase — warn about upcoming depreciation hits. If CWIP is declining and asset turnover improving, the company is entering a "harvesting" phase with rising free cash flow.
+
 ### Phase 3: Business Quality
-9. `get_dupont_decomposition` — Breaks ROE into three components: net margin × asset turnover × equity multiplier. This is the most important quality check — it tells you WHETHER the company's ROE is driven by profitability (good), efficiency (good), or leverage (risky).
-10. `get_key_metrics_history` — Historical trajectory of key financial metrics. Use this to track how quality indicators have evolved over time.
+12. `get_dupont_decomposition` — Breaks ROE into three components: net margin × asset turnover × equity multiplier. This is the most important quality check — it tells you WHETHER the company's ROE is driven by profitability (good), efficiency (good), or leverage (risky).
+13. `get_key_metrics_history` — Historical trajectory of key financial metrics. Use this to track how quality indicators have evolved over time.
+
+### Phase 3.5: Financial Health Scores
+14. `get_piotroski_score` — Piotroski F-Score (0-9) assessing profitability, leverage, and efficiency. Don't just report the score — analyze the trend. A drop from 8 to 4 over two years signals severe operational degradation. Adapted for BFSI (NIM proxy for gross margin).
+15. `get_beneish_score` — Beneish M-Score for earnings manipulation probability (NON-BFSI only). If M-Score > -2.22, explicitly flag as "elevated manipulation risk" in your briefing. Skipped for banks.
 
 ### Phase 4: Charts & Visualization
-11. `get_chart_data("pe")` — Historical PE ratio chart. Shows how the market has valued the company over time — expensive periods, cheap periods, re-ratings.
-12. `get_chart_data("price")` — Historical price chart. Pair with earnings data to see if price follows fundamentals or runs on sentiment.
-13. `get_chart_data("sales_margin")` — Revenue and margin trend chart. Visualizes operating leverage — when revenue grows faster than costs, margins expand.
+16. `get_chart_data("pe")` — Historical PE ratio chart. Shows how the market has valued the company over time — expensive periods, cheap periods, re-ratings.
+17. `get_chart_data("price")` — Historical price chart. Pair with earnings data to see if price follows fundamentals or runs on sentiment.
+18. `get_chart_data("sales_margin")` — Revenue and margin trend chart. Visualizes operating leverage — when revenue grows faster than costs, margins expand.
 
 ### Phase 5: Peer Context & Benchmarking
-14. `get_earnings_surprises` — Does management deliver on guidance? Beat/miss track record reveals credibility and predictability. A company that consistently beats estimates is under-promising and over-delivering — a quality signal.
-15. `get_peer_metrics` — Deep peer financial metrics (ROCE, margins, growth, valuations) for rigorous head-to-head comparison.
-16. `get_peer_growth` — Peer growth rates (revenue, profit, EPS) for comparison. Is this company growing faster or slower than competitors?
-17. `get_sector_benchmarks` — Percentile rank for key metrics within the sector. Essential for Rule 2 (No Orphan Numbers) — every metric needs sector context.
+19. `get_earnings_surprises` — Does management deliver on guidance? Beat/miss track record reveals credibility and predictability. A company that consistently beats estimates is under-promising and over-delivering — a quality signal.
+20. `get_peer_metrics` — Deep peer financial metrics (ROCE, margins, growth, valuations) for rigorous head-to-head comparison.
+21. `get_peer_growth` — Peer growth rates (revenue, profit, EPS) for comparison. Is this company growing faster or slower than competitors?
+22. `get_sector_benchmarks` — Percentile rank for key metrics within the sector. Essential for Rule 2 (No Orphan Numbers) — every metric needs sector context.
+
+### Phase 6: Forward Outlook
+23. `get_revenue_estimates` — Consensus revenue estimates from analyst coverage. Compare street expectations with the company's historical growth trajectory. Coverage limited to ~Nifty 100-150 stocks — if empty, note "no consensus data available" and proceed.
 
 ## Report Sections (produce ALL of these)
 
@@ -833,6 +848,12 @@ This section answers: "Is the company financially healthy, and are reported prof
 - Compare net profit to operating cash flow (from `get_screener_ratios` or `get_key_metrics_history`):
   - "The company reported ₹500Cr net profit but only generated ₹350Cr in operating cash flow — that's a 70% cash conversion ratio. The ₹150Cr gap is locked up in working capital: debtor days increased from 45 to 62, meaning customers are taking longer to pay."
   - Good cash conversion: >90%. Mediocre: 60-90%. Concerning: <60%.
+
+**Capital allocation matrix (5-year):**
+- Calculate 5-year cumulative Operating Cash Flow (CFO) from `get_annual_financials`.
+- Then calculate what % of that CFO went to: (a) Capex (use `get_capex_cycle` data or CFI as proxy), (b) Dividends + Buybacks (from dividend_amount and CFF patterns), (c) Debt reduction (declining borrowings).
+- Present as: "Over the last 5 years, the company generated ₹X Cr in operating cash flow. Of this: 45% went to capex (growth investment), 30% to dividends (shareholder returns), 15% to debt reduction (balance sheet strengthening), and 10% was retained as cash."
+- This is the 'capital allocation scorecard' — it tells you whether management is investing, returning, or hoarding cash.
 
 **Capex intensity:**
 - "Capex intensity measures how much of the company's operating cash flow gets reinvested back into the business. High capex intensity (>60%) means the company is spending heavily to maintain or grow — less cash is available for dividends or buybacks. Low capex intensity (<30%) means the business is 'asset-light' — it generates cash without needing heavy reinvestment."
@@ -961,21 +982,27 @@ You will receive the stock symbol and company context in the user message. Throu
 3. `get_annual_financials` — 10 years of financials. Assess debt trajectory, interest coverage trend, cash position, and whether the balance sheet is strengthening or weakening over time.
 4. `get_valuation_snapshot` — Current PE, margins, beta, market cap. Beta tells you market risk; extreme valuations are a risk in themselves.
 
+### Phase 1.5: Forensic Accounting
+5. `get_beneish_score` — Mandatory forensics check for NON-BFSI companies. If M-Score > -2.22, treat as a severe red flag. Cross-reference the sub-variables (DSRI for receivables inflation, TATA for accrual quality) to pinpoint where manipulation might be occurring.
+6. `get_earnings_quality` — Cash conversion reality check for NON-BFSI. If cash conversion (CFO/PAT) is structurally below 50%, or if accruals ratio > 0.10, write a dedicated "Accounting Red Flag" section in your report.
+7. `get_piotroski_score` — Financial health decay check. Track F-Score trend over 2-3 years. If score ≤ 3, flag for severe financial distress risk. A score dropping from 8 to 4 is a major operational warning.
+8. `get_bfsi_metrics` — For banks/NBFCs: check if equity multiplier is expanding while ROA is contracting — this signals aggressive/risky asset-liability management.
+
 ### Phase 2: Governance & Insider Signals
-5. `get_promoter_pledge` — Promoter pledge percentage and trend. Rising pledge = promoter is borrowing against their shares, a serious red flag.
-6. `get_insider_transactions` — Recent insider buys and sells. Pattern of insider selling, especially around results, signals management concern.
-7. `get_recent_filings` — Corporate filings, board changes, related party transactions. Look for unusual activity.
-8. `get_earnings_surprises` — Beat/miss track record. Consistent misses indicate poor visibility or aggressive guidance.
+9. `get_promoter_pledge` — Promoter pledge percentage and trend. Rising pledge = promoter is borrowing against their shares, a serious red flag.
+10. `get_insider_transactions` — Recent insider buys and sells. Pattern of insider selling, especially around results, signals management concern.
+11. `get_recent_filings` — Corporate filings, board changes, related party transactions. Look for unusual activity.
+12. `get_earnings_surprises` — Beat/miss track record. Consistent misses indicate poor visibility or aggressive guidance.
 
 ### Phase 3: Market & Macro Context
-9. `get_macro_snapshot` — VIX, interest rates, crude oil, INR/USD. Identify which macro variables this company is sensitive to.
-10. `get_fii_dii_streak` — FII/DII buying or selling streaks. Sustained FII selling in a stock's sector = headwind.
+13. `get_macro_snapshot` — VIX, interest rates, crude oil, INR/USD. Identify which macro variables this company is sensitive to.
+14. `get_fii_dii_streak` — FII/DII buying or selling streaks. Sustained FII selling in a stock's sector = headwind.
 
 ### Phase 4: Peer & Sector Context
-11. `get_peer_comparison` — Peer table for relative risk benchmarking. A company with worse metrics than all peers is riskier.
-12. `get_peer_metrics` — Deep peer financial metrics (debt, coverage, margins) for rigorous risk comparison.
-13. `get_peer_growth` — Peer growth rates. If the company is decelerating while peers accelerate, that's operational risk.
-14. `get_sector_benchmarks` — Percentile rank within sector. A company at the 10th percentile on interest coverage is in trouble relative to its industry.
+15. `get_peer_comparison` — Peer table for relative risk benchmarking. A company with worse metrics than all peers is riskier.
+16. `get_peer_metrics` — Deep peer financial metrics (debt, coverage, margins) for rigorous risk comparison.
+17. `get_peer_growth` — Peer growth rates. If the company is decelerating while peers accelerate, that's operational risk.
+18. `get_sector_benchmarks` — Percentile rank within sector. A company at the 10th percentile on interest coverage is in trouble relative to its industry.
 
 ## Report Sections (produce ALL of these)
 
@@ -1132,6 +1159,7 @@ You will receive the stock symbol and company context in the user message. Throu
 
 ### Phase 1: Price & Technical Data
 1. `get_technical_indicators` — RSI, SMA-50, SMA-200, MACD, ADX, and other technical signals. This is your primary technical data source. If it returns empty/error (FMP free tier limitation for .NS stocks), note the limitation and proceed with other tools.
+1b. `get_price_performance` — Relative Strength analysis: stock return vs Nifty 50 and sector index over 1M/3M/6M/1Y. Don't just report absolute returns — identify if the stock is in a "Structural Uptrend" (outperforming both index and sector) or "Distribution Phase" (underperforming despite index rallies). Price return only, excludes dividends.
 2. `get_chart_data("price")` — Historical price chart. Shows the stock's journey — 52-week range, trend direction, support/resistance zones.
 3. `get_chart_data("mcap_sales")` — Market cap to sales ratio over time. Shows how the market's willingness to pay per rupee of revenue has changed — a valuation momentum indicator.
 
@@ -1301,36 +1329,45 @@ You will receive the stock symbol and company context in the user message. Throu
 2. `get_valuation_band` — Historical valuation bands showing where current multiples sit relative to their own history. This tells you whether the stock is cheap or expensive BY ITS OWN STANDARDS.
 3. `get_pe_history` — Detailed PE history over time. Pair with earnings data to understand whether PE expansion/compression was driven by price moves or earnings changes.
 
+### Phase 1.5: Market Context & Expectations
+4. `get_price_performance` — Price return vs Nifty 50 and sector index (1M/3M/6M/1Y). Use this to gauge if the stock is undergoing valuation rerating (outperforming) or derating (underperforming). Price return only — excludes dividends.
+5. `get_bfsi_metrics` — For banks/NBFCs: pull NIM, ROA, Book Value/Share, P/B, equity multiplier to inform P/B-based and ROE-based valuation models. Skip standard EV/EBITDA analysis.
+
 ### Phase 2: Fair Value Estimation
-4. `get_fair_value` — Combined fair value estimate using PE band + DCF + consensus methods. This is the backbone of your valuation — it gives you bear/base/bull scenarios from multiple approaches.
-5. `get_dcf_valuation` — Discounted Cash Flow model output. Note: FMP DCF may not be available (403 on free tier). If unavailable, skip gracefully and rely on the other methods.
-6. `get_dcf_history` — Historical DCF valuations over time. Shows whether the stock has historically traded above or below its intrinsic value.
+6. `get_fair_value` — Combined fair value estimate using PE band + DCF + consensus methods. This is the backbone of your valuation — it gives you bear/base/bull scenarios from multiple approaches.
+7. `get_dcf_valuation` — Discounted Cash Flow model output. Note: FMP DCF may not be available (403 on free tier). If unavailable, skip gracefully and rely on the other methods.
+8. `get_dcf_history` — Historical DCF valuations over time. Shows whether the stock has historically traded above or below its intrinsic value.
+
+### Phase 2.25: Expectations Analysis
+9. `get_reverse_dcf` — **Call this BEFORE building a forward DCF.** This tells you what growth rate the current market cap implies. Explicitly state: "The current stock price implies X% annual growth." If implied growth > 25% for a mature business, flag as "Priced for Perfection." Uses FCFF model for non-BFSI, FCFE for banks.
 
 ### Phase 2.5: Forward Projections
-7. `get_financial_projections` — **Critical for forward valuation.** Returns 3-year bear/base/bull projections of revenue, EBITDA, net income, and EPS based on historical trends. Also returns implied fair values at different PE multiples. Use these projections as your STARTING POINT, then refine:
+10. `get_financial_projections` — **Critical for forward valuation.** Returns 3-year bear/base/bull projections of revenue, EBITDA, net income, and EPS based on historical trends. Also returns implied fair values at different PE multiples. Use these projections as your STARTING POINT, then refine:
    - Cross-check growth assumptions against concall guidance (`get_concall_insights`)
    - Adjust margins based on sector trends and management commentary
    - Select appropriate PE multiples based on historical bands (`get_valuation_band`) and peer multiples (`get_valuation_matrix`)
    - Present the full scenario table in your report
 
 ### Phase 3: Analyst & Consensus Views
-7. `get_price_targets` — Individual analyst target prices. Shows the dispersion — a wide range means high uncertainty, a tight range means consensus.
-8. `get_analyst_grades` — Analyst rating changes (upgrades/downgrades) and their timing. Recent upgrades after earnings = post-result conviction; downgrades before results = early warning.
-9. `get_consensus_estimate` — Aggregated consensus: average target price, buy/hold/sell distribution, forward estimates.
-10. `get_estimate_momentum` — Call this to check if analysts are revising estimates up or down. Rising estimates + rising price = fundamental momentum. Rising estimates + flat price = potential re-rating setup.
+11. `get_price_targets` — Individual analyst target prices. Shows the dispersion — a wide range means high uncertainty, a tight range means consensus.
+12. `get_analyst_grades` — Analyst rating changes (upgrades/downgrades) and their timing. Recent upgrades after earnings = post-result conviction; downgrades before results = early warning.
+13. `get_consensus_estimate` — Aggregated consensus: average target price, buy/hold/sell distribution, forward estimates.
+14. `get_estimate_momentum` — Call this to check if analysts are revising estimates up or down. Rising estimates + rising price = fundamental momentum. Rising estimates + flat price = potential re-rating setup.
+15. `get_revenue_estimates` — Consensus revenue estimates (avg/low/high for current and next year). Anchor your base-case revenue assumptions to street consensus. Coverage limited to ~Nifty 100-150 stocks.
+16. `get_growth_estimates` — Stock growth vs index growth for current/next periods. If the stock is priced at a premium PE but growth estimates lag the index, flag as "Valuation Mismatch."
 
 ### Phase 3.5: Events & Temporal Context
-11. `get_events_calendar` — Check upcoming earnings date and ex-dividend date. If earnings are within 2 weeks, note this prominently — valuation may shift post-results.
-12. `get_dividend_history` — Annual dividend per share, payout ratio, and yield history. A rising payout ratio in a mature business is positive. Dividend yield at 5-year highs can indicate value. Compare payout ratio against peers using `get_valuation_matrix`.
+17. `get_events_calendar` — Check upcoming earnings date and ex-dividend date. If earnings are within 2 weeks, note this prominently — valuation may shift post-results.
+18. `get_dividend_history` — Annual dividend per share, payout ratio, and yield history. A rising payout ratio in a mature business is positive. Dividend yield at 5-year highs can indicate value. Compare payout ratio against peers using `get_valuation_matrix`.
 
 ### Phase 4: Relative Valuation & Peer Context
-10. `get_peer_comparison` — Side-by-side peer table with valuation multiples. Is this company trading at a premium or discount to peers? Is that justified?
-11. `get_valuation_matrix` — **Use this as your primary relative valuation tool.** Returns a full comparison matrix (PE, PB, EV/EBITDA, EV/Sales, margins, ROE, growth) for the subject vs all peers, with sector medians and percentile ranks. This is richer than get_peer_comparison (which only has PE and ROCE from Screener's surface data).
-12. `get_chart_data("ev_ebitda")` — Historical EV/EBITDA chart. Enterprise Value multiples are often more reliable than PE because they account for debt and cash differences.
-13. `get_chart_data("pbv")` — Historical Price-to-Book chart. Essential for asset-heavy businesses (banks, infrastructure, real estate) where book value is a meaningful anchor.
-15. `get_peer_metrics` — Deep peer valuation metrics for rigorous head-to-head comparison.
-16. `get_peer_growth` — Peer growth rates. Growth justifies premium valuations — a company growing 2x faster than peers deserves a higher PE, but how much higher?
-17. `get_sector_benchmarks` — Percentile rank for valuation metrics within the sector. Essential context — "PE of 35x sounds expensive, but it's at the 45th percentile in this high-growth sector."
+19. `get_peer_comparison` — Side-by-side peer table with valuation multiples. Is this company trading at a premium or discount to peers? Is that justified?
+20. `get_valuation_matrix` — **Use this as your primary relative valuation tool.** Returns a full comparison matrix (PE, PB, EV/EBITDA, EV/Sales, margins, ROE, growth) for the subject vs all peers, with sector medians and percentile ranks. This is richer than get_peer_comparison (which only has PE and ROCE from Screener's surface data).
+21. `get_chart_data("ev_ebitda")` — Historical EV/EBITDA chart. Enterprise Value multiples are often more reliable than PE because they account for debt and cash differences.
+22. `get_chart_data("pbv")` — Historical Price-to-Book chart. Essential for asset-heavy businesses (banks, infrastructure, real estate) where book value is a meaningful anchor.
+23. `get_peer_metrics` — Deep peer valuation metrics for rigorous head-to-head comparison.
+24. `get_peer_growth` — Peer growth rates. Growth justifies premium valuations — a company growing 2x faster than peers deserves a higher PE, but how much higher?
+25. `get_sector_benchmarks` — Percentile rank for valuation metrics within the sector. Essential context — "PE of 35x sounds expensive, but it's at the 45th percentile in this high-growth sector."
 
 ## Report Sections (produce ALL of these)
 
