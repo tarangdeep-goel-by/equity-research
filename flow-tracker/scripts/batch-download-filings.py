@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Batch download concall transcripts + investor decks for Nifty 250 stocks.
+"""Batch download concall transcripts + investor decks for all Nifty index stocks.
 
 Downloads from BSE to ~/vault/stocks/{SYMBOL}/filings/{FY-Q}/concall.pdf
 Free — just HTTP downloads, no API keys needed.
 
 Usage:
-    uv run python scripts/batch-download-filings.py              # all 250
+    uv run python scripts/batch-download-filings.py              # all stocks
     uv run python scripts/batch-download-filings.py --limit 50   # first 50
     uv run python scripts/batch-download-filings.py --resume     # skip already downloaded
 """
@@ -29,11 +29,11 @@ from flowtracker.filing_client import FilingClient
 console = Console()
 
 
-def get_nifty_250_symbols() -> list[str]:
-    """Get Nifty 250 symbols from index_constituents."""
+def get_nifty_symbols() -> list[str]:
+    """Get all Nifty index stocks from index_constituents."""
     with FlowStore() as store:
         rows = store._conn.execute(
-            "SELECT symbol FROM index_constituents ORDER BY symbol LIMIT 250"
+            "SELECT DISTINCT symbol FROM index_constituents ORDER BY symbol"
         ).fetchall()
     return [r[0] for r in rows]
 
@@ -82,8 +82,8 @@ def download_filings_for_symbol(fc: FilingClient, symbol: str, from_date=None) -
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Batch download concall PDFs for Nifty 250")
-    parser.add_argument("--limit", type=int, default=250, help="Number of stocks (default: 250)")
+    parser = argparse.ArgumentParser(description="Batch download concall PDFs for Nifty index stocks")
+    parser.add_argument("--limit", type=int, default=0, help="Limit to first N stocks (0=all)")
     parser.add_argument("--years", type=int, default=5, help="Download filings from last N years (default: 5)")
     parser.add_argument("--resume", action="store_true", help="Skip stocks with >=4 concalls already")
     parser.add_argument("--sleep", type=float, default=1.0, help="Seconds between stocks (rate limit)")
@@ -93,7 +93,9 @@ def main():
     from dateutil.relativedelta import relativedelta
     cutoff_date = date.today() - relativedelta(years=args.years)
 
-    symbols = get_nifty_250_symbols()[:args.limit]
+    symbols = get_nifty_symbols()
+    if args.limit:
+        symbols = symbols[:args.limit]
     console.print(f"\n[bold]Batch Filing Download — {len(symbols)} stocks, last {args.years} years (since {cutoff_date})[/]\n")
 
     # Check what's already downloaded

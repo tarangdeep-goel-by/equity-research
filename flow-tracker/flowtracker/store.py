@@ -630,6 +630,61 @@ CREATE TABLE IF NOT EXISTS corporate_actions (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (symbol, ex_date, action_type, source)
 );
+
+CREATE TABLE IF NOT EXISTS estimate_revisions (
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    period TEXT NOT NULL,
+    eps_current REAL,
+    eps_7d_ago REAL,
+    eps_30d_ago REAL,
+    eps_60d_ago REAL,
+    eps_90d_ago REAL,
+    revisions_up_7d INTEGER,
+    revisions_up_30d INTEGER,
+    revisions_down_7d INTEGER,
+    revisions_down_30d INTEGER,
+    momentum_score REAL,
+    momentum_signal TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, date, period)
+);
+
+CREATE TABLE IF NOT EXISTS quarterly_balance_sheet (
+    symbol TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    total_assets REAL,
+    total_debt REAL,
+    long_term_debt REAL,
+    stockholders_equity REAL,
+    cash_and_equivalents REAL,
+    net_debt REAL,
+    investments REAL,
+    net_ppe REAL,
+    shares_outstanding REAL,
+    total_liabilities REAL,
+    minority_interest REAL,
+    source TEXT DEFAULT 'yfinance',
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, quarter_end)
+);
+
+CREATE TABLE IF NOT EXISTS quarterly_cash_flow (
+    symbol TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    operating_cash_flow REAL,
+    free_cash_flow REAL,
+    capital_expenditure REAL,
+    investing_cash_flow REAL,
+    financing_cash_flow REAL,
+    change_in_working_capital REAL,
+    depreciation REAL,
+    dividends_paid REAL,
+    net_income REAL,
+    source TEXT DEFAULT 'yfinance',
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, quarter_end)
+);
 """
 
 
@@ -3162,6 +3217,118 @@ class FlowStore:
             seen_dates[ex] = src
             result.append(d)
         return result
+
+    def upsert_estimate_revisions(self, data: dict) -> int:
+        """Upsert estimate revision data (all periods for one symbol)."""
+        symbol = data["symbol"]
+        today = data.get("date") or __import__("datetime").date.today().isoformat()
+        count = 0
+        for period, trend in data.get("eps_trend", {}).items():
+            rev = data.get("eps_revisions", {}).get(period, {})
+            self._conn.execute(
+                """INSERT INTO estimate_revisions
+                   (symbol, date, period, eps_current, eps_7d_ago, eps_30d_ago, eps_60d_ago, eps_90d_ago,
+                    revisions_up_7d, revisions_up_30d, revisions_down_7d, revisions_down_30d,
+                    momentum_score, momentum_signal)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(symbol, date, period) DO UPDATE SET
+                    eps_current=excluded.eps_current, eps_7d_ago=excluded.eps_7d_ago,
+                    eps_30d_ago=excluded.eps_30d_ago, eps_60d_ago=excluded.eps_60d_ago,
+                    eps_90d_ago=excluded.eps_90d_ago,
+                    revisions_up_7d=excluded.revisions_up_7d, revisions_up_30d=excluded.revisions_up_30d,
+                    revisions_down_7d=excluded.revisions_down_7d, revisions_down_30d=excluded.revisions_down_30d,
+                    momentum_score=excluded.momentum_score, momentum_signal=excluded.momentum_signal,
+                    fetched_at=datetime('now')""",
+                (symbol, today, period,
+                 trend.get("current"), trend.get("7d_ago"), trend.get("30d_ago"),
+                 trend.get("60d_ago"), trend.get("90d_ago"),
+                 rev.get("up_7d"), rev.get("up_30d"), rev.get("down_7d"), rev.get("down_30d"),
+                 data.get("momentum_score"), data.get("momentum_signal")),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_estimate_revisions(self, symbol: str) -> list[dict]:
+        """Get latest estimate revision data for all periods."""
+        rows = self._conn.execute(
+            """SELECT * FROM estimate_revisions
+               WHERE symbol = ? AND date = (
+                   SELECT MAX(date) FROM estimate_revisions WHERE symbol = ?
+               ) ORDER BY period""",
+            (symbol.upper(), symbol.upper()),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def upsert_quarterly_balance_sheet(self, symbol: str, rows: list[dict]) -> int:
+        """Upsert quarterly balance sheet data."""
+        count = 0
+        for row in rows:
+            self._conn.execute(
+                """INSERT INTO quarterly_balance_sheet
+                   (symbol, quarter_end, total_assets, total_debt, long_term_debt,
+                    stockholders_equity, cash_and_equivalents, net_debt, investments,
+                    net_ppe, shares_outstanding, total_liabilities, minority_interest)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(symbol, quarter_end) DO UPDATE SET
+                    total_assets=excluded.total_assets, total_debt=excluded.total_debt,
+                    long_term_debt=excluded.long_term_debt, stockholders_equity=excluded.stockholders_equity,
+                    cash_and_equivalents=excluded.cash_and_equivalents, net_debt=excluded.net_debt,
+                    investments=excluded.investments, net_ppe=excluded.net_ppe,
+                    shares_outstanding=excluded.shares_outstanding, total_liabilities=excluded.total_liabilities,
+                    minority_interest=excluded.minority_interest, fetched_at=datetime('now')""",
+                (symbol.upper(), row["quarter_end"],
+                 row.get("total_assets"), row.get("total_debt"), row.get("long_term_debt"),
+                 row.get("stockholders_equity"), row.get("cash_and_equivalents"),
+                 row.get("net_debt"), row.get("investments"), row.get("net_ppe"),
+                 row.get("shares_outstanding"), row.get("total_liabilities"),
+                 row.get("minority_interest")),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def upsert_quarterly_cash_flow(self, symbol: str, rows: list[dict]) -> int:
+        """Upsert quarterly cash flow data."""
+        count = 0
+        for row in rows:
+            self._conn.execute(
+                """INSERT INTO quarterly_cash_flow
+                   (symbol, quarter_end, operating_cash_flow, free_cash_flow, capital_expenditure,
+                    investing_cash_flow, financing_cash_flow, change_in_working_capital,
+                    depreciation, dividends_paid, net_income)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(symbol, quarter_end) DO UPDATE SET
+                    operating_cash_flow=excluded.operating_cash_flow, free_cash_flow=excluded.free_cash_flow,
+                    capital_expenditure=excluded.capital_expenditure, investing_cash_flow=excluded.investing_cash_flow,
+                    financing_cash_flow=excluded.financing_cash_flow, change_in_working_capital=excluded.change_in_working_capital,
+                    depreciation=excluded.depreciation, dividends_paid=excluded.dividends_paid,
+                    net_income=excluded.net_income, fetched_at=datetime('now')""",
+                (symbol.upper(), row["quarter_end"],
+                 row.get("operating_cash_flow"), row.get("free_cash_flow"),
+                 row.get("capital_expenditure"), row.get("investing_cash_flow"),
+                 row.get("financing_cash_flow"), row.get("change_in_working_capital"),
+                 row.get("depreciation"), row.get("dividends_paid"), row.get("net_income")),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_quarterly_balance_sheet(self, symbol: str, limit: int = 8) -> list[dict]:
+        """Get quarterly balance sheet data, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM quarterly_balance_sheet WHERE symbol = ? ORDER BY quarter_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_quarterly_cash_flow(self, symbol: str, limit: int = 8) -> list[dict]:
+        """Get quarterly cash flow data, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM quarterly_cash_flow WHERE symbol = ? ORDER BY quarter_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""

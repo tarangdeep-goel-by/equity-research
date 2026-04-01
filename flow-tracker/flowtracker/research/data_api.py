@@ -47,6 +47,17 @@ class ResearchDataAPI:
         rows = self._store.get_screener_ratios(symbol, limit=years)
         return _clean([r.model_dump() for r in rows])
 
+    def get_quarterly_balance_sheet(self, symbol: str, quarters: int = 8) -> list[dict]:
+        """Quarterly balance sheet: assets, debt, equity, cash, investments (from yfinance)."""
+        rows = self._store.get_quarterly_balance_sheet(symbol, limit=quarters)
+        return _clean(rows)
+
+    def get_quarterly_cash_flow(self, symbol: str, quarters: int = 8) -> list[dict]:
+        """Quarterly cash flow: OCF, FCF, capex, working capital changes (from yfinance).
+        Note: not available for all stocks (banks typically missing)."""
+        rows = self._store.get_quarterly_cash_flow(symbol, limit=quarters)
+        return _clean(rows)
+
     # --- Valuation ---
 
     def get_valuation_snapshot(self, symbol: str) -> dict:
@@ -130,6 +141,137 @@ class ResearchDataAPI:
         """Quarterly earnings surprises: actual vs estimate EPS, surprise %."""
         rows = self._store.get_surprises(symbol)
         return _clean([r.model_dump() for r in rows])
+
+    def get_estimate_revisions(self, symbol: str) -> list[dict]:
+        """Latest EPS estimate trends and revision counts for all periods."""
+        rows = self._store.get_estimate_revisions(symbol)
+        return _clean(rows)
+
+    def get_estimate_momentum(self, symbol: str) -> dict:
+        """Computed momentum signal from estimate revisions."""
+        rows = self._store.get_estimate_revisions(symbol)
+        if not rows:
+            return {}
+        # Find the row with momentum data (all rows have the same score)
+        score = rows[0].get("momentum_score")
+        signal = rows[0].get("momentum_signal")
+
+        # Build narrative
+        parts = []
+        for r in rows:
+            period = r.get("period", "")
+            current = r.get("eps_current")
+            ago_90 = r.get("eps_90d_ago")
+            if current and ago_90 and ago_90 != 0:
+                change_pct = round((current - ago_90) / abs(ago_90) * 100, 1)
+                if abs(change_pct) > 0.5:
+                    label = {"0q": "Current Q", "+1q": "Next Q", "0y": "FY current", "+1y": "FY next"}.get(period, period)
+                    direction = "up" if change_pct > 0 else "down"
+                    parts.append(f"{label} estimates revised {direction} {abs(change_pct)}% in 90 days")
+
+        # Count net revisions
+        total_up = sum(r.get("revisions_up_30d") or 0 for r in rows)
+        total_down = sum(r.get("revisions_down_30d") or 0 for r in rows)
+        if total_up or total_down:
+            parts.append(f"{total_up} upgrades vs {total_down} downgrades in 30 days")
+
+        return _clean({
+            "symbol": symbol.upper(),
+            "momentum_score": score,
+            "momentum_signal": signal,
+            "narrative": ". ".join(parts) if parts else "No significant revision activity",
+            "periods": rows,
+        })
+
+    # --- Events & Calendar ---
+
+    def get_events_calendar(self, symbol: str) -> dict:
+        """Upcoming events: next earnings date, ex-dividend date, consensus estimates."""
+        from flowtracker.estimates_client import EstimatesClient
+        ec = EstimatesClient()
+        data = ec.fetch_events_calendar(symbol)
+        return _clean(data) if data else {}
+
+    # --- Dividend History ---
+
+    def get_dividend_history(self, symbol: str, years: int = 10) -> list[dict]:
+        """Annual dividend per share, yield, and payout ratio history.
+
+        Computed from corporate_actions (yfinance dividends) + annual_financials (EPS) + valuation_snapshot (price).
+        """
+        # 1. Get yfinance dividends from corporate_actions
+        divs = self._store._conn.execute(
+            "SELECT ex_date, dividend_amount FROM corporate_actions "
+            "WHERE symbol = ? AND source = 'yfinance' AND action_type = 'dividend' "
+            "AND dividend_amount IS NOT NULL ORDER BY ex_date",
+            (symbol.upper(),),
+        ).fetchall()
+        if not divs:
+            return []
+
+        # 2. Group by fiscal year (Apr-Mar): ex_date in Apr 2024–Mar 2025 → FY25
+        from collections import defaultdict
+        fy_dividends: dict[str, float] = defaultdict(float)
+        for row in divs:
+            ex_date = row["ex_date"]
+            amount = row["dividend_amount"]
+            try:
+                from datetime import date as dt_date
+                d = dt_date.fromisoformat(ex_date)
+                # Indian FY: Apr Y to Mar Y+1 = FY(Y+1)
+                fy_year = d.year + 1 if d.month >= 4 else d.year
+                fy_label = f"FY{str(fy_year)[2:]}"
+                fy_dividends[fy_label] += amount
+            except (ValueError, TypeError):
+                continue
+
+        if not fy_dividends:
+            return []
+
+        # 3. Get EPS from annual_financials
+        from flowtracker.fund_models import AnnualFinancials
+        annuals = self._store.get_annual_financials(symbol, limit=years)
+        eps_by_fy: dict[str, float] = {}
+        price_by_fy: dict[str, float] = {}
+        for a in annuals:
+            fy_end = a.fiscal_year_end
+            try:
+                from datetime import date as dt_date
+                d = dt_date.fromisoformat(fy_end)
+                fy_year = d.year + 1 if d.month >= 4 else d.year
+                fy_label = f"FY{str(fy_year)[2:]}"
+                if a.eps:
+                    eps_by_fy[fy_label] = a.eps
+                if a.price:
+                    price_by_fy[fy_label] = a.price
+            except (ValueError, TypeError):
+                continue
+
+        # 4. Build result
+        result = []
+        sorted_fys = sorted(fy_dividends.keys(), key=lambda x: int(x[2:]) + (2000 if int(x[2:]) < 50 else 1900))
+        prev_dps = None
+        for fy in sorted_fys:
+            dps = round(fy_dividends[fy], 2)
+            entry: dict = {"fiscal_year": fy, "annual_dividend_per_share": dps}
+
+            eps = eps_by_fy.get(fy)
+            if eps and eps > 0:
+                entry["eps"] = eps
+                entry["payout_ratio_pct"] = round(dps / eps * 100, 1)
+
+            price = price_by_fy.get(fy)
+            if price and price > 0:
+                entry["price_at_fy_end"] = price
+                entry["dividend_yield_pct"] = round(dps / price * 100, 2)
+
+            if prev_dps and prev_dps > 0:
+                entry["dividend_growth_yoy_pct"] = round((dps - prev_dps) / prev_dps * 100, 1)
+
+            prev_dps = dps
+            result.append(entry)
+
+        return _clean(result[-years:])
 
     # --- Macro Context ---
 

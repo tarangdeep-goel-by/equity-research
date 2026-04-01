@@ -525,7 +525,10 @@ You will receive the stock symbol and company context in the user message. Throu
 13. `get_peer_growth` — Peer growth rates (revenue, profit) for comparison. Is this company growing faster or slower than competitors?
 14. `get_sector_benchmarks` — Percentile rank for key metrics (ROCE, margins, growth, valuation) within the sector. Essential for the "No Orphan Numbers" rule — every metric needs sector context.
 15. `get_consensus_estimate` — What do professional sell-side analysts think? Target prices, buy/hold/sell recommendations, forward EPS estimates.
-16. `get_earnings_surprises` — Does management deliver on promises? Beat/miss track record reveals management credibility and guidance quality.
+16. `get_estimate_momentum` — Are analysts revising their estimates up or down? This is one of the strongest short-term signals. Rising consensus = bullish momentum.
+17. `get_earnings_surprises` — Does management deliver on promises? Beat/miss track record reveals management credibility and guidance quality.
+18. `get_events_calendar` — Upcoming events: next earnings date, ex-dividend date, consensus estimates. Sets temporal context for the research.
+19. `get_dividend_history` — Annual dividend per share, payout ratio, yield history. Shows dividend policy evolution over time.
 
 ### Phase 3: Save Your Work
 17. `save_business_profile` — Save the business profile you've built so future research runs can reuse it.
@@ -689,24 +692,28 @@ You will receive the stock symbol and company context in the user message. Throu
    - **Cash Flow reality:** Compare CFO vs Net Income — if CFO consistently trails net income, reported profits aren't converting to cash (red flag). Check if CFF is positive (raising debt) while CFI is negative (investing) — fine for growth companies, concerning for mature ones.
 4. `get_screener_ratios` — ROCE, ROE, working capital efficiency, debtor days, inventory days, cash conversion. These quality indicators reveal whether growth is genuine or manufactured.
 
+### Phase 1.5: Intra-Year Balance Sheet & Cash Flow
+5. `get_quarterly_balance_sheet` — Intra-year balance sheet snapshots from yfinance. Track quarterly debt, equity, cash changes. For banks, track quarterly debt and equity changes. For all companies, monitor cash position and working capital shifts.
+6. `get_quarterly_cash_flow` — Quarterly OCF, FCF, capex. Not available for banks — use annual CF from `get_annual_financials` if empty.
+
 ### Phase 2: Deep Margin & Expense Analysis
-5. `get_expense_breakdown` — Where does each rupee of revenue go? Raw materials, employee costs, depreciation, other expenses. Changes in cost structure explain WHY margins expanded or compressed.
-6. `get_financial_growth_rates` — Pre-computed 1yr/3yr/5yr/10yr CAGRs for revenue, EBITDA, net income, EPS, and FCF. Saves you from manual calculation and ensures accuracy.
+7. `get_expense_breakdown` — Where does each rupee of revenue go? Raw materials, employee costs, depreciation, other expenses. Changes in cost structure explain WHY margins expanded or compressed.
+8. `get_financial_growth_rates` — Pre-computed 1yr/3yr/5yr/10yr CAGRs for revenue, EBITDA, net income, EPS, and FCF. Saves you from manual calculation and ensures accuracy.
 
 ### Phase 3: Business Quality
-7. `get_dupont_decomposition` — Breaks ROE into three components: net margin × asset turnover × equity multiplier. This is the most important quality check — it tells you WHETHER the company's ROE is driven by profitability (good), efficiency (good), or leverage (risky).
-8. `get_key_metrics_history` — Historical trajectory of key financial metrics. Use this to track how quality indicators have evolved over time.
+9. `get_dupont_decomposition` — Breaks ROE into three components: net margin × asset turnover × equity multiplier. This is the most important quality check — it tells you WHETHER the company's ROE is driven by profitability (good), efficiency (good), or leverage (risky).
+10. `get_key_metrics_history` — Historical trajectory of key financial metrics. Use this to track how quality indicators have evolved over time.
 
 ### Phase 4: Charts & Visualization
-9. `get_chart_data("pe")` — Historical PE ratio chart. Shows how the market has valued the company over time — expensive periods, cheap periods, re-ratings.
-10. `get_chart_data("price")` — Historical price chart. Pair with earnings data to see if price follows fundamentals or runs on sentiment.
-11. `get_chart_data("sales_margin")` — Revenue and margin trend chart. Visualizes operating leverage — when revenue grows faster than costs, margins expand.
+11. `get_chart_data("pe")` — Historical PE ratio chart. Shows how the market has valued the company over time — expensive periods, cheap periods, re-ratings.
+12. `get_chart_data("price")` — Historical price chart. Pair with earnings data to see if price follows fundamentals or runs on sentiment.
+13. `get_chart_data("sales_margin")` — Revenue and margin trend chart. Visualizes operating leverage — when revenue grows faster than costs, margins expand.
 
 ### Phase 5: Peer Context & Benchmarking
-12. `get_earnings_surprises` — Does management deliver on guidance? Beat/miss track record reveals credibility and predictability. A company that consistently beats estimates is under-promising and over-delivering — a quality signal.
-13. `get_peer_metrics` — Deep peer financial metrics (ROCE, margins, growth, valuations) for rigorous head-to-head comparison.
-14. `get_peer_growth` — Peer growth rates (revenue, profit, EPS) for comparison. Is this company growing faster or slower than competitors?
-15. `get_sector_benchmarks` — Percentile rank for key metrics within the sector. Essential for Rule 2 (No Orphan Numbers) — every metric needs sector context.
+14. `get_earnings_surprises` — Does management deliver on guidance? Beat/miss track record reveals credibility and predictability. A company that consistently beats estimates is under-promising and over-delivering — a quality signal.
+15. `get_peer_metrics` — Deep peer financial metrics (ROCE, margins, growth, valuations) for rigorous head-to-head comparison.
+16. `get_peer_growth` — Peer growth rates (revenue, profit, EPS) for comparison. Is this company growing faster or slower than competitors?
+17. `get_sector_benchmarks` — Percentile rank for key metrics within the sector. Essential for Rule 2 (No Orphan Numbers) — every metric needs sector context.
 
 ## Report Sections (produce ALL of these)
 
@@ -789,7 +796,8 @@ This section answers: "Is the company's profitability real and sustainable?"
 
 This section answers: "Is the company financially healthy, and are reported profits turning into real cash?"
 
-**Balance Sheet health (10Y trend):**
+**Balance Sheet health (10Y trend + quarterly):**
+- Call `get_quarterly_balance_sheet` for intra-year balance sheet changes. For banks, track quarterly debt and equity changes. For all companies, monitor cash position and working capital shifts. Note: quarterly CF is not available for all stocks — if empty, rely on annual CF from `get_annual_financials`.
 - Build a table showing: Borrowings, Reserves, Total Assets, Cash & Bank, Receivables, Inventory for the last 5-10 years.
 - Key ratios to compute and explain:
   - **Debt-to-Equity** = Borrowings / (Equity Capital + Reserves). Explain: "For every ₹1 of the owners' money in the business, how much is borrowed?"
@@ -1270,6 +1278,11 @@ You will receive the stock symbol and company context in the user message. Throu
 7. `get_price_targets` — Individual analyst target prices. Shows the dispersion — a wide range means high uncertainty, a tight range means consensus.
 8. `get_analyst_grades` — Analyst rating changes (upgrades/downgrades) and their timing. Recent upgrades after earnings = post-result conviction; downgrades before results = early warning.
 9. `get_consensus_estimate` — Aggregated consensus: average target price, buy/hold/sell distribution, forward estimates.
+10. `get_estimate_momentum` — Call this to check if analysts are revising estimates up or down. Rising estimates + rising price = fundamental momentum. Rising estimates + flat price = potential re-rating setup.
+
+### Phase 3.5: Events & Temporal Context
+11. `get_events_calendar` — Check upcoming earnings date and ex-dividend date. If earnings are within 2 weeks, note this prominently — valuation may shift post-results.
+12. `get_dividend_history` — Annual dividend per share, payout ratio, and yield history. A rising payout ratio in a mature business is positive. Dividend yield at 5-year highs can indicate value. Compare payout ratio against peers using `get_valuation_matrix`.
 
 ### Phase 4: Relative Valuation & Peer Context
 10. `get_peer_comparison` — Side-by-side peer table with valuation multiples. Is this company trading at a premium or discount to peers? Is that justified?

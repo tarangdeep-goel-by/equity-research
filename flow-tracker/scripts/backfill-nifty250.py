@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""One-time backfill for Nifty 250 — fills all DB tables with historical data.
+"""Backfill all Nifty index stocks — fills DB tables with historical data.
 
 Run this ONCE to populate the database. After this, cron scripts keep data fresh.
+Fetches all stocks from index_constituents (Nifty 500+).
 
 Usage:
     uv run python scripts/backfill-nifty250.py                    # everything
     uv run python scripts/backfill-nifty250.py --step valuation    # just one step
     uv run python scripts/backfill-nifty250.py --limit 50          # first 50 stocks
-    uv run python scripts/backfill-nifty250.py --resume            # skip fresh data
 """
 
 from __future__ import annotations
@@ -26,11 +26,12 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCo
 console = Console()
 
 
-def get_nifty_250() -> list[str]:
+def get_nifty_stocks() -> list[str]:
+    """Get all stocks from index_constituents (Nifty 500+)."""
     from flowtracker.store import FlowStore
     with FlowStore() as store:
         rows = store._conn.execute(
-            "SELECT symbol FROM index_constituents ORDER BY symbol LIMIT 250"
+            "SELECT DISTINCT symbol FROM index_constituents ORDER BY symbol"
         ).fetchall()
     return [r[0] for r in rows]
 
@@ -226,6 +227,59 @@ def step_corporate_actions(symbols: list[str], sleep: float = 0.3):
     console.print(f"  [green]✓[/] {ok}/{len(symbols)} stocks with corporate actions")
 
 
+def step_estimate_revisions(symbols: list[str], sleep: float = 0.5):
+    """Fetch EPS estimate revision trends from yfinance."""
+    from flowtracker.estimates_client import EstimatesClient
+    from flowtracker.store import FlowStore
+
+    console.print("\n[bold]Step: Estimate Revision Trends (yfinance)[/]")
+    ec = EstimatesClient()
+    ok = 0
+    with FlowStore() as store:
+        with Progress(SpinnerColumn(), TextColumn("{task.description}"), BarColumn(), MofNCompleteColumn(), console=console) as p:
+            task = p.add_task("Est Revisions", total=len(symbols))
+            for sym in symbols:
+                p.update(task, description=sym)
+                try:
+                    data = ec.fetch_estimate_revisions(sym)
+                    if data:
+                        store.upsert_estimate_revisions(data)
+                        ok += 1
+                except Exception:
+                    pass
+                p.advance(task)
+                time.sleep(sleep)
+    console.print(f"  [green]✓[/] {ok}/{len(symbols)} stocks")
+
+
+def step_quarterly_bs_cf(symbols: list[str], sleep: float = 0.5):
+    """Fetch quarterly balance sheet + cash flow from yfinance."""
+    from flowtracker.fund_client import FundClient
+    from flowtracker.store import FlowStore
+
+    console.print("\n[bold]Step: Quarterly Balance Sheet + Cash Flow (yfinance)[/]")
+    fc = FundClient()
+    bs_ok = cf_ok = 0
+    with FlowStore() as store:
+        with Progress(SpinnerColumn(), TextColumn("{task.description}"), BarColumn(), MofNCompleteColumn(), console=console) as p:
+            task = p.add_task("Quarterly BS/CF", total=len(symbols))
+            for sym in symbols:
+                p.update(task, description=sym)
+                try:
+                    data = fc.fetch_quarterly_bs_cf(sym)
+                    if data.get("balance_sheet"):
+                        store.upsert_quarterly_balance_sheet(sym, data["balance_sheet"])
+                        bs_ok += 1
+                    if data.get("cash_flow"):
+                        store.upsert_quarterly_cash_flow(sym, data["cash_flow"])
+                        cf_ok += 1
+                except Exception:
+                    pass
+                p.advance(task)
+                time.sleep(sleep)
+    console.print(f"  [green]✓[/] BS: {bs_ok}/{len(symbols)}, CF: {cf_ok}/{len(symbols)}")
+
+
 STEPS = {
     "valuation": step_valuation,
     "estimates": step_estimates,
@@ -233,18 +287,22 @@ STEPS = {
     "screener": step_screener,
     "filings": step_filings,
     "corporate_actions": step_corporate_actions,
+    "estimate_revisions": step_estimate_revisions,
+    "quarterly_bs_cf": step_quarterly_bs_cf,
 }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backfill Nifty 250 data")
-    parser.add_argument("--limit", type=int, default=250)
+    parser = argparse.ArgumentParser(description="Backfill Nifty index stocks data")
+    parser.add_argument("--limit", type=int, default=0, help="Limit to first N stocks (0=all)")
     parser.add_argument("--step", choices=list(STEPS.keys()), help="Run single step")
     parser.add_argument("--sleep", type=float, default=None, help="Override sleep between requests")
     args = parser.parse_args()
 
-    symbols = get_nifty_250()[:args.limit]
-    console.print(f"[bold]Nifty 250 Backfill — {len(symbols)} stocks[/]")
+    symbols = get_nifty_stocks()
+    if args.limit:
+        symbols = symbols[:args.limit]
+    console.print(f"[bold]Nifty Backfill — {len(symbols)} stocks[/]")
 
     if args.step:
         fn = STEPS[args.step]
