@@ -32,7 +32,58 @@ uv run flowtrack research thesis-check -s SBIN            # check thesis conditi
 uv run flowtrack fmp fetch -s RELIANCE                    # DCF, technicals, metrics, grades
 ```
 
-No test suite exists yet.
+## Testing
+
+```bash
+uv sync --extra test                         # install test deps (first time)
+uv run pytest tests/ -m "not slow"           # fast suite (~20s, 929 tests)
+uv run pytest tests/                         # full suite with CLI smoke (~120s, 1048 tests)
+uv run pytest tests/ --cov=flowtracker -q    # with coverage report
+uv run python scripts/check-freshness.py     # verify production DB data is current
+```
+
+### Test structure
+
+```
+tests/
+  conftest.py          # Fixtures: store (temp DB), populated_store, tmp_db, golden_dir
+  fixtures/
+    factories.py       # Model factories + populate_all(store) for 2 symbols (SBIN, INFY)
+    golden/            # Recorded API responses (screener HTML/Excel, etc.)
+  unit/                # Store, models, utils, clients, engines, charts, assembly
+  integration/         # Client→store pipelines, display capture, CLI commands, MCP tools
+  e2e/                 # Full screener pipeline, alert pipeline, thesis pipeline
+  contract/            # Schema + model snapshots (syrupy), API response shape validation
+  quality/             # Data consistency checks (shareholding sums, referential integrity)
+```
+
+### When adding new features — test requirements
+
+**New store method:** Add upsert+get round-trip test in the appropriate `test_store_*.py`.
+
+**New client or parser:** Add parsing tests in `test_client_*.py` using golden fixtures or inline data. Test both happy path and error path (bad input, missing data).
+
+**New CLI command:** Add the command's `--help` to `test_smoke.py` HELP_COMMANDS list. If it's a read-only command, add a CliRunner test in `test_commands_extended.py`.
+
+**New display function:** Add a capture test in `test_display_modules.py` (monkeypatch console, verify key strings).
+
+**New Pydantic model:** Add construction + optional-None + computed property tests in `test_models.py`.
+
+**New research tool (MCP):** Add async tool test in `test_mcp_tools_extended.py`.
+
+**New chart type:** Add render test in `test_charts.py` (monkeypatch `_chart_dir`, verify PNG created).
+
+**New scoring factor or alert condition:** Add to `test_screener_engine.py` or `test_alert_engine.py`.
+
+### Key testing patterns
+
+- **Store isolation:** `FlowStore(db_path=tmp_db)` — one fresh DB per test, <5ms overhead
+- **HTTP mocking:** `respx` for httpx clients, `unittest.mock.patch` for yfinance
+- **Display capture:** `Console(file=StringIO(), force_terminal=True)` + monkeypatch module's `console`
+- **CLI testing:** `typer.testing.CliRunner` + `monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))`
+- **ResearchDataAPI injection:** `monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))` (constructor reads env var)
+- **Time freezing:** `freezegun` for date-relative store queries
+- **Snapshots:** `syrupy` for schema/model regression detection
 
 ## Architecture
 
