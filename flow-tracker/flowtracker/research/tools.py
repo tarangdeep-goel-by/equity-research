@@ -886,6 +886,20 @@ async def get_price_performance(args):
 
 
 @tool(
+    "get_sector_kpis",
+    "Sector-specific operational KPIs extracted from concall transcripts. "
+    "Uses canonical field names per sector (14 sectors covered: banks, NBFCs, insurance, IT, pharma, "
+    "FMCG, auto, cement, metals, real estate, telecom, chemicals, power, oil & gas). "
+    "Returns per-quarter values + trends. Requires concall extraction to exist.",
+    {"symbol": str},
+)
+async def get_sector_kpis(args):
+    with ResearchDataAPI() as api:
+        data = api.get_sector_kpis(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
     "get_bfsi_metrics",
     "Bank/NBFC-specific metrics: NIM, ROA, Cost-to-Income, P/B, equity multiplier (5Y trend). "
     "Only for BFSI stocks — returns skipped for non-BFSI and insurance.",
@@ -952,6 +966,7 @@ RESEARCH_TOOLS = [
     get_piotroski_score,
     get_reverse_dcf, get_capex_cycle, get_common_size_pl,
     get_revenue_estimates, get_growth_estimates, get_price_performance,
+    get_sector_kpis,
 ]
 
 # Subset for business research — qualitative + key financials for context
@@ -992,9 +1007,10 @@ BUSINESS_AGENT_TOOLS = [
     get_valuation_snapshot, get_peer_comparison, get_expense_breakdown,
     get_consensus_estimate, get_earnings_surprises,
     get_upcoming_catalysts,
+    get_sector_kpis,  # sector-specific operational KPIs from concalls
     render_chart,  # generate PNG charts for embedding
     *_PEER_TOOLS,
-]  # 19 tools
+]  # 20 tools
 
 FINANCIAL_AGENT_TOOLS = [
     get_company_info, get_quarterly_results, get_annual_financials,
@@ -1010,10 +1026,10 @@ FINANCIAL_AGENT_TOOLS = [
     get_earnings_quality, get_piotroski_score, get_beneish_score,
     get_reverse_dcf, get_capex_cycle, get_common_size_pl,
     get_revenue_estimates,
-    get_bfsi_metrics,
+    get_bfsi_metrics, get_sector_kpis,
     render_chart,
     *_PEER_TOOLS,
-]  # 29 tools
+]  # 30 tools
 
 OWNERSHIP_AGENT_TOOLS = [
     get_shareholding, get_shareholding_changes, get_insider_transactions,
@@ -1071,6 +1087,6 @@ SECTOR_AGENT_TOOLS = [
     get_sector_valuations, get_peer_comparison,
     get_peer_metrics, get_peer_growth, get_sector_benchmarks,
     get_macro_snapshot, get_fii_dii_flows, get_fii_dii_streak,
-    get_price_performance,
+    get_price_performance, get_sector_kpis,
     render_chart,
-]  # 13 tools
+]  # 14 tools

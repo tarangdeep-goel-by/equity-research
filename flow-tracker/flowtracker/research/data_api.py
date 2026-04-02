@@ -685,6 +685,112 @@ class ResearchDataAPI:
                     continue
         return {"error": f"No concall extraction found for {symbol}", "hint": "Run concall pipeline first"}
 
+    def get_sector_kpis(self, symbol: str) -> dict:
+        """Extract sector-specific KPIs from concall data using canonical field names.
+
+        Reads the concall extraction JSON, identifies the company's sector, and
+        pulls out KPIs matching the canonical keys defined in sector_kpis.py.
+        Returns per-quarter values + trends for the sector-relevant metrics.
+        """
+        from flowtracker.research.sector_kpis import (
+            get_kpis_for_industry,
+            get_sector_for_industry,
+        )
+
+        industry = self._get_industry(symbol)
+        sector = get_sector_for_industry(industry)
+        if sector is None:
+            return {"error": f"No sector KPI framework for industry '{industry}'"}
+
+        kpi_defs = get_kpis_for_industry(industry)
+        canonical_keys = {k["key"] for k in kpi_defs}
+        key_labels = {k["key"]: k["label"] for k in kpi_defs}
+
+        # Read concall extraction
+        concall = self.get_concall_insights(symbol)
+        if "error" in concall:
+            return {"error": concall["error"], "sector": sector, "kpis_expected": [k["key"] for k in kpi_defs]}
+
+        quarters = concall.get("quarters", [])
+        if not quarters:
+            return {"error": "No quarterly data in concall extraction", "sector": sector}
+
+        # Extract KPIs from each quarter's operational_metrics + key_numbers_mentioned
+        kpi_timeline: dict[str, list[dict]] = {k: [] for k in canonical_keys}
+
+        for q in quarters:
+            quarter_label = q.get("fy_quarter", q.get("label", ""))
+            op_metrics = q.get("operational_metrics", {})
+            key_numbers = q.get("key_numbers_mentioned", {})
+
+            # Direct match on canonical keys
+            for canonical_key in canonical_keys:
+                value = None
+                context = None
+
+                # Check operational_metrics (structured)
+                if canonical_key in op_metrics:
+                    entry = op_metrics[canonical_key]
+                    if isinstance(entry, dict):
+                        value = entry.get("value")
+                        context = entry.get("context")
+                    else:
+                        value = entry
+
+                # Fallback: check key_numbers_mentioned (flat dict)
+                if value is None and canonical_key in key_numbers:
+                    value = key_numbers[canonical_key]
+
+                # Fuzzy match: try without unit suffix and common variations
+                if value is None:
+                    base_key = canonical_key.rsplit("_", 1)[0]  # strip _pct, _cr, etc.
+                    for src_key, src_val in {**op_metrics, **key_numbers}.items():
+                        src_lower = src_key.lower().replace(" ", "_").replace("-", "_")
+                        if base_key in src_lower or src_lower in base_key:
+                            if isinstance(src_val, dict):
+                                value = src_val.get("value")
+                                context = src_val.get("context")
+                            else:
+                                value = src_val
+                            break
+
+                if value is not None:
+                    entry = {"quarter": quarter_label, "value": value}
+                    if context:
+                        entry["context"] = context
+                    kpi_timeline[canonical_key].append(entry)
+
+        # Build result with only KPIs that have at least one value
+        found_kpis = []
+        missing_kpis = []
+        for kpi_def in kpi_defs:
+            key = kpi_def["key"]
+            values = kpi_timeline[key]
+            if values:
+                found_kpis.append({
+                    "key": key,
+                    "label": kpi_def["label"],
+                    "unit": kpi_def["unit"],
+                    "values": values,
+                })
+            else:
+                missing_kpis.append(key)
+
+        # Cross-quarter metric trajectories (if available)
+        cross = concall.get("cross_quarter_narrative", {})
+        trajectories = cross.get("metric_trajectories", {})
+
+        return {
+            "symbol": symbol.upper(),
+            "sector": sector,
+            "industry": industry,
+            "kpis_found": found_kpis,
+            "kpis_missing": missing_kpis,
+            "coverage": f"{len(found_kpis)}/{len(kpi_defs)} KPIs found in concall data",
+            "metric_trajectories": trajectories,
+            "quarters_analyzed": len(quarters),
+        }
+
     # --- Corporate Actions ---
 
     def get_corporate_actions(self, symbol: str) -> list[dict]:
