@@ -22,4 +22,8 @@ $UV run python scripts/backfill-nifty250.py --step estimate_revisions --sleep 0.
 # Quarterly balance sheet + cash flow (yfinance, ~5min)
 $UV run python scripts/backfill-nifty250.py --step quarterly_bs_cf --sleep 0.3 >> "$LOG" 2>&1
 
+# Compute analytical snapshots (DB queries + yfinance indexes, ~3min)
+echo "=== $(date) === Computing analytical snapshots ===" >> "$LOG"
+$UV run python scripts/compute-analytics.py >> "$LOG" 2>&1
+
 echo "=== $(date) === Weekly Nifty Refresh complete ===" >> "$LOG"

@@ -4,6 +4,19 @@ RESEARCH_SYSTEM_PROMPT = """You are an equity research analyst writing for a beg
 
 Pull data systematically in this order:
 
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
+
 ### Phase 1: Understand the Business
 1. **Business profile** — get_business_profile to check for a cached profile in the vault
 2. **Company profile** — get_company_profile for Screener's about text and key business points
@@ -489,6 +502,19 @@ You will receive the stock symbol and company context in the user message. Throu
 
 ## Your Tools (use in this order)
 
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
+
 ### Phase 1: Understand the Business
 1. `get_company_info` — Get the company name and industry. This is your starting point.
 2. `get_company_profile` — Read Screener's description of the company: about text, key points, business segments.
@@ -699,6 +725,19 @@ Your job is to decode a company's numbers — earnings trajectory, margin mechan
 You will receive the stock symbol and company context in the user message. Throughout this prompt, "the company" or "this company" refers to the stock you are analyzing.
 
 ## Your Tools (use in this order)
+
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
 
 ### Phase 1: Core Financial Data
 1. `get_company_info` — Get the company name, industry, and sector. This anchors all your analysis.
@@ -976,6 +1015,19 @@ You will receive the stock symbol and company context in the user message. Throu
 
 ## Your Tools (use in this order)
 
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
+
 ### Phase 1: Quantitative Risk Profile
 1. `get_composite_score` — Start here. This gives you an 8-factor quantitative rating (ownership, insider, valuation, earnings, quality, delivery, estimates, risk). Each factor is scored 0-100. This is the backbone of your Risk Dashboard.
 2. `get_quarterly_results` — Last 12 quarters. Look for revenue volatility, margin compression, earnings misses — any signs of instability or deterioration.
@@ -1157,6 +1209,19 @@ You will receive the stock symbol and company context in the user message. Throu
 
 ## Your Tools (use in this order)
 
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
+
 ### Phase 1: Price & Technical Data
 1. `get_technical_indicators` — RSI, SMA-50, SMA-200, MACD, ADX, and other technical signals. This is your primary technical data source. If it returns empty/error (FMP free tier limitation for .NS stocks), note the limitation and proceed with other tools.
 1b. `get_price_performance` — Relative Strength analysis: stock return vs Nifty 50 and sector index over 1M/3M/6M/1Y. Don't just report absolute returns — identify if the stock is in a "Structural Uptrend" (outperforming both index and sector) or "Distribution Phase" (underperforming despite index rallies). Price return only, excludes dividends.
@@ -1323,6 +1388,19 @@ Your job is to answer the most important question in investing: **Is this stock 
 You will receive the stock symbol and company context in the user message. Throughout this prompt, "the company" or "this company" refers to the stock you are analyzing.
 
 ## Your Tools (use in this order)
+
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
 
 ### Phase 1: Current Valuation Snapshot
 1. `get_valuation_snapshot` — Current PE, PB, EV/EBITDA, market cap, margins, beta, price. This is your starting point — where does the market price the stock today?
@@ -1591,6 +1669,19 @@ Your job is to analyze who owns this stock, who is buying, who is selling, and w
 You will receive the stock symbol and company context in the user message. Throughout this prompt, "the company" or "this company" refers to the stock you are analyzing.
 
 ## Your Tools (use in this order)
+
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
 
 ### Phase 1: Ownership Structure
 1. `get_shareholding` — Current shareholding pattern: promoter, FII, DII, public, and other categories. This is your starting point — the ownership pie chart.
@@ -2115,6 +2206,19 @@ Your job is to analyze the industry-level dynamics for a given stock's sector �
 You will receive the stock symbol and company context in the user message. Throughout this prompt, "the company" or "this company" refers to the stock you are analyzing. Your analysis should cover the entire sector this company operates in.
 
 ## Your Tools (use in this order)
+
+### Phase 0: Analytical Profile (START HERE)
+1. `get_analytical_profile` — Pre-computed weekly analytical snapshot. Returns ALL of these in ONE call:
+   - **Composite Score** (0-100): 8-factor quality/risk rating
+   - **F-Score** (0-9): Piotroski financial strength (strong/moderate/weak)
+   - **M-Score**: Beneish manipulation risk (unlikely/gray_zone/likely)
+   - **Earnings Quality**: Cash conversion signal (high_quality/low_quality/warning)
+   - **Reverse DCF**: Implied growth rate + implied margin + 5×5 sensitivity matrix
+   - **Capex Cycle**: Phase (Investing/Commissioning/Harvesting/Mature)
+   - **Common Size P&L**: Cost structure (biggest cost, margins as % of revenue)
+   - **BFSI Metrics**: NIM, ROA, cost-to-income, equity multiplier (banks only)
+   - **Price Performance**: 1M/3M/6M/1Y returns vs Nifty 50 + sector index
+   ALWAYS call this first. Reference these metrics throughout your analysis. Only drill into individual data tools when you need full 10Y history or deeper breakdown.
 
 ### Phase 1: Sector Overview
 1. `get_company_info` — Get the company name, industry, and sector. This tells you which sector to analyze.
