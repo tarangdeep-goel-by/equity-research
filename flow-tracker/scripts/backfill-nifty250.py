@@ -125,28 +125,24 @@ def step_screener(symbols: list[str], sleep: float = 2.0):
                         p.advance(task)
                         continue
 
-                    # Quarterly results
-                    from flowtracker.screener_client import parse_quarterly_from_html
-                    qr = parse_quarterly_from_html(html, sym)
+                    # Quarterly results (from HTML)
+                    qr = sc.parse_quarterly_from_html(sym, html)
                     if qr:
                         store.upsert_quarterly_results(qr)
 
                     # Annual financials (via Excel export)
-                    from flowtracker.screener_client import _extract_ids_from_html
-                    _, wid = _extract_ids_from_html(html)
+                    _, wid = sc._get_both_ids(html)
                     if wid:
                         try:
-                            from flowtracker.screener_client import parse_annual_financials
                             excel = sc.fetch_excel_export(wid)
-                            af = parse_annual_financials(excel, sym)
+                            af = sc.parse_annual_financials(sym, excel)
                             if af:
                                 store.upsert_annual_financials(af)
                         except Exception:
                             pass
 
-                    # Ratios
-                    from flowtracker.screener_client import parse_ratios_from_html
-                    ratios = parse_ratios_from_html(html, sym)
+                    # Ratios (from HTML)
+                    ratios = sc.parse_ratios_from_html(sym, html)
                     if ratios:
                         store.upsert_screener_ratios(ratios)
 
