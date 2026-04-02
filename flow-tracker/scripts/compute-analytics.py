@@ -81,9 +81,12 @@ def compute_stock(api, engine, symbol: str, index_cache: dict | None, skip_perf:
         cs = engine.score_stock(symbol)
         if cs:
             d = cs.model_dump()
-            row["composite_score"] = d.get("composite")
-            factors = {k: v for k, v in d.items() if k not in ("composite", "symbol")}
-            row["composite_factors"] = json.dumps(factors) if factors else None
+            row["composite_score"] = d.get("composite_score")
+            # factors is a list of FactorScore dicts
+            if d.get("factors"):
+                factor_dict = {f["factor"]: f["score"] for f in d["factors"]}
+                row["composite_factors"] = json.dumps(factor_dict)
+
     except Exception as e:
         errors["composite_score"] = str(e)
 
