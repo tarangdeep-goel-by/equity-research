@@ -791,6 +791,43 @@ class ResearchDataAPI:
             "quarters_analyzed": len(quarters),
         }
 
+    # --- Analytical Profile (pre-computed) ---
+
+    def get_analytical_profile(self, symbol: str) -> dict:
+        """Get pre-computed analytical profile. One call replaces 9 individual tools.
+
+        Returns the full analytical snapshot with JSON fields parsed.
+        Updated weekly by compute-analytics.py.
+        """
+        import json as _json
+        snapshot = self._store.get_analytical_snapshot(symbol)
+        if not snapshot:
+            return {"error": f"No analytical snapshot for {symbol}. Run compute-analytics.py first."}
+
+        for field in ("composite_factors", "f_score_criteria", "m_score_variables", "rdcf_sensitivity", "errors"):
+            raw = snapshot.get(field)
+            if raw and isinstance(raw, str):
+                try:
+                    snapshot[field] = _json.loads(raw)
+                except (_json.JSONDecodeError, TypeError):
+                    pass
+
+        return snapshot
+
+    def screen_stocks(self, filters: dict) -> list[dict]:
+        """Screen stocks by pre-computed analytical metrics."""
+        import json as _json
+        results = self._store.screen_by_analytics(filters)
+        for row in results:
+            for field in ("composite_factors", "f_score_criteria", "m_score_variables", "rdcf_sensitivity", "errors"):
+                raw = row.get(field)
+                if raw and isinstance(raw, str):
+                    try:
+                        row[field] = _json.loads(raw)
+                    except (_json.JSONDecodeError, TypeError):
+                        pass
+        return results
+
     # --- Corporate Actions ---
 
     def get_corporate_actions(self, symbol: str) -> list[dict]:
@@ -1273,7 +1310,7 @@ class ResearchDataAPI:
     # --- Reverse DCF / Capex / Common Size (Batch 1B) ---
 
     def get_reverse_dcf(self, symbol: str) -> dict:
-        """Reverse DCF: solve for implied growth rate that justifies current market cap."""
+        """Bernstein-style reverse DCF: solve for implied growth, implied margin, + sensitivity matrix."""
         annual = self.get_annual_financials(symbol, years=10)
         if len(annual) < 2:
             return {"error": "Need at least 2 years of financials"}
@@ -1297,6 +1334,9 @@ class ResearchDataAPI:
             discount_rate = 0.14  # Cost of equity for Indian banks
             target = market_cap  # FCFE model → PV = Market Cap directly
             model = "FCFE"
+            cash = 0
+            borrowings = 0
+            capex = 0
         else:
             # FCFF model: discount FCF at WACC, then bridge EV→MCap
             net_block_t = latest.get("net_block", 0) or 0
@@ -1324,13 +1364,13 @@ class ResearchDataAPI:
 
         terminal_g = 0.05  # 5% nominal GDP growth
 
+        # --- 1. Implied Growth Solve (existing) ---
         def dcf_value(g):
             pv = sum(base_cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
             terminal = base_cf * (1 + g) ** 10 * (1 + terminal_g) / (discount_rate - terminal_g)
             pv += terminal / (1 + discount_rate) ** 10
             return pv
 
-        # Binary search for g in [-0.20, 0.60]
         lo, hi = -0.20, 0.60
         for _ in range(100):
             mid = (lo + hi) / 2
@@ -1348,26 +1388,115 @@ class ResearchDataAPI:
         if len(revenues) >= 6:
             cagr_5y = round((revenues[0][1] / revenues[5][1]) ** (1/5) - 1, 4) if revenues[5][1] > 0 else None
 
-        # Assessment
+        # --- 2. Implied Margin Solve (NEW — non-BFSI only) ---
+        current_revenue = latest.get("revenue", 0) or 0
+        current_net_income = latest.get("net_income", 0) or 0
+        current_margin = round(current_net_income / current_revenue, 4) if current_revenue > 0 else 0
+        num_shares = latest.get("num_shares", 0) or 0
+        current_price = valuation.get("price")
+
+        implied_margin = None
+        hist_g = cagr_3y or cagr_5y or 0.10  # fallback 10%
+
+        if not is_bfsi and current_revenue > 0:
+            # Reinvestment rate = net reinvestment / NOPAT (Damodaran textbook)
+            # Net reinvestment = capex - depreciation (+ ΔWC if available, we skip)
+            depr = latest.get("depreciation", 0) or 0
+            net_reinvestment = capex - depr
+            nopat = current_net_income  # proxy: net income ≈ NOPAT for this purpose
+            reinvestment = min(max(net_reinvestment / nopat, 0.05), 0.80) if nopat > 0 else 0.30
+
+            def dcf_with_margin(margin):
+                cf_year0 = current_revenue * margin * (1 - reinvestment)
+                pv = sum(cf_year0 * (1 + hist_g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                eff_discount = max(discount_rate - terminal_g, 0.001)
+                terminal = cf_year0 * (1 + hist_g) ** 10 * (1 + terminal_g) / eff_discount
+                pv += terminal / (1 + discount_rate) ** 10
+                return pv
+
+            lo_m, hi_m = 0.01, 0.50
+            for _ in range(100):
+                mid_m = (lo_m + hi_m) / 2
+                if dcf_with_margin(mid_m) < target:
+                    lo_m = mid_m
+                else:
+                    hi_m = mid_m
+            implied_margin = round((lo_m + hi_m) / 2, 4)
+
+        # --- 3. Sensitivity Matrix (NEW) ---
+        sensitivity = []
+        if not is_bfsi and current_revenue > 0:
+            # reinvestment already computed above (net_reinvestment / nopat)
+            growth_scenarios = [0.05, 0.10, 0.15, 0.20, 0.25]
+            margin_scenarios = [0.05, 0.08, 0.12, 0.16, 0.20]
+
+            for g in growth_scenarios:
+                for m in margin_scenarios:
+                    cf = current_revenue * m * (1 - reinvestment)
+                    pv = sum(cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                    eff_discount = max(discount_rate - terminal_g, 0.001)
+                    terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / eff_discount
+                    pv += terminal / (1 + discount_rate) ** 10
+                    implied_mcap = pv + cash - borrowings
+                    implied_price = round(implied_mcap * 1e7 / num_shares, 2) if num_shares > 0 else None
+                    sensitivity.append({"growth": g, "margin": m, "implied_price": implied_price})
+        elif is_bfsi:
+            # BFSI: use book_value × ROE × payout_ratio as FCFE
+            # Banks must retain capital to grow: payout = 1 - g/ROE
+            equity_capital = latest.get("equity_capital", 0) or 0
+            reserves = latest.get("reserves", 0) or 0
+            book_value = equity_capital + reserves
+            roe_scenarios = [0.10, 0.12, 0.14, 0.16, 0.18]
+            growth_scenarios = [0.05, 0.10, 0.15, 0.20, 0.25]
+
+            for g in growth_scenarios:
+                for roe in roe_scenarios:
+                    net_income = book_value * roe
+                    # g >= roe means bank can't grow this fast without raising equity
+                    payout_ratio = max(1 - (g / roe), 0) if roe > 0 else 0
+                    cf = net_income * payout_ratio  # true FCFE
+                    pv = sum(cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                    eff_discount = max(discount_rate - terminal_g, 0.001)
+                    terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / eff_discount
+                    pv += terminal / (1 + discount_rate) ** 10
+                    implied_price = round(pv * 1e7 / num_shares, 2) if num_shares > 0 else None
+                    sensitivity.append({"growth": g, "roe": roe, "implied_price": implied_price})
+
+        # --- 4. Enhanced Assessment ---
         hist = cagr_3y or cagr_5y
         if hist is not None:
             if implied_g > hist + 0.05:
-                assessment = f"Market expects {implied_g:.0%} growth vs {hist:.0%} historical — priced for acceleration"
+                growth_view = f"growth acceleration ({implied_g:.0%} vs {hist:.0%} historical)"
             elif implied_g < hist - 0.05:
-                assessment = f"Market expects {implied_g:.0%} growth vs {hist:.0%} historical — priced for deceleration"
+                growth_view = f"growth deceleration ({implied_g:.0%} vs {hist:.0%} historical)"
             else:
-                assessment = f"Market expects {implied_g:.0%} growth, roughly in line with {hist:.0%} historical"
+                growth_view = f"growth continuation ({implied_g:.0%} ≈ {hist:.0%} historical)"
+
+            if implied_margin is not None and current_margin > 0:
+                if implied_margin > current_margin + 0.03:
+                    margin_view = f"margin expansion ({implied_margin:.0%} implied vs {current_margin:.0%} current)"
+                elif implied_margin < current_margin - 0.03:
+                    margin_view = f"margin compression ({implied_margin:.0%} implied vs {current_margin:.0%} current)"
+                else:
+                    margin_view = f"stable margins ({implied_margin:.0%} ≈ {current_margin:.0%} current)"
+                assessment = f"Market is pricing in {growth_view} + {margin_view}"
+            else:
+                assessment = f"Market is pricing in {growth_view}"
         else:
             assessment = f"Implied growth rate: {implied_g:.0%}"
 
         return {
             "implied_growth_rate": implied_g,
+            "implied_margin": implied_margin,
+            "current_margin": current_margin,
             "base_cf_used": round(base_cf, 2),
             "market_cap": market_cap,
             "model": model,
             "discount_rate": discount_rate,
             "historical_3y_cagr": cagr_3y,
             "historical_5y_cagr": cagr_5y,
+            "sensitivity": sensitivity,
+            "current_price": current_price,
             "assessment": assessment,
         }
 
@@ -1591,9 +1720,24 @@ class ResearchDataAPI:
 
     # --- Price Performance ---
 
-    def get_price_performance(self, symbol: str) -> dict:
-        """Price return vs Nifty 50 and sector index (excl. dividends)."""
-        import yfinance as yf
+    # Sector index mapping for price performance
+    _SECTOR_INDEX = {
+        "Private Sector Bank": "^NSEBANK", "Public Sector Bank": "^NSEBANK",
+        "Other Bank": "^NSEBANK",
+        "IT - Software": "^CNXIT", "IT - Services": "^CNXIT",
+        "Pharmaceuticals": "^CNXPHARMA", "FMCG": "^CNXFMCG",
+        "Automobile": "NIFTY_AUTO.NS", "Auto Components": "NIFTY_AUTO.NS",
+        "Realty": "NIFTY_REALTY.NS",
+        "Non Banking Financial Company (NBFC)": "^NSEBANK",
+    }
+
+    def get_price_performance(self, symbol: str, index_cache: dict | None = None) -> dict:
+        """Price return vs Nifty 50 and sector index (excl. dividends).
+
+        Args:
+            index_cache: Optional dict of {ticker: {date_str: close_price}} for batch mode.
+                When provided, skips live yfinance fetch. When None, fetches live.
+        """
         from datetime import date, timedelta
 
         today = date.today()
@@ -1617,35 +1761,32 @@ class ResearchDataAPI:
         latest_date = max(stock_prices.keys())
         latest_price = stock_prices[latest_date]
 
-        # Fetch Nifty 50 index prices (live from yfinance, 1Y history)
-        try:
-            nifty = yf.Ticker("^NSEI")
-            hist = nifty.history(period="1y")
-            nifty_prices = {str(d.date()): row["Close"] for d, row in hist.iterrows()}
-        except Exception:
-            nifty_prices = {}
-
-        # Sector index mapping
-        _SECTOR_INDEX = {
-            "Private Sector Bank": "^NSEBANK", "Public Sector Bank": "^NSEBANK",
-            "Other Bank": "^NSEBANK",
-            "IT - Software": "^CNXIT", "IT - Services": "^CNXIT",
-            "Pharmaceuticals": "^CNXPHARMA", "FMCG": "^CNXFMCG",
-            "Automobile": "NIFTY_AUTO.NS", "Auto Components": "NIFTY_AUTO.NS",
-            "Realty": "NIFTY_REALTY.NS",
-            "Non Banking Financial Company (NBFC)": "^NSEBANK",
-        }
+        # Nifty 50 index prices — from cache or live yfinance
+        if index_cache and "^NSEI" in index_cache:
+            nifty_prices = index_cache["^NSEI"]
+        else:
+            try:
+                import yfinance as yf
+                nifty = yf.Ticker("^NSEI")
+                hist = nifty.history(period="1y")
+                nifty_prices = {str(d.date()): row["Close"] for d, row in hist.iterrows()}
+            except Exception:
+                nifty_prices = {}
 
         industry = self._get_industry(symbol)
-        sector_idx = _SECTOR_INDEX.get(industry)
+        sector_idx = self._SECTOR_INDEX.get(industry)
         sector_prices = {}
         if sector_idx:
-            try:
-                sec = yf.Ticker(sector_idx)
-                hist = sec.history(period="1y")
-                sector_prices = {str(d.date()): row["Close"] for d, row in hist.iterrows()}
-            except Exception:
-                pass
+            if index_cache and sector_idx in index_cache:
+                sector_prices = index_cache[sector_idx]
+            else:
+                try:
+                    import yfinance as yf
+                    sec = yf.Ticker(sector_idx)
+                    hist = sec.history(period="1y")
+                    sector_prices = {str(d.date()): row["Close"] for d, row in hist.iterrows()}
+                except Exception:
+                    pass
 
         def find_price(prices_dict, target_date):
             """Find closest price on or before target date (within 5 day tolerance)."""

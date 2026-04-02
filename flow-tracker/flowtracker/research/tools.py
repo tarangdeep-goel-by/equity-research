@@ -911,6 +911,38 @@ async def get_bfsi_metrics(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+@tool(
+    "get_analytical_profile",
+    "Pre-computed analytical profile (updated weekly). Returns ALL metrics in ONE call: "
+    "composite score (0-100), Piotroski F-Score (0-9), Beneish M-Score, earnings quality, "
+    "Bernstein reverse DCF (implied growth + implied margin + 5x5 sensitivity matrix), "
+    "capex cycle phase, common size P&L, BFSI metrics (NIM/ROA if bank), "
+    "price performance (1M/3M/6M/1Y vs Nifty + sector). "
+    "CALL THIS FIRST — drill into individual tools only for full 10Y history.",
+    {"symbol": str},
+)
+async def get_analytical_profile(args):
+    with ResearchDataAPI() as api:
+        data = api.get_analytical_profile(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "screen_stocks",
+    "Screen ~600 Nifty index stocks by pre-computed analytical metrics. "
+    "Pass filters dict with _min/_max suffixes or exact match. "
+    "Examples: {\"f_score_min\": 7} for F-Score >= 7. "
+    "{\"eq_signal\": \"high_quality\", \"composite_score_min\": 60} combines filters. "
+    "Available: f_score, m_score, composite_score, eq_signal, rdcf_implied_growth, "
+    "capex_phase, perf_1y_excess, is_bfsi, industry, m_score_signal.",
+    {"filters": dict},
+)
+async def screen_stocks(args):
+    with ResearchDataAPI() as api:
+        data = api.screen_stocks(args["filters"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
 _PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_valuation_matrix, get_sector_benchmarks]
 
 
@@ -967,6 +999,7 @@ RESEARCH_TOOLS = [
     get_reverse_dcf, get_capex_cycle, get_common_size_pl,
     get_revenue_estimates, get_growth_estimates, get_price_performance,
     get_sector_kpis,
+    get_analytical_profile, screen_stocks,
 ]
 
 # Subset for business research — qualitative + key financials for context
@@ -1007,10 +1040,11 @@ BUSINESS_AGENT_TOOLS = [
     get_valuation_snapshot, get_peer_comparison, get_expense_breakdown,
     get_consensus_estimate, get_earnings_surprises,
     get_upcoming_catalysts,
+    get_analytical_profile,  # pre-computed analytical metrics
     get_sector_kpis,  # sector-specific operational KPIs from concalls
     render_chart,  # generate PNG charts for embedding
     *_PEER_TOOLS,
-]  # 20 tools
+]  # 21 tools
 
 FINANCIAL_AGENT_TOOLS = [
     get_company_info, get_quarterly_results, get_annual_financials,
@@ -1023,13 +1057,11 @@ FINANCIAL_AGENT_TOOLS = [
     get_financial_projections,
     get_estimate_revisions, get_estimate_momentum,
     get_dividend_history,
-    get_earnings_quality, get_piotroski_score, get_beneish_score,
-    get_reverse_dcf, get_capex_cycle, get_common_size_pl,
+    get_analytical_profile,  # pre-computed: F-Score, M-Score, DCF, earnings quality, capex, BFSI, etc.
     get_revenue_estimates,
-    get_bfsi_metrics, get_sector_kpis,
     render_chart,
     *_PEER_TOOLS,
-]  # 30 tools
+]  # 25 tools
 
 OWNERSHIP_AGENT_TOOLS = [
     get_shareholding, get_shareholding_changes, get_insider_transactions,
@@ -1052,9 +1084,8 @@ VALUATION_AGENT_TOOLS = [
     get_events_calendar,
     get_dividend_history,
     get_upcoming_catalysts,
-    get_reverse_dcf,
-    get_revenue_estimates, get_growth_estimates, get_price_performance,
-    get_bfsi_metrics,
+    get_analytical_profile,  # pre-computed: reverse DCF, BFSI metrics, price performance, etc.
+    get_revenue_estimates, get_growth_estimates,
     render_chart,
     *_PEER_TOOLS,
 ]
@@ -1068,17 +1099,16 @@ RISK_AGENT_TOOLS = [
     get_concall_insights,  # red flags, evasive answers, risk acknowledgments from management
     get_corporate_actions,  # share capital changes are a risk factor
     get_upcoming_catalysts,
-    get_earnings_quality, get_piotroski_score, get_beneish_score,
-    get_bfsi_metrics,
+    get_analytical_profile,  # pre-computed: F-Score, M-Score, earnings quality, BFSI metrics, etc.
     *_PEER_TOOLS,
-]  # 20 tools
+]  # 17 tools
 
 TECHNICAL_AGENT_TOOLS = [
     get_technical_indicators, get_chart_data, get_delivery_trend,
     get_valuation_snapshot, get_bulk_block_deals,
     get_fii_dii_flows, get_fii_dii_streak,
     get_sector_benchmarks,
-    get_price_performance,
+    get_analytical_profile,  # pre-computed price performance + all analytical metrics
     render_chart,  # price + delivery charts
 ]  # 10 tools
 
@@ -1087,6 +1117,7 @@ SECTOR_AGENT_TOOLS = [
     get_sector_valuations, get_peer_comparison,
     get_peer_metrics, get_peer_growth, get_sector_benchmarks,
     get_macro_snapshot, get_fii_dii_flows, get_fii_dii_streak,
-    get_price_performance, get_sector_kpis,
+    get_analytical_profile,  # pre-computed price performance + analytical metrics
+    get_sector_kpis,
     render_chart,
 ]  # 14 tools

@@ -685,6 +685,94 @@ CREATE TABLE IF NOT EXISTS quarterly_cash_flow (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (symbol, quarter_end)
 );
+
+CREATE TABLE IF NOT EXISTS analytical_snapshot (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    computed_date TEXT NOT NULL,
+
+    -- Composite Score
+    composite_score REAL,
+    composite_factors TEXT,
+
+    -- Piotroski F-Score
+    f_score INTEGER,
+    f_score_max INTEGER,
+    f_score_signal TEXT,
+    f_score_criteria TEXT,
+
+    -- Beneish M-Score
+    m_score REAL,
+    m_score_signal TEXT,
+    m_score_variables TEXT,
+
+    -- Earnings Quality
+    eq_signal TEXT,
+    eq_cfo_pat_3y REAL,
+    eq_cfo_pat_5y REAL,
+    eq_accruals_3y REAL,
+
+    -- Reverse DCF
+    rdcf_implied_growth REAL,
+    rdcf_implied_margin REAL,
+    rdcf_model TEXT,
+    rdcf_base_cf REAL,
+    rdcf_market_cap REAL,
+    rdcf_3y_cagr REAL,
+    rdcf_5y_cagr REAL,
+    rdcf_assessment TEXT,
+    rdcf_sensitivity TEXT,
+
+    -- Capex Cycle
+    capex_phase TEXT,
+    capex_cwip_to_nb REAL,
+    capex_intensity REAL,
+    capex_asset_turnover REAL,
+
+    -- Common Size P&L (latest year)
+    cs_biggest_cost TEXT,
+    cs_fastest_growing_cost TEXT,
+    cs_raw_material_pct REAL,
+    cs_employee_pct REAL,
+    cs_depreciation_pct REAL,
+    cs_interest_pct REAL,
+    cs_net_margin_pct REAL,
+    cs_ebit_pct REAL,
+    cs_denominator TEXT,
+
+    -- BFSI Metrics (latest year)
+    bfsi_nim_pct REAL,
+    bfsi_roa_pct REAL,
+    bfsi_cost_to_income_pct REAL,
+    bfsi_equity_multiplier REAL,
+    bfsi_book_value_per_share REAL,
+    bfsi_pb_ratio REAL,
+
+    -- Price Performance
+    perf_1m_stock REAL,
+    perf_3m_stock REAL,
+    perf_6m_stock REAL,
+    perf_1y_stock REAL,
+    perf_1m_excess REAL,
+    perf_3m_excess REAL,
+    perf_6m_excess REAL,
+    perf_1y_excess REAL,
+    perf_outperformer INTEGER,
+    perf_sector_index TEXT,
+
+    -- Metadata
+    industry TEXT,
+    is_bfsi INTEGER,
+    is_insurance INTEGER,
+    errors TEXT,
+    compute_duration_ms INTEGER,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+
+    UNIQUE(symbol, computed_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytical_snapshot_symbol ON analytical_snapshot(symbol);
+CREATE INDEX IF NOT EXISTS idx_analytical_snapshot_date ON analytical_snapshot(computed_date);
 """
 
 
@@ -3328,6 +3416,87 @@ class FlowStore:
             "SELECT * FROM quarterly_cash_flow WHERE symbol = ? ORDER BY quarter_end DESC LIMIT ?",
             (symbol.upper(), limit),
         ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Analytical Snapshot ─────────────────────────────────────────
+
+    def upsert_analytical_snapshot(self, row: dict) -> None:
+        """Upsert a single analytical snapshot row."""
+        cols = [c[1] for c in self._conn.execute(
+            "PRAGMA table_info(analytical_snapshot)"
+        ).fetchall() if c[1] != "id"]
+        placeholders = ", ".join(["?"] * len(cols))
+        col_names = ", ".join(cols)
+        sql = f"INSERT OR REPLACE INTO analytical_snapshot ({col_names}) VALUES ({placeholders})"
+        self._conn.execute(sql, [row.get(c) for c in cols])
+        self._conn.commit()
+
+    def get_analytical_snapshot(self, symbol: str) -> dict | None:
+        """Get latest analytical snapshot for a stock."""
+        row = self._conn.execute(
+            "SELECT * FROM analytical_snapshot WHERE symbol = ? "
+            "ORDER BY computed_date DESC LIMIT 1",
+            (symbol.upper(),)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_analytical_snapshots_all(self, computed_date: str | None = None) -> list[dict]:
+        """Get latest snapshots for all stocks. For screening and batch operations."""
+        if computed_date:
+            rows = self._conn.execute(
+                "SELECT * FROM analytical_snapshot WHERE computed_date = ?",
+                (computed_date,)
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                """SELECT a.* FROM analytical_snapshot a
+                   INNER JOIN (
+                       SELECT symbol, MAX(computed_date) as max_date
+                       FROM analytical_snapshot GROUP BY symbol
+                   ) b ON a.symbol = b.symbol AND a.computed_date = b.max_date"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def screen_by_analytics(self, filters: dict) -> list[dict]:
+        """Screen stocks by analytical metrics.
+
+        Filter keys: _min suffix (>=), _max suffix (<=), no suffix (exact match).
+        Example: {"f_score_min": 7, "eq_signal": "high_quality"}
+        """
+        allowed = {c[1] for c in self._conn.execute(
+            "PRAGMA table_info(analytical_snapshot)"
+        ).fetchall()}
+
+        conditions = []
+        params = []
+        for key, value in filters.items():
+            if key.endswith("_min"):
+                col = key[:-4]
+                if col not in allowed:
+                    continue
+                conditions.append(f"{col} >= ?")
+                params.append(value)
+            elif key.endswith("_max"):
+                col = key[:-4]
+                if col not in allowed:
+                    continue
+                conditions.append(f"{col} <= ?")
+                params.append(value)
+            else:
+                if key not in allowed:
+                    continue
+                conditions.append(f"{key} = ?")
+                params.append(value)
+
+        where = " AND ".join(conditions) if conditions else "1=1"
+        sql = f"""SELECT a.* FROM analytical_snapshot a
+                  INNER JOIN (
+                      SELECT symbol, MAX(computed_date) as max_date
+                      FROM analytical_snapshot GROUP BY symbol
+                  ) b ON a.symbol = b.symbol AND a.computed_date = b.max_date
+                  WHERE {where}
+                  ORDER BY a.composite_score DESC"""
+        rows = self._conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
     def close(self) -> None:
