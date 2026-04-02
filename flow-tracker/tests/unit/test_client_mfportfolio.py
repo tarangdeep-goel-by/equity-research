@@ -71,7 +71,7 @@ class TestParseHoldingRow:
         assert holding.isin == "INE062A01020"
         assert holding.stock_name == "State Bank of India"
         assert holding.quantity == 500000
-        assert holding.market_value_lakhs == 41000000.0
+        assert holding.market_value_cr == 410000.0
         assert holding.pct_of_nav == 5.25
         assert holding.month == "2026-02"
         assert holding.amc == "SBI"
@@ -152,7 +152,7 @@ class TestParseHoldingRow:
         # qty=0 but value=50000, so holding is returned
         assert holding is not None
         assert holding.quantity == 0
-        assert holding.market_value_lakhs == 50000.0
+        assert holding.market_value_cr == 500.0
         client.close()
 
     def test_scheme_name_truncated(self):

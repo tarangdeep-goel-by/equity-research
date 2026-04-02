@@ -28,6 +28,40 @@ from flowtracker.fmp_models import (
 from flowtracker.portfolio_models import PortfolioHolding
 from flowtracker.alert_models import Alert
 
+import logging
+
+_val_logger = logging.getLogger("flowtracker.validation")
+
+_VALIDATION_RULES: dict[str, dict[str, tuple[float, float]]] = {
+    "annual_financials": {
+        "revenue": (0, 2_000_000),       # 0 to 20L Cr
+        "net_income": (-100_000, 1_000_000),
+        "total_assets": (0, 100_000_000), # banks can be very large
+        "num_shares": (1_000_000, 50_000_000_000),
+        "eps": (-500, 10_000),
+    },
+    "valuation_snapshot": {
+        "market_cap": (0, 30_000_000),    # 0 to 30L Cr (in crores)
+        "price": (0.01, 200_000),
+        "pe_trailing": (-1000, 5000),
+    },
+    "quarterly_results": {
+        "revenue": (0, 500_000),          # quarterly, so lower than annual
+    },
+}
+
+
+def _validate_row(table: str, row: dict) -> list[str]:
+    """Return list of validation warnings. Empty = valid."""
+    errors = []
+    rules = _VALIDATION_RULES.get(table, {})
+    for field, (lo, hi) in rules.items():
+        val = row.get(field)
+        if val is not None and (val < lo or val > hi):
+            errors.append(f"{field}={val} outside [{lo}, {hi}]")
+    return errors
+
+
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
 _DEFAULT_DB_NAME = "flows.db"
 
@@ -346,7 +380,7 @@ CREATE TABLE IF NOT EXISTS mf_scheme_holdings (
     isin TEXT NOT NULL,
     stock_name TEXT NOT NULL,
     quantity INTEGER NOT NULL,
-    market_value_lakhs REAL NOT NULL,
+    market_value_cr REAL NOT NULL,
     pct_of_nav REAL NOT NULL,
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(month, amc, scheme_name, isin)
@@ -1504,6 +1538,9 @@ class FlowStore:
                 "SELECT revenue FROM quarterly_results WHERE symbol = ? AND quarter_end = ?",
                 (r.symbol, r.quarter_end),
             ).fetchone()
+            warnings = _validate_row("quarterly_results", r.model_dump())
+            if warnings:
+                _val_logger.warning("quarterly_results %s/%s: %s", r.symbol, r.quarter_end, "; ".join(warnings))
             if existing and existing["revenue"] != r.revenue:
                 cursor.execute(
                     "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
@@ -1552,6 +1589,9 @@ class FlowStore:
             "SELECT pe_trailing FROM valuation_snapshot WHERE symbol = ? AND date = ?",
             (snapshot.symbol, snapshot.date),
         ).fetchone()
+        warnings = _validate_row("valuation_snapshot", snapshot.model_dump())
+        if warnings:
+            _val_logger.warning("valuation_snapshot %s/%s: %s", snapshot.symbol, snapshot.date, "; ".join(warnings))
         if existing and existing["pe_trailing"] != snapshot.pe_trailing:
             cursor.execute(
                 "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
@@ -1698,6 +1738,9 @@ class FlowStore:
                 "SELECT revenue FROM annual_financials WHERE symbol = ? AND fiscal_year_end = ?",
                 (r.symbol, r.fiscal_year_end),
             ).fetchone()
+            warnings = _validate_row("annual_financials", r.model_dump())
+            if warnings:
+                _val_logger.warning("annual_financials %s/%s: %s", r.symbol, r.fiscal_year_end, "; ".join(warnings))
             if existing and existing["revenue"] != r.revenue:
                 cursor.execute(
                     "INSERT INTO audit_log (table_name, symbol, key_info, field, old_value, new_value) "
@@ -2400,10 +2443,10 @@ class FlowStore:
         for h in holdings:
             cursor.execute(
                 "INSERT OR REPLACE INTO mf_scheme_holdings "
-                "(month, amc, scheme_name, isin, stock_name, quantity, market_value_lakhs, pct_of_nav) "
+                "(month, amc, scheme_name, isin, stock_name, quantity, market_value_cr, pct_of_nav) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (h.month, h.amc, h.scheme_name, h.isin, h.stock_name,
-                 h.quantity, h.market_value_lakhs, h.pct_of_nav),
+                 h.quantity, h.market_value_cr, h.pct_of_nav),
             )
             count += cursor.rowcount
         self._conn.commit()
@@ -2415,13 +2458,13 @@ class FlowStore:
             "SELECT * FROM mf_scheme_holdings "
             "WHERE (UPPER(stock_name) LIKE ? OR isin = ?) "
             "AND month = (SELECT MAX(month) FROM mf_scheme_holdings) "
-            "ORDER BY market_value_lakhs DESC",
+            "ORDER BY market_value_cr DESC",
             (f"%{search}%", search),
         ).fetchall()
         return [MFSchemeHolding(
             month=r["month"], amc=r["amc"], scheme_name=r["scheme_name"],
             isin=r["isin"], stock_name=r["stock_name"], quantity=r["quantity"],
-            market_value_lakhs=r["market_value_lakhs"], pct_of_nav=r["pct_of_nav"],
+            market_value_cr=r["market_value_cr"], pct_of_nav=r["pct_of_nav"],
         ) for r in rows]
 
     def get_mf_holding_changes(
@@ -2451,8 +2494,8 @@ class FlowStore:
                     ? as prev_month, ? as curr_month,
                     COALESCE(p.quantity, 0) as prev_qty, c.quantity as curr_qty,
                     c.quantity - COALESCE(p.quantity, 0) as qty_change,
-                    COALESCE(p.market_value_lakhs, 0) as prev_value,
-                    c.market_value_lakhs as curr_value,
+                    COALESCE(p.market_value_cr, 0) as prev_value,
+                    c.market_value_cr as curr_value,
                     CASE WHEN p.isin IS NULL THEN 'NEW' ELSE 'INCREASE' END as change_type
                 FROM mf_scheme_holdings c
                 LEFT JOIN mf_scheme_holdings p ON c.isin = p.isin
@@ -2460,7 +2503,7 @@ class FlowStore:
                     AND p.month = ?
                 WHERE c.month = ?
                     AND (p.isin IS NULL OR c.quantity > p.quantity)
-                ORDER BY c.market_value_lakhs - COALESCE(p.market_value_lakhs, 0) DESC
+                ORDER BY c.market_value_cr - COALESCE(p.market_value_cr, 0) DESC
                 LIMIT ?
             """, (prev_month, month, prev_month, month, limit)).fetchall()
         else:
@@ -2470,8 +2513,8 @@ class FlowStore:
                     ? as prev_month, ? as curr_month,
                     p.quantity as prev_qty, COALESCE(c.quantity, 0) as curr_qty,
                     COALESCE(c.quantity, 0) - p.quantity as qty_change,
-                    p.market_value_lakhs as prev_value,
-                    COALESCE(c.market_value_lakhs, 0) as curr_value,
+                    p.market_value_cr as prev_value,
+                    COALESCE(c.market_value_cr, 0) as curr_value,
                     CASE WHEN c.isin IS NULL THEN 'EXIT' ELSE 'DECREASE' END as change_type
                 FROM mf_scheme_holdings p
                 LEFT JOIN mf_scheme_holdings c ON p.isin = c.isin
@@ -2479,7 +2522,7 @@ class FlowStore:
                     AND c.month = ?
                 WHERE p.month = ?
                     AND (c.isin IS NULL OR c.quantity < p.quantity)
-                ORDER BY p.market_value_lakhs - COALESCE(c.market_value_lakhs, 0) DESC
+                ORDER BY p.market_value_cr - COALESCE(c.market_value_cr, 0) DESC
                 LIMIT ?
             """, (prev_month, month, month, prev_month, limit)).fetchall()
 
@@ -2503,9 +2546,9 @@ class FlowStore:
         rows = self._conn.execute(
             "SELECT amc, COUNT(DISTINCT scheme_name) as num_schemes, "
             "COUNT(DISTINCT isin) as num_stocks, "
-            "SUM(market_value_lakhs) as total_value_lakhs "
+            "SUM(market_value_cr) as total_value_cr "
             "FROM mf_scheme_holdings WHERE month = ? "
-            "GROUP BY amc ORDER BY total_value_lakhs DESC",
+            "GROUP BY amc ORDER BY total_value_cr DESC",
             (month,),
         ).fetchall()
         return [dict(r) for r in rows]

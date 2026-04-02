@@ -488,10 +488,10 @@ Full Quarterly Results — {{ quarterly_full|length }} Quarters (click to expand
 <h3 style="font-size:0.9rem;color:var(--cyan);margin-bottom:0.5rem">Mutual Fund Scheme Holdings — Top {{ mf_holdings|length }} Schemes</h3>
 <p class="note">Source: AMFI monthly portfolio disclosures.</p>
 <table style="font-size:0.82rem">
-<thead><tr><th>#</th><th>Scheme Name</th><th>AMC</th><th class="r">Qty (shares)</th><th class="r">Value (₹L)</th><th class="r">% of NAV</th></tr></thead>
+<thead><tr><th>#</th><th>Scheme Name</th><th>AMC</th><th class="r">Qty (shares)</th><th class="r">Value (₹Cr)</th><th class="r">% of NAV</th></tr></thead>
 <tbody>
 {% for h in mf_holdings[:20] %}
-<tr><td>{{ loop.index }}</td><td>{{ h.scheme }}</td><td>{{ h.amc }}</td><td class="r">{{ "{:,.0f}".format(h.qty) }}</td><td class="r">{{ "{:,.0f}".format(h.value_lakhs) }}</td><td class="r">{{ "%.2f"|format(h.pct_nav) }}%</td></tr>
+<tr><td>{{ loop.index }}</td><td>{{ h.scheme }}</td><td>{{ h.amc }}</td><td class="r">{{ "{:,.0f}".format(h.qty) }}</td><td class="r">{{ "{:,.1f}".format(h.value_cr) }}</td><td class="r">{{ "%.2f"|format(h.pct_nav) }}%</td></tr>
 {% endfor %}
 </tbody>
 </table>

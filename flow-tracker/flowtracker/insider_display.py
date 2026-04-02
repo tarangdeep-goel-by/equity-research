@@ -40,8 +40,8 @@ def display_insider_trades(
             if txn_color else t.transaction_type
         )
 
-        # Value in crores (input is INR)
-        value_cr = t.value / 1e7 if t.value else 0
+        # Value already in crores
+        value_cr = t.value if t.value else 0
 
         table.add_row(
             t.date,

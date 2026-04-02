@@ -37,7 +37,7 @@ def display_stock_holdings(
     table.add_column("AMC", width=6)
     table.add_column("Scheme", width=28)
     table.add_column("Qty", justify="right", width=12)
-    table.add_column("Value ₹L", justify="right", width=12)
+    table.add_column("Value ₹Cr", justify="right", width=12)
     table.add_column("% NAV", justify="right", width=7)
 
     for h in holdings:
@@ -46,7 +46,7 @@ def display_stock_holdings(
             h.amc,
             h.scheme_name[:28],
             f"{h.quantity:,}",
-            f"{h.market_value_lakhs:,.0f}",
+            f"{h.market_value_cr:,.1f}",
             f"{h.pct_of_nav:.2f}%",
         )
 
@@ -96,7 +96,7 @@ def display_top_changes(changes: list[MFHoldingChange], title: str) -> None:
 def display_amc_summary(summary: list[dict]) -> None:
     """Show AMC-level summary for a month.
 
-    Each dict: {amc, num_schemes, num_stocks, total_value_lakhs}
+    Each dict: {amc, num_schemes, num_stocks, total_value_cr}
     """
     if not summary:
         console.print("[yellow]No portfolio data found.[/]")
@@ -117,7 +117,7 @@ def display_amc_summary(summary: list[dict]) -> None:
             s["amc"],
             str(s["num_schemes"]),
             str(s["num_stocks"]),
-            f"{s['total_value_lakhs'] / 100:,.0f}",  # lakhs to crores
+            f"{s['total_value_cr']:,.0f}",
         )
 
     console.print(table)

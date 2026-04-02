@@ -440,11 +440,11 @@ def make_mf_daily_flows(n: int = 5) -> list[MFDailyFlow]:
 
 def make_mf_scheme_holdings() -> list[MFSchemeHolding]:
     return [
-        MFSchemeHolding(month="2026-02", amc="SBI", scheme_name="SBI Bluechip Fund", isin="INE062A01020", stock_name="State Bank of India", quantity=5000000, market_value_lakhs=41000.0, pct_of_nav=5.2),
-        MFSchemeHolding(month="2026-02", amc="ICICI", scheme_name="ICICI Pru Bluechip Fund", isin="INE062A01020", stock_name="State Bank of India", quantity=3000000, market_value_lakhs=24600.0, pct_of_nav=3.8),
-        MFSchemeHolding(month="2026-02", amc="SBI", scheme_name="SBI Focused Equity Fund", isin="INE009A01021", stock_name="Infosys Ltd", quantity=2000000, market_value_lakhs=37000.0, pct_of_nav=4.5),
+        MFSchemeHolding(month="2026-02", amc="SBI", scheme_name="SBI Bluechip Fund", isin="INE062A01020", stock_name="State Bank of India", quantity=5000000, market_value_cr=410.0, pct_of_nav=5.2),
+        MFSchemeHolding(month="2026-02", amc="ICICI", scheme_name="ICICI Pru Bluechip Fund", isin="INE062A01020", stock_name="State Bank of India", quantity=3000000, market_value_cr=246.0, pct_of_nav=3.8),
+        MFSchemeHolding(month="2026-02", amc="SBI", scheme_name="SBI Focused Equity Fund", isin="INE009A01021", stock_name="Infosys Ltd", quantity=2000000, market_value_cr=370.0, pct_of_nav=4.5),
         # Previous month for change detection
-        MFSchemeHolding(month="2026-01", amc="SBI", scheme_name="SBI Bluechip Fund", isin="INE062A01020", stock_name="State Bank of India", quantity=4500000, market_value_lakhs=36000.0, pct_of_nav=4.8),
+        MFSchemeHolding(month="2026-01", amc="SBI", scheme_name="SBI Bluechip Fund", isin="INE062A01020", stock_name="State Bank of India", quantity=4500000, market_value_cr=360.0, pct_of_nav=4.8),
     ]
 
 

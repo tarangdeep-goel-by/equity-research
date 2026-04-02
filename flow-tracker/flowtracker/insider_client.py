@@ -153,7 +153,8 @@ class InsiderClient:
             quantity = _parse_int_safe(
                 item.get("secAcq") or item.get("noOfShareAcq", 0)
             )
-            value = _parse_float_safe(item.get("secVal", 0))
+            value_raw = _parse_float_safe(item.get("secVal", 0))
+            value = value_raw / 1e7 if value_raw else 0  # Convert to crores
 
             if quantity == 0 and value == 0:
                 return None

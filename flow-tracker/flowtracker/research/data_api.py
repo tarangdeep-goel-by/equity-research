@@ -1316,11 +1316,9 @@ class ResearchDataAPI:
             return {"error": "Need at least 2 years of financials"}
 
         valuation = self.get_valuation_snapshot(symbol)
-        market_cap_raw = valuation.get("market_cap")
-        if not market_cap_raw or market_cap_raw <= 0:
+        market_cap = valuation.get("market_cap")
+        if not market_cap or market_cap <= 0:
             return {"error": "No market cap data"}
-        # valuation_snapshot stores market_cap in rupees; financials are in crores
-        market_cap = market_cap_raw / 1e7
 
         latest = annual[0]  # most recent year
         prev = annual[1]
@@ -1699,9 +1697,9 @@ class ResearchDataAPI:
             if operating_income > 0:
                 entry["cost_to_income_pct"] = round((employee_cost + other_exp) / operating_income * 100, 2)
 
-            # Book Value / Share
+            # Book Value / Share (net_worth is in Cr, convert to Rs for per-share)
             if num_shares > 0:
-                bvps = net_worth / num_shares
+                bvps = net_worth * 1e7 / num_shares
                 entry["book_value_per_share"] = round(bvps, 2)
                 # P/B (use current price if available)
                 if current_price and current_price > 0:

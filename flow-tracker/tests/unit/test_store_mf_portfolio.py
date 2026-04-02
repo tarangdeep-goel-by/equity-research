@@ -94,7 +94,7 @@ def test_get_mf_portfolio_summary(store: FlowStore):
     assert "amc" in first
     assert "num_schemes" in first
     assert "num_stocks" in first
-    assert "total_value_lakhs" in first
+    assert "total_value_cr" in first
 
 
 def test_get_mf_portfolio_summary_auto_month(store: FlowStore):

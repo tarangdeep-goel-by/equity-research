@@ -38,6 +38,11 @@ def _div100(val: float | None) -> float | None:
     return val / 100 if val is not None else None
 
 
+def _to_cr(val: float | None) -> float | None:
+    """Convert raw rupees to crores (÷1e7)."""
+    return val / 1e7 if val is not None else None
+
+
 class FundClient:
     """yfinance client for fundamentals data."""
 
@@ -151,8 +156,8 @@ class FundClient:
             date=date.today().isoformat(),
             # Price context
             price=info.get("currentPrice") or info.get("regularMarketPrice"),
-            market_cap=info.get("marketCap"),
-            enterprise_value=info.get("enterpriseValue"),
+            market_cap=_to_cr(info.get("marketCap")),
+            enterprise_value=_to_cr(info.get("enterpriseValue")),
             fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
             fifty_two_week_low=info.get("fiftyTwoWeekLow"),
             beta=info.get("beta"),
@@ -179,12 +184,12 @@ class FundClient:
             # Balance sheet
             debt_to_equity=_div100(info.get("debtToEquity")),
             current_ratio=info.get("currentRatio"),
-            total_cash=info.get("totalCash"),
-            total_debt=info.get("totalDebt"),
+            total_cash=_to_cr(info.get("totalCash")),
+            total_debt=_to_cr(info.get("totalDebt")),
             book_value_per_share=info.get("bookValue"),
             # Cash flow
-            free_cash_flow=info.get("freeCashflow"),
-            operating_cash_flow=info.get("operatingCashflow"),
+            free_cash_flow=_to_cr(info.get("freeCashflow")),
+            operating_cash_flow=_to_cr(info.get("operatingCashflow")),
             # Per-share
             revenue_per_share=info.get("revenuePerShare"),
             cash_per_share=info.get("totalCashPerShare"),

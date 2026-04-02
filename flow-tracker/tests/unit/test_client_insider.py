@@ -134,7 +134,7 @@ class TestParseTrade:
         assert trade.person_name == "Rajesh Kumar"
         assert trade.person_category == "Promoters"
         assert trade.quantity == 50000
-        assert trade.value == 41000000.0
+        assert trade.value == 4.1  # 41000000 rupees → 4.1 crores
         assert trade.mode == "Market Purchase"
         assert trade.holding_before_pct == 45.20
         assert trade.holding_after_pct == 45.25

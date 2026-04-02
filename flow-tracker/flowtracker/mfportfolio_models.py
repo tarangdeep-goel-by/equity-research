@@ -13,7 +13,7 @@ class MFSchemeHolding(BaseModel):
     isin: str
     stock_name: str
     quantity: int
-    market_value_lakhs: float
+    market_value_cr: float
     pct_of_nav: float
 
 

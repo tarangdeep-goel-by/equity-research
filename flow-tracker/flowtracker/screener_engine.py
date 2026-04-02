@@ -160,9 +160,9 @@ class ScreenerEngine:
         sells = [t for t in trades if t.transaction_type == "Sell"]
         promoter_buys = [t for t in buys if "Promoter" in t.person_category]
 
-        buy_val = sum(t.value for t in buys) / 1e7  # crores
-        sell_val = sum(t.value for t in sells) / 1e7
-        promo_buy_val = sum(t.value for t in promoter_buys) / 1e7
+        buy_val = sum(t.value for t in buys)  # already in crores
+        sell_val = sum(t.value for t in sells)
+        promo_buy_val = sum(t.value for t in promoter_buys)
 
         score = 50.0
         if promo_buy_val > 10:

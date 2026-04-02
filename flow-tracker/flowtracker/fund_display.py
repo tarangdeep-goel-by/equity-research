@@ -16,13 +16,9 @@ def _fmt_cr(value: float | None) -> str:
     """Format value in crores with appropriate suffix."""
     if value is None:
         return "—"
-    if abs(value) >= 1e12:  # Lakh crore (from raw yfinance values)
-        return f"₹{value / 1e12:.1f}L Cr"
-    if abs(value) >= 1e7:  # Crore (from raw yfinance values)
-        return f"₹{value / 1e7:.0f} Cr"
-    if abs(value) >= 1e4:  # Already in crores (Screener format)
-        return f"₹{value:,.0f} Cr"
-    return f"₹{value:,.1f} Cr"
+    if abs(value) >= 100_000:  # 1 lakh crore+
+        return f"₹{value / 100_000:.1f}L Cr"
+    return f"₹{value:,.0f} Cr"
 
 
 def _fmt_pct(value: float | None, multiply: bool = False) -> str:

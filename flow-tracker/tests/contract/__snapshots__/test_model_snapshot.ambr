@@ -243,7 +243,7 @@
     'MFSchemeHolding': list([
       'amc',
       'isin',
-      'market_value_lakhs',
+      'market_value_cr',
       'month',
       'pct_of_nav',
       'quantity',

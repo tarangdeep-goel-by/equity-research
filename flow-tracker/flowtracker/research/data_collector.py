@@ -134,7 +134,7 @@ def collect_fundamentals_data(symbol: str) -> dict:
                 "scheme": h.scheme_name,
                 "amc": h.amc,
                 "qty": h.quantity,
-                "value_lakhs": h.market_value_lakhs,
+                "value_cr": h.market_value_cr,
                 "pct_nav": h.pct_of_nav,
             }
             for h in mf_holdings[:30]
@@ -147,7 +147,7 @@ def collect_fundamentals_data(symbol: str) -> dict:
     mcap = v.get("market_cap", 0)
 
     data["price"] = price
-    data["mcap_cr"] = round(mcap / 1e7) if mcap else 0
+    data["mcap_cr"] = round(mcap) if mcap else 0  # already in crores
     data["pe_trailing"] = v.get("pe_trailing")
     data["pe_forward"] = v.get("pe_forward")
 

@@ -480,7 +480,7 @@ class MFPortfolioClient:
                 isin=isin,
                 stock_name=stock_name[:100],
                 quantity=qty,
-                market_value_lakhs=value,
+                market_value_cr=value / 100,
                 pct_of_nav=pct,
             )
         except (IndexError, KeyError):

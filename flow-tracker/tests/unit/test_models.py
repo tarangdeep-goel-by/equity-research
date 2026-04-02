@@ -720,7 +720,7 @@ class TestMFSchemeHolding:
         h = MFSchemeHolding(
             month="2026-02", amc="SBI", scheme_name="SBI Blue Chip",
             isin="INE123456789", stock_name="RELIANCE",
-            quantity=50000, market_value_lakhs=1250.0, pct_of_nav=5.5,
+            quantity=50000, market_value_cr=12.5, pct_of_nav=5.5,
         )
         assert h.pct_of_nav == 5.5
 

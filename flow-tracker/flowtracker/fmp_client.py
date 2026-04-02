@@ -49,6 +49,11 @@ def _safe_float(val: object) -> float | None:
         return None
 
 
+def _to_cr(val: float | None) -> float | None:
+    """Convert raw value to crores (÷1e7)."""
+    return val / 1e7 if val is not None else None
+
+
 class FMPClient:
     """Client for Financial Modeling Prep API."""
 
@@ -188,8 +193,8 @@ class FMPClient:
                 tangible_book_value_per_share=_safe_float(d.get("tangibleBookValuePerShare")),
                 shareholders_equity_per_share=_safe_float(d.get("shareholdersEquityPerShare")),
                 interest_debt_per_share=_safe_float(d.get("interestDebtPerShare")),
-                market_cap=_safe_float(d.get("marketCap")),
-                enterprise_value=_safe_float(d.get("enterpriseValue")),
+                market_cap=_to_cr(_safe_float(d.get("marketCap"))),
+                enterprise_value=_to_cr(_safe_float(d.get("enterpriseValue"))),
                 pe_ratio=_safe_float(d.get("peRatio")),
                 price_to_sales_ratio=_safe_float(d.get("priceToSalesRatio")),
                 pb_ratio=_safe_float(d.get("pbRatio")),

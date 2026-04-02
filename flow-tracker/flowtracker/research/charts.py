@@ -751,12 +751,8 @@ def render_sector_mcap_bar(symbol: str, ranked_data: list[dict]) -> str:
     # Add value labels
     max_mcap = max(mcaps) if mcaps else 1
     for bar, val in zip(bars, mcaps):
-        if val >= 1e12:
-            label = f"₹{val / 1e12:.1f}T"
-        elif val >= 1e9:
-            label = f"₹{val / 1e9:.0f}K Cr"
-        elif val >= 1e7:
-            label = f"₹{val / 1e7:.0f}L Cr"
+        if val >= 100_000:  # 1 lakh crore+
+            label = f"₹{val / 100_000:.1f}L Cr"
         else:
             label = f"₹{val:,.0f} Cr"
         ax.text(bar.get_width() + max_mcap * 0.01, bar.get_y() + bar.get_height() / 2,
