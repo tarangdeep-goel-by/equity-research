@@ -276,6 +276,100 @@ class EstimatesClient:
             logger.warning("Failed to fetch events calendar for %s: %s", symbol, e)
             return None
 
+    def fetch_revenue_estimates(self, symbol: str) -> dict | None:
+        """Fetch consensus revenue estimates from yfinance."""
+        try:
+            ticker = yf.Ticker(nse_symbol(symbol))
+            rev_est = ticker.revenue_estimate
+            if rev_est is None or (hasattr(rev_est, "empty") and rev_est.empty):
+                return None
+
+            periods = []
+            for period in rev_est.index:
+                row = {}
+                for col, key in [
+                    ("avg", "avg"), ("low", "low"), ("high", "high"),
+                    ("numberOfAnalysts", "num_analysts"),
+                    ("yearAgoRevenue", "year_ago_revenue"),
+                    ("growth", "growth"),
+                ]:
+                    if col in rev_est.columns:
+                        val = rev_est.loc[period, col]
+                        if val is not None and str(val) != "nan":
+                            # Convert INR to crores for monetary values
+                            if col in ("avg", "low", "high", "yearAgoRevenue"):
+                                row[key + "_cr"] = round(float(val) / 1e7, 2)
+                            elif col == "numberOfAnalysts":
+                                row[key] = int(val)
+                            else:
+                                row[key] = round(float(val), 4)
+                if row:
+                    periods.append({"period": str(period), **row})
+
+            return {"symbol": symbol.upper(), "periods": periods} if periods else None
+        except Exception as e:
+            logger.warning("Failed to fetch revenue estimates for %s: %s", symbol, e)
+            return None
+
+    def fetch_growth_estimates(self, symbol: str) -> dict | None:
+        """Fetch growth estimates (stock vs index) from yfinance."""
+        try:
+            ticker = yf.Ticker(nse_symbol(symbol))
+            growth_est = ticker.growth_estimates
+            if growth_est is None or (hasattr(growth_est, "empty") and growth_est.empty):
+                return None
+
+            # growth_estimates has columns like stock ticker and index
+            # Try to find stockTrend and indexTrend columns
+            cols = growth_est.columns.tolist()
+            stock_col = None
+            index_col = None
+            for c in cols:
+                cl = str(c).lower()
+                if "stock" in cl or nse_symbol(symbol).replace(".NS", "") in str(c):
+                    stock_col = c
+                elif "index" in cl or "industry" in cl:
+                    index_col = c
+
+            # Fallback: first col = stock, second = index
+            if stock_col is None and len(cols) >= 1:
+                stock_col = cols[0]
+            if index_col is None and len(cols) >= 2:
+                index_col = cols[1]
+
+            periods = []
+            ltg = {"stock": None, "index": None}
+
+            for period in growth_est.index:
+                entry = {"period": str(period)}
+                if stock_col is not None:
+                    val = growth_est.loc[period, stock_col]
+                    if val is not None and str(val) != "nan":
+                        entry["stock_growth"] = round(float(val), 4)
+                if index_col is not None:
+                    val = growth_est.loc[period, index_col]
+                    if val is not None and str(val) != "nan":
+                        entry["index_growth"] = round(float(val), 4)
+
+                sg = entry.get("stock_growth")
+                ig = entry.get("index_growth")
+                if sg is not None and ig is not None:
+                    entry["vs_index"] = "outperforming" if sg > ig else "underperforming" if sg < ig else "inline"
+
+                if str(period).upper() == "LTG" or "long" in str(period).lower():
+                    ltg["stock"] = entry.get("stock_growth")
+                    ltg["index"] = entry.get("index_growth")
+                else:
+                    periods.append(entry)
+
+            if not periods and ltg["stock"] is None:
+                return None
+
+            return {"symbol": symbol.upper(), "periods": periods, "ltg": ltg}
+        except Exception as e:
+            logger.warning("Failed to fetch growth estimates for %s: %s", symbol, e)
+            return None
+
     def fetch_batch(
         self, symbols: list[str],
     ) -> tuple[list[ConsensusEstimate], list[EarningsSurprise]]:

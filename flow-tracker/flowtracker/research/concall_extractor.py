@@ -312,8 +312,13 @@ async def extract_concalls(
     symbol: str,
     quarters: int = 4,
     model: str = "claude-sonnet-4-20250514",
+    industry: str | None = None,
 ) -> dict:
     """Extract structured insights from the last N concall PDFs.
+
+    Args:
+        industry: NSE/Screener industry name (e.g. "Private Sector Bank").
+            If provided, injects sector-specific canonical KPI extraction hints.
 
     Returns the full extraction dict matching concall_extraction_v2.json schema.
     """
@@ -343,9 +348,16 @@ async def extract_concalls(
                 user_parts.append(f"\n\n## {extra.stem.replace('_', ' ').title()} — {quarter_label}\n\n{extra_text}")
                 docs_read.append(extra.name)
 
+        # Build sector-specific KPI hint if industry is known
+        sector_hint = ""
+        if industry:
+            from flowtracker.research.sector_kpis import build_extraction_hint
+            sector_hint = build_extraction_hint(industry)
+
         user_prompt = (
             f"Company: {symbol}\nQuarter: {quarter_label}\n"
-            f"Documents provided: {', '.join(docs_read)}\n\n"
+            f"Documents provided: {', '.join(docs_read)}\n"
+            + (f"\n{sector_hint}\n\n" if sector_hint else "\n")
             + "\n".join(user_parts)
         )
 
