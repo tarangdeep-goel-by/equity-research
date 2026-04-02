@@ -32,21 +32,49 @@ import logging
 
 _val_logger = logging.getLogger("flowtracker.validation")
 
+# Ranges designed to catch unit errors (rupees stored as crores).
+# A ₹500 Cr company in rupees = 5,000,000,000 — must exceed upper bound.
+# Lower bounds catch reverse errors or nonsense values.
 _VALIDATION_RULES: dict[str, dict[str, tuple[float, float]]] = {
     "annual_financials": {
-        "revenue": (0, 2_000_000),       # 0 to 20L Cr
-        "net_income": (-100_000, 1_000_000),
-        "total_assets": (0, 100_000_000), # banks can be very large
-        "num_shares": (1_000_000, 50_000_000_000),
-        "eps": (-500, 10_000),
+        "revenue": (1, 1_500_000),          # ₹1 Cr to ₹15L Cr (Reliance ~9L Cr)
+        "net_income": (-50_000, 500_000),   # losses capped, profits ~5L Cr max
+        "total_assets": (1, 50_000_000),    # SBI ~60L Cr, but most < 50L
+        "num_shares": (100_000, 50_000_000_000),  # at least 1L shares
+        "eps": (-500, 5_000),               # per-share rupees
     },
     "valuation_snapshot": {
-        "market_cap": (0, 30_000_000),    # 0 to 30L Cr (in crores)
-        "price": (0.01, 200_000),
-        "pe_trailing": (-1000, 5000),
+        "market_cap": (50, 25_000_000),     # ₹50 Cr to ₹25L Cr
+        "enterprise_value": (-500_000, 30_000_000),
+        "total_cash": (0.01, 10_000_000),   # at least 1L, max 10L Cr
+        "total_debt": (0.01, 30_000_000),
+        "free_cash_flow": (-200_000, 200_000),
+        "operating_cash_flow": (-200_000, 300_000),
+        "price": (1, 200_000),              # ₹1 to ₹2L per share
+        "pe_trailing": (-500, 2000),
     },
     "quarterly_results": {
-        "revenue": (0, 500_000),          # quarterly, so lower than annual
+        "revenue": (0.1, 400_000),          # quarterly — max ~4L Cr
+        "net_income": (-30_000, 200_000),
+    },
+    "insider_transactions": {
+        "value": (0, 10_000),               # max ~₹10K Cr single trade
+    },
+    "mf_scheme_holdings": {
+        "market_value_cr": (0.01, 50_000),  # ₹1L to ₹50K Cr per scheme holding
+        "pct_of_nav": (0.001, 25),          # max 25% NAV in one stock
+    },
+    "fmp_key_metrics": {
+        "market_cap": (50, 25_000_000),
+        "enterprise_value": (-500_000, 30_000_000),
+    },
+    "quarterly_balance_sheet": {
+        "total_assets": (1, 50_000_000),
+        "total_debt": (0.01, 30_000_000),
+    },
+    "quarterly_cash_flow": {
+        "operating_cf": (-200_000, 300_000),
+        "free_cf": (-200_000, 200_000),
     },
 }
 
@@ -2007,6 +2035,9 @@ class FlowStore:
         cursor = self._conn.cursor()
         count = 0
         for t in trades:
+            warnings = _validate_row("insider_transactions", t.model_dump())
+            if warnings:
+                _val_logger.warning("insider_transactions %s/%s: %s", t.symbol, t.date, "; ".join(warnings))
             cursor.execute(
                 "INSERT OR REPLACE INTO insider_transactions "
                 "(date, symbol, person_name, person_category, transaction_type, "
@@ -2441,6 +2472,9 @@ class FlowStore:
         cursor = self._conn.cursor()
         count = 0
         for h in holdings:
+            warnings = _validate_row("mf_scheme_holdings", h.model_dump())
+            if warnings:
+                _val_logger.warning("mf_scheme_holdings %s/%s/%s: %s", h.amc, h.month, h.stock_name[:20], "; ".join(warnings))
             cursor.execute(
                 "INSERT OR REPLACE INTO mf_scheme_holdings "
                 "(month, amc, scheme_name, isin, stock_name, quantity, market_value_cr, pct_of_nav) "
@@ -2927,6 +2961,9 @@ class FlowStore:
         cursor = self._conn.cursor()
         count = 0
         for r in records:
+            warnings = _validate_row("fmp_key_metrics", r.model_dump())
+            if warnings:
+                _val_logger.warning("fmp_key_metrics %s/%s: %s", r.symbol, r.date, "; ".join(warnings))
             cursor.execute(
                 "INSERT OR REPLACE INTO fmp_key_metrics "
                 "(symbol, date, revenue_per_share, net_income_per_share, "
@@ -3395,6 +3432,9 @@ class FlowStore:
         """Upsert quarterly balance sheet data."""
         count = 0
         for row in rows:
+            warnings = _validate_row("quarterly_balance_sheet", row)
+            if warnings:
+                _val_logger.warning("quarterly_balance_sheet %s/%s: %s", symbol, row.get("quarter_end"), "; ".join(warnings))
             self._conn.execute(
                 """INSERT INTO quarterly_balance_sheet
                    (symbol, quarter_end, total_assets, total_debt, long_term_debt,
@@ -3423,6 +3463,9 @@ class FlowStore:
         """Upsert quarterly cash flow data."""
         count = 0
         for row in rows:
+            warnings = _validate_row("quarterly_cash_flow", row)
+            if warnings:
+                _val_logger.warning("quarterly_cash_flow %s/%s: %s", symbol, row.get("quarter_end"), "; ".join(warnings))
             self._conn.execute(
                 """INSERT INTO quarterly_cash_flow
                    (symbol, quarter_end, operating_cash_flow, free_cash_flow, capital_expenditure,
