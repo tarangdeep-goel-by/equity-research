@@ -113,6 +113,8 @@ def step_screener(symbols: list[str], sleep: float = 2.0):
     console.print("\n[bold]Step: Quarterly/Annual Financials + Ratios (Screener.in)[/]")
     console.print(f"  [dim]Rate limited: {sleep}s between stocks (Screener blocks aggressive scraping)[/]")
     ok = 0
+    excel_ok = 0
+    excel_fail = []
 
     with FlowStore() as store, ScreenerClient() as sc:
         with Progress(SpinnerColumn(), TextColumn("{task.description}"), BarColumn(), MofNCompleteColumn(), console=console) as p:
@@ -131,13 +133,24 @@ def step_screener(symbols: list[str], sleep: float = 2.0):
                         store.upsert_quarterly_results(qr)
 
                     # Annual financials (via Excel export)
-                    try:
-                        excel = sc.download_excel(sym)
-                        af = sc.parse_annual_financials(sym, excel)
-                        if af:
-                            store.upsert_annual_financials(af)
-                    except Exception:
-                        pass
+                    # Extract warehouse ID from already-fetched HTML to avoid double page fetch
+                    _, wid = sc._get_both_ids(html)
+                    if wid:
+                        try:
+                            csrf = sc._client.cookies.get("csrftoken")
+                            resp = sc._client.post(
+                                f"https://www.screener.in/user/company/export/{wid}/",
+                                data={"csrfmiddlewaretoken": csrf},
+                                headers={"Referer": f"https://www.screener.in/company/{sym}/consolidated/"},
+                            )
+                            resp.raise_for_status()
+                            if not resp.headers.get("content-type", "").startswith("text/html"):
+                                af = sc.parse_annual_financials(sym, resp.content)
+                                if af:
+                                    store.upsert_annual_financials(af)
+                                    excel_ok += 1
+                        except Exception as e:
+                            excel_fail.append(f"{sym}: {e}")
 
                     # Ratios (from HTML)
                     ratios = sc.parse_ratios_from_html(sym, html)
@@ -149,7 +162,9 @@ def step_screener(symbols: list[str], sleep: float = 2.0):
                     pass
                 p.advance(task)
                 time.sleep(sleep)
-    console.print(f"  [green]✓[/] {ok}/{len(symbols)} stocks")
+    console.print(f"  [green]✓[/] {ok}/{len(symbols)} stocks (Excel: {excel_ok} ok, {len(excel_fail)} failed)")
+    if excel_fail:
+        console.print(f"  [dim]Excel failures (first 10): {excel_fail[:10]}[/dim]")
 
 
 def step_filings(symbols: list[str], sleep: float = 1.0):
