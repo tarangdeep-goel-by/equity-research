@@ -1399,13 +1399,18 @@ class ResearchDataAPI:
         hist_g = cagr_3y or cagr_5y or 0.10  # fallback 10%
 
         if not is_bfsi and current_revenue > 0:
-            # Reinvestment rate: capex as fraction of earnings, capped at 80%
-            reinvestment = min(capex / base_cf, 0.80) if base_cf > 0 else 0.30
+            # Reinvestment rate = net reinvestment / NOPAT (Damodaran textbook)
+            # Net reinvestment = capex - depreciation (+ ΔWC if available, we skip)
+            depr = latest.get("depreciation", 0) or 0
+            net_reinvestment = capex - depr
+            nopat = current_net_income  # proxy: net income ≈ NOPAT for this purpose
+            reinvestment = min(max(net_reinvestment / nopat, 0.05), 0.80) if nopat > 0 else 0.30
 
             def dcf_with_margin(margin):
                 cf_year0 = current_revenue * margin * (1 - reinvestment)
                 pv = sum(cf_year0 * (1 + hist_g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
-                terminal = cf_year0 * (1 + hist_g) ** 10 * (1 + terminal_g) / (discount_rate - terminal_g)
+                eff_discount = max(discount_rate - terminal_g, 0.001)
+                terminal = cf_year0 * (1 + hist_g) ** 10 * (1 + terminal_g) / eff_discount
                 pv += terminal / (1 + discount_rate) ** 10
                 return pv
 
@@ -1421,7 +1426,7 @@ class ResearchDataAPI:
         # --- 3. Sensitivity Matrix (NEW) ---
         sensitivity = []
         if not is_bfsi and current_revenue > 0:
-            reinvestment = min(capex / base_cf, 0.80) if base_cf > 0 else 0.30
+            # reinvestment already computed above (net_reinvestment / nopat)
             growth_scenarios = [0.05, 0.10, 0.15, 0.20, 0.25]
             margin_scenarios = [0.05, 0.08, 0.12, 0.16, 0.20]
 
@@ -1429,14 +1434,15 @@ class ResearchDataAPI:
                 for m in margin_scenarios:
                     cf = current_revenue * m * (1 - reinvestment)
                     pv = sum(cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
-                    terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / (discount_rate - terminal_g)
+                    eff_discount = max(discount_rate - terminal_g, 0.001)
+                    terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / eff_discount
                     pv += terminal / (1 + discount_rate) ** 10
                     implied_mcap = pv + cash - borrowings
-                    # implied_mcap is in crores, num_shares is actual count → convert crores to rupees
                     implied_price = round(implied_mcap * 1e7 / num_shares, 2) if num_shares > 0 else None
                     sensitivity.append({"growth": g, "margin": m, "implied_price": implied_price})
         elif is_bfsi:
-            # BFSI: use book_value × ROE instead of revenue × margin
+            # BFSI: use book_value × ROE × payout_ratio as FCFE
+            # Banks must retain capital to grow: payout = 1 - g/ROE
             equity_capital = latest.get("equity_capital", 0) or 0
             reserves = latest.get("reserves", 0) or 0
             book_value = equity_capital + reserves
@@ -1445,11 +1451,14 @@ class ResearchDataAPI:
 
             for g in growth_scenarios:
                 for roe in roe_scenarios:
-                    cf = book_value * roe
+                    net_income = book_value * roe
+                    # g >= roe means bank can't grow this fast without raising equity
+                    payout_ratio = max(1 - (g / roe), 0) if roe > 0 else 0
+                    cf = net_income * payout_ratio  # true FCFE
                     pv = sum(cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
-                    terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / (discount_rate - terminal_g)
+                    eff_discount = max(discount_rate - terminal_g, 0.001)
+                    terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / eff_discount
                     pv += terminal / (1 + discount_rate) ** 10
-                    # pv is in crores, num_shares is actual count → convert crores to rupees
                     implied_price = round(pv * 1e7 / num_shares, 2) if num_shares > 0 else None
                     sensitivity.append({"growth": g, "roe": roe, "implied_price": implied_price})
 
