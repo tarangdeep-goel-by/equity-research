@@ -131,15 +131,13 @@ def step_screener(symbols: list[str], sleep: float = 2.0):
                         store.upsert_quarterly_results(qr)
 
                     # Annual financials (via Excel export)
-                    _, wid = sc._get_both_ids(html)
-                    if wid:
-                        try:
-                            excel = sc.fetch_excel_export(wid)
-                            af = sc.parse_annual_financials(sym, excel)
-                            if af:
-                                store.upsert_annual_financials(af)
-                        except Exception:
-                            pass
+                    try:
+                        excel = sc.download_excel(sym)
+                        af = sc.parse_annual_financials(sym, excel)
+                        if af:
+                            store.upsert_annual_financials(af)
+                    except Exception:
+                        pass
 
                     # Ratios (from HTML)
                     ratios = sc.parse_ratios_from_html(sym, html)
