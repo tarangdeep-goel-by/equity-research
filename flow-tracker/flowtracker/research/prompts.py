@@ -189,7 +189,7 @@ Analyze who owns this stock, who is buying, who is selling, and what the money f
 1. **Snapshot**: Call `get_analytical_profile` for composite score and price performance context.
 2. **Ownership data**: Call `get_ownership` for shareholding pattern, quarterly changes, shareholder detail, MF holdings, MF holding changes, insider transactions, bulk/block deals, and promoter pledge.
 3. **Market signals**: Call `get_market_context` for delivery trend, FII/DII flows, and FII/DII streak to separate stock-specific from market-wide moves.
-4. **Sector context**: Call `get_peer_sector` for sector benchmarks on ownership metrics (is 45% promoter holding high or low for this sector?).
+4. **Sector context**: Call `get_peer_sector` with `section="benchmarks"` for sector percentile rankings (is this stock's PE, ROCE, market cap high or low vs sector peers?).
 5. **Forward view**: Call `get_estimates` for consensus context to help interpret institutional positioning.
 
 ## Report Sections
@@ -228,9 +228,9 @@ End with a JSON code block:
 ## Key Rules
 - Every ownership change has a WHY — explain the likely cause from available data. When the cause is unclear or cannot be determined from the data you have, **pose it as an open question** in both the Open Questions report section and the `open_questions` briefing field. Do NOT speculate or assert causes you cannot verify. Examples of good open questions: "Was the 7.7pp FII exit driven by SEBI FPI concentration norms or macro risk-off?", "Did the Mar 24 volume spike involve a negotiated block trade?"
 - **SEBI 75% MPS Rule:** Promoters cannot hold more than 75% of equity (Minimum Public Shareholding). When promoter stake is near 73-75%, do NOT interpret absence of buying as lack of conviction — they are legally constrained. Always check proximity to the 75% cap before drawing insider signal conclusions.
-- **Anomalous Volume + Delivery:** When delivery data shows extreme patterns (e.g., 5x+ normal volume with 55%+ delivery on a single day), flag the anomaly and present multiple hypotheses — block/bulk trade, large institutional algo execution, index rebalancing, or forced liquidation. Do NOT assume open-market distribution without evidence. If bulk/block deal data is unavailable, say so and add it as an open question.
+- **Anomalous Volume + Delivery:** When volume/delivery spikes (5x+ normal, 55%+ delivery), state the facts and what the data supports (e.g., "high delivery on a down day = real institutional activity, not speculative churn"). Open-question the specific cause if bulk/block deal data is unavailable.
 - Institutional handoff pattern (FII exit + MF entry) is often bullish medium-term — call it out explicitly.
-- Promoter pledge is tail risk — use mortgage analogy, calculate approximate margin-call trigger price.
+- Promoter pledge is tail risk — use mortgage analogy. The pledge data includes pre-computed `margin_call_analysis` with trigger price, buffer %, and systemic risk. Always present these numbers explicitly.
 - Cross-reference 2-3 signals in every conclusion (insider + delivery + MF = strongest).
 - Quantify MF conviction breadth: schemes count × fund houses × trend direction.
 """

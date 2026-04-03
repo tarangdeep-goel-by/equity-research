@@ -143,7 +143,7 @@ async def get_shareholding_changes(args):
 )
 async def get_insider_transactions(args):
     with ResearchDataAPI() as api:
-        data = api.get_insider_transactions(args["symbol"], args.get("days", 365))
+        data = api.get_insider_transactions(args["symbol"], args.get("days", 1825))
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1079,7 +1079,7 @@ def _get_ownership_section(api, symbol, section, args):
     elif section == "changes":
         return api.get_shareholding_changes(symbol)
     elif section == "insider":
-        return api.get_insider_transactions(symbol, args.get("days", 365))
+        return api.get_insider_transactions(symbol, args.get("days", 1825))
     elif section == "bulk_block":
         return api.get_bulk_block_deals(symbol)
     elif section == "mf_holdings":
@@ -1109,7 +1109,7 @@ async def get_ownership(args):
             data = {
                 "shareholding": api.get_shareholding(symbol, args.get("quarters", 12)),
                 "changes": api.get_shareholding_changes(symbol),
-                "insider": api.get_insider_transactions(symbol, args.get("days", 365)),
+                "insider": api.get_insider_transactions(symbol, args.get("days", 1825)),
                 "bulk_block": api.get_bulk_block_deals(symbol),
                 "mf_holdings": api.get_mf_holdings(symbol),
                 "mf_changes": api.get_mf_holding_changes(symbol),

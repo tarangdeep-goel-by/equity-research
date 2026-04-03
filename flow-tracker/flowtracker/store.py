@@ -2070,7 +2070,7 @@ class FlowStore:
         self._conn.commit()
         return count
 
-    def get_insider_by_symbol(self, symbol: str, days: int = 365) -> list[InsiderTransaction]:
+    def get_insider_by_symbol(self, symbol: str, days: int = 1825) -> list[InsiderTransaction]:
         """Get insider transactions for a symbol."""
         rows = self._conn.execute(
             "SELECT * FROM insider_transactions WHERE symbol = ? "
@@ -2506,14 +2506,29 @@ class FlowStore:
         return count
 
     def get_mf_stock_holdings(self, search: str) -> list[MFSchemeHolding]:
-        """Get MF holdings for a stock by name or ISIN."""
-        rows = self._conn.execute(
+        """Get MF holdings for a stock by name, ISIN, or NSE symbol."""
+        query = (
             "SELECT * FROM mf_scheme_holdings "
             "WHERE (UPPER(stock_name) LIKE ? OR isin = ?) "
             "AND month = (SELECT MAX(month) FROM mf_scheme_holdings) "
-            "ORDER BY market_value_cr DESC",
-            (f"%{search}%", search),
-        ).fetchall()
+            "ORDER BY market_value_cr DESC"
+        )
+        rows = self._conn.execute(query, (f"%{search}%", search)).fetchall()
+
+        # If empty and looks like an NSE symbol, resolve via index_constituents
+        if not rows and search == search.upper() and " " not in search:
+            ic = self._conn.execute(
+                "SELECT company_name FROM index_constituents WHERE symbol = ? LIMIT 1",
+                (search,),
+            ).fetchone()
+            if ic and ic["company_name"]:
+                name = ic["company_name"]
+                for suffix in (" Limited", " Ltd.", " Ltd"):
+                    if name.endswith(suffix):
+                        name = name[: -len(suffix)].strip()
+                        break
+                rows = self._conn.execute(query, (f"%{name}%", search)).fetchall()
+
         return [MFSchemeHolding(
             month=r["month"], amc=r["amc"], scheme_name=r["scheme_name"],
             isin=r["isin"], stock_name=r["stock_name"], quantity=r["quantity"],

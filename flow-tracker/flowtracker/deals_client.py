@@ -111,23 +111,27 @@ class DealsClient:
     def _parse_deal(self, item: dict, deal_type: str) -> BulkBlockDeal | None:
         """Parse a single deal entry."""
         try:
-            symbol = item.get("BD_SYMBOL", "").strip()
+            # Support both old (BD_*) and new API field names
+            symbol = (item.get("symbol") or item.get("BD_SYMBOL", "")).strip()
             if not symbol:
                 return None
 
-            date_str = item.get("BD_DT_DATE", "")
+            date_str = item.get("date") or item.get("BD_DT_DATE", "")
             parsed_date = self._parse_date(date_str)
 
-            quantity = int(item.get("BD_QTY_TRD", 0))
-            price_raw = item.get("BD_TP_WATP")
+            quantity = int(item.get("qty") or item.get("BD_QTY_TRD", 0))
+            price_raw = item.get("watp") or item.get("BD_TP_WATP")
             price = float(price_raw) if price_raw else None
+
+            client = (item.get("clientName") or item.get("BD_CLIENT_NAME", "")).strip() or None
+            buy_sell = (item.get("buySell") or item.get("BD_BUY_SELL", "")).strip().upper() or None
 
             return BulkBlockDeal(
                 date=parsed_date,
                 deal_type=deal_type,
                 symbol=symbol,
-                client_name=item.get("BD_CLIENT_NAME", "").strip() or None,
-                buy_sell=item.get("BD_BUY_SELL", "").strip().upper() or None,
+                client_name=client,
+                buy_sell=buy_sell,
                 quantity=quantity,
                 price=price,
             )

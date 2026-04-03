@@ -203,7 +203,7 @@ class ResearchDataAPI:
             for r in rows
         ])
 
-    def get_insider_transactions(self, symbol: str, days: int = 365) -> list[dict]:
+    def get_insider_transactions(self, symbol: str, days: int = 1825) -> list[dict]:
         """SAST insider buy/sell trades with person name, category, value."""
         rows = self._store.get_insider_by_symbol(symbol, days=days)
         return _clean([r.model_dump() for r in rows])
@@ -231,9 +231,54 @@ class ResearchDataAPI:
         return _clean([r.model_dump() for r in rows])
 
     def get_promoter_pledge(self, symbol: str) -> list[dict]:
-        """Quarterly promoter pledge % history."""
+        """Quarterly promoter pledge % history with margin-call analysis."""
         rows = self._store.get_promoter_pledge(symbol)
-        return _clean([r.model_dump() for r in rows])
+        result = _clean([r.model_dump() for r in rows])
+
+        # Compute margin-call trigger if pledge exists
+        if result:
+            latest = result[0]  # most recent quarter (DESC order)
+            pledge_pct = latest.get("pledge_pct", 0)
+            if pledge_pct and pledge_pct > 0:
+                # Find when pledge first appeared (to estimate pledge price)
+                first_pledged = next(
+                    (r for r in reversed(result) if (r.get("pledge_pct") or 0) > 0),
+                    None,
+                )
+                pledge_quarter = first_pledged["quarter_end"] if first_pledged else None
+
+                # Get stock price near pledge creation date
+                snap = self._store.get_valuation_history(symbol, days=730)
+                pledge_price = None
+                if snap and pledge_quarter:
+                    # Find closest snapshot to pledge quarter
+                    for s in snap:
+                        if s.date and s.date >= pledge_quarter:
+                            pledge_price = s.price
+                            break
+                    if not pledge_price and snap:
+                        pledge_price = snap[-1].price  # fallback to latest
+
+                cmp = snap[-1].price if snap else None
+
+                if pledge_price and cmp:
+                    # Loan per share at 50% LTV; margin call when LTV exceeds 65%
+                    loan_per_share = pledge_price * 0.50
+                    trigger_price = round(loan_per_share / 0.65, 2)
+                    buffer_pct = round((cmp - trigger_price) / cmp * 100, 1)
+                    latest["margin_call_analysis"] = {
+                        "estimated_pledge_price": round(pledge_price, 2),
+                        "pledge_appeared_quarter": pledge_quarter,
+                        "assumed_initial_ltv": 0.50,
+                        "margin_call_ltv": 0.65,
+                        "loan_per_share": round(loan_per_share, 2),
+                        "trigger_price": trigger_price,
+                        "current_price": round(cmp, 2),
+                        "buffer_pct": buffer_pct,
+                        "systemic_risk": "low" if pledge_pct < 5 else "moderate" if pledge_pct < 15 else "high",
+                    }
+
+        return result
 
     # --- Consensus ---
 
