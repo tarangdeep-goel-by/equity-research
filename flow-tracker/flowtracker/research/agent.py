@@ -84,7 +84,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "ownership": 30,
     "valuation": 30,
     "risk": 30,
-    "technical": 25,
+    "technical": 30,
     "sector": 25,
 }
 
@@ -94,7 +94,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "ownership": 0.60,
     "valuation": 0.60,
     "risk": 0.60,
-    "technical": 0.50,
+    "technical": 0.60,
     "sector": 0.50,
 }
 
