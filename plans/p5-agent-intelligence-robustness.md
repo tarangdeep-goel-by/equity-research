@@ -4,7 +4,7 @@
 
 Gemini reviewed P-4's architecture (April 2026) and upgraded the verdict from "Ferrari engine, confusing steering wheel" to "purpose-built race car." P-4 solved tool overload (71→16) and prompt bloat (36K→7K words). P-5 addresses the remaining issues: verification logic, synthesis quality, tool efficiency, graceful degradation, and analytical coverage gaps.
 
-**Goals:** Narrative-first synthesis, fact-check-only verifier, multi-section tool calls, graceful agent failure handling, market-cap-aware personas, business agent news mandate, comparison prompt V2.
+**Goals:** Narrative-first synthesis, fact-check-only verifier, multi-section tool calls, graceful agent failure handling, market-cap-aware personas, comparison prompt V2.
 
 ---
 
@@ -354,29 +354,7 @@ def _build_mcap_injection(mcap_cr: float, agent_name: str) -> str:
 
 ---
 
-## Item 6: Business Agent "Recent Developments" Mandate
-
-**Problem:** Business agent focuses on structural business understanding but doesn't capture recent material news (last 3 months). Concall insights cover management commentary but not external events (contract wins, regulatory changes, media coverage, competitor moves).
-
-**Changes:**
-
-### prompts.py — BUSINESS_AGENT_PROMPT_V2
-
-Add to Workflow (after step 5, before Save):
-```
-6. **Recent developments**: Use `WebSearch` to find significant news from the last 3 months: "{company_name} news 2026", "{company_name} contract OR acquisition OR regulation". Synthesize 3-5 material developments. Focus on events that could change the investment thesis — ignore routine press releases.
-```
-
-Add new Report Section (after "The Big Question", before Structured Briefing):
-```
-8. **Recent Developments** — 3-5 material events from the last 3 months that could impact the thesis. For each: what happened, why it matters for investors, and how it connects to the business model/financials described above. Skip if nothing material found.
-```
-
-**Verify:** Run business agent for a stock. Check that the report includes a "Recent Developments" section with actual news (not fabricated).
-
----
-
-## Item 7: Comparison Agent V2 Prompt
+## Item 6: Comparison Agent V2 Prompt
 
 **Problem:** Comparison prompt body is 2,471 words — verbose, with full table examples and first-mention definitions that duplicate the shared preamble. Still has V1-style tool-by-tool instructions referencing old individual tools.
 
@@ -426,12 +404,8 @@ Rewrite body from ~2,471 words to ~800 words following V2 structure:
 ### Batch 3: Robustness + Intelligence (parallel)
 - Item 4: Graceful degradation (briefing.py + agent.py + prompts.py)
 - Item 5: Market-cap persona injection (prompts.py)
-- Item 6: Business agent news mandate (prompts.py)
-- Test: Mock failed agent, verify synthesis handles it. Test small-cap persona.
-
-### Batch 4: Cleanup
-- Item 7: Comparison agent V2 prompt
-- Test: Word count check + comparison run.
+- Item 6: Comparison agent V2 prompt (prompts.py)
+- Test: Mock failed agent, verify synthesis handles it. Test small-cap persona. Comparison word count check.
 
 ---
 
@@ -439,7 +413,7 @@ Rewrite body from ~2,471 words to ~800 words following V2 structure:
 
 | File | Changes |
 |------|---------|
-| `research/prompts.py` | Synthesis prompt rewrite, business agent news section, mcap injection, comparison V2 |
+| `research/prompts.py` | Synthesis prompt rewrite, mcap injection, comparison V2 |
 | `research/agent.py` | Orchestrator signal reframing, failed agent handling, synthesis failed_agents param |
 | `research/verifier.py` | Complete prompt rewrite to fact-checking only |
 | `research/tools.py` | All 10 macro-tools accept list sections, extract section helpers |
@@ -454,7 +428,6 @@ Rewrite body from ~2,471 words to ~800 words following V2 structure:
 3. **Multi-section:** `get_fundamentals(section=["quarterly_results", "ratios"])` returns dict with both keys
 4. **Graceful degradation:** Kill one agent, run thesis — synthesis should mention the gap and lower confidence
 5. **Market-cap:** Small-cap gets Risk "Small-Cap Alert" injection, mega-cap gets Valuation context
-6. **Business news:** Report includes "Recent Developments" section with real news
-7. **Comparison V2:** Word count ~1,240 total, still produces correct comparison output
+6. **Comparison V2:** Word count ~1,240 total, still produces correct comparison output
 8. **Full pipeline:** End-to-end thesis for INDIAMART — all 7 specialists + verify + synthesis + HTML
 9. **Tests pass:** 1069+ tests pass
