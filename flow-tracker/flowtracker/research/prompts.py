@@ -26,6 +26,9 @@ Map financial concepts to everyday decisions:
 - Fiscal year: April–March. FY26 = Apr 2025–Mar 2026. Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar.
 - NSE symbols, uppercase.
 
+## Data Source Caveat
+- PE/valuation from `get_valuation` uses **consolidated** earnings (yfinance). PE history from `get_chart_data` uses **standalone** earnings (Screener.in). For conglomerates with large subsidiaries, these can diverge 10-15%. When comparing current PE against historical PE band, note which basis you are using.
+
 ## Honesty
 If data is missing, say so. Never fabricate numbers. If a tool fails, note it and work with available data. If >50% of tools fail, state this at the top.
 

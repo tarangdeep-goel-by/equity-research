@@ -951,14 +951,11 @@ def _add_freshness_meta(data: dict, api, symbol: str) -> dict:
     if not isinstance(data, dict):
         return data
     try:
-        # Get latest quarter from quarterly results
-        qr = api.get_quarterly_results(symbol, 1)
-        latest_quarter = qr[0].get("quarter", "unknown") if qr else "unknown"
-
         from datetime import date
+        freshness = api.get_data_freshness(symbol)
         data["_meta"] = {
             "as_of_date": str(date.today()),
-            "latest_quarter_reported": latest_quarter,
+            "data_freshness": freshness,
         }
     except Exception:
         pass  # Don't break tool calls for metadata failures

@@ -40,6 +40,47 @@ class ResearchDataAPI:
     def __exit__(self, *a):
         self.close()
 
+    # --- Freshness Helpers ---
+
+    def get_data_freshness(self, symbol: str) -> dict:
+        """Get last-fetched timestamps for key data tables."""
+        conn = self._store._conn
+        symbol = symbol.upper()
+        freshness = {}
+        queries = {
+            "quarterly_results": (
+                "SELECT max(fetched_at) as last_fetched, max(quarter_end) as latest_period "
+                "FROM quarterly_results WHERE symbol = ?"
+            ),
+            "annual_financials": (
+                "SELECT max(fetched_at) as last_fetched, max(fiscal_year_end) as latest_period "
+                "FROM annual_financials WHERE symbol = ?"
+            ),
+            "valuation_snapshot": (
+                "SELECT max(fetched_at) as last_fetched, max(date) as latest_period "
+                "FROM valuation_snapshot WHERE symbol = ?"
+            ),
+            "shareholding": (
+                "SELECT max(fetched_at) as last_fetched, max(quarter_end) as latest_period "
+                "FROM shareholding WHERE symbol = ?"
+            ),
+            "consensus_estimates": (
+                "SELECT max(fetched_at) as last_fetched, max(date) as latest_period "
+                "FROM consensus_estimates WHERE symbol = ?"
+            ),
+        }
+        for table, sql in queries.items():
+            try:
+                row = conn.execute(sql, (symbol,)).fetchone()
+                if row and row["last_fetched"]:
+                    freshness[table] = {
+                        "last_fetched": row["last_fetched"],
+                        "latest_period": row["latest_period"],
+                    }
+            except Exception:
+                pass
+        return freshness
+
     # --- Industry Helpers ---
 
     def _get_industry(self, symbol: str) -> str:
