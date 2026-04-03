@@ -40,6 +40,47 @@ class ResearchDataAPI:
     def __exit__(self, *a):
         self.close()
 
+    # --- SOTP: Listed Subsidiaries ---
+
+    def get_listed_subsidiaries(self, symbol: str) -> list[dict] | None:
+        """Get listed subsidiary valuations for SOTP analysis.
+
+        Reads parent→subsidiary mappings from DB, fetches live market caps
+        from yfinance, and computes per-share value to the parent.
+        Returns None if the company has no listed subsidiaries in DB.
+        """
+        subs = self._store.get_listed_subsidiaries(symbol)
+        if not subs:
+            return None
+
+        import yfinance as yf
+        parent_shares = self.get_valuation_snapshot(symbol).get("shares_outstanding", 0)
+        if not parent_shares:
+            return None
+
+        results = []
+        for row in subs:
+            try:
+                t = yf.Ticker(f"{row['sub_symbol']}.NS")
+                sub_mcap = t.info.get("marketCap", 0) or 0
+                sub_mcap_cr = sub_mcap / 1e7
+                ownership = row["parent_ownership_pct"]
+                parent_stake_cr = sub_mcap_cr * (ownership / 100)
+                per_share_value = (parent_stake_cr * 1e7) / parent_shares if parent_shares else 0
+                results.append({
+                    "subsidiary": row["sub_name"],
+                    "symbol": row["sub_symbol"],
+                    "parent_ownership_pct": ownership,
+                    "relationship": row.get("relationship", ""),
+                    "subsidiary_market_cap_cr": round(sub_mcap_cr),
+                    "parent_stake_value_cr": round(parent_stake_cr),
+                    "per_share_value": round(per_share_value, 2),
+                })
+            except Exception:
+                continue
+
+        return results if results else None
+
     # --- Freshness Helpers ---
 
     def get_data_freshness(self, symbol: str) -> dict:
