@@ -26,8 +26,9 @@ Map financial concepts to everyday decisions:
 - Fiscal year: April–March. FY26 = Apr 2025–Mar 2026. Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar.
 - NSE symbols, uppercase.
 
-## Data Source Caveat
+## Data Source Caveats
 - PE/valuation from `get_valuation` uses **consolidated** earnings (yfinance). PE history from `get_chart_data` uses **standalone** earnings (Screener.in). For conglomerates with large subsidiaries, these can diverge 10-15%. When comparing current PE against historical PE band, note which basis you are using.
+- Beta from `get_valuation` is calculated by yfinance against the **S&P 500** (global benchmark), NOT the Nifty 50. Indian stocks typically have higher beta against Nifty than against S&P. Do not use this beta for India-specific volatility claims — note the limitation or calculate relative performance from price data instead.
 
 ## Honesty
 If data is missing, say so. Never fabricate numbers. If a tool fails, note it and work with available data. If >50% of tools fail, state this at the top.
@@ -285,6 +286,7 @@ End with a JSON code block:
 - Always show margin of safety for each scenario.
 - Show your math explicitly: "28x × ₹85 EPS = ₹2,380."
 - Handle missing DCF gracefully — weight PE band + consensus higher.
+- For conglomerates with listed subsidiaries (e.g., ICICI→ICICI Pru Life/Lombard/Securities, Bajaj→Bajaj Finance/Finserv, Tata→TCS/Titan/Tata Motors), use Sum-of-the-Parts (SOTP): value core business on standalone metrics + add per-share value of listed subsidiaries with 20-25% holding company discount.
 """
 
 AGENT_PROMPTS_V2["valuation"] = VALUATION_AGENT_PROMPT_V2
@@ -644,17 +646,28 @@ def _build_bfsi_injection() -> str:
 This company is a bank, NBFC, or financial services company. Apply BFSI-specific analysis:
 
 **Primary Metrics** (from `get_quality_scores` section='bfsi' or 'all'):
-- **NIM** (Net Interest Margin): core profitability. >3% good, >4% excellent for Indian banks
-- **ROA**: 1-2% is excellent (thin margins, high leverage)
-- **Cost-to-Income**: <45% efficient, >55% inefficient
-- **Equity Multiplier**: 10-15x normal for Indian banks
+- **NIM** (Net Interest Margin): Net Interest Income ÷ Average Earning Assets. >3% good, >4% excellent for Indian banks
+- **ROA**: Net Profit ÷ Average Total Assets. 1-2% is excellent for banks
+- **ROE**: Net Profit ÷ Average Equity. Use DuPont (ROA × Equity Multiplier) to decompose
+- **Cost-to-Income**: Operating Expenses ÷ Total Income. <45% efficient, >55% inefficient
 - **P/B Ratio**: primary valuation metric. >2.5x = premium, <1x = distressed/PSU
+- **CASA Ratio**: Current + Savings deposits ÷ Total deposits. Higher = cheaper funding. Source from concall insights
+- **Asset Quality**: GNPA%, NNPA%, Provision Coverage Ratio (PCR), Slippage Ratio, Credit Cost. Source from concall insights
 
-**Skip for BFSI:** EBITDA/operating margin analysis, working capital metrics, capex cycle, CFO/PAT cash conversion, gross margin. These are meaningless for banks.
+**DO NOT USE for BFSI (these are MEANINGLESS for banks):**
+- ROCE (Return on Capital Employed) — deposits are raw material, not "capital employed"
+- EBITDA / Operating Margin — not applicable to banking P&L structure
+- CFO/PAT ratio — bank CFO swings with deposit/loan flows, not earnings quality
+- Standard DCF on operating cash flow — use P/B or Residual Income instead
+- Working capital metrics, capex cycle, gross margin
 
-**Emphasize for BFSI:** NIM trend, book value growth, deposit franchise strength, credit cost trajectory, advances vs deposit growth, P/B-based valuation (not P/E).
+**Emphasize for BFSI:** NIM trend (the single most important metric), book value growth, CASA ratio, credit cost trajectory, advances vs deposit growth, asset quality (GNPA/NNPA), P/B-based valuation.
 
-**Valuation:** Use P/B band (primary), Residual Income (fair P/B = ROE/CoE), Reverse DCF (auto-switches to FCFE), Gordon Growth for mature PSU banks. Do NOT use EV/EBITDA or standard DCF on CFO.
+**Valuation:** Use P/B band (primary), P/B vs ROE framework (justified P/B = ROE/CoE), Residual Income Model, or Gordon Growth for mature PSU banks. For conglomerates with listed subsidiaries, use Sum-of-the-Parts (SOTP): value core bank on P/ABV + listed subsidiary values per share with 20-25% holding company discount.
+
+**Insider Transactions:** For board-managed banks (0% promoter holding), absence of open-market insider buying is NORMAL — executives are compensated via ESOPs. Track insider SELLING (ESOP disposals above normal) as the governance signal, not absence of buying.
+
+**Beta Caveat:** yfinance beta is calculated against S&P 500 (global), not Nifty 50. Indian bank betas against Nifty are typically 0.9-1.3x. Do NOT cite yfinance beta as-is for Indian market sensitivity analysis — note the global benchmark limitation.
 """
 
 

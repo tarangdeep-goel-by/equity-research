@@ -280,8 +280,8 @@ async def _call_claude(system_prompt: str, user_prompt: str, model: str) -> str:
     """Call Claude via Agent SDK. Handles the TextBlock fallback for empty ResultMessage."""
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        max_turns=1,
-        max_budget_usd=0.10,
+        max_turns=3,
+        max_budget_usd=0.30,
         permission_mode="bypassPermissions",
         model=model,
     )
