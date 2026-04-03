@@ -49,28 +49,34 @@ def _get_verifier_tools(agent_name: str) -> list:
     ]
 
 
-VERIFICATION_PROMPT = """You are a verification agent. Your job is to independently spot-check the accuracy of a specialist research report.
+VERIFICATION_PROMPT = """You are a fact-checking agent. Your ONLY job is to verify that numbers and claims in a research report match the raw data from tool calls.
 
-You have READ-ONLY access to the same data tools the specialist used. You will:
+You receive:
+1. A specialist research report (markdown)
+2. An evidence log showing every tool call the specialist made and its result
 
-1. **Verify 3-5 key numerical claims** — re-fetch the data and compare to what the report states.
-   - Focus on: revenue/profit numbers, growth rates, margins, ROCE, sector rankings, percentile claims
-   - For each claim: state what the report says, what the data shows, and whether they match
+## Your Task
 
-2. **Recompute 1-2 calculations** — recalculate growth rates or CAGRs from raw data.
-   - E.g., if the report says "5yr revenue CAGR of 18%", verify: (latest/earliest)^(1/5) - 1
+Check 5-8 key numerical claims in the report against the evidence log:
+- Revenue/profit figures — do they match the tool output?
+- Growth rates and CAGRs — are the calculations correct?
+- Sector rankings and percentile claims — do they match benchmarks data?
+- Valuation multiples (PE, PB, EV/EBITDA) — do they match the snapshot?
 
-3. **Check interpretation validity** — do conclusions follow from data?
-   - E.g., "margins expanding" — verify the actual trajectory shows expansion, not a one-quarter blip
+## What You Are NOT Doing
+- You are NOT judging writing quality, insight depth, or analytical reasoning
+- You are NOT checking whether conclusions are "correct" — that's the Synthesis agent's job
+- You are NOT re-analyzing the company — just checking numbers
 
-4. **Check peer benchmark accuracy** — verify any percentile or ranking claims against sector benchmarks.
+## Rules
+- If the evidence log doesn't contain data for a claim, mark it as "unverifiable" — NOT as an error
+- Rounding differences (±2%) are acceptable — mark as "note" not "error"
+- If report says "~25%" and data shows 24.7%, that's a pass
+- Focus on material errors: wrong order of magnitude, wrong direction, wrong company
+- 8 turns max
 
-5. **Check consistency** — numbers cited in different sections should agree.
-
-## Output Format
-
-End your response with a JSON code block:
-
+## Output
+End with a JSON code block:
 ```json
 {
     "agent_verified": "<agent_name>",
@@ -80,29 +86,19 @@ End your response with a JSON code block:
     "issues": [
         {
             "severity": "<error|warning|note>",
-            "section": "<section name>",
             "claim": "<what the report says>",
-            "actual": "<what the data shows>",
-            "data_source": "<tool used to verify>",
-            "action": "<correct_number|minor_correction|none>"
+            "actual": "<what the evidence shows>",
+            "evidence_tool": "<which tool call to check>"
         }
     ],
-    "corrections": [
-        "<specific text replacement instruction>"
-    ],
+    "corrections": ["<specific correction if needed>"],
     "overall_data_quality": "<summary>"
 }
 ```
 
-- **verdict = "pass"**: All spot checks match. Report is accurate.
-- **verdict = "pass_with_notes"**: Minor discrepancies (rounding, small differences). List corrections.
-- **verdict = "fail"**: Significant errors found (wrong numbers, wrong interpretation). Must be corrected.
-
-## Rules
-- You are checking ACCURACY, not writing style. Don't critique the prose.
-- If you can't verify a claim (tool fails, data unavailable), note it but don't count it as an error.
-- Be specific: "Report says 23%, data shows 19.8%" not just "growth rate is wrong".
-- 10 turns max — be efficient. Focus on the most important claims.
+- **pass**: All checked claims match evidence (±2% rounding OK)
+- **pass_with_notes**: Minor discrepancies flagged but no material errors
+- **fail**: Material errors found — wrong numbers, fabricated claims, or contradictions with evidence
 """
 
 
@@ -121,7 +117,7 @@ async def _run_verifier(
     options = ClaudeAgentOptions(
         system_prompt=VERIFICATION_PROMPT,
         mcp_servers={f"verify-{agent_name}": server},
-        max_turns=10,
+        max_turns=8,
         max_budget_usd=0.20,
         permission_mode="bypassPermissions",
         model=model,
