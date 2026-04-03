@@ -358,10 +358,17 @@ async def _run_specialist(
                 exc_info=True,
             )
 
-    # Use collected TextBlocks as fallback if ResultMessage.result was empty
-    if not report_text and text_blocks:
+    # Prefer TextBlocks over ResultMessage.result when TextBlocks have more content.
+    # ResultMessage.result often contains only a short summary, while the full report
+    # is spread across TextBlocks from intermediate assistant turns.
+    joined_blocks = "\n\n".join(text_blocks) if text_blocks else ""
+    if len(joined_blocks) > len(report_text) * 2 and len(joined_blocks) > 1000:
+        logger.info("Agent '%s' %s: TextBlocks (%d chars) >> ResultMessage (%d chars), using TextBlocks",
+                     name, symbol, len(joined_blocks), len(report_text))
+        report_text = joined_blocks
+    elif not report_text and text_blocks:
         logger.info("Agent '%s' %s: no ResultMessage, using %d TextBlocks as fallback", name, symbol, len(text_blocks))
-        report_text = "\n\n".join(text_blocks)
+        report_text = joined_blocks
 
     if not report_text:
         logger.error("Agent '%s' %s: EMPTY REPORT — no ResultMessage and no TextBlocks captured", name, symbol)
