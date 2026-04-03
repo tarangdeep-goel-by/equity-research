@@ -1332,9 +1332,6 @@ async def get_events_actions(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
-_PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_valuation_matrix, get_sector_benchmarks]
-
-
 # --- Tool Registry ---
 
 # V2 macro-tools (10 consolidated) + 6 standalone = 16 agent-facing tools
@@ -1401,125 +1398,7 @@ RESEARCH_TOOLS = [
     get_analytical_profile, screen_stocks,
 ]
 
-# Subset for business research — qualitative + key financials for context
-# Excludes: market signals (delivery, pledge), macro, FII/DII flows, bulk deals
-BUSINESS_TOOLS = [
-    # Qualitative context
-    get_company_info,
-    get_company_profile,
-    get_company_documents,
-    get_business_profile,
-    save_business_profile,
-    # Financial data (for backing claims with numbers and trends)
-    get_quarterly_results,
-    get_annual_financials,
-    get_screener_ratios,
-    get_valuation_snapshot,
-    get_peer_comparison,
-    get_expense_breakdown,
-    # Analyst consensus
-    get_consensus_estimate,
-    get_earnings_surprises,
-    get_estimate_momentum,
-    # Events & calendar
-    get_events_calendar,
-    # Dividend history
-    get_dividend_history,
-    # Chart data for trends
-    get_chart_data,
-]
-
-# --- Specialist Agent Tool Registries ---
-
-BUSINESS_AGENT_TOOLS = [
-    get_company_info, get_company_profile, get_company_documents,
-    get_business_profile, save_business_profile,
-    get_concall_insights,  # pre-extracted concall data (4 quarters)
-    get_quarterly_results, get_annual_financials, get_screener_ratios,
-    get_valuation_snapshot, get_peer_comparison, get_expense_breakdown,
-    get_consensus_estimate, get_earnings_surprises,
-    get_upcoming_catalysts,
-    get_analytical_profile,  # pre-computed analytical metrics
-    get_sector_kpis,  # sector-specific operational KPIs from concalls
-    render_chart,  # generate PNG charts for embedding
-    *_PEER_TOOLS,
-]  # 21 tools
-
-FINANCIAL_AGENT_TOOLS = [
-    get_company_info, get_quarterly_results, get_annual_financials,
-    get_screener_ratios, get_quarterly_balance_sheet, get_quarterly_cash_flow,
-    get_expense_breakdown, get_financial_growth_rates,
-    get_dupont_decomposition, get_key_metrics_history,
-    get_chart_data, get_earnings_surprises,
-    get_concall_insights,  # management commentary on margins, guidance, segment performance
-    get_corporate_actions, get_adjusted_eps,
-    get_financial_projections,
-    get_estimate_revisions, get_estimate_momentum,
-    get_dividend_history,
-    get_analytical_profile,  # pre-computed: F-Score, M-Score, DCF, earnings quality, capex, BFSI, etc.
-    get_revenue_estimates,
-    render_chart,
-    *_PEER_TOOLS,
-]  # 25 tools
-
-OWNERSHIP_AGENT_TOOLS = [
-    get_shareholding, get_shareholding_changes, get_insider_transactions,
-    get_bulk_block_deals, get_mf_holdings, get_mf_holding_changes,
-    get_shareholder_detail, get_promoter_pledge, get_delivery_trend,
-    get_fii_dii_flows, get_fii_dii_streak,
-    get_sector_benchmarks,
-    render_chart,
-]  # 13 tools — no concall (ownership data comes from filings, not concalls)
-
-VALUATION_AGENT_TOOLS = [
-    get_valuation_snapshot, get_valuation_band, get_pe_history,
-    get_fair_value, get_dcf_valuation, get_dcf_history,
-    get_price_targets, get_analyst_grades, get_peer_comparison,
-    get_chart_data, get_consensus_estimate,
-    get_concall_insights,  # management guidance affects forward valuation
-    get_corporate_actions, get_adjusted_eps,
-    get_financial_projections,
-    get_estimate_revisions, get_estimate_momentum,
-    get_events_calendar,
-    get_dividend_history,
-    get_upcoming_catalysts,
-    get_analytical_profile,  # pre-computed: reverse DCF, BFSI metrics, price performance, etc.
-    get_revenue_estimates, get_growth_estimates,
-    render_chart,
-    *_PEER_TOOLS,
-]
-
-RISK_AGENT_TOOLS = [
-    get_quarterly_results, get_annual_financials, get_quarterly_balance_sheet,
-    get_promoter_pledge,
-    get_insider_transactions, get_macro_snapshot, get_fii_dii_streak,
-    get_composite_score, get_earnings_surprises, get_recent_filings,
-    get_valuation_snapshot, get_peer_comparison,
-    get_concall_insights,  # red flags, evasive answers, risk acknowledgments from management
-    get_corporate_actions,  # share capital changes are a risk factor
-    get_upcoming_catalysts,
-    get_analytical_profile,  # pre-computed: F-Score, M-Score, earnings quality, BFSI metrics, etc.
-    *_PEER_TOOLS,
-]  # 17 tools
-
-TECHNICAL_AGENT_TOOLS = [
-    get_technical_indicators, get_chart_data, get_delivery_trend,
-    get_valuation_snapshot, get_bulk_block_deals,
-    get_fii_dii_flows, get_fii_dii_streak,
-    get_sector_benchmarks,
-    get_analytical_profile,  # pre-computed price performance + all analytical metrics
-    render_chart,  # price + delivery charts
-]  # 10 tools
-
-SECTOR_AGENT_TOOLS = [
-    get_company_info, get_sector_overview_metrics, get_sector_flows,
-    get_sector_valuations, get_peer_comparison,
-    get_peer_metrics, get_peer_growth, get_sector_benchmarks,
-    get_macro_snapshot, get_fii_dii_flows, get_fii_dii_streak,
-    get_analytical_profile,  # pre-computed price performance + analytical metrics
-    get_sector_kpis,
-    render_chart,
-]  # 14 tools
+# V1 agent registries (BUSINESS_TOOLS, *_AGENT_TOOLS, _PEER_TOOLS) removed — see *_AGENT_TOOLS_V2 below
 
 # --- V2 Agent Tool Registries (macro-tools) ---
 

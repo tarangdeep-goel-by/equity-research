@@ -104,80 +104,33 @@ AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
 }
 
 
-async def _run_agent(symbol: str, model: str | None = None) -> str:
-    """Run the research agent and return the Markdown report."""
-    from flowtracker.research.prompts import RESEARCH_SYSTEM_PROMPT
-    from flowtracker.research.tools import RESEARCH_TOOLS
+def generate_business_profile(symbol: str, model: str | None = None) -> Path:
+    """Generate a business profile via the business specialist agent.
 
-    server = create_sdk_mcp_server("research-data", tools=RESEARCH_TOOLS)
-
-    options = ClaudeAgentOptions(
-        system_prompt=RESEARCH_SYSTEM_PROMPT,
-        mcp_servers={"research": server},
-        max_turns=30,
-        permission_mode="bypassPermissions",
-        model=model,
-    )
-
-    report = ""
-    async for message in query(
-        prompt=f"Generate a comprehensive equity research thesis for {symbol}. Pull all available data, cross-reference signals, and produce the full Markdown report.",
-        options=options,
-    ):
-        if isinstance(message, ResultMessage):
-            report = message.result or ""
-
-    return report
-
-
-async def _run_business_agent(symbol: str, model: str | None = None) -> str:
-    """Run the business profile agent — lightweight, qualitative only."""
-    from flowtracker.research.prompts import BUSINESS_SYSTEM_PROMPT
-    from flowtracker.research.tools import BUSINESS_TOOLS
-
-    server = create_sdk_mcp_server("business-data", tools=BUSINESS_TOOLS)
-
-    options = ClaudeAgentOptions(
-        system_prompt=BUSINESS_SYSTEM_PROMPT,
-        mcp_servers={"business": server},
-        max_turns=25,
-        permission_mode="bypassPermissions",
-        model=model,
-    )
-
-    report = ""
-    async for message in query(
-        prompt=f"Research and write a business profile for {symbol}. Explain what the company does, how it makes money, its competitive position, and key risks. Use web search if the stored data is thin.",
-        options=options,
-    ):
-        if isinstance(message, ResultMessage):
-            report = message.result or ""
-
-    return report
-
-
-def generate_thesis(symbol: str, model: str | None = None) -> Path:
-    """Generate a research thesis for a stock symbol. Returns path to .md file."""
+    Uses the same V2 tools+prompts as run_all_agents (business slot).
+    Returns path to the HTML report.
+    """
     symbol = symbol.upper()
-    today = date.today().isoformat()
 
-    report = asyncio.run(_run_agent(symbol, model))
+    envelope = asyncio.run(run_single_agent("business", symbol, model=model))
 
-    if not report.strip():
-        raise RuntimeError(f"Agent returned empty report for {symbol}")
+    report = envelope.report
+    if not report or not report.strip():
+        raise RuntimeError(f"Business agent returned empty report for {symbol}")
 
-    # Save to vault
-    vault_dir = _VAULT_BASE / symbol / "thesis"
-    vault_dir.mkdir(parents=True, exist_ok=True)
-    vault_path = vault_dir / f"{today}.md"
-    vault_path.write_text(report)
+    # Save raw markdown to vault
+    profile_dir = _VAULT_BASE / symbol
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    profile_path = profile_dir / "profile.md"
+    profile_path.write_text(report)
 
-    # Save to reports/
+    # Render HTML
+    html = _render_mermaid_to_html(report, profile_dir)
+    html_path = _REPORTS_DIR / f"{symbol.lower()}-business.html"
     _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    reports_path = _REPORTS_DIR / f"{symbol.lower()}-thesis.md"
-    reports_path.write_text(report)
+    html_path.write_text(html)
 
-    return vault_path
+    return html_path
 
 
 def _render_mermaid_to_html(markdown: str, output_dir: Path) -> str:
@@ -277,30 +230,6 @@ _HTML_TEMPLATE = """\
 </body>
 </html>
 """
-
-
-def generate_business_profile(symbol: str, model: str | None = None) -> Path:
-    """Generate a business profile for a stock. Returns path to HTML report."""
-    symbol = symbol.upper()
-
-    report = asyncio.run(_run_business_agent(symbol, model))
-
-    if not report.strip():
-        raise RuntimeError(f"Agent returned empty business profile for {symbol}")
-
-    # Save raw markdown to vault
-    profile_dir = _VAULT_BASE / symbol
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    profile_path = profile_dir / "profile.md"
-    profile_path.write_text(report)
-
-    # Render HTML with mermaid diagrams
-    html = _render_mermaid_to_html(report, profile_dir)
-    html_path = _REPORTS_DIR / f"{symbol.lower()}-business.html"
-    _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    html_path.write_text(html)
-
-    return html_path
 
 
 # --- Multi-agent specialist functions ---
@@ -533,14 +462,19 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
 async def run_single_agent(
     agent_name: str,
     symbol: str,
-    system_prompt: str,
     model: str | None = None,
 ) -> BriefingEnvelope:
-    """Run a single specialist agent. Public API for CLI."""
+    """Run a single specialist agent. Uses same V2 prompts/tools as run_all_agents."""
+    from flowtracker.research.prompts import build_specialist_prompt
+
+    prompt = build_specialist_prompt(agent_name, symbol.upper())
+    if not prompt:
+        raise ValueError(f"Unknown agent: {agent_name}")
+
     return await _run_specialist(
         name=agent_name,
         symbol=symbol.upper(),
-        system_prompt=system_prompt,
+        system_prompt=prompt,
         model=model,
     )
 
@@ -909,16 +843,14 @@ async def run_comparison_agent(
     """Run the comparison agent across multiple stocks. Returns BriefingEnvelope."""
     from flowtracker.research.prompts import COMPARISON_AGENT_PROMPT
     from flowtracker.research.tools import (
-        get_fair_value,
+        get_fair_value_analysis,
         get_composite_score,
-        get_valuation_snapshot,
-        get_peer_comparison,
-        get_upcoming_catalysts,
-        get_sector_overview_metrics,
-        get_sector_benchmarks,
+        get_valuation,
+        get_peer_sector,
+        get_events_actions,
+        get_fundamentals,
+        get_ownership,
         render_chart,
-        get_annual_financials,
-        get_shareholding_changes,
     )
 
     # Step 1: Ensure briefings exist and are fresh
@@ -932,11 +864,10 @@ async def run_comparison_agent(
             briefing_text += f"**{agent_name}:** {json.dumps(data, indent=2)}\n"
 
     # Step 3: Run comparison agent
-    comparison_tools = [get_fair_value, get_composite_score,
-                        get_valuation_snapshot, get_peer_comparison,
-                        get_upcoming_catalysts, get_sector_overview_metrics,
-                        get_sector_benchmarks, render_chart,
-                        get_annual_financials, get_shareholding_changes]
+    comparison_tools = [get_fair_value_analysis, get_composite_score,
+                        get_valuation, get_peer_sector,
+                        get_events_actions, get_fundamentals,
+                        get_ownership, render_chart]
 
     user_prompt = (
         f"Compare these {len(symbols)} stocks: {', '.join(symbols)}.\n\n"
