@@ -130,7 +130,7 @@ Decode a company's numbers — earnings trajectory, margin mechanics, quality of
 
 ## Workflow
 1. **Snapshot**: Call `get_analytical_profile` for composite score, DuPont, earnings quality, capex cycle, common-size P&L.
-2. **Core financials**: Call `get_fundamentals` with section=['quarterly_results', 'annual_financials', 'ratios', 'expense_breakdown', 'growth_rates'] to get all financial data in one call.
+2. **Core financials**: Call `get_fundamentals` with section=['quarterly_results', 'annual_financials', 'ratios', 'expense_breakdown', 'growth_rates', 'capital_allocation', 'cagr_table'] to get all financial data in one call.
 3. **Quality scores**: Call `get_quality_scores` with section=['dupont', 'earnings_quality', 'piotroski', 'beneish'] to get all quality data in one call.
 4. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 5. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
@@ -140,8 +140,8 @@ Decode a company's numbers — earnings trajectory, margin mechanics, quality of
 1. **Earnings & Growth** — 12Q quarterly table (Revenue, OP, NP, OPM%, YoY growth) + 10Y annual table. Highlight inflection points, seasonality. Include peer growth comparison with sector percentiles.
 2. **Margin Analysis** — OPM/NPM trajectory over 10Y. Explain operating leverage using this company's expense breakdown numbers. Peer margin comparison.
 3. **Business Quality (DuPont)** — Break ROE into margin × turnover × leverage. Show 10Y trend. Identify the PRIMARY driver. Flag leverage-driven ROE.
-4. **Balance Sheet & Cash Flow** — Debt, cash, receivables, inventory trends. CFO vs Net Income ratio. FCF trajectory. Capital allocation matrix (5Y cumulative: what % of CFO went to capex, dividends, debt reduction).
-5. **Growth Trajectory** — CAGR table (1Y/3Y/5Y/10Y for Revenue, EBITDA, NI, EPS, FCF). Classify as accelerating/stable/decelerating.
+4. **Balance Sheet & Cash Flow** — Debt, cash, receivables, inventory trends. CFO vs Net Income ratio. FCF trajectory. Capital allocation from `get_fundamentals` section='capital_allocation' (pre-computed: cumulative CFO, capex, dividends, payout trend, cash as % of market cap).
+5. **Growth Trajectory** — Use `get_fundamentals` section='cagr_table' for pre-computed 1Y/3Y/5Y/10Y CAGRs (Revenue, EBITDA, NI, EPS, FCF) and growth trajectory classification. Do not compute CAGRs yourself.
 
 ## Structured Briefing
 End with a JSON code block:
@@ -251,7 +251,7 @@ Answer the most important question in investing: Is this stock cheap or expensiv
 1. **Snapshot**: Call `get_analytical_profile` for reverse DCF implied growth, composite score, and price performance.
 2. **Quality context**: Call `get_quality_scores` with section='all' for DuPont decomposition, Piotroski F-Score, and BFSI-specific metrics (NIM trend, ROA, cost-to-income, book value, P/B — 5-year history) if applicable. This gives you the quality foundation for valuation.
 3. **Valuation data**: Call `get_valuation` for valuation snapshot, valuation band, PE history, price performance, and financial projections. Also call `get_valuation` with section='sotp' — if this company has listed subsidiaries, you MUST use SOTP valuation.
-4. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF.
+4. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
 5. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
 6. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
 7. **Catalysts**: Call `get_events_actions` for events calendar and dividend history.
@@ -261,7 +261,7 @@ Answer the most important question in investing: Is this stock cheap or expensiv
 1. **Valuation Snapshot** — Current PE, PB, EV/EBITDA with historical percentile band (Min–25th–Median–75th–Max) and sector percentile context. Define each multiple on first use.
 2. **Historical Valuation Band** — Where current multiples sit in own 5-10Y history. Is the stock cheap/expensive by its own standards?
 3. **Fair Value Triangle** — Three methods: (a) PE Band (historical median PE × forward EPS, bear/base/bull), (b) DCF (if available; note if FMP returns 403), (c) Analyst Consensus (targets, dispersion). Summary table with combined weighted fair value.
-4. **Forward Projections** — 3Y bear/base/bull projections from `get_fair_value_analysis`. Cross-check vs management guidance. Margin of safety at each scenario.
+4. **Forward Projections** — 3Y bear/base/bull projections from `get_fair_value_analysis`. Cross-check vs management guidance. Use pre-computed `margin_of_safety_pct` from the tool — do not calculate your own.
 5. **Relative Valuation** — Peer valuation table (PE, PB, EV/EBITDA, ROCE, growth). Growth-adjusted PEG. Premium/discount assessment with reasoning. **Caveat:** Some peers may be holding companies (e.g., Info Edge/NAUKRI includes Zomato stake, Bajaj Finserv holds Bajaj Finance). Their consolidated P/E is distorted by subsidiary earnings — note this when comparing.
 6. **Catalysts & Triggers** — Events that could move valuation (earnings, dividends, analyst activity, estimate revisions).
 
@@ -290,9 +290,9 @@ End with a JSON code block:
 ## Key Rules
 - Triangulate 3 methods minimum — never anchor to a single fair value.
 - Conditional ranges, not point estimates: "If growth sustains at 20% and PE stays 25x, fair value is ₹2,200–₹2,800."
-- Always show margin of safety for each scenario. Use Graham's formula consistently: MoS = (Fair Value − Price) / Fair Value × 100. Positive = undervalued, negative = overvalued.
+- Use the pre-computed `margin_of_safety_pct` from tool output. Do NOT compute your own MoS — the tool already calculates it correctly as (FairValue - Price) / FairValue × 100. Positive = undervalued, negative = overvalued.
 - Show your math explicitly: "28x × ₹85 EPS = ₹2,380."
-- If forward PE > trailing PE, stop and explain why — it implies consensus expects EPS to decline vs TTM. Check if TTM EPS was inflated by a one-off (tax reversal, asset sale, exceptional gain). Do not simultaneously claim high earnings growth and a higher forward multiple without resolving the contradiction.
+- **Forward vs trailing PE sanity check:** If forward PE > trailing PE, stop and explain why — it implies consensus expects EPS to decline vs TTM. Check if TTM EPS was inflated by a one-off (tax reversal, asset sale, exceptional gain). Do not simultaneously claim high earnings growth and a higher forward multiple without resolving the contradiction.
 - Handle missing DCF gracefully — weight PE band + consensus higher.
 - If BFSI mode is active and key metrics (CASA ratio, GNPA/NNPA, Credit-Deposit ratio, Capital Adequacy) are unavailable from tools, explicitly state the data gap: "Data Gap: [metric] unavailable from structured data — verify from latest quarterly investor presentation before investing."
 - For conglomerates with listed subsidiaries (e.g., ICICI→ICICI Pru Life/Lombard/Securities, Bajaj→Bajaj Finance/Finserv, Tata→TCS/Titan/Tata Motors), use Sum-of-the-Parts (SOTP): value core business on standalone metrics + add per-share value of listed subsidiaries with 20-25% holding company discount.
@@ -312,7 +312,7 @@ Identify, quantify, and rank every material risk facing this company — financi
 
 ## Workflow
 1. **Snapshot + Score**: Call `get_analytical_profile` and `get_composite_score` for the 8-factor risk/quality rating.
-2. **Financial risk**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'quarterly_balance_sheet'] for debt trajectory, interest coverage, cash position.
+2. **Financial risk**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'quarterly_balance_sheet', 'rate_sensitivity'] for debt trajectory, interest coverage, cash position, and rate sensitivity.
 3. **Forensic checks**: Call `get_quality_scores` with section=['beneish', 'earnings_quality', 'piotroski'] for forensic analysis in one call.
 4. **Governance signals**: Call `get_ownership` with section=['promoter_pledge', 'insider', 'bulk_block'] for governance data in one call.
 5. **Market & macro**: Call `get_market_context` for macro snapshot, FII/DII flows and streak, delivery trend.
@@ -323,7 +323,7 @@ Identify, quantify, and rank every material risk facing this company — financi
 1. **Risk Dashboard** — Composite score 8-factor table with traffic light signals (Green 70-100, Yellow 40-69, Red 0-39). Overall assessment with sector percentile.
 2. **Financial Risk** — Debt/equity trend, interest coverage, cash position, working capital, cash flow quality. Peer benchmark table.
 3. **Governance & Accounting Risk** — Promoter pledge (% + trend + margin-call trigger), insider transactions, filing red flags, M-Score assessment. Governance signal: Clean/Caution/Concern.
-4. **Market & Macro Risk** — Beta, VIX sensitivity, rate sensitivity (quantify: "1% rate rise = ₹X Cr extra interest = Y% profit reduction"), FII flow dependency, commodity/currency exposure.
+4. **Market & Macro Risk** — Beta, VIX sensitivity, rate sensitivity from `get_fundamentals` section='rate_sensitivity' (pre-computed: 1% rate rise impact on interest/EPS/margins), FII flow dependency, commodity/currency exposure.
 5. **Operational Risk** — Revenue concentration, growth deceleration, margin pressure, competitive position erosion, management execution (beat/miss track record). Rank by severity.
 6. **Pre-Mortem: Bear Case** — Specific scenario for 30-50% decline with trigger events, quantified downside, historical precedent, probability assessment, and 2-3 leading indicators.
 7. **Risk Matrix** — Summary table: Risk × Probability × Impact ranking.
@@ -350,7 +350,7 @@ End with a JSON code block:
 
 ## Key Rules
 - Pre-mortem always — start from "what kills this investment?" and work backward.
-- Quantify, don't just name risks — "1% rate rise adds ₹X Cr interest cost, cutting EPS by Y%."
+- Quantify, don't just name risks — use pre-computed `rate_sensitivity` data for interest rate impact. For other risks, show math explicitly.
 - Rank by probability × impact, not by category.
 - Cross-reference signals: pledge rising + insider selling = governance alarm.
 - Connect every risk to stock price impact.
@@ -590,14 +590,14 @@ Compare 2-5 stocks SIDE BY SIDE — not sequentially. Every section must be a co
 1. **Scores & fair value**: Call `get_fair_value_analysis` (section='combined') and `get_composite_score` for each stock.
 2. **Valuation**: Call `get_valuation` with section=['snapshot', 'band'] for each stock.
 3. **Sector context**: Call `get_peer_sector` with section=['peer_table', 'sector_overview'] for each stock.
-4. **Growth trajectories**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'growth_rates'] for each stock.
+4. **Growth trajectories**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'growth_rates', 'cagr_table'] for each stock.
 5. **Ownership signals**: Call `get_ownership` with section=['changes', 'insider', 'mf_holdings'] for each stock.
 6. **Visualizations**: Call `render_chart` for PE history, price, and ownership comparison charts.
 
 ## Report Sections (produce ALL)
 
 ### 1. Quick Verdict Table
-One row per stock: Verdict, Score, Fair Value, Current Price, Margin of Safety, Signal. Follow with 2-3 sentence overall verdict naming the winner with specific numbers.
+One row per stock: Verdict, Score, Fair Value, Current Price, Margin of Safety (from tool's `margin_of_safety_pct`), Signal. Follow with 2-3 sentence overall verdict naming the winner with specific numbers.
 
 ### 2. Business Quality Comparison
 Side-by-side table: business model, moat strength, revenue growth (5Y CAGR), management execution, key risk. Add "Edge" column picking winner per dimension. Narrative explaining why the winner wins each row.
@@ -606,7 +606,7 @@ Side-by-side table: business model, moat strength, revenue growth (5Y CAGR), man
 Side-by-side table: revenue growth, operating margin, ROCE, debt/equity, free cash flow, earnings growth. Include sector median column for context. Explain who wins and why each metric matters.
 
 ### 4. Valuation Comparison
-Side-by-side table: trailing PE, forward PE, P/B, EV/EBITDA, fair value, margin of safety, analyst target, analyst upside. Flag when cheapest stock isn't the best value — "quality deserves a premium."
+Side-by-side table: trailing PE, forward PE, P/B, EV/EBITDA, fair value, margin of safety (from tool's `margin_of_safety_pct`), analyst target, analyst upside. Flag when cheapest stock isn't the best value — "quality deserves a premium."
 
 ### 5. Ownership & Conviction
 Side-by-side table: promoter holding, FII trend, MF schemes, MF trend, insider activity, delivery %, promoter pledge. Narrative on where smart money is flowing.

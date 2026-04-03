@@ -145,11 +145,11 @@ def build_projections(
     base_ebitda_margin = statistics.mean(ebitda_margins[:3]) if ebitda_margins else 0.15
 
     # Bear case: half growth, 200bps margin compression
-    bear_growth = base_growth * 0.5
+    bear_growth = base_growth - abs(base_growth * 0.5)
     bear_ebitda_margin = base_ebitda_margin - 0.02
 
     # Bull case: 1.5x growth (capped at reasonable), 200bps margin expansion
-    bull_growth = min(base_growth * 1.5, 0.40)  # Cap at 40%
+    bull_growth = min(base_growth + abs(base_growth * 0.5), 0.40)
     bull_ebitda_margin = base_ebitda_margin + 0.02
 
     # Clamp margins to reasonable range

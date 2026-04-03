@@ -978,13 +978,19 @@ def _get_fundamentals_section(api, symbol, section, args):
         return api.get_expense_breakdown(symbol, args.get("sub_section", "profit-loss"))
     elif section == "growth_rates":
         return api.get_financial_growth_rates(symbol)
+    elif section == "capital_allocation":
+        return api.get_capital_allocation(symbol, args.get("years", 5))
+    elif section == "rate_sensitivity":
+        return api.get_rate_sensitivity(symbol)
+    elif section == "cagr_table":
+        return api.get_growth_cagr_table(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_fundamentals",
-    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | ['section1', 'section2']",
+    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | ['section1', 'section2']",
     {"symbol": str, "section": str, "quarters": int, "years": int, "sub_section": str},
 )
 async def get_fundamentals(args):
@@ -1002,6 +1008,9 @@ async def get_fundamentals(args):
                 "quarterly_cash_flow": api.get_quarterly_cash_flow(symbol, args.get("quarters", 8)),
                 "expense_breakdown": api.get_expense_breakdown(symbol, args.get("sub_section", "profit-loss")),
                 "growth_rates": api.get_financial_growth_rates(symbol),
+                "capital_allocation": api.get_capital_allocation(symbol, args.get("years", 5)),
+                "rate_sensitivity": api.get_rate_sensitivity(symbol),
+                "cagr_table": api.get_growth_cagr_table(symbol),
             }
         else:
             data = _get_fundamentals_section(api, symbol, section, args)

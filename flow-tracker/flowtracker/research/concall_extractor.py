@@ -32,6 +32,61 @@ def _fy_sort_key(quarter_dir: Path) -> tuple[int, int]:
         return (0, 0)
 
 
+def _fy_sort_key_from_str(fy_quarter: str) -> tuple[int, int]:
+    """Return (fy_number, quarter_number) from a string like 'FY26-Q3'."""
+    fy = int(fy_quarter[2:4])
+    q = _FY_ORDER.get(fy_quarter.split("-")[1], 0)
+    return (fy, q)
+
+
+def _screener_period_to_fy_quarter(period: str) -> str:
+    """Convert Screener period like 'Jan 2026' to FY quarter like 'FY26-Q3'.
+
+    Indian FY runs Apr-Mar. Results announcement month maps to the quarter it reports:
+      Jan-Mar announcement → Q3 (Oct-Dec results)
+      Apr-Jun announcement → Q4 (Jan-Mar results)
+      Jul-Sep announcement → Q1 (Apr-Jun results)
+      Oct-Dec announcement → Q2 (Jul-Sep results)
+    """
+    month_str, year_str = period.split()
+    month = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+             "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}[month_str[:3]]
+    year = int(year_str)
+
+    if month in (1, 2, 3):      # Jan-Mar → Q3 results (Oct-Dec)
+        fy = year % 100
+        return f"FY{fy:02d}-Q3"
+    elif month in (4, 5, 6):    # Apr-Jun → Q4 results (Jan-Mar)
+        fy = year % 100
+        return f"FY{fy:02d}-Q4"
+    elif month in (7, 8, 9):    # Jul-Sep → Q1 results (Apr-Jun)
+        fy = (year + 1) % 100
+        return f"FY{fy:02d}-Q1"
+    else:                        # Oct-Dec → Q2 results (Jul-Sep)
+        fy = (year + 1) % 100
+        return f"FY{fy:02d}-Q2"
+
+
+def _download_transcript_from_url(url: str, dest_path: Path) -> bool:
+    """Download a transcript PDF/HTML from a Screener-sourced URL.
+
+    Returns True if downloaded successfully. Skips BSE URLs (unreliable).
+    """
+    if "bseindia.com" in url:
+        return False  # BSE is flaky, skip
+    import httpx
+    try:
+        with httpx.Client(follow_redirects=True, timeout=30) as client:
+            resp = client.get(url)
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                dest_path.write_bytes(resp.content)
+                return True
+    except Exception:
+        pass
+    return False
+
+
 # --- PDF discovery ---
 
 
@@ -40,10 +95,11 @@ def _find_concall_pdfs(symbol: str, quarters: int = 6) -> list[Path]:
 
     Returns up to `quarters` paths. Only includes recent quarters
     (within ~2 FY years from the most recent available).
+    Uses Screener transcript URLs as fallback when vault PDFs are missing.
     """
-    filings_dir = _VAULT_BASE / symbol.upper() / "filings"
-    if not filings_dir.exists():
-        return []
+    symbol = symbol.upper()
+    filings_dir = _VAULT_BASE / symbol / "filings"
+    filings_dir.mkdir(parents=True, exist_ok=True)
 
     # Collect quarter dirs matching FY??-Q? pattern
     quarter_dirs = sorted(
@@ -52,24 +108,73 @@ def _find_concall_pdfs(symbol: str, quarters: int = 6) -> list[Path]:
         reverse=True,
     )
 
-    # Find the most recent quarter to establish recency window
+    # Find existing concall PDFs in vault
     all_with_concall = [d for d in quarter_dirs if (d / "concall.pdf").exists()]
-    if not all_with_concall:
-        return []
 
-    latest_key = _fy_sort_key(all_with_concall[0])  # (fy, q) of most recent
-    # Allow up to 7 FY quarters back from the latest (covers ~21 months)
+    # Establish recency window from latest available (or current date)
+    if all_with_concall:
+        latest_key = _fy_sort_key(all_with_concall[0])
+    else:
+        # No PDFs yet — derive window from current date
+        today = date.today()
+        if today.month <= 3:
+            latest_key = (today.year % 100, 3)
+        elif today.month <= 6:
+            latest_key = (today.year % 100, 4)
+        elif today.month <= 9:
+            latest_key = ((today.year + 1) % 100, 1)
+        else:
+            latest_key = ((today.year + 1) % 100, 2)
+
     min_key = (latest_key[0] - 2, latest_key[1] + 1)  # ~2 FY years back
 
     results = []
+    seen_quarters: set[str] = set()
     for qdir in all_with_concall:
         if _fy_sort_key(qdir) < min_key:
-            break  # too old
+            break
         results.append(qdir / "concall.pdf")
+        seen_quarters.add(qdir.name)
         if len(results) >= quarters:
             break
 
-    return results
+    # If we have fewer than desired, try Screener transcript URLs
+    if len(results) < quarters:
+        try:
+            from flowtracker.store import FlowStore
+            with FlowStore() as store:
+                docs = store._conn.execute(
+                    "SELECT period, url FROM company_documents "
+                    "WHERE symbol = ? AND doc_type = 'concall_transcript' "
+                    "ORDER BY period DESC",
+                    (symbol,),
+                ).fetchall()
+
+            for doc in docs:
+                try:
+                    fy_q = _screener_period_to_fy_quarter(doc["period"])
+                except (ValueError, KeyError):
+                    continue
+                if fy_q in seen_quarters:
+                    continue
+                if _fy_sort_key_from_str(fy_q) < min_key:
+                    continue
+                dest = filings_dir / fy_q / "concall.pdf"
+                if dest.exists():
+                    results.append(dest)
+                    seen_quarters.add(fy_q)
+                elif _download_transcript_from_url(doc["url"], dest):
+                    results.append(dest)
+                    seen_quarters.add(fy_q)
+                if len(results) >= quarters:
+                    break
+        except Exception:
+            pass  # don't break extraction if DB lookup fails
+
+        # Re-sort by recency
+        results.sort(key=lambda p: _fy_sort_key(p.parent), reverse=True)
+
+    return results[:quarters]
 
 
 def _find_supplementary_pdfs(quarter_dir: Path) -> list[Path]:

@@ -188,6 +188,36 @@ def refresh_for_research(
                 except Exception as e:
                     _skip("company_documents", str(e))
 
+                # Download transcript PDFs from Screener URLs (before BSE, which is flaky)
+                try:
+                    from flowtracker.research.concall_extractor import (
+                        _screener_period_to_fy_quarter,
+                        _download_transcript_from_url,
+                    )
+                    from pathlib import Path
+                    vault_base = Path.home() / "vault" / "stocks"
+                    transcript_docs = store._conn.execute(
+                        "SELECT period, url FROM company_documents "
+                        "WHERE symbol = ? AND doc_type = 'concall_transcript' "
+                        "ORDER BY period DESC LIMIT 6",
+                        (symbol,),
+                    ).fetchall()
+                    downloaded = 0
+                    for doc in transcript_docs:
+                        try:
+                            fy_q = _screener_period_to_fy_quarter(doc["period"])
+                        except (ValueError, KeyError):
+                            continue
+                        dest = vault_base / symbol / "filings" / fy_q / "concall.pdf"
+                        if dest.exists():
+                            continue
+                        if _download_transcript_from_url(doc["url"], dest):
+                            downloaded += 1
+                    if downloaded:
+                        _ok("transcript_downloads", downloaded)
+                except Exception as e:
+                    _skip("transcript_downloads", str(e))
+
                 quarters = sc.parse_quarterly_from_html(symbol, html)
                 if quarters:
                     store.upsert_quarterly_results(quarters)

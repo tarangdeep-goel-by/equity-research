@@ -251,13 +251,22 @@ class ResearchDataAPI:
                 snap = self._store.get_valuation_history(symbol, days=730)
                 pledge_price = None
                 if snap and pledge_quarter:
-                    # Find closest snapshot to pledge quarter
                     for s in snap:
                         if s.date and s.date >= pledge_quarter:
                             pledge_price = s.price
                             break
                     if not pledge_price and snap:
-                        pledge_price = snap[-1].price  # fallback to latest
+                        pledge_price = snap[-1].price
+
+                # Adjust pledge price for splits/bonuses since pledge date
+                if pledge_price and pledge_quarter:
+                    actions = self._store.get_split_bonus_actions(symbol)
+                    post_pledge_factor = 1.0
+                    for a in actions:
+                        if a["ex_date"] > pledge_quarter:
+                            post_pledge_factor *= (a.get("multiplier") or 1.0)
+                    if post_pledge_factor != 1.0:
+                        pledge_price = pledge_price / post_pledge_factor
 
                 cmp = snap[-1].price if snap else None
 
@@ -483,9 +492,9 @@ class ResearchDataAPI:
         if not dcf:
             return {}
         result = _clean(dcf.model_dump())
-        if dcf.dcf and dcf.stock_price and dcf.stock_price > 0:
+        if dcf.dcf and dcf.stock_price and dcf.dcf > 0:
             result["margin_of_safety_pct"] = round(
-                (dcf.dcf - dcf.stock_price) / dcf.stock_price * 100, 2
+                (dcf.dcf - dcf.stock_price) / dcf.dcf * 100, 2
             )
         return result
 
@@ -505,12 +514,22 @@ class ResearchDataAPI:
         annuals = self._store.get_annual_financials(symbol, limit=10)
         if annuals:
             decomp = []
-            for a in annuals:
+            for i, a in enumerate(annuals):
                 total_equity = (a.equity_capital or 0) + (a.reserves or 0)
-                if a.revenue and a.revenue > 0 and a.net_income is not None and a.total_assets and a.total_assets > 0 and total_equity and total_equity > 0:
+                # Use average of T and T-1 for balance sheet items (more accurate for growing companies)
+                if i + 1 < len(annuals):
+                    prev = annuals[i + 1]
+                    prev_equity = (prev.equity_capital or 0) + (prev.reserves or 0)
+                    prev_ta = prev.total_assets or 0
+                    avg_ta = (a.total_assets + prev_ta) / 2 if prev_ta > 0 else a.total_assets
+                    avg_equity = (total_equity + prev_equity) / 2 if prev_equity > 0 else total_equity
+                else:
+                    avg_ta = a.total_assets
+                    avg_equity = total_equity
+                if a.revenue and a.revenue > 0 and a.net_income is not None and avg_ta and avg_ta > 0 and avg_equity and avg_equity > 0:
                     npm = a.net_income / a.revenue
-                    at = a.revenue / a.total_assets
-                    em = a.total_assets / total_equity
+                    at = a.revenue / avg_ta
+                    em = avg_ta / avg_equity
                     roe = npm * at * em
                     decomp.append({
                         "fiscal_year_end": a.fiscal_year_end,
@@ -578,6 +597,7 @@ class ResearchDataAPI:
         Returns bear/base/bull range, margin of safety %, signal.
         """
         result: dict = {"symbol": symbol}
+        bear = bull = None
 
         # 1. PE band fair value
         pe_band = self._store.get_valuation_band(symbol, "pe_trailing", days=2500)
@@ -602,11 +622,14 @@ class ResearchDataAPI:
             }
             pe_fair = base
 
-        # 2. FMP DCF
+        # 2. FMP DCF (exclude for BFSI — unreliable for Indian financials)
+        is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
         dcf = self._store.get_fmp_dcf_latest(symbol)
-        dcf_value = dcf.dcf if dcf else None
+        dcf_value = dcf.dcf if dcf and not is_bfsi else None
         if dcf_value:
             result["dcf"] = dcf_value
+        elif dcf and is_bfsi:
+            result["dcf_excluded"] = "FMP DCF unreliable for BFSI; use P/B band instead"
 
         # 3. Analyst consensus target
         target_mean = est.target_mean if est else None
@@ -1093,6 +1116,147 @@ class ResearchDataAPI:
         events = gather_catalysts(symbol, self._store, days)
         return _clean([e.model_dump() for e in events])
 
+    # --- Pre-computed Metrics (avoid agent math errors) ---
+
+    def get_rate_sensitivity(self, symbol: str) -> dict:
+        """Impact of a 1% interest rate rise on profitability.
+
+        Computes: extra interest cost, EPS impact, interest coverage.
+        Pre-computed so agents don't do this math themselves.
+        """
+        annual = self.get_annual_financials(symbol, years=1)
+        if not annual:
+            return {"error": "No annual financial data"}
+
+        latest = annual[0]
+        borrowings = latest.get("borrowings", 0) or 0
+        interest = latest.get("interest", 0) or 0
+        ni = latest.get("net_income", 0) or 0
+        pbt = latest.get("profit_before_tax", 0) or 0
+        tax = latest.get("tax", 0) or 0
+        revenue = latest.get("revenue", 0) or 0
+        eps = latest.get("eps", 0) or 0
+        op = latest.get("operating_profit")
+
+        if borrowings <= 0:
+            return {"symbol": symbol, "net_debt": 0, "signal": "debt_free", "rate_sensitivity": "none"}
+
+        is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
+
+        tax_rate = tax / pbt if pbt > 0 else 0.25
+        extra_interest = borrowings * 0.01  # 1% rate rise
+        extra_interest_post_tax = extra_interest * (1 - tax_rate)
+
+        # Interest coverage = EBIT / interest
+        ebit = (op if op is not None else (pbt + interest)) or 0
+        coverage = round(ebit / interest, 2) if interest > 0 else None
+
+        # EPS impact
+        eps_impact_pct = round(extra_interest_post_tax / ni * 100, 1) if ni > 0 else None
+        margin_impact_bps = round(extra_interest / revenue * 10000, 0) if revenue > 0 else None
+
+        return {
+            "symbol": symbol,
+            "borrowings": round(borrowings, 2),
+            "current_interest": round(interest, 2),
+            "interest_coverage": coverage,
+            "rate_rise_1pct": {
+                "extra_interest_cr": round(extra_interest, 2),
+                "extra_interest_post_tax_cr": round(extra_interest_post_tax, 2),
+                "net_income_impact_pct": eps_impact_pct,
+                "margin_impact_bps": margin_impact_bps,
+            },
+            "signal": "high" if (eps_impact_pct and eps_impact_pct > 10) else "moderate" if (eps_impact_pct and eps_impact_pct > 3) else "low",
+            **({"caveat": "BFSI: borrowings are deposits (raw material), not corporate debt. Rate sensitivity reflects NIM compression risk, not leverage risk."} if is_bfsi else {}),
+        }
+
+    def get_growth_cagr_table(self, symbol: str) -> dict:
+        """Pre-computed CAGR table: 1Y/3Y/5Y/10Y for Revenue, EBITDA, NI, EPS, FCF.
+
+        Pre-computed so agents don't calculate CAGRs themselves.
+        """
+        annual = self.get_annual_financials(symbol, years=11)
+        if len(annual) < 2:
+            return {"error": "Need at least 2 years of financials"}
+
+        def _cagr(latest_val: float, oldest_val: float, years: int) -> float | None:
+            if oldest_val and oldest_val > 0 and latest_val and latest_val > 0 and years > 0:
+                return round(((latest_val / oldest_val) ** (1 / years) - 1) * 100, 1)
+            return None
+
+        def _yoy(latest_val: float, prev_val: float) -> float | None:
+            if prev_val and prev_val > 0 and latest_val is not None:
+                return round(((latest_val / prev_val) - 1) * 100, 1)
+            return None
+
+        # Extract series
+        def _get(d: dict, key: str) -> float:
+            return d.get(key, 0) or 0
+
+        def _ebitda(d: dict) -> float:
+            op = d.get("operating_profit")
+            dep = _get(d, "depreciation")
+            if op is not None:
+                return op + dep
+            return _get(d, "net_income") + _get(d, "tax") + _get(d, "interest") + dep
+
+        def _fcf(d: dict, prev: dict | None) -> float | None:
+            cfo = _get(d, "cfo")
+            if not cfo or prev is None:
+                return None
+            nb_t, nb_t1 = _get(d, "net_block"), _get(prev, "net_block")
+            cwip_t, cwip_t1 = _get(d, "cwip"), _get(prev, "cwip")
+            dep = _get(d, "depreciation")
+            capex = (nb_t - nb_t1) + (cwip_t - cwip_t1) + dep
+            return cfo - capex
+
+        n = len(annual)
+        metrics = {}
+        for label, extract in [
+            ("revenue", lambda d, _: _get(d, "revenue")),
+            ("ebitda", lambda d, _: _ebitda(d)),
+            ("net_income", lambda d, _: _get(d, "net_income")),
+            ("eps", lambda d, _: _get(d, "eps")),
+            ("fcf", lambda d, prev: _fcf(d, prev)),
+        ]:
+            values = []
+            for i, d in enumerate(annual):
+                prev = annual[i + 1] if i + 1 < n else None
+                values.append(extract(d, prev))
+
+            row = {}
+            if len(values) >= 2 and values[0] and values[1]:
+                row["1y"] = _yoy(values[0], values[1])
+            if len(values) >= 4 and values[0] and values[3]:
+                row["3y"] = _cagr(values[0], values[3], 3)
+            if len(values) >= 6 and values[0] and values[5]:
+                row["5y"] = _cagr(values[0], values[5], 5)
+            if len(values) >= 11 and values[0] and values[10]:
+                row["10y"] = _cagr(values[0], values[10], 10)
+
+            row["latest"] = round(values[0], 2) if values[0] else None
+            metrics[label] = row
+
+        # Classify trajectory from revenue CAGRs
+        rev = metrics.get("revenue", {})
+        r1, r3, r5 = rev.get("1y"), rev.get("3y"), rev.get("5y")
+        if r1 is not None and r3 is not None:
+            if r1 > r3 + 3:
+                trajectory = "accelerating"
+            elif r1 < r3 - 3:
+                trajectory = "decelerating"
+            else:
+                trajectory = "stable"
+        else:
+            trajectory = "unknown"
+
+        return {
+            "symbol": symbol,
+            "years_available": n,
+            "cagrs": metrics,
+            "growth_trajectory": trajectory,
+        }
+
     # --- Analytical Frameworks ---
 
     def get_earnings_quality(self, symbol: str) -> dict:
@@ -1113,7 +1277,8 @@ class ResearchDataAPI:
             cfo = a.get("cfo")
             total_assets = a.get("total_assets")
 
-            ebitda = (ni or 0) + tax + interest + depreciation
+            other_inc = a.get("other_income") or 0
+            ebitda = (ni or 0) + tax + interest + depreciation - other_inc
             entry: dict = {"fiscal_year_end": a.get("fiscal_year_end")}
 
             if ni and ni > 0 and cfo is not None:
@@ -1142,6 +1307,10 @@ class ResearchDataAPI:
                 signal = "low_quality"
         if avg_3y_accruals is not None and avg_3y_accruals > 0.10:
             signal = "warning"
+        # Flag negative PAT years where CFO/PAT ratio is misleading
+        neg_pat_years = [y for y in years if "cfo_pat" in y and y["cfo_pat"] < 0]
+        if neg_pat_years:
+            signal += "_negative_pat_years"
 
         return _clean({
             "years": years,
@@ -1236,12 +1405,13 @@ class ResearchDataAPI:
             max_score -= 1
             criteria.append({"name": "ΔCurrent Ratio > 0", "passed": None, "value": None, "note": "Quarterly balance sheet unavailable, skipped"})
 
-        # 7. No dilution — use adjusted shares (net_income / eps) to handle splits/bonuses
-        adj_shares_t = ni_t / eps_t if ni_t is not None and eps_t and eps_t != 0 else None
-        adj_shares_t1 = ni_t1 / eps_t1 if ni_t1 is not None and eps_t1 and eps_t1 != 0 else None
-        if adj_shares_t is not None and adj_shares_t1 is not None:
-            passed = adj_shares_t <= adj_shares_t1
-            criteria.append({"name": "No dilution", "passed": passed, "value": round(adj_shares_t - adj_shares_t1, 2)})
+        # 7. No dilution — compare num_shares directly (more reliable than NI/EPS inference)
+        shares_t = g(t, "num_shares")
+        shares_t1 = g(t1, "num_shares")
+        if shares_t is not None and shares_t1 is not None and shares_t1 > 0:
+            passed = shares_t <= shares_t1
+            change_pct = round((shares_t - shares_t1) / shares_t1 * 100, 2)
+            criteria.append({"name": "No dilution", "passed": passed, "value": change_pct, "unit": "% change"})
             if passed:
                 score += 1
         else:
@@ -1451,17 +1621,28 @@ class ResearchDataAPI:
         prev = annual[1]
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
 
+        # Common: compute tax rate from latest year
+        tax_amount = latest.get("tax", 0) or 0
+        pbt = latest.get("profit_before_tax", 0) or 0
+        tax_rate = tax_amount / pbt if pbt > 0 else 0.25
+
         if is_bfsi:
-            # FCFE model: discount net_income at cost of equity
-            base_cf = latest.get("net_income", 0)
-            if not base_cf or base_cf <= 0:
+            # FCFE model: discount dividendable earnings at cost of equity
+            base_ni = latest.get("net_income", 0)
+            if not base_ni or base_ni <= 0:
                 return {"error": "Negative/zero net income — cannot run reverse DCF"}
+            # ROE needed for sustainable payout constraint
+            equity_capital = latest.get("equity_capital", 0) or 0
+            reserves = latest.get("reserves", 0) or 0
+            book_value = equity_capital + reserves
+            bfsi_roe = base_ni / book_value if book_value > 0 else 0.14
             discount_rate = 0.14  # Cost of equity for Indian banks
             target = market_cap  # FCFE model → PV = Market Cap directly
             model = "FCFE"
             cash = 0
             borrowings = 0
             capex = 0
+            base_cf = base_ni  # used for display only
         else:
             # FCFF model: discount FCF at WACC, then bridge EV→MCap
             net_block_t = latest.get("net_block", 0) or 0
@@ -1473,13 +1654,19 @@ class ResearchDataAPI:
 
             # Capex = ΔNet_Block + ΔCWIP + Depreciation (NOT CFI)
             capex = (net_block_t - net_block_t1) + (cwip_t - cwip_t1) + depr
-            base_cf = cfo - capex
+            # FCFF = CFO + Interest*(1-tax_rate) - Capex
+            # CFO under Ind AS is post-interest, so add back after-tax interest for FCFF
+            interest_expense = latest.get("interest", 0) or 0
+            base_cf = cfo + interest_expense * (1 - tax_rate) - capex
 
             if base_cf <= 0:
-                # Fallback to net_income
-                base_cf = latest.get("net_income", 0) or 0
+                # Normalize: use NOPAT * (1 - avg reinvestment) instead of raw NI
+                op = latest.get("operating_profit", 0) or 0
+                nopat_norm = op * (1 - tax_rate) if op > 0 else (latest.get("net_income", 0) or 0)
+                # Use 30% default reinvestment for normalization
+                base_cf = nopat_norm * 0.70
                 if base_cf <= 0:
-                    return {"error": "Negative/zero FCF and net income — cannot run reverse DCF"}
+                    return {"error": "Negative/zero normalized FCFF — cannot run reverse DCF"}
 
             cash = latest.get("cash_and_bank", 0) or 0
             borrowings = latest.get("borrowings", 0) or 0
@@ -1489,21 +1676,90 @@ class ResearchDataAPI:
 
         terminal_g = 0.05  # 5% nominal GDP growth
 
-        # --- 1. Implied Growth Solve (existing) ---
-        def dcf_value(g):
-            pv = sum(base_cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
-            terminal = base_cf * (1 + g) ** 10 * (1 + terminal_g) / (discount_rate - terminal_g)
-            pv += terminal / (1 + discount_rate) ** 10
-            return pv
+        # --- 1. Implied Growth Solve ---
+        if is_bfsi:
+            # BFSI: embed payout constraint in DCF — payout = 1 - g/ROE
+            def dcf_value(g):
+                payout = max(1 - (g / bfsi_roe), 0) if bfsi_roe > 0 else 0
+                cf = base_ni * payout
+                pv = sum(cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                # Terminal: payout adjusts to terminal growth
+                terminal_payout = max(1 - (terminal_g / bfsi_roe), 0) if bfsi_roe > 0 else 0
+                terminal_cf = base_ni * (1 + g) ** 10 * terminal_payout
+                terminal = terminal_cf * (1 + terminal_g) / (discount_rate - terminal_g)
+                pv += terminal / (1 + discount_rate) ** 10
+                return pv
+        else:
+            def dcf_value(g):
+                pv = sum(base_cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                terminal = base_cf * (1 + g) ** 10 * (1 + terminal_g) / (discount_rate - terminal_g)
+                pv += terminal / (1 + discount_rate) ** 10
+                return pv
 
-        lo, hi = -0.20, 0.60
-        for _ in range(100):
-            mid = (lo + hi) / 2
-            if dcf_value(mid) < target:
-                lo = mid
+        def _solve_growth(dcf_fn):
+            lo, hi = -0.50, 2.00
+            for _ in range(100):
+                mid = (lo + hi) / 2
+                if dcf_fn(mid) < target:
+                    lo = mid
+                else:
+                    hi = mid
+            g = round((lo + hi) / 2, 4)
+            return g, g >= 1.99 or g <= -0.49
+
+        implied_g, growth_at_bound = _solve_growth(dcf_value)
+
+        # --- Normalized (5Y avg) DCF — cycle-adjusted view ---
+        normalized = {}
+        if len(annual) >= 5:
+            if is_bfsi:
+                avg_ni = statistics.mean(a.get("net_income", 0) or 0 for a in annual[:5])
+                if avg_ni > 0:
+                    def dcf_value_norm(g):
+                        payout = max(1 - (g / bfsi_roe), 0) if bfsi_roe > 0 else 0
+                        cf = avg_ni * payout
+                        pv = sum(cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                        terminal_payout = max(1 - (terminal_g / bfsi_roe), 0) if bfsi_roe > 0 else 0
+                        t_cf = avg_ni * (1 + g) ** 10 * terminal_payout
+                        t_val = t_cf * (1 + terminal_g) / (discount_rate - terminal_g)
+                        pv += t_val / (1 + discount_rate) ** 10
+                        return pv
+                    norm_g, norm_at_bound = _solve_growth(dcf_value_norm)
+                    normalized = {
+                        "implied_growth_normalized": norm_g,
+                        "base_cf_normalized": round(avg_ni, 2),
+                        "at_bound": norm_at_bound,
+                    }
             else:
-                hi = mid
-        implied_g = round((lo + hi) / 2, 4)
+                # Average FCFF over available years (up to 5)
+                fcffs = []
+                for i in range(min(5, len(annual) - 1)):
+                    d, p = annual[i], annual[i + 1]
+                    nb_d, nb_p = (d.get("net_block", 0) or 0), (p.get("net_block", 0) or 0)
+                    cw_d, cw_p = (d.get("cwip", 0) or 0), (p.get("cwip", 0) or 0)
+                    dep_d = d.get("depreciation", 0) or 0
+                    cfo_d = d.get("cfo", 0) or 0
+                    int_d = d.get("interest", 0) or 0
+                    cap_d = (nb_d - nb_p) + (cw_d - cw_p) + dep_d
+                    fcff_d = cfo_d + int_d * (1 - tax_rate) - cap_d
+                    fcffs.append(fcff_d)
+                avg_fcff = statistics.mean(fcffs) if fcffs else 0
+                if avg_fcff > 0:
+                    def dcf_value_norm(g):
+                        pv = sum(avg_fcff * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                        t_val = avg_fcff * (1 + g) ** 10 * (1 + terminal_g) / (discount_rate - terminal_g)
+                        pv += t_val / (1 + discount_rate) ** 10
+                        return pv
+                    norm_g, norm_at_bound = _solve_growth(dcf_value_norm)
+                    normalized = {
+                        "implied_growth_normalized": norm_g,
+                        "base_cf_normalized": round(avg_fcff, 2),
+                        "at_bound": norm_at_bound,
+                    }
+
+            if normalized and not normalized.get("at_bound"):
+                delta = abs(implied_g - normalized["implied_growth_normalized"])
+                normalized["cycle_signal"] = "high_cyclicality" if delta > 0.10 else "moderate_cyclicality" if delta > 0.05 else "low_cyclicality"
 
         # Historical CAGRs for context
         revenues = [(a.get("fiscal_year_end", ""), a.get("revenue", 0)) for a in annual if a.get("revenue")]
@@ -1516,7 +1772,19 @@ class ResearchDataAPI:
         # --- 2. Implied Margin Solve (NEW — non-BFSI only) ---
         current_revenue = latest.get("revenue", 0) or 0
         current_net_income = latest.get("net_income", 0) or 0
-        current_margin = round(current_net_income / current_revenue, 4) if current_revenue > 0 else 0
+        current_net_margin = round(current_net_income / current_revenue, 4) if current_revenue > 0 else 0
+
+        # Compute EBITDA margin (operating margin) — not inflated by other income
+        depr_latest = latest.get("depreciation", 0) or 0
+        op_profit = latest.get("operating_profit")
+        if op_profit is not None:
+            current_ebitda = op_profit + depr_latest
+        else:
+            # Bottom-up: EBITDA = NI + Tax + Interest + Depreciation
+            tax_val = latest.get("tax", 0) or 0
+            interest_val = latest.get("interest", 0) or 0
+            current_ebitda = current_net_income + tax_val + interest_val + depr_latest
+        current_ebitda_margin = round(current_ebitda / current_revenue, 4) if current_revenue > 0 else 0
         num_shares = latest.get("num_shares", 0) or 0
         current_price = valuation.get("price")
 
@@ -1528,18 +1796,29 @@ class ResearchDataAPI:
             # Net reinvestment = capex - depreciation (+ ΔWC if available, we skip)
             depr = latest.get("depreciation", 0) or 0
             net_reinvestment = capex - depr
-            nopat = current_net_income  # proxy: net income ≈ NOPAT for this purpose
+            # NOPAT = Operating Profit * (1 - tax_rate), not net income
+            op = latest.get("operating_profit", 0) or 0
+            nopat = op * (1 - tax_rate) if op > 0 else current_net_income
             reinvestment = min(max(net_reinvestment / nopat, 0.05), 0.80) if nopat > 0 else 0.30
 
+            # Terminal reinvestment: company growing at terminal_g needs less reinvestment
+            # Reinvestment = g / ROIC; at terminal, reinvestment = terminal_g / ROIC
+            roic = nopat / (latest.get("total_assets", 0) or 1) if nopat > 0 else 0.15
+            terminal_reinvestment = min(terminal_g / roic, 0.80) if roic > 0 else 0.10
+
             def dcf_with_margin(margin):
-                cf_year0 = current_revenue * margin * (1 - reinvestment)
+                nopat_yr0 = current_revenue * margin
+                cf_year0 = nopat_yr0 * (1 - reinvestment)
                 pv = sum(cf_year0 * (1 + hist_g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                # Terminal: lower reinvestment at terminal growth rate
+                terminal_nopat = nopat_yr0 * (1 + hist_g) ** 10
+                terminal_cf = terminal_nopat * (1 - terminal_reinvestment)
                 eff_discount = max(discount_rate - terminal_g, 0.001)
-                terminal = cf_year0 * (1 + hist_g) ** 10 * (1 + terminal_g) / eff_discount
+                terminal = terminal_cf * (1 + terminal_g) / eff_discount
                 pv += terminal / (1 + discount_rate) ** 10
                 return pv
 
-            lo_m, hi_m = 0.01, 0.50
+            lo_m, hi_m = 0.01, 1.00
             for _ in range(100):
                 mid_m = (lo_m + hi_m) / 2
                 if dcf_with_margin(mid_m) < target:
@@ -1581,15 +1860,20 @@ class ResearchDataAPI:
                     payout_ratio = max(1 - (g / roe), 0) if roe > 0 else 0
                     cf = net_income * payout_ratio  # true FCFE
                     pv = sum(cf * (1 + g) ** n / (1 + discount_rate) ** n for n in range(1, 11))
+                    # Terminal: use terminal growth payout, not high-growth payout
+                    terminal_payout = max(1 - (terminal_g / roe), 0) if roe > 0 else 0
+                    terminal_cf = net_income * (1 + g) ** 10 * terminal_payout
                     eff_discount = max(discount_rate - terminal_g, 0.001)
-                    terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / eff_discount
+                    terminal = terminal_cf * (1 + terminal_g) / eff_discount
                     pv += terminal / (1 + discount_rate) ** 10
                     implied_price = round(pv * 1e7 / num_shares, 2) if num_shares > 0 else None
                     sensitivity.append({"growth": g, "roe": roe, "implied_price": implied_price})
 
         # --- 4. Enhanced Assessment ---
         hist = cagr_3y or cagr_5y
-        if hist is not None:
+        if growth_at_bound:
+            assessment = f"Model cannot solve — implied growth hit bound ({implied_g:.0%}). FCFF (₹{base_cf:.0f} Cr) is too small relative to EV (₹{target:.0f} Cr). Check if capex-heavy or one-off year."
+        elif hist is not None:
             if implied_g > hist + 0.05:
                 growth_view = f"growth acceleration ({implied_g:.0%} vs {hist:.0%} historical)"
             elif implied_g < hist - 0.05:
@@ -1597,23 +1881,24 @@ class ResearchDataAPI:
             else:
                 growth_view = f"growth continuation ({implied_g:.0%} ≈ {hist:.0%} historical)"
 
-            if implied_margin is not None and current_margin > 0:
-                if implied_margin > current_margin + 0.03:
-                    margin_view = f"margin expansion ({implied_margin:.0%} implied vs {current_margin:.0%} current)"
-                elif implied_margin < current_margin - 0.03:
-                    margin_view = f"margin compression ({implied_margin:.0%} implied vs {current_margin:.0%} current)"
+            if implied_margin is not None and current_ebitda_margin > 0:
+                if implied_margin > current_ebitda_margin + 0.03:
+                    margin_view = f"margin expansion ({implied_margin:.0%} implied vs {current_ebitda_margin:.0%} current EBITDA margin)"
+                elif implied_margin < current_ebitda_margin - 0.03:
+                    margin_view = f"margin compression ({implied_margin:.0%} implied vs {current_ebitda_margin:.0%} current EBITDA margin)"
                 else:
-                    margin_view = f"stable margins ({implied_margin:.0%} ≈ {current_margin:.0%} current)"
+                    margin_view = f"stable margins ({implied_margin:.0%} ≈ {current_ebitda_margin:.0%} current EBITDA margin)"
                 assessment = f"Market is pricing in {growth_view} + {margin_view}"
             else:
                 assessment = f"Market is pricing in {growth_view}"
         else:
             assessment = f"Implied growth rate: {implied_g:.0%}"
 
-        return {
+        result = {
             "implied_growth_rate": implied_g,
             "implied_margin": implied_margin,
-            "current_margin": current_margin,
+            "current_ebitda_margin": current_ebitda_margin,
+            "current_net_margin": current_net_margin,
             "base_cf_used": round(base_cf, 2),
             "market_cap": market_cap,
             "model": model,
@@ -1624,6 +1909,119 @@ class ResearchDataAPI:
             "current_price": current_price,
             "assessment": assessment,
         }
+        if normalized:
+            result["normalized_5y"] = normalized
+        return result
+
+    def get_capital_allocation(self, symbol: str, years: int = 5) -> dict:
+        """Capital allocation analysis — how does the company deploy its cash?
+
+        Computes from annual_financials + valuation_snapshot:
+        - 5Y cumulative CFO
+        - Deployment: capex, acquisitions (via CFI), dividends, net cash change
+        - Cash as % of market cap
+        - Payout ratio trend
+        - Cash yield (dividends / market cap)
+        """
+        annual = self.get_annual_financials(symbol, years=years + 1)
+        if len(annual) < 2:
+            return {"error": "Need at least 2 years of financials"}
+
+        valuation = self.get_valuation_snapshot(symbol)
+        market_cap = valuation.get("market_cap")
+
+        # Use up to `years` most recent years
+        data = annual[:years]
+
+        # Cumulative figures
+        total_cfo = sum(d.get("cfo", 0) or 0 for d in data)
+        total_dividends = 0
+        dividend_details = []
+        for d in data:
+            # Screener uses dividend_amount (total dividends paid in crores)
+            div_paid = d.get("dividend_amount", 0) or d.get("dividend_payout", 0) or 0
+            ni = d.get("net_income", 0) or 0
+            fy = d.get("fiscal_year_end", "")
+
+            total_dividends += div_paid
+
+            payout_ratio = round(div_paid / ni * 100, 1) if ni and ni > 0 else None
+            dividend_details.append({
+                "fiscal_year": fy,
+                "dividends_paid": round(div_paid, 2),
+                "net_income": round(ni, 2),
+                "payout_ratio_pct": payout_ratio,
+            })
+
+        # Capex: delta_Net_Block + delta_CWIP + Depreciation
+        total_gross_capex = 0
+        total_divestments = 0
+        for i, d in enumerate(data):
+            if i + 1 < len(annual):  # need previous year for delta
+                prev = annual[i + 1]  # data is sorted most recent first
+                nb_t = d.get("net_block", 0) or 0
+                nb_t1 = prev.get("net_block", 0) or 0
+                cwip_t = d.get("cwip", 0) or 0
+                cwip_t1 = prev.get("cwip", 0) or 0
+                depr = d.get("depreciation", 0) or 0
+                net_capex = (nb_t - nb_t1) + (cwip_t - cwip_t1) + depr
+                if net_capex >= 0:
+                    total_gross_capex += net_capex
+                else:
+                    total_divestments += abs(net_capex)
+        total_capex = total_gross_capex - total_divestments
+
+        # Cash position (cash_and_bank + investments for companies holding cash in MFs/FDs)
+        latest = data[0]
+        cash_bank = latest.get("cash_and_bank", 0) or 0
+        investments = latest.get("investments", 0) or 0
+        total_cash = cash_bank + investments
+        borrowings = latest.get("borrowings", 0) or 0
+        net_cash = total_cash - borrowings
+
+        # Cash as % of market cap
+        cash_pct_mcap = round(total_cash / market_cap * 100, 1) if market_cap and market_cap > 0 else None
+        net_cash_pct_mcap = round(net_cash / market_cap * 100, 1) if market_cap and market_cap > 0 else None
+
+        # Cash yield = dividends / market cap (last year)
+        last_year_div = dividend_details[0]["dividends_paid"] if dividend_details else 0
+        cash_yield = round(last_year_div / market_cap * 100, 2) if market_cap and market_cap > 0 else None
+
+        # Deployment breakdown
+        # CFI includes capex + acquisitions + investments
+        # Residual = CFO - capex - dividends = what went to cash/investments/acquisitions
+        residual = total_cfo - total_capex - total_dividends
+
+        result = {
+            "symbol": symbol,
+            "years_analyzed": len(data),
+            "cumulative": {
+                "cfo": round(total_cfo, 2),
+                "gross_capex": round(total_gross_capex, 2),
+                "divestments": round(total_divestments, 2),
+                "net_capex": round(total_capex, 2),
+                "dividends": round(total_dividends, 2),
+                "residual_cash_acquisitions": round(residual, 2),
+                "capex_pct_of_cfo": round(total_gross_capex / total_cfo * 100, 1) if total_cfo > 0 else None,
+                "dividends_pct_of_cfo": round(total_dividends / total_cfo * 100, 1) if total_cfo > 0 else None,
+            },
+            "cash_position": {
+                "cash_and_bank": round(cash_bank, 2),
+                "investments": round(investments, 2),
+                "total_cash": round(total_cash, 2),
+                "borrowings": round(borrowings, 2),
+                "net_cash": round(net_cash, 2),
+                "cash_pct_of_market_cap": cash_pct_mcap,
+                "net_cash_pct_of_market_cap": net_cash_pct_mcap,
+            },
+            "cash_yield_pct": cash_yield,
+            "payout_trend": dividend_details,
+        }
+
+        if market_cap:
+            result["market_cap"] = market_cap
+
+        return result
 
     def get_capex_cycle(self, symbol: str) -> dict:
         """CWIP/Capex tracking with phase detection."""
