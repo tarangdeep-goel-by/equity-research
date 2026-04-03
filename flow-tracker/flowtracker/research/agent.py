@@ -499,16 +499,17 @@ def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
         counts = Counter(signal_values)
         majority = counts.most_common(1)[0]
         agreement = majority[1] / len(signal_values) * 100
-        lines.append(f"**Agent agreement:** {len(signal_values)} agents responded. "
-                      f"Majority signal: {majority[0]} ({majority[1]}/{len(signal_values)} = {agreement:.0f}%)")
+        lines.append(f"**Suggested signal (orchestrator analysis):** {len(signal_values)} agents responded. "
+                      f"Majority signal appears {majority[0]} ({majority[1]}/{len(signal_values)} = {agreement:.0f}%). "
+                      f"Please validate — do the underlying briefing details support this?")
         lines.append(f"**Signal breakdown:** {dict(counts)}")
 
         # Flag contradictions
         if len(counts) > 1:
             dissenters = [(name, sig) for name, sig in signals.items() if sig != majority[0] and sig != "unknown"]
             if dissenters:
-                lines.append(f"**Contradictions to resolve:** {', '.join(f'{n} says {s}' for n, s in dissenters)} "
-                              f"vs majority {majority[0]}. WHY do these agents disagree? Your synthesis must address this.")
+                lines.append(f"**Potential contradiction:** {', '.join(f'{n} says {s}' for n, s in dissenters)} "
+                              f"vs majority {majority[0]}. Investigate whether these reflect genuinely conflicting evidence or different timeframes/scopes.")
 
     # Cross-signal detection
     cross_signals = []
@@ -558,7 +559,7 @@ def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
         cross_signals.append("Both sector and stock are expensive — correction risk is amplified.")
 
     if cross_signals:
-        lines.append("\n**Cross-signals detected (investigate these):**")
+        lines.append("\n**Potential cross-signals (orchestrator suggestions — validate against briefing data):**")
         for i, sig in enumerate(cross_signals, 1):
             lines.append(f"  {i}. {sig}")
     else:
@@ -637,8 +638,19 @@ async def run_all_agents(
     for name, result in results:
         if isinstance(result, Exception):
             print(f"  ⚠ {name} agent failed: {result}")
-            continue
-        envelopes[name] = result
+            envelopes[name] = BriefingEnvelope(
+                agent=name, symbol=symbol,
+                status="failed", failure_reason=str(result),
+            )
+        elif not result.report or len(result.report.strip()) < 100:
+            envelopes[name] = BriefingEnvelope(
+                agent=name, symbol=symbol,
+                status="empty", failure_reason="Agent produced no substantive output",
+                report=result.report, briefing=result.briefing,
+                evidence=result.evidence, cost=result.cost,
+            )
+        else:
+            envelopes[name] = result
 
     # Phase 1.5: Verification (with concurrency limit)
     if verify and envelopes:
@@ -700,6 +712,7 @@ async def run_all_agents(
 async def run_synthesis_agent(
     symbol: str,
     model: str | None = None,
+    failed_agents: list[str] | None = None,
 ) -> BriefingEnvelope:
     """Run the synthesis agent on existing briefings."""
     from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2 as SYNTHESIS_AGENT_PROMPT
@@ -717,6 +730,10 @@ async def run_synthesis_agent(
     for agent_name, data in briefings.items():
         briefing_text += f"\n### {agent_name.upper()} Briefing\n```json\n{json.dumps(data, indent=2)}\n```\n"
 
+    if failed_agents:
+        briefing_text += f"\n\n### FAILED AGENTS\nThe following agents failed to produce reports: {', '.join(failed_agents)}. "
+        briefing_text += "Your analysis is incomplete — lower your confidence accordingly and note which dimensions are missing.\n"
+
     # --- Directed synthesis: pre-analyze briefings for the synthesis agent ---
     signals_analysis = _analyze_briefing_signals(briefings)
 
@@ -727,11 +744,12 @@ async def run_synthesis_agent(
 
     user_prompt = (
         f"Synthesize the analysis for {symbol}.\n\n"
-        f"## Pre-Analysis (signals detected by orchestrator)\n{signals_analysis}\n\n"
+        f"## Orchestrator Pre-Analysis (suggestions to investigate, not conclusions)\n{signals_analysis}\n\n"
         f"## Specialist Briefings\n{briefing_text}\n\n"
-        "Use the pre-analysis to guide your cross-referencing. Resolve contradictions, "
-        "amplify agreements, and produce: Verdict, Executive Summary, Key Signals, "
-        "Catalysts, The Big Question."
+        "The orchestrator has flagged potential signals above — treat these as suggestions to investigate, "
+        "not conclusions. You may find additional signals or disagree with the orchestrator's assessment. "
+        "Your independent analysis takes precedence. "
+        "Produce: Verdict, Executive Summary, Key Signals, Catalysts, The Big Question."
     )
 
     return await _run_specialist(

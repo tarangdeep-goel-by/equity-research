@@ -43,6 +43,8 @@ class BriefingEnvelope(BaseModel, extra="ignore"):
     generated_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    status: str = "success"  # "success" | "failed" | "empty"
+    failure_reason: str = ""  # populated when status != "success"
     report: str = ""  # full markdown report section
     briefing: dict = Field(default_factory=dict)  # structured JSON for synthesis
     evidence: list[ToolEvidence] = Field(default_factory=list)
