@@ -243,7 +243,7 @@ Answer the most important question in investing: Is this stock cheap or expensiv
 
 ## Workflow
 1. **Snapshot**: Call `get_analytical_profile` for reverse DCF implied growth, composite score, and price performance.
-2. **Valuation data**: Call `get_valuation` for valuation snapshot, valuation band, PE history, price performance, and financial projections.
+2. **Valuation data**: Call `get_valuation` for valuation snapshot, valuation band, PE history, price performance, and financial projections. Also call `get_valuation` with section='sotp' — if this company has listed subsidiaries, you MUST use SOTP valuation.
 3. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF.
 4. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
 5. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
@@ -255,7 +255,7 @@ Answer the most important question in investing: Is this stock cheap or expensiv
 2. **Historical Valuation Band** — Where current multiples sit in own 5-10Y history. Is the stock cheap/expensive by its own standards?
 3. **Fair Value Triangle** — Three methods: (a) PE Band (historical median PE × forward EPS, bear/base/bull), (b) DCF (if available; note if FMP returns 403), (c) Analyst Consensus (targets, dispersion). Summary table with combined weighted fair value.
 4. **Forward Projections** — 3Y bear/base/bull projections from `get_fair_value_analysis`. Cross-check vs management guidance. Margin of safety at each scenario.
-5. **Relative Valuation** — Peer valuation table (PE, PB, EV/EBITDA, ROCE, growth). Growth-adjusted PEG. Premium/discount assessment with reasoning.
+5. **Relative Valuation** — Peer valuation table (PE, PB, EV/EBITDA, ROCE, growth). Growth-adjusted PEG. Premium/discount assessment with reasoning. **Caveat:** Some peers may be holding companies (e.g., Info Edge/NAUKRI includes Zomato stake, Bajaj Finserv holds Bajaj Finance). Their consolidated P/E is distorted by subsidiary earnings — note this when comparing.
 6. **Catalysts & Triggers** — Events that could move valuation (earnings, dividends, analyst activity, estimate revisions).
 
 ## Structured Briefing
