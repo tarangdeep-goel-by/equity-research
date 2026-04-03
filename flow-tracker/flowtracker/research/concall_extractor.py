@@ -38,7 +38,8 @@ def _fy_sort_key(quarter_dir: Path) -> tuple[int, int]:
 def _find_concall_pdfs(symbol: str, quarters: int = 4) -> list[Path]:
     """Find concall PDFs sorted by FY quarter (most recent first).
 
-    Returns up to `quarters` paths.
+    Returns up to `quarters` paths. Only includes recent quarters
+    (within last 5 FY quarters from the most recent available).
     """
     filings_dir = _VAULT_BASE / symbol.upper() / "filings"
     if not filings_dir.exists():
@@ -51,11 +52,20 @@ def _find_concall_pdfs(symbol: str, quarters: int = 4) -> list[Path]:
         reverse=True,
     )
 
+    # Find the most recent quarter to establish recency window
+    all_with_concall = [d for d in quarter_dirs if (d / "concall.pdf").exists()]
+    if not all_with_concall:
+        return []
+
+    latest_key = _fy_sort_key(all_with_concall[0])  # (fy, q) of most recent
+    # Allow up to 5 FY quarters back from the latest (covers ~15 months)
+    min_key = (latest_key[0] - 1, latest_key[1])  # ~1 FY year back
+
     results = []
-    for qdir in quarter_dirs:
-        concall = qdir / "concall.pdf"
-        if concall.exists():
-            results.append(concall)
+    for qdir in all_with_concall:
+        if _fy_sort_key(qdir) < min_key:
+            break  # too old
+        results.append(qdir / "concall.pdf")
         if len(results) >= quarters:
             break
 
