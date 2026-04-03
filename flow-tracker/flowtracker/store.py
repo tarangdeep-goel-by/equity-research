@@ -1,4 +1,11 @@
-"""SQLite persistence for FII/DII daily flow data."""
+"""SQLite persistence for FII/DII daily flow data.
+
+Unit standard (P-3B):
+    Monetary aggregates: CRORES (₹1 Cr = 10M). Converted at ingestion, never in compute code.
+    Per-share values:    RUPEES (price, EPS, BVPS, DPS). Use ×1e7 to convert Cr→Rs per-share.
+    Counts:              RAW (shares_outstanding, volume, quantity).
+    Percentages/ratios:  AS-IS (PE, ROE, margins, growth rates, pct_of_nav).
+"""
 
 from __future__ import annotations
 
