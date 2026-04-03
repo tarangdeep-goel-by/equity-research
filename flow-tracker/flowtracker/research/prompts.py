@@ -483,7 +483,11 @@ Before synthesizing, assess input quality:
 - How many agents produced substantive reports? (If <5, lower confidence)
 - Are there data gaps? (e.g., FMP tools failed → DCF not available → valuation is less reliable)
 - Are briefing JSON fields populated or mostly null? Null fields = less reliable analysis.
-- If any specialist agent failed, explicitly state: "The [X] analysis could not be completed." Cap confidence at 60% if 1 agent failed, 40% if 2+ failed.
+- If any specialist agent failed, check the tier-weighted failure info in the FAILED AGENTS section:
+  - **Tier 1 failed (Risk/Financials/Valuation):** These are dealbreakers. Cap verdict at HOLD, confidence at 40%. Lead with a prominent warning.
+  - **Tier 2 failed (Business/Ownership):** Cap confidence at 65%. Explicitly note missing dimensions.
+  - **Tier 3 failed (Sector/Technical):** Cap confidence at 85%. Proceed with available data.
+  - Multiple tier failures compound — use the LOWEST applicable cap.
 - Note at the top: "This synthesis is based on [N]/7 agent reports with [quality assessment]."
 
 ## Cross-Signal Framework

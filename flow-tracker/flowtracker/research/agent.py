@@ -68,6 +68,16 @@ AGENT_TOOLS: dict[str, list] = {
     "sector": SECTOR_AGENT_TOOLS_V2,
 }
 
+# Agent failure severity tiers for synthesis confidence capping
+AGENT_TIERS = {
+    # Tier 1: Dealbreakers — core financial analysis
+    "risk": 1, "financials": 1, "valuation": 1,
+    # Tier 2: Core context — business model and ownership
+    "business": 2, "ownership": 2,
+    # Tier 3: Enhancers — sector and market timing
+    "sector": 3, "technical": 3,
+}
+
 AGENT_MAX_TURNS: dict[str, int] = {
     "business": 40,
     "financials": 35,
@@ -685,7 +695,7 @@ async def run_all_agents(
             # We use the SAME specialist prompt + correction context so the agent
             # starts with full domain knowledge and knows exactly what to fix.
             if vdata.verdict == "fail":
-                print(f"  🔄 {name} failed verification — re-running with corrections")
+                print(f"  🔄 {name} failed verification — re-running once with corrections")
                 base_prompt = build_specialist_prompt(name, symbol)
                 corrections_context = (
                     f"\n\n## CORRECTIONS REQUIRED (from verification agent)\n"
@@ -704,7 +714,12 @@ async def run_all_agents(
                     )
                     envelopes[name] = rerun
                 except Exception as e:
-                    print(f"  ⚠ {name} re-run failed: {e}")
+                    print(f"  ⚠ {name} re-run failed — marking as failed: {e}")
+                    envelopes[name] = BriefingEnvelope(
+                        agent=name, symbol=symbol,
+                        status="failed",
+                        failure_reason=f"Failed verification and re-run: {e}",
+                    )
 
     return envelopes
 
@@ -731,8 +746,28 @@ async def run_synthesis_agent(
         briefing_text += f"\n### {agent_name.upper()} Briefing\n```json\n{json.dumps(data, indent=2)}\n```\n"
 
     if failed_agents:
-        briefing_text += f"\n\n### FAILED AGENTS\nThe following agents failed to produce reports: {', '.join(failed_agents)}. "
-        briefing_text += "Your analysis is incomplete — lower your confidence accordingly and note which dimensions are missing.\n"
+        # Build tier-weighted failure info
+        tier1_failed = [a for a in failed_agents if AGENT_TIERS.get(a) == 1]
+        tier2_failed = [a for a in failed_agents if AGENT_TIERS.get(a) == 2]
+        tier3_failed = [a for a in failed_agents if AGENT_TIERS.get(a) == 3]
+
+        briefing_text += "\n\n### FAILED AGENTS\n"
+        if tier1_failed:
+            briefing_text += (
+                f"**CRITICAL — Tier 1 agents failed: {', '.join(tier1_failed)}.** "
+                "These are core financial analysis agents. Cap your verdict at HOLD and confidence at 40%. "
+                "Lead with: 'WARNING: Core financial/risk analysis incomplete.'\n"
+            )
+        if tier2_failed:
+            briefing_text += (
+                f"**Tier 2 agents failed: {', '.join(tier2_failed)}.** "
+                "Cap confidence at 65%. Note which dimensions are missing.\n"
+            )
+        if tier3_failed:
+            briefing_text += (
+                f"Tier 3 agents failed: {', '.join(tier3_failed)}. "
+                "Cap confidence at 85%. These are supplementary — proceed with available data.\n"
+            )
 
     # --- Directed synthesis: pre-analyze briefings for the synthesis agent ---
     signals_analysis = _analyze_briefing_signals(briefings)

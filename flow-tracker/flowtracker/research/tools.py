@@ -946,6 +946,25 @@ async def screen_stocks(args):
 # --- Macro Tools (V2 consolidated) ---
 
 
+def _add_freshness_meta(data: dict, api, symbol: str) -> dict:
+    """Add freshness metadata to tool return payloads."""
+    if not isinstance(data, dict):
+        return data
+    try:
+        # Get latest quarter from quarterly results
+        qr = api.get_quarterly_results(symbol, 1)
+        latest_quarter = qr[0].get("quarter", "unknown") if qr else "unknown"
+
+        from datetime import date
+        data["_meta"] = {
+            "as_of_date": str(date.today()),
+            "latest_quarter_reported": latest_quarter,
+        }
+    except Exception:
+        pass  # Don't break tool calls for metadata failures
+    return data
+
+
 def _get_fundamentals_section(api, symbol, section, args):
     """Route a single section for get_fundamentals."""
     if section == "quarterly_results":
@@ -968,7 +987,7 @@ def _get_fundamentals_section(api, symbol, section, args):
 
 @tool(
     "get_fundamentals",
-    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'all' | ['section1', 'section2']",
+    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | ['section1', 'section2']",
     {"symbol": str, "section": str, "quarters": int, "years": int, "sub_section": str},
 )
 async def get_fundamentals(args):
@@ -989,6 +1008,8 @@ async def get_fundamentals(args):
             }
         else:
             data = _get_fundamentals_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1014,7 +1035,7 @@ def _get_quality_scores_section(api, symbol, section, args):
 
 @tool(
     "get_quality_scores",
-    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | 'all' | ['section1', 'section2']. "
+    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | ['section1', 'section2']. "
     "BFSI routing: 'all' auto-skips non-applicable sections based on sector.",
     {"symbol": str, "section": str},
 )
@@ -1049,6 +1070,8 @@ async def get_quality_scores(args):
                 }
         else:
             data = _get_quality_scores_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1076,7 +1099,7 @@ def _get_ownership_section(api, symbol, section, args):
 
 @tool(
     "get_ownership",
-    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'all' | ['section1', 'section2']",
+    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | ['section1', 'section2']",
     {"symbol": str, "section": str, "quarters": int, "days": int, "classification": str},
 )
 async def get_ownership(args):
@@ -1098,6 +1121,8 @@ async def get_ownership(args):
             }
         else:
             data = _get_ownership_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1117,7 +1142,7 @@ def _get_valuation_section(api, symbol, section, args):
 
 @tool(
     "get_valuation",
-    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'all' | ['section1', 'section2']",
+    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | ['section1', 'section2']",
     {"symbol": str, "section": str, "metric": str, "days": int, "years": int},
 )
 async def get_valuation(args):
@@ -1135,6 +1160,8 @@ async def get_valuation(args):
             }
         else:
             data = _get_valuation_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1156,7 +1183,7 @@ def _get_fair_value_analysis_section(api, symbol, section, args):
 
 @tool(
     "get_fair_value_analysis",
-    "Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | 'all' | ['section1', 'section2']",
+    "Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | ['section1', 'section2']",
     {"symbol": str, "section": str},
 )
 async def get_fair_value_analysis(args):
@@ -1202,7 +1229,7 @@ def _get_peer_sector_section(api, symbol, section, args):
 
 @tool(
     "get_peer_sector",
-    "Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'all' | ['section1', 'section2']",
+    "Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | ['section1', 'section2']",
     {"symbol": str, "section": str, "metric": str},
 )
 async def get_peer_sector(args):
@@ -1251,7 +1278,7 @@ def _get_estimates_section(api, symbol, section, args):
 
 @tool(
     "get_estimates",
-    "Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | 'all' | ['section1', 'section2']",
+    "Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']",
     {"symbol": str, "section": str},
 )
 async def get_estimates(args):
@@ -1273,6 +1300,8 @@ async def get_estimates(args):
             }
         else:
             data = _get_estimates_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1296,7 +1325,7 @@ def _get_market_context_section(api, symbol, section, args):
 
 @tool(
     "get_market_context",
-    "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'all' | ['section1', 'section2']",
+    "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | ['section1', 'section2']",
     {"symbol": str, "section": str, "days": int},
 )
 async def get_market_context(args):
@@ -1343,7 +1372,7 @@ def _get_company_context_section(api, symbol, section, args):
 
 @tool(
     "get_company_context",
-    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | 'all' | ['section1', 'section2']",
+    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']",
     {"symbol": str, "section": str, "doc_type": str, "limit": int},
 )
 async def get_company_context(args):
@@ -1385,7 +1414,7 @@ def _get_events_actions_section(api, symbol, section, args):
 
 @tool(
     "get_events_actions",
-    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'all' | ['section1', 'section2']",
+    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | ['section1', 'section2']",
     {"symbol": str, "section": str, "years": int, "quarters": int, "days": int},
 )
 async def get_events_actions(args):
