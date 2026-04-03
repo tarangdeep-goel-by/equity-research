@@ -1133,13 +1133,15 @@ def _get_valuation_section(api, symbol, section, args):
         return api.get_pe_history(symbol, args.get("days", 2500))
     elif section == "key_metrics":
         return api.get_key_metrics_history(symbol, args.get("years", 10))
+    elif section == "sotp":
+        return api.get_listed_subsidiaries(symbol) or {"info": "No listed subsidiaries found for this company"}
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_valuation",
-    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | ['section1', 'section2']",
+    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']",
     {"symbol": str, "section": str, "metric": str, "days": int, "years": int},
 )
 async def get_valuation(args):

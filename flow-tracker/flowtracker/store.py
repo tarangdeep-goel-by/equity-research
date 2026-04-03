@@ -842,6 +842,18 @@ CREATE TABLE IF NOT EXISTS analytical_snapshot (
 
 CREATE INDEX IF NOT EXISTS idx_analytical_snapshot_symbol ON analytical_snapshot(symbol);
 CREATE INDEX IF NOT EXISTS idx_analytical_snapshot_date ON analytical_snapshot(computed_date);
+
+CREATE TABLE IF NOT EXISTS listed_subsidiaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_symbol TEXT NOT NULL,
+    sub_symbol TEXT NOT NULL,
+    sub_name TEXT NOT NULL,
+    parent_ownership_pct REAL NOT NULL,
+    relationship TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(parent_symbol, sub_symbol)
+);
 """
 
 
@@ -3548,6 +3560,40 @@ class FlowStore:
                        FROM analytical_snapshot GROUP BY symbol
                    ) b ON a.symbol = b.symbol AND a.computed_date = b.max_date"""
             ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- Listed Subsidiaries (SOTP) --
+
+    def upsert_listed_subsidiary(
+        self, parent_symbol: str, sub_symbol: str, sub_name: str,
+        ownership_pct: float, relationship: str = "", notes: str = "",
+    ) -> None:
+        """Upsert a parent→subsidiary mapping."""
+        self._conn.execute(
+            """INSERT INTO listed_subsidiaries
+               (parent_symbol, sub_symbol, sub_name, parent_ownership_pct, relationship, notes, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+               ON CONFLICT(parent_symbol, sub_symbol) DO UPDATE SET
+               sub_name=excluded.sub_name, parent_ownership_pct=excluded.parent_ownership_pct,
+               relationship=excluded.relationship, notes=excluded.notes, updated_at=datetime('now')""",
+            (parent_symbol.upper(), sub_symbol.upper(), sub_name, ownership_pct, relationship, notes),
+        )
+        self._conn.commit()
+
+    def get_listed_subsidiaries(self, parent_symbol: str) -> list[dict]:
+        """Get all listed subsidiaries for a parent company."""
+        rows = self._conn.execute(
+            "SELECT * FROM listed_subsidiaries WHERE parent_symbol = ? ORDER BY parent_ownership_pct DESC",
+            (parent_symbol.upper(),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_parent_companies(self, sub_symbol: str) -> list[dict]:
+        """Get parent companies that hold this subsidiary (reverse lookup)."""
+        rows = self._conn.execute(
+            "SELECT * FROM listed_subsidiaries WHERE sub_symbol = ?",
+            (sub_symbol.upper(),),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def screen_by_analytics(self, filters: dict) -> list[dict]:
