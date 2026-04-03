@@ -943,11 +943,410 @@ async def screen_stocks(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+# --- Macro Tools (V2 consolidated) ---
+
+
+@tool(
+    "get_fundamentals",
+    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'all'",
+    {"symbol": str, "section": str, "quarters": int, "years": int, "sub_section": str},
+)
+async def get_fundamentals(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "quarterly_results":
+            data = api.get_quarterly_results(symbol, args.get("quarters", 12))
+        elif section == "annual_financials":
+            data = api.get_annual_financials(symbol, args.get("years", 10))
+        elif section == "ratios":
+            data = api.get_screener_ratios(symbol, args.get("years", 10))
+        elif section == "quarterly_balance_sheet":
+            data = api.get_quarterly_balance_sheet(symbol, args.get("quarters", 8))
+        elif section == "quarterly_cash_flow":
+            data = api.get_quarterly_cash_flow(symbol, args.get("quarters", 8))
+        elif section == "expense_breakdown":
+            data = api.get_expense_breakdown(symbol, args.get("sub_section", "profit-loss"))
+        elif section == "growth_rates":
+            data = api.get_financial_growth_rates(symbol)
+        elif section == "all":
+            data = {
+                "quarterly_results": api.get_quarterly_results(symbol, args.get("quarters", 12)),
+                "annual_financials": api.get_annual_financials(symbol, args.get("years", 10)),
+                "ratios": api.get_screener_ratios(symbol, args.get("years", 10)),
+                "quarterly_balance_sheet": api.get_quarterly_balance_sheet(symbol, args.get("quarters", 8)),
+                "quarterly_cash_flow": api.get_quarterly_cash_flow(symbol, args.get("quarters", 8)),
+                "expense_breakdown": api.get_expense_breakdown(symbol, args.get("sub_section", "profit-loss")),
+                "growth_rates": api.get_financial_growth_rates(symbol),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_quality_scores",
+    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | 'all'. "
+    "BFSI routing: 'all' auto-skips non-applicable sections based on sector.",
+    {"symbol": str, "section": str},
+)
+async def get_quality_scores(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "earnings_quality":
+            data = api.get_earnings_quality(symbol)
+        elif section == "piotroski":
+            data = api.get_piotroski_score(symbol)
+        elif section == "beneish":
+            data = api.get_beneish_score(symbol)
+        elif section == "dupont":
+            data = api.get_dupont_decomposition(symbol)
+        elif section == "common_size":
+            data = api.get_common_size_pl(symbol)
+        elif section == "capex_cycle":
+            data = api.get_capex_cycle(symbol)
+        elif section == "bfsi":
+            data = api.get_bfsi_metrics(symbol)
+        elif section == "all":
+            is_bfsi = api._is_bfsi(symbol)
+            skipped = {"skipped": "not applicable for BFSI"}
+            if is_bfsi:
+                data = {
+                    "earnings_quality": skipped,
+                    "piotroski": api.get_piotroski_score(symbol),
+                    "beneish": skipped,
+                    "dupont": api.get_dupont_decomposition(symbol),
+                    "common_size": api.get_common_size_pl(symbol),
+                    "capex_cycle": skipped,
+                    "bfsi": api.get_bfsi_metrics(symbol),
+                }
+            else:
+                data = {
+                    "earnings_quality": api.get_earnings_quality(symbol),
+                    "piotroski": api.get_piotroski_score(symbol),
+                    "beneish": api.get_beneish_score(symbol),
+                    "dupont": api.get_dupont_decomposition(symbol),
+                    "common_size": api.get_common_size_pl(symbol),
+                    "capex_cycle": api.get_capex_cycle(symbol),
+                    "bfsi": {"skipped": "not applicable for non-BFSI"},
+                }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_ownership",
+    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'all'",
+    {"symbol": str, "section": str, "quarters": int, "days": int, "classification": str},
+)
+async def get_ownership(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "shareholding":
+            data = api.get_shareholding(symbol, args.get("quarters", 12))
+        elif section == "changes":
+            data = api.get_shareholding_changes(symbol)
+        elif section == "insider":
+            data = api.get_insider_transactions(symbol, args.get("days", 365))
+        elif section == "bulk_block":
+            data = api.get_bulk_block_deals(symbol)
+        elif section == "mf_holdings":
+            data = api.get_mf_holdings(symbol)
+        elif section == "mf_changes":
+            data = api.get_mf_holding_changes(symbol)
+        elif section == "shareholder_detail":
+            data = api.get_shareholder_detail(symbol, args.get("classification"))
+        elif section == "promoter_pledge":
+            data = api.get_promoter_pledge(symbol)
+        elif section == "all":
+            data = {
+                "shareholding": api.get_shareholding(symbol, args.get("quarters", 12)),
+                "changes": api.get_shareholding_changes(symbol),
+                "insider": api.get_insider_transactions(symbol, args.get("days", 365)),
+                "bulk_block": api.get_bulk_block_deals(symbol),
+                "mf_holdings": api.get_mf_holdings(symbol),
+                "mf_changes": api.get_mf_holding_changes(symbol),
+                "shareholder_detail": api.get_shareholder_detail(symbol, args.get("classification")),
+                "promoter_pledge": api.get_promoter_pledge(symbol),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_valuation",
+    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'all'",
+    {"symbol": str, "section": str, "metric": str, "days": int, "years": int},
+)
+async def get_valuation(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "snapshot":
+            data = api.get_valuation_snapshot(symbol)
+        elif section == "band":
+            data = api.get_valuation_band(symbol, args.get("metric", "pe_trailing"), args.get("days", 2500))
+        elif section == "pe_history":
+            data = api.get_pe_history(symbol, args.get("days", 2500))
+        elif section == "key_metrics":
+            data = api.get_key_metrics_history(symbol, args.get("years", 10))
+        elif section == "all":
+            data = {
+                "snapshot": api.get_valuation_snapshot(symbol),
+                "band": api.get_valuation_band(symbol, args.get("metric", "pe_trailing"), args.get("days", 2500)),
+                "pe_history": api.get_pe_history(symbol, args.get("days", 2500)),
+                "key_metrics": api.get_key_metrics_history(symbol, args.get("years", 10)),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_fair_value_analysis",
+    "Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | 'all'",
+    {"symbol": str, "section": str},
+)
+async def get_fair_value_analysis(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "combined":
+            data = api.get_fair_value(symbol)
+        elif section == "dcf":
+            data = api.get_dcf_valuation(symbol)
+        elif section == "dcf_history":
+            data = api.get_dcf_history(symbol)
+        elif section == "reverse_dcf":
+            data = api.get_reverse_dcf(symbol)
+        elif section == "projections":
+            data = api.get_financial_projections(symbol)
+        elif section == "all":
+            data = {
+                "combined": api.get_fair_value(symbol),
+                "dcf": api.get_dcf_valuation(symbol),
+                "dcf_history": api.get_dcf_history(symbol),
+                "reverse_dcf": api.get_reverse_dcf(symbol),
+                "projections": api.get_financial_projections(symbol),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_peer_sector",
+    "Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'all'",
+    {"symbol": str, "section": str, "metric": str},
+)
+async def get_peer_sector(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "peer_table":
+            data = api.get_peer_comparison(symbol)
+        elif section == "peer_metrics":
+            data = api.get_peer_metrics(symbol)
+        elif section == "peer_growth":
+            data = api.get_peer_growth(symbol)
+        elif section == "valuation_matrix":
+            data = api.get_valuation_matrix(symbol)
+        elif section == "benchmarks":
+            data = api.get_sector_benchmarks(symbol, args.get("metric"))
+        elif section == "sector_overview":
+            data = api.get_sector_overview_metrics(symbol)
+        elif section == "sector_flows":
+            data = api.get_sector_flows(symbol)
+        elif section == "sector_valuations":
+            data = api.get_sector_valuations(symbol)
+        elif section == "all":
+            data = {
+                "peer_table": api.get_peer_comparison(symbol),
+                "peer_metrics": api.get_peer_metrics(symbol),
+                "peer_growth": api.get_peer_growth(symbol),
+                "valuation_matrix": api.get_valuation_matrix(symbol),
+                "benchmarks": api.get_sector_benchmarks(symbol, args.get("metric")),
+                "sector_overview": api.get_sector_overview_metrics(symbol),
+                "sector_flows": api.get_sector_flows(symbol),
+                "sector_valuations": api.get_sector_valuations(symbol),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_estimates",
+    "Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | 'all'",
+    {"symbol": str, "section": str},
+)
+async def get_estimates(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "consensus":
+            data = api.get_consensus_estimate(symbol)
+        elif section == "surprises":
+            data = api.get_earnings_surprises(symbol)
+        elif section == "revisions":
+            data = api.get_estimate_revisions(symbol)
+        elif section == "momentum":
+            data = api.get_estimate_momentum(symbol)
+        elif section == "revenue":
+            data = api.get_revenue_estimates(symbol)
+        elif section == "growth":
+            data = api.get_growth_estimates(symbol)
+        elif section == "analyst_grades":
+            data = api.get_analyst_grades(symbol)
+        elif section == "price_targets":
+            data = api.get_price_targets(symbol)
+        elif section == "all":
+            data = {
+                "consensus": api.get_consensus_estimate(symbol),
+                "surprises": api.get_earnings_surprises(symbol),
+                "revisions": api.get_estimate_revisions(symbol),
+                "momentum": api.get_estimate_momentum(symbol),
+                "revenue": api.get_revenue_estimates(symbol),
+                "growth": api.get_growth_estimates(symbol),
+                "analyst_grades": api.get_analyst_grades(symbol),
+                "price_targets": api.get_price_targets(symbol),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_market_context",
+    "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'all'",
+    {"symbol": str, "section": str, "days": int},
+)
+async def get_market_context(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "delivery":
+            data = api.get_delivery_trend(symbol, args.get("days", 30))
+        elif section == "macro":
+            data = api.get_macro_snapshot()
+        elif section == "fii_dii_streak":
+            data = api.get_fii_dii_streak()
+        elif section == "fii_dii_flows":
+            data = api.get_fii_dii_flows(args.get("days", 30))
+        elif section == "technicals":
+            data = api.get_technical_indicators(symbol)
+        elif section == "price_performance":
+            data = api.get_price_performance(symbol)
+        elif section == "all":
+            data = {
+                "delivery": api.get_delivery_trend(symbol, args.get("days", 30)),
+                "macro": api.get_macro_snapshot(),
+                "fii_dii_streak": api.get_fii_dii_streak(),
+                "fii_dii_flows": api.get_fii_dii_flows(args.get("days", 30)),
+                "technicals": api.get_technical_indicators(symbol),
+                "price_performance": api.get_price_performance(symbol),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_company_context",
+    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | 'all'",
+    {"symbol": str, "section": str, "doc_type": str, "limit": int},
+)
+async def get_company_context(args):
+    from pathlib import Path
+
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+
+    def _read_business_profile(sym: str) -> str:
+        path = Path.home() / "vault" / "stocks" / sym.upper() / "profile.md"
+        return path.read_text() if path.exists() else ""
+
+    with ResearchDataAPI() as api:
+        if section == "info":
+            data = api.get_company_info(symbol)
+        elif section == "profile":
+            data = api.get_company_profile(symbol)
+        elif section == "documents":
+            data = api.get_company_documents(symbol, args.get("doc_type"))
+        elif section == "business_profile":
+            data = _read_business_profile(symbol)
+        elif section == "concall_insights":
+            data = api.get_concall_insights(symbol)
+        elif section == "sector_kpis":
+            data = api.get_sector_kpis(symbol)
+        elif section == "filings":
+            data = api.get_recent_filings(symbol, args.get("limit", 10))
+        elif section == "all":
+            data = {
+                "info": api.get_company_info(symbol),
+                "profile": api.get_company_profile(symbol),
+                "documents": api.get_company_documents(symbol, args.get("doc_type")),
+                "business_profile": _read_business_profile(symbol),
+                "concall_insights": api.get_concall_insights(symbol),
+                "sector_kpis": api.get_sector_kpis(symbol),
+                "filings": api.get_recent_filings(symbol, args.get("limit", 10)),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+@tool(
+    "get_events_actions",
+    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'all'",
+    {"symbol": str, "section": str, "years": int, "quarters": int, "days": int},
+)
+async def get_events_actions(args):
+    symbol = args["symbol"]
+    section = args.get("section", "all")
+    with ResearchDataAPI() as api:
+        if section == "events":
+            data = api.get_events_calendar(symbol)
+        elif section == "dividends":
+            data = api.get_dividend_history(symbol, args.get("years", 10))
+        elif section == "corporate_actions":
+            data = api.get_corporate_actions(symbol)
+        elif section == "adjusted_eps":
+            data = api.get_adjusted_eps(symbol, args.get("quarters", 12))
+        elif section == "catalysts":
+            data = api.get_upcoming_catalysts(symbol, args.get("days", 90))
+        elif section == "all":
+            data = {
+                "events": api.get_events_calendar(symbol),
+                "dividends": api.get_dividend_history(symbol, args.get("years", 10)),
+                "corporate_actions": api.get_corporate_actions(symbol),
+                "adjusted_eps": api.get_adjusted_eps(symbol, args.get("quarters", 12)),
+                "catalysts": api.get_upcoming_catalysts(symbol, args.get("days", 90)),
+            }
+        else:
+            data = {"error": f"Unknown section: {section}"}
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
 _PEER_TOOLS = [get_peer_metrics, get_peer_growth, get_valuation_matrix, get_sector_benchmarks]
 
 
 # --- Tool Registry ---
 
+# V2 macro-tools (10 consolidated) + 6 standalone = 16 agent-facing tools
+RESEARCH_TOOLS_V2 = [
+    get_fundamentals, get_quality_scores, get_ownership, get_valuation,
+    get_fair_value_analysis, get_peer_sector, get_estimates,
+    get_market_context, get_company_context, get_events_actions,
+    get_analytical_profile, render_chart, get_composite_score,
+    screen_stocks, save_business_profile, get_chart_data,
+]
+
+# Individual tools kept for CLI `flowtrack research data <tool_name>` and monolith agent
 RESEARCH_TOOLS = [
     get_quarterly_results,
     get_annual_financials,
@@ -1121,3 +1520,49 @@ SECTOR_AGENT_TOOLS = [
     get_sector_kpis,
     render_chart,
 ]  # 14 tools
+
+# --- V2 Agent Tool Registries (macro-tools) ---
+
+BUSINESS_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_company_context, get_fundamentals,
+    get_peer_sector, get_estimates, get_events_actions,
+    get_valuation, get_chart_data, save_business_profile, render_chart,
+]
+
+FINANCIAL_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_company_context, get_fundamentals,
+    get_quality_scores, get_valuation, get_peer_sector,
+    get_estimates, get_events_actions, get_fair_value_analysis,
+    get_chart_data, render_chart,
+]
+
+OWNERSHIP_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_ownership, get_market_context,
+    get_peer_sector, get_company_context, get_estimates,
+    get_fundamentals, render_chart,
+]
+
+VALUATION_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_valuation, get_fair_value_analysis,
+    get_estimates, get_peer_sector, get_events_actions,
+    get_company_context, get_quality_scores, get_market_context,
+    get_chart_data, render_chart,
+]
+
+RISK_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_composite_score, get_fundamentals,
+    get_quality_scores, get_ownership, get_market_context,
+    get_peer_sector, get_company_context, get_events_actions,
+    get_estimates,
+]
+
+TECHNICAL_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_market_context, get_valuation,
+    get_ownership, get_peer_sector, get_chart_data, render_chart,
+]
+
+SECTOR_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_company_context, get_peer_sector,
+    get_market_context, get_fundamentals, get_estimates,
+    get_valuation, get_chart_data, render_chart,
+]

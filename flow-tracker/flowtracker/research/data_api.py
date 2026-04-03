@@ -1716,6 +1716,46 @@ class ResearchDataAPI:
 
         return {"is_bfsi": True, "years": years_data}
 
+    def get_quality_scores_all(self, symbol: str) -> dict:
+        """Aggregate all quality score metrics with BFSI-aware routing.
+
+        For BFSI: includes piotroski, dupont, common_size, bfsi_metrics.
+        Skips earnings_quality, beneish, capex_cycle (not applicable).
+        For non-BFSI: includes all except bfsi_metrics.
+        """
+        bfsi = self._is_bfsi(symbol)
+        result: dict = {"is_bfsi": bfsi}
+
+        # Always included
+        result["piotroski"] = self.get_piotroski_score(symbol)
+        result["dupont"] = self.get_dupont_decomposition(symbol)
+        result["common_size"] = self.get_common_size_pl(symbol)
+
+        if bfsi:
+            result["bfsi"] = self.get_bfsi_metrics(symbol)
+            result["earnings_quality"] = {
+                "skipped": "not applicable for BFSI stocks",
+                "reason": "requires manufacturing/service cost structure",
+            }
+            result["beneish"] = {
+                "skipped": "not applicable for BFSI stocks",
+                "reason": "designed for non-financial companies",
+            }
+            result["capex_cycle"] = {
+                "skipped": "not applicable for BFSI stocks",
+                "reason": "BFSI has no CWIP/capex cycle",
+            }
+        else:
+            result["earnings_quality"] = self.get_earnings_quality(symbol)
+            result["beneish"] = self.get_beneish_score(symbol)
+            result["capex_cycle"] = self.get_capex_cycle(symbol)
+            result["bfsi"] = {
+                "skipped": "only for banks/NBFCs",
+                "reason": "non-BFSI company",
+            }
+
+        return result
+
     # --- Price Performance ---
 
     # Sector index mapping for price performance

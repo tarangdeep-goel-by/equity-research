@@ -30,13 +30,13 @@ from flowtracker.research.briefing import (
     save_envelope,
 )
 from flowtracker.research.tools import (
-    BUSINESS_AGENT_TOOLS,
-    FINANCIAL_AGENT_TOOLS,
-    OWNERSHIP_AGENT_TOOLS,
-    RISK_AGENT_TOOLS,
-    SECTOR_AGENT_TOOLS,
-    TECHNICAL_AGENT_TOOLS,
-    VALUATION_AGENT_TOOLS,
+    BUSINESS_AGENT_TOOLS_V2,
+    FINANCIAL_AGENT_TOOLS_V2,
+    OWNERSHIP_AGENT_TOOLS_V2,
+    RISK_AGENT_TOOLS_V2,
+    SECTOR_AGENT_TOOLS_V2,
+    TECHNICAL_AGENT_TOOLS_V2,
+    VALUATION_AGENT_TOOLS_V2,
 )
 
 
@@ -59,13 +59,13 @@ DEFAULT_MODELS: dict[str, str] = {
 }
 
 AGENT_TOOLS: dict[str, list] = {
-    "business": BUSINESS_AGENT_TOOLS,
-    "financials": FINANCIAL_AGENT_TOOLS,
-    "ownership": OWNERSHIP_AGENT_TOOLS,
-    "valuation": VALUATION_AGENT_TOOLS,
-    "risk": RISK_AGENT_TOOLS,
-    "technical": TECHNICAL_AGENT_TOOLS,
-    "sector": SECTOR_AGENT_TOOLS,
+    "business": BUSINESS_AGENT_TOOLS_V2,
+    "financials": FINANCIAL_AGENT_TOOLS_V2,
+    "ownership": OWNERSHIP_AGENT_TOOLS_V2,
+    "valuation": VALUATION_AGENT_TOOLS_V2,
+    "risk": RISK_AGENT_TOOLS_V2,
+    "technical": TECHNICAL_AGENT_TOOLS_V2,
+    "sector": SECTOR_AGENT_TOOLS_V2,
 }
 
 AGENT_MAX_TURNS: dict[str, int] = {
@@ -640,7 +640,7 @@ async def run_all_agents(
     verify_model: str | None = None,
 ) -> dict[str, BriefingEnvelope]:
     """Run all 7 specialist agents in parallel, optionally verify, return results."""
-    from flowtracker.research.prompts import AGENT_PROMPTS
+    from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
     agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector"]
@@ -689,7 +689,7 @@ async def run_all_agents(
     # Build tasks for all agents that have prompts
     specialist_tasks = []
     for name in agent_names:
-        prompt = AGENT_PROMPTS.get(name)
+        prompt = build_specialist_prompt(name, symbol)
         if not prompt:
             continue
         specialist_tasks.append(_run_with_limit(name, prompt))
@@ -740,7 +740,7 @@ async def run_all_agents(
             # starts with full domain knowledge and knows exactly what to fix.
             if vdata.verdict == "fail":
                 print(f"  🔄 {name} failed verification — re-running with corrections")
-                base_prompt = AGENT_PROMPTS.get(name, "")
+                base_prompt = build_specialist_prompt(name, symbol)
                 corrections_context = (
                     f"\n\n## CORRECTIONS REQUIRED (from verification agent)\n"
                     f"Your previous report was independently verified and flagged.\n"
@@ -768,7 +768,7 @@ async def run_synthesis_agent(
     model: str | None = None,
 ) -> BriefingEnvelope:
     """Run the synthesis agent on existing briefings."""
-    from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT
+    from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2 as SYNTHESIS_AGENT_PROMPT
     from flowtracker.research.briefing import load_all_briefings
     from flowtracker.research.tools import get_composite_score, get_fair_value
 

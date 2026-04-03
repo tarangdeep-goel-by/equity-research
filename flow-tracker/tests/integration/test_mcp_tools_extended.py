@@ -183,3 +183,205 @@ class TestGetFiiDiiStreak:
         result = await get_fii_dii_streak.handler({})
         data = _parse_tool_result(result)
         assert isinstance(data, dict)
+
+
+# ---------------------------------------------------------------------------
+# Macro Tools (V2 consolidated)
+# ---------------------------------------------------------------------------
+
+
+class TestGetFundamentals:
+    @pytest.mark.asyncio
+    async def test_section_quarterly_results(self, db_env):
+        from flowtracker.research.tools import get_fundamentals
+        result = await get_fundamentals.handler({"symbol": "SBIN", "section": "quarterly_results", "quarters": 4})
+        data = _parse_tool_result(result)
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert "revenue" in data[0]
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_fundamentals
+        result = await get_fundamentals.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "quarterly_results" in data
+        assert "annual_financials" in data
+
+    @pytest.mark.asyncio
+    async def test_unknown_section(self, db_env):
+        from flowtracker.research.tools import get_fundamentals
+        result = await get_fundamentals.handler({"symbol": "SBIN", "section": "bogus"})
+        data = _parse_tool_result(result)
+        assert "error" in data
+
+
+class TestGetQualityScores:
+    @pytest.mark.asyncio
+    async def test_section_piotroski(self, db_env):
+        from flowtracker.research.tools import get_quality_scores
+        result = await get_quality_scores.handler({"symbol": "SBIN", "section": "piotroski"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+
+    @pytest.mark.asyncio
+    async def test_section_all_returns_all_keys(self, db_env):
+        """Test 'all' section returns expected keys.
+
+        Note: SBIN in test DB has industry='Banks' which doesn't match
+        _BFSI_INDUSTRIES (expects 'Public Sector Bank'), so both SBIN
+        and INFY follow the non-BFSI path in the test fixture.
+        """
+        from flowtracker.research.tools import get_quality_scores
+        result = await get_quality_scores.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        # All quality sections present
+        for key in ("piotroski", "dupont", "common_size", "earnings_quality", "beneish", "capex_cycle", "bfsi"):
+            assert key in data
+
+
+class TestGetOwnership:
+    @pytest.mark.asyncio
+    async def test_section_shareholding(self, db_env):
+        from flowtracker.research.tools import get_ownership
+        result = await get_ownership.handler({"symbol": "SBIN", "section": "shareholding", "quarters": 4})
+        data = _parse_tool_result(result)
+        assert isinstance(data, list)
+        assert len(data) > 0
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_ownership
+        result = await get_ownership.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("shareholding", "changes", "insider", "bulk_block", "mf_holdings", "mf_changes", "shareholder_detail", "promoter_pledge"):
+            assert key in data
+
+
+class TestGetValuationMacro:
+    @pytest.mark.asyncio
+    async def test_section_snapshot(self, db_env):
+        from flowtracker.research.tools import get_valuation
+        result = await get_valuation.handler({"symbol": "SBIN", "section": "snapshot"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_valuation
+        result = await get_valuation.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("snapshot", "band", "pe_history", "key_metrics"):
+            assert key in data
+
+
+class TestGetFairValueAnalysis:
+    @pytest.mark.asyncio
+    async def test_section_combined(self, db_env):
+        from flowtracker.research.tools import get_fair_value_analysis
+        result = await get_fair_value_analysis.handler({"symbol": "SBIN", "section": "combined"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_fair_value_analysis
+        result = await get_fair_value_analysis.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("combined", "dcf", "dcf_history", "reverse_dcf", "projections"):
+            assert key in data
+
+
+class TestGetPeerSector:
+    @pytest.mark.asyncio
+    async def test_section_peer_table(self, db_env):
+        from flowtracker.research.tools import get_peer_sector
+        result = await get_peer_sector.handler({"symbol": "SBIN", "section": "peer_table"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, (list, dict))
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_peer_sector
+        result = await get_peer_sector.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("peer_table", "peer_metrics", "sector_overview"):
+            assert key in data
+
+
+class TestGetEstimatesMacro:
+    @pytest.mark.asyncio
+    async def test_section_consensus(self, db_env):
+        from flowtracker.research.tools import get_estimates
+        result = await get_estimates.handler({"symbol": "SBIN", "section": "consensus"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_estimates
+        result = await get_estimates.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("consensus", "surprises", "revisions", "momentum"):
+            assert key in data
+
+
+class TestGetMarketContext:
+    @pytest.mark.asyncio
+    async def test_section_macro(self, db_env):
+        from flowtracker.research.tools import get_market_context
+        result = await get_market_context.handler({"symbol": "SBIN", "section": "macro"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_market_context
+        result = await get_market_context.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("delivery", "macro", "fii_dii_streak"):
+            assert key in data
+
+
+class TestGetCompanyContext:
+    @pytest.mark.asyncio
+    async def test_section_info(self, db_env):
+        from flowtracker.research.tools import get_company_context
+        result = await get_company_context.handler({"symbol": "SBIN", "section": "info"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_company_context
+        result = await get_company_context.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("info", "profile", "documents"):
+            assert key in data
+
+
+class TestGetEventsActions:
+    @pytest.mark.asyncio
+    async def test_section_events(self, db_env):
+        from flowtracker.research.tools import get_events_actions
+        result = await get_events_actions.handler({"symbol": "SBIN", "section": "events"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+
+    @pytest.mark.asyncio
+    async def test_section_all(self, db_env):
+        from flowtracker.research.tools import get_events_actions
+        result = await get_events_actions.handler({"symbol": "SBIN", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        for key in ("events", "dividends", "corporate_actions", "adjusted_eps", "catalysts"):
+            assert key in data
