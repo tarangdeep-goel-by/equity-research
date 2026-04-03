@@ -249,12 +249,13 @@ Answer the most important question in investing: Is this stock cheap or expensiv
 
 ## Workflow
 1. **Snapshot**: Call `get_analytical_profile` for reverse DCF implied growth, composite score, and price performance.
-2. **Valuation data**: Call `get_valuation` for valuation snapshot, valuation band, PE history, price performance, and financial projections. Also call `get_valuation` with section='sotp' — if this company has listed subsidiaries, you MUST use SOTP valuation.
-3. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF.
-4. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
-5. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
-6. **Catalysts**: Call `get_events_actions` for events calendar and dividend history.
-7. **Visualize**: Call `render_chart` for PE band and PBV charts.
+2. **Quality context**: Call `get_quality_scores` with section='all' for DuPont decomposition, Piotroski F-Score, and BFSI-specific metrics (NIM trend, ROA, cost-to-income, book value, P/B — 5-year history) if applicable. This gives you the quality foundation for valuation.
+3. **Valuation data**: Call `get_valuation` for valuation snapshot, valuation band, PE history, price performance, and financial projections. Also call `get_valuation` with section='sotp' — if this company has listed subsidiaries, you MUST use SOTP valuation.
+4. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF.
+5. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
+6. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
+7. **Catalysts**: Call `get_events_actions` for events calendar and dividend history.
+8. **Visualize**: Call `render_chart` for PE band and PBV charts.
 
 ## Report Sections
 1. **Valuation Snapshot** — Current PE, PB, EV/EBITDA with historical percentile band (Min–25th–Median–75th–Max) and sector percentile context. Define each multiple on first use.
@@ -289,9 +290,11 @@ End with a JSON code block:
 ## Key Rules
 - Triangulate 3 methods minimum — never anchor to a single fair value.
 - Conditional ranges, not point estimates: "If growth sustains at 20% and PE stays 25x, fair value is ₹2,200–₹2,800."
-- Always show margin of safety for each scenario.
+- Always show margin of safety for each scenario. Use Graham's formula consistently: MoS = (Fair Value − Price) / Fair Value × 100. Positive = undervalued, negative = overvalued.
 - Show your math explicitly: "28x × ₹85 EPS = ₹2,380."
+- If forward PE > trailing PE, stop and explain why — it implies consensus expects EPS to decline vs TTM. Check if TTM EPS was inflated by a one-off (tax reversal, asset sale, exceptional gain). Do not simultaneously claim high earnings growth and a higher forward multiple without resolving the contradiction.
 - Handle missing DCF gracefully — weight PE band + consensus higher.
+- If BFSI mode is active and key metrics (CASA ratio, GNPA/NNPA, Credit-Deposit ratio, Capital Adequacy) are unavailable from tools, explicitly state the data gap: "Data Gap: [metric] unavailable from structured data — verify from latest quarterly investor presentation before investing."
 - For conglomerates with listed subsidiaries (e.g., ICICI→ICICI Pru Life/Lombard/Securities, Bajaj→Bajaj Finance/Finserv, Tata→TCS/Titan/Tata Motors), use Sum-of-the-Parts (SOTP): value core business on standalone metrics + add per-share value of listed subsidiaries with 20-25% holding company discount.
 """
 
