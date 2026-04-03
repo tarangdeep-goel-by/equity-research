@@ -110,7 +110,7 @@ End with a JSON code block:
 ## Key Rules
 - Teach, don't summarize — every section should build understanding, not list facts.
 - Connect every fact to investability — "60% market share means pricing power" not just "60% market share."
-- Show your math — back-of-envelope calculations build understanding.
+- Use numbers from tools to build understanding — "60% market share at ₹1,388 Cr revenue means each 1% share gain = ₹23 Cr."
 - Classify moat (None/Narrow/Wide) with specific evidence from financials and competitive dynamics.
 - Use mermaid diagrams for business model flow and revenue breakdown.
 """
@@ -291,7 +291,6 @@ End with a JSON code block:
 - Triangulate 3 methods minimum — never anchor to a single fair value.
 - Conditional ranges, not point estimates: "If growth sustains at 20% and PE stays 25x, fair value is ₹2,200–₹2,800."
 - Use the pre-computed `margin_of_safety_pct` from tool output. Do NOT compute your own MoS — the tool already calculates it correctly as (FairValue - Price) / FairValue × 100. Positive = undervalued, negative = overvalued.
-- Show your math explicitly: "28x × ₹85 EPS = ₹2,380."
 - **Forward vs trailing PE sanity check:** If forward PE > trailing PE, stop and explain why — it implies consensus expects EPS to decline vs TTM. Check if TTM EPS was inflated by a one-off (tax reversal, asset sale, exceptional gain). Do not simultaneously claim high earnings growth and a higher forward multiple without resolving the contradiction.
 - Handle missing DCF gracefully — weight PE band + consensus higher.
 - If BFSI mode is active and key metrics (CASA ratio, GNPA/NNPA, Credit-Deposit ratio, Capital Adequacy) are unavailable from tools, explicitly state the data gap: "Data Gap: [metric] unavailable from structured data — verify from latest quarterly investor presentation before investing."
