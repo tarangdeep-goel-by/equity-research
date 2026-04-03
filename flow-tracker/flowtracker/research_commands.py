@@ -629,17 +629,11 @@ def run_agent(
     # Run specialist agents
     total_cost = 0.0
     for agent in specialist_agents:
-        try:
-            from flowtracker.research.prompts import AGENT_PROMPTS
-            prompt = AGENT_PROMPTS[agent]
-        except (ImportError, KeyError):
-            prompt = f"You are a {agent} research analyst. Analyze {symbol} using your available tools. Produce a detailed report."
-
         console.print(f"\n[bold]Running {agent} agent for {symbol}...[/]")
 
         try:
             from flowtracker.research.agent import run_single_agent
-            envelope = asyncio.run(run_single_agent(agent, symbol, prompt, model))
+            envelope = asyncio.run(run_single_agent(agent, symbol, model=model))
         except Exception as e:
             console.print(f"[red]{agent} agent error: {e}[/]")
             continue

@@ -38,24 +38,9 @@ DEFAULT_VERIFY_MODEL = "claude-haiku-4-5-20251001"
 
 def _get_verifier_tools(agent_name: str) -> list:
     """Get read-only tool subset for verifying a specialist agent."""
-    from flowtracker.research.tools import (
-        BUSINESS_AGENT_TOOLS,
-        FINANCIAL_AGENT_TOOLS,
-        OWNERSHIP_AGENT_TOOLS,
-        RISK_AGENT_TOOLS,
-        TECHNICAL_AGENT_TOOLS,
-        VALUATION_AGENT_TOOLS,
-    )
+    from flowtracker.research.agent import AGENT_TOOLS
 
-    registry = {
-        "business": BUSINESS_AGENT_TOOLS,
-        "financials": FINANCIAL_AGENT_TOOLS,
-        "ownership": OWNERSHIP_AGENT_TOOLS,
-        "valuation": VALUATION_AGENT_TOOLS,
-        "risk": RISK_AGENT_TOOLS,
-        "technical": TECHNICAL_AGENT_TOOLS,
-    }
-    tools = registry.get(agent_name, [])
+    tools = AGENT_TOOLS.get(agent_name, [])
     # Filter out write tools — verifier is read-only
     return [
         t
