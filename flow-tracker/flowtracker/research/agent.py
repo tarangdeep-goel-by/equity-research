@@ -686,6 +686,21 @@ async def run_all_agents(
             if isinstance(vdata, Exception):
                 print(f"  ⚠ {name} verifier failed: {vdata}")
                 continue
+            # Log verification result
+            if vdata.verdict == "pass":
+                print(f"  ✓ {name} verification: pass ({vdata.spot_checks_performed} checks)")
+            elif vdata.verdict == "pass_with_notes":
+                issues_summary = ", ".join(
+                    f"{i.get('severity', '?')}: {i.get('claim', '?')[:60]}"
+                    for i in vdata.issues[:3]
+                )
+                print(f"  ✓ {name} verification: pass_with_notes ({vdata.spot_checks_performed} checks) — {issues_summary}")
+            else:
+                errors = [i for i in vdata.issues if i.get("severity") == "error"]
+                print(f"  ✗ {name} verification: FAIL ({len(errors)} errors, {vdata.spot_checks_performed} checks)")
+                for i in errors:
+                    print(f"    → {i.get('claim', '?')[:80]} | actual: {i.get('actual', '?')[:80]}")
+
             envelopes[name] = apply_corrections(envelopes[name], vdata)
 
             # Re-save corrected envelope

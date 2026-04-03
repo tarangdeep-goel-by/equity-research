@@ -403,18 +403,33 @@ class FilingClient:
             if file_path.exists() and file_path.stat().st_size > 0:
                 return file_path
 
-        try:
-            resp = self._client.get(url)
-            if resp.status_code == 200 and len(resp.content) > 100:
-                file_path.write_bytes(resp.content)
-                logger.info("Downloaded %s (%d KB)", file_path.name, len(resp.content) // 1024)
-                return file_path
-            else:
-                logger.warning("Empty or failed download for %s", filing.attachment_name)
+        import time
+
+        for attempt in range(3):
+            try:
+                resp = self._client.get(url)
+                if resp.status_code == 200 and len(resp.content) > 100:
+                    file_path.write_bytes(resp.content)
+                    logger.info("Downloaded %s (%d KB)", file_path.name, len(resp.content) // 1024)
+                    return file_path
+                if resp.status_code in (404,):
+                    # Permanent failure — don't retry
+                    logger.warning("Not found (404) for %s", filing.attachment_name)
+                    return None
+                if attempt < 2:
+                    # 406/5xx — transient, retry with backoff
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                logger.warning("Empty or failed download for %s (status %s after %d attempts)",
+                               filing.attachment_name, resp.status_code, attempt + 1)
                 return None
-        except Exception as e:
-            logger.warning("Download failed for %s: %s", filing.attachment_name, e)
-            return None
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                logger.warning("Download failed for %s: %s", filing.attachment_name, e)
+                return None
+        return None
 
     def download_url(
         self, url: str, symbol: str, category: str, filename: str,
