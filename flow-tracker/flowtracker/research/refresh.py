@@ -65,6 +65,55 @@ def _is_fresh(store, symbol: str, table: str, hours: int = 6) -> bool:
     return False
 
 
+def _detect_parent_subsidiary(store, symbol: str, shareholders: list) -> None:
+    """Auto-detect if any promoter of this stock is itself a listed company.
+
+    If found, upsert into listed_subsidiaries table (this stock as subsidiary).
+    """
+    try:
+        # Get all listed company names from index_constituents
+        all_companies = store._conn.execute(
+            "SELECT DISTINCT symbol, company_name FROM index_constituents"
+        ).fetchall()
+        # Build lookup: lowercase company name fragment → symbol
+        name_to_symbol = {}
+        for r in all_companies:
+            name = r["company_name"].lower()
+            sym = r["symbol"]
+            if sym == symbol:
+                continue  # skip self
+            name_to_symbol[name] = sym
+            # Also match on just the first word (e.g. "ICICI" from "ICICI Bank Limited")
+            first_word = name.split()[0]
+            if len(first_word) > 3:
+                name_to_symbol[first_word] = sym
+
+        # Check promoter entries
+        for sh in shareholders:
+            if sh.get("classification", "").lower() != "promoters":
+                continue
+            pct = sh.get("percentage", 0)
+            if pct < 20:
+                continue
+            holder = sh.get("holder_name", "").lower()
+
+            for company_name, parent_sym in name_to_symbol.items():
+                if company_name in holder:
+                    # Found a match — this stock is a subsidiary of parent_sym
+                    sub_name = store._conn.execute(
+                        "SELECT company_name FROM index_constituents WHERE symbol = ? LIMIT 1",
+                        (symbol,),
+                    ).fetchone()
+                    sub_name = sub_name["company_name"] if sub_name else symbol
+                    store.upsert_listed_subsidiary(
+                        parent_sym, symbol, sub_name, pct,
+                        relationship=f"Auto-detected: promoter '{sh.get('holder_name', '')}'",
+                    )
+                    return  # one match is enough
+    except Exception:
+        pass  # don't break refresh for detection failures
+
+
 def refresh_for_research(
     symbol: str, console: Console | None = None, max_age_hours: int = 6,
 ) -> dict[str, int]:
@@ -200,6 +249,9 @@ def refresh_for_research(
                         shareholders = sc.fetch_shareholders(company_id)
                         count = store.upsert_shareholder_details(symbol, shareholders)
                         _ok("shareholders", count)
+
+                        # Auto-detect parent company from promoter holdings
+                        _detect_parent_subsidiary(store, symbol, shareholders)
                     except Exception as e:
                         _skip("shareholders", str(e))
 
