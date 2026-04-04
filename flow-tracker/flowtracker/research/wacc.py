@@ -402,6 +402,22 @@ def build_wacc_params(
     if beta_defaulted:
         flags.append("beta_default")
 
+    # --- WACC sanity check ---
+    # Flag if WACC seems too high for company's risk profile
+    debt_equity = borrowings / mcap_cr if mcap_cr and mcap_cr > 0 else 0
+    if wacc_value and wacc_value > 0.15 and debt_equity < 0.1:
+        flags.append("wacc_high_for_low_debt")
+
+    wacc_note = None
+    if "wacc_high_for_low_debt" in flags:
+        wacc_note = (
+            f"WACC of {wacc_value:.1%} appears high for a company with near-zero debt "
+            f"(D/E {debt_equity:.3f}). This is driven by a high beta ({beta_value:.2f}) "
+            f"and/or small-cap premium. For companies with sovereign/government customers "
+            f"and assured cash flows, the effective discount rate may be lower (10-13%). "
+            f"DCF outputs using this WACC will be conservative."
+        )
+
     return {
         "symbol": symbol,
         "beta": beta_result,
@@ -414,4 +430,5 @@ def build_wacc_params(
         "pe_multiples": pe_result,
         "reliability_flags": flags,
         "is_bfsi": is_bfsi,
+        "wacc_note": wacc_note,
     }

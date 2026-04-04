@@ -36,6 +36,9 @@ If data is missing, say so. Never fabricate numbers. If a tool fails, note it an
 ## Explain the WHY, Not Just the WHAT
 When you identify a trend (margin compressing, valuation falling, ownership shifting), you MUST explain the likely CAUSE — connect data trends to known business events (management changes, regulatory actions, macro shifts, competitive dynamics). "NIM compressed from 4.5% to 4.25%" is observation. "NIM compressed because deposit competition intensified after fintechs offered 7% savings rates, eroding the bank's CASA advantage" is analysis. Always provide the causal link.
 
+## Reverse DCF Conclusions
+When a Reverse DCF reveals the market is pricing in a metric (growth rate, FCF margin) significantly above or below the company's actual/historical level, you MUST state the conclusion explicitly: "The current price implies X% margin, which is Y pp above the actual Z%. This means the valuation depends on margin expansion that has not yet materialized — creating downside risk if margins stay flat." Never leave the reader to infer the implication.
+
 ## Conglomerate SOTP
 For companies with separately valuable subsidiaries (banks with AMC/insurance/securities arms, industrial conglomerates with listed subs), the valuation agent MUST acknowledge SOTP as a relevant framework. If subsidiary AUM/profit data is available from concall insights or known from company disclosures, attempt a rough SOTP using peer multiples (e.g., "AMC subsidiary manages ~₹X Cr AUM; listed AMCs trade at 5-10% of equity AUM, implying ₹Y-Z Cr value"). If data is insufficient, explicitly state: "SOTP analysis is warranted for this conglomerate but subsidiary-level financials are not available from current tools. The market price may not fully reflect subsidiary value." Never silently skip SOTP for a conglomerate.
 
@@ -504,7 +507,7 @@ End with a JSON code block:
   "regulatory_risk": "<low|medium|high>",
   "key_sector_tailwinds": ["<tailwind1>", "<tailwind2>"],
   "key_sector_headwinds": ["<headwind1>", "<headwind2>"],
-  "top_sector_picks": ["<SYMBOL1>", "<SYMBOL2>", "<SYMBOL3>"],
+  "top_sector_picks": ["<SYMBOL1>", "<SYMBOL2>", "<SYMBOL3>"],  // MUST include 5-10 word rationale per pick in the report body
   "open_questions": ["<question that needs web research to answer>"]
 }
 ```
@@ -563,6 +566,7 @@ When combining specialist findings, look for:
 - **Divergence**: 2+ agents disagree → investigate. Business says "strong moat" but risk says "governance concern" — which signal is stronger and why?
 - **Amplification**: Two independent signals pointing the same way multiply conviction. "MF accumulation + improving ROCE + management buying = triple confirmation of quality improvement."
 - **Contradiction resolution**: When signals conflict, explain which you weight more and why. "Valuation says expensive (PE at 75th pct) but ownership shows smart money accumulating. Resolution: institutions are pricing in growth that hasn't shown in trailing PE yet."
+- **Technical vs Fundamental tension**: When the technical agent signals bearish (death cross, distribution) but fundamental agents signal bullish (undervalued, quality), you MUST explicitly acknowledge this tension. State: "Technical indicators conflict with the fundamental thesis" and explain which timeframe each applies to (technical = near-term momentum, fundamental = medium-term value).
 
 ## Sections to Produce
 
