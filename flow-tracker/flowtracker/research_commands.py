@@ -293,7 +293,16 @@ def thesis(
         console.print("[red]All agents failed. No reports generated.[/]")
         raise typer.Exit(1)
 
-    console.print(f"\n[green]✓[/] {len(envelopes)} specialist reports complete")
+    # Count specialist vs web_research
+    specialist_count = sum(1 for n in envelopes if n != "web_research")
+    console.print(f"\n[green]✓[/] {specialist_count} specialist reports complete")
+
+    # Show web research status
+    if "web_research" in envelopes:
+        wr = envelopes["web_research"]
+        resolved = wr.briefing.get("questions_resolved", 0)
+        received = wr.briefing.get("questions_received", 0)
+        console.print(f"[green]✓[/] Web research: {resolved}/{received} open questions resolved (${wr.cost.total_cost_usd:.2f})")
 
     # Phase 2: Synthesis
     console.print(f"\n[bold]Phase 2: Synthesis agent[/]")
@@ -564,7 +573,7 @@ def compare(
 
 
 VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical", "sector"}
-VALID_AGENTS_WITH_SYNTHESIS = VALID_AGENTS | {"synthesis"}
+VALID_AGENTS_WITH_EXTRAS = VALID_AGENTS | {"synthesis", "web_research"}
 
 
 @app.command("run")
@@ -592,12 +601,13 @@ def run_agent(
 
     # Validate
     for agent in agent_list:
-        if agent not in VALID_AGENTS_WITH_SYNTHESIS:
+        if agent not in VALID_AGENTS_WITH_EXTRAS:
             console.print(f"[red]Unknown agent: {agent}[/]")
-            console.print(f"Valid agents: {', '.join(sorted(VALID_AGENTS_WITH_SYNTHESIS))}")
+            console.print(f"Valid agents: {', '.join(sorted(VALID_AGENTS_WITH_EXTRAS))}")
             raise typer.Exit(1)
 
     specialist_agents = [a for a in agent_list if a in VALID_AGENTS]
+    run_web_research = "web_research" in agent_list
     run_synthesis = "synthesis" in agent_list
 
     # Show what exists in vault
@@ -643,6 +653,22 @@ def run_agent(
         duration_m = int(cost.duration_seconds) // 60
         duration_s = int(cost.duration_seconds) % 60
         console.print(f"  [green]✓[/] {agent}: {len(envelope.report):,} chars, ${cost.total_cost_usd:.2f}, {duration_m}m {duration_s:02d}s")
+
+    # Run web research (loads open questions from existing briefings in vault)
+    if run_web_research:
+        console.print(f"\n[bold]Running web research agent for {symbol}...[/]")
+        try:
+            from flowtracker.research.agent import run_web_research_agent
+            wr_envelope = asyncio.run(run_web_research_agent(symbol, model=model))
+            cost = wr_envelope.cost
+            total_cost += cost.total_cost_usd
+            resolved = wr_envelope.briefing.get("questions_resolved", 0)
+            received = wr_envelope.briefing.get("questions_received", 0)
+            duration_m = int(cost.duration_seconds) // 60
+            duration_s = int(cost.duration_seconds) % 60
+            console.print(f"  [green]✓[/] web_research: {resolved}/{received} questions resolved, ${cost.total_cost_usd:.2f}, {duration_m}m {duration_s:02d}s")
+        except Exception as e:
+            console.print(f"[red]Web research error: {e}[/]")
 
     # Run synthesis
     if run_synthesis:

@@ -56,6 +56,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "sector": "claude-sonnet-4-6",
     "synthesis": "claude-sonnet-4-6",
     "verifier": "claude-haiku-4-5-20251001",
+    "web_research": "claude-sonnet-4-6",
 }
 
 AGENT_TOOLS: dict[str, list] = {
@@ -86,6 +87,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "risk": 30,
     "technical": 30,
     "sector": 25,
+    "web_research": 20,
 }
 
 AGENT_MAX_BUDGET: dict[str, float] = {
@@ -96,6 +98,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "risk": 0.60,
     "technical": 0.60,
     "sector": 0.50,
+    "web_research": 0.50,
 }
 
 # Claude Code built-ins that agents should NOT have access to.
@@ -111,6 +114,7 @@ _DISALLOWED_BUILTINS = [
 AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
     "business": ["WebSearch", "WebFetch"],  # needs web research for industry context
     "sector": ["WebSearch", "WebFetch"],  # needs web research for sector dynamics
+    "web_research": ["WebSearch", "WebFetch"],
 }
 
 
@@ -257,18 +261,21 @@ async def _run_specialist(
 ) -> BriefingEnvelope:
     """Run a single specialist agent. Returns BriefingEnvelope with report, briefing, evidence, cost."""
 
-    tools = tools or AGENT_TOOLS.get(name, [])
+    tools = tools if tools is not None else AGENT_TOOLS.get(name, [])
     max_turns = max_turns or AGENT_MAX_TURNS.get(name, 20)
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
     model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
 
-    # Create MCP server with agent's tool subset
-    server = create_sdk_mcp_server(f"{name}-data", tools=tools)
+    # Create MCP server with agent's tool subset (skip if no tools — e.g. web_research)
+    mcp_servers = {}
+    if tools:
+        server = create_sdk_mcp_server(f"{name}-data", tools=tools)
+        mcp_servers[name] = server
 
     # Build options
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        mcp_servers={name: server},
+        mcp_servers=mcp_servers,
         max_turns=max_turns,
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
@@ -743,6 +750,20 @@ async def run_all_agents(
                         failure_reason=f"Failed verification and re-run: {e}",
                     )
 
+    # Phase 1.75: Web research to resolve open questions
+    try:
+        web_envelope = await run_web_research_agent(symbol, model)
+        if web_envelope.status == "success":
+            envelopes["web_research"] = web_envelope
+            print(f"  ✓ web_research: {web_envelope.briefing.get('questions_resolved', 0)} questions resolved")
+        elif web_envelope.status == "empty":
+            print(f"  ○ web_research: no open questions to research")
+        else:
+            print(f"  ⚠ web_research: {web_envelope.failure_reason}")
+    except Exception as exc:
+        logger.warning("Web research agent failed for %s: %s", symbol, exc)
+        print(f"  ⚠ web_research failed: {exc}")
+
     return envelopes
 
 
@@ -799,9 +820,38 @@ async def run_synthesis_agent(
 
     model = model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-20250514")
 
+    # Inject web research results if available
+    web_research_section = ""
+    web_briefing = briefings.get("web_research", {})
+    resolved = web_briefing.get("resolved", [])
+    unresolved = web_briefing.get("unresolved", [])
+    if resolved or unresolved:
+        web_research_section = "\n## Resolved Open Questions (from web research)\n"
+        if resolved:
+            for item in resolved:
+                q = item.get("question", "")
+                ans = item.get("answer", "")
+                confidence = item.get("confidence", "?")
+                sources = item.get("sources", [])
+                agents = ", ".join(item.get("source_agents", []))
+                src_str = " | ".join(sources[:2]) if sources else "no URL"
+                web_research_section += (
+                    f"**Q ({agents}):** {q}\n"
+                    f"**A [{confidence}]:** {ans}\n"
+                    f"*Source: {src_str}*\n\n"
+                )
+        if unresolved:
+            web_research_section += "## Unresolved Questions\n"
+            for item in unresolved:
+                q = item.get("question", "")
+                reason = item.get("reason", "unknown")
+                web_research_section += f"- {q} — *{reason}*\n"
+        web_research_section += "\n"
+
     user_prompt = (
         f"Synthesize the analysis for {symbol}.\n\n"
         f"## Orchestrator Pre-Analysis (suggestions to investigate, not conclusions)\n{signals_analysis}\n\n"
+        f"{web_research_section}"
         f"## Specialist Briefings\n{briefing_text}\n\n"
         "The orchestrator has flagged potential signals above — treat these as suggestions to investigate, "
         "not conclusions. You may find additional signals or disagree with the orchestrator's assessment. "
@@ -816,6 +866,85 @@ async def run_synthesis_agent(
         tools=synthesis_tools,
         max_turns=10,
         max_budget=0.30,
+        model=model,
+        user_prompt=user_prompt,
+    )
+
+
+async def run_web_research_agent(
+    symbol: str,
+    model: str | None = None,
+) -> BriefingEnvelope:
+    """Run the web research agent to resolve open questions from specialist briefings.
+
+    Loads existing briefings from vault, collects all open_questions,
+    and uses WebSearch/WebFetch to find answers.
+    """
+    from flowtracker.research.prompts import WEB_RESEARCH_AGENT_PROMPT
+    from flowtracker.research.briefing import load_all_briefings
+
+    symbol = symbol.upper()
+    briefings = load_all_briefings(symbol)
+
+    if not briefings:
+        raise ValueError(f"No briefings found for {symbol}. Run specialist agents first.")
+
+    # Collect open questions from all specialist briefings
+    all_questions: list[dict] = []
+    for agent_name, data in briefings.items():
+        if agent_name in ("synthesis", "web_research"):
+            continue
+        questions = data.get("open_questions", [])
+        for q in questions:
+            if isinstance(q, str) and q.strip():
+                all_questions.append({"question": q.strip(), "source_agent": agent_name})
+
+    if not all_questions:
+        logger.info("No open questions found in briefings for %s — skipping web research", symbol)
+        return BriefingEnvelope(
+            agent="web_research",
+            symbol=symbol,
+            status="empty",
+            failure_reason="No open questions in specialist briefings",
+            briefing={"agent": "web_research", "symbol": symbol,
+                      "questions_received": 0, "questions_resolved": 0,
+                      "resolved": [], "unresolved": []},
+        )
+
+    # Group questions by text to find which agents asked the same thing
+    question_map: dict[str, list[str]] = {}
+    for item in all_questions:
+        q = item["question"]
+        if q not in question_map:
+            question_map[q] = []
+        question_map[q].append(item["source_agent"])
+
+    # Build user prompt with all questions
+    question_lines = []
+    for i, (q, agents) in enumerate(question_map.items(), 1):
+        agents_str = ", ".join(sorted(set(agents)))
+        question_lines.append(f"{i}. [{agents_str}] {q}")
+
+    user_prompt = (
+        f"Research the following {len(question_map)} open questions about {symbol} "
+        f"(an Indian-listed stock). Each question is tagged with the specialist agent(s) that asked it.\n\n"
+        + "\n".join(question_lines)
+        + "\n\nAnswer every question. Use WebSearch and WebFetch to find factual, sourced answers. "
+        "Produce your structured JSON briefing at the end."
+    )
+
+    model = model or DEFAULT_MODELS.get("web_research", "claude-sonnet-4-6")
+
+    # Scale turns to question count: ~3 turns per question (search + fetch + answer)
+    # plus overhead for grouping and final JSON
+    dynamic_turns = min(max(len(question_map) * 3 + 5, 15), 40)
+
+    return await _run_specialist(
+        name="web_research",
+        symbol=symbol,
+        system_prompt=WEB_RESEARCH_AGENT_PROMPT,
+        tools=[],  # no MCP tools — only WebSearch/WebFetch builtins
+        max_turns=dynamic_turns,
         model=model,
         user_prompt=user_prompt,
     )
