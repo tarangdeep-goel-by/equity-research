@@ -112,3 +112,5 @@ Pick stocks that stress-test the agent's edge cases:
 | risk | GROWW | 1 | B+ | 2026-04-04 |
 | technical | HDFCBANK | 1 | A | 2026-04-04 |
 | sector | INDIAMART | 1 | A+ | 2026-04-04 |
+| technical | VEDL | 1 | A+ | 2026-04-04 |
+| sector | SBIN | 1 | A+ | 2026-04-04 |
