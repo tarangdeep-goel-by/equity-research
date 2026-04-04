@@ -71,6 +71,17 @@ def assemble_final_report(
             parts.append(cleaned)
             parts.append("\n---\n")
 
+    # Web research section (resolved open questions)
+    web_env = specialist_envelopes.get("web_research")
+    if web_env and web_env.report and len(web_env.report.strip()) > 100:
+        cleaned = _strip_preamble(web_env.report)
+        # Strip the trailing JSON briefing block from the report
+        json_start = cleaned.rfind("```json")
+        if json_start > 0:
+            cleaned = cleaned[:json_start].rstrip()
+        parts.append(cleaned)
+        parts.append("\n---\n")
+
     # Synthesis closing sections (Catalysts, Big Question)
     for header in ["Catalysts", "What to Watch", "Big Question"]:
         section = _find_section(synthesis_sections, header)
