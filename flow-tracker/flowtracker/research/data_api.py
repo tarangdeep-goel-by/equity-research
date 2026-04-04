@@ -226,9 +226,26 @@ class ResearchDataAPI:
     # --- Market Signals ---
 
     def get_delivery_trend(self, symbol: str, days: int = 30) -> list[dict]:
-        """Daily delivery % from bhavcopy — accumulation signal."""
+        """Delivery % trend — Screener chart (weekly, 20yr) with bhavcopy fallback (daily, recent).
+
+        Returns list of {"date": str, "delivery_pct": float} sorted oldest-first.
+        """
+        # Primary: Screener chart Volume_Delivery (weekly, ~20 years of history)
+        chart_data = self._store.get_chart_data(symbol, "price")
+        for ds in chart_data:
+            if ds["metric"] == "Volume_Delivery":
+                points = ds["values"]
+                if points:
+                    # Trim to requested window if needed
+                    if days and days < 9999:
+                        from datetime import date as dt_date, timedelta
+                        cutoff = (dt_date.today() - timedelta(days=days)).isoformat()
+                        points = [p for p in points if p["date"] >= cutoff]
+                    return [{"date": p["date"], "delivery_pct": p["value"]} for p in points]
+
+        # Fallback: bhavcopy daily data (5-30 days typically)
         rows = self._store.get_stock_delivery(symbol, days=days)
-        return _clean([r.model_dump() for r in rows])
+        return _clean([{"date": r.date, "delivery_pct": r.delivery_pct} for r in rows if r.delivery_pct])
 
     def get_promoter_pledge(self, symbol: str) -> list[dict]:
         """Quarterly promoter pledge % history with margin-call analysis."""
@@ -2233,6 +2250,12 @@ class ResearchDataAPI:
             # Equity Multiplier = total_assets / net_worth (true leverage including deposits)
             if net_worth > 0:
                 entry["equity_multiplier"] = round(total_assets / net_worth, 2)
+
+            # Credit-Deposit ratio = Advances / Deposits (>78% stretched, >85% risky)
+            advances = row.get("other_assets", 0) or 0  # Screener maps advances to other_assets for banks
+            deposits = borrowings  # Screener maps deposits+market borrowings to borrowings
+            if deposits > 0 and advances > 0:
+                entry["cd_ratio_pct"] = round(advances / deposits * 100, 2)
 
             entry["nii"] = round(nii, 2)
             entry["net_worth"] = round(net_worth, 2)

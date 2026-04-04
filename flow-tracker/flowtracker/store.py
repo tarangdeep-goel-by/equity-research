@@ -2705,7 +2705,8 @@ class FlowStore:
         count = 0
         for ds in datasets:
             metric = ds.get("metric", "")
-            for date_val, value in ds.get("values", []):
+            for item in ds.get("values", []):
+                date_val, value = item[0], item[1]
                 self._conn.execute(
                     "INSERT INTO screener_charts (symbol, chart_type, metric, date, value) "
                     "VALUES (?, ?, ?, ?, ?) "
@@ -2713,6 +2714,15 @@ class FlowStore:
                     (symbol, chart_type, metric, str(date_val), value),
                 )
                 count += 1
+                # Volume dataset includes delivery % as third element: {"delivery": pct}
+                if len(item) > 2 and isinstance(item[2], dict) and "delivery" in item[2]:
+                    self._conn.execute(
+                        "INSERT INTO screener_charts (symbol, chart_type, metric, date, value) "
+                        "VALUES (?, ?, ?, ?, ?) "
+                        "ON CONFLICT(symbol, chart_type, metric, date) DO UPDATE SET value=excluded.value",
+                        (symbol, chart_type, f"{metric}_Delivery", str(date_val), item[2]["delivery"]),
+                    )
+                    count += 1
         self._conn.commit()
         return count
 

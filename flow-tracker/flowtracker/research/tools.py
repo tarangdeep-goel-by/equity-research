@@ -185,7 +185,7 @@ async def get_mf_holding_changes(args):
 
 @tool(
     "get_delivery_trend",
-    "Get daily delivery % from bhavcopy — high delivery signals accumulation. Up to 30 days.",
+    "Get delivery % trend — weekly data up to 20 years from Screener charts. High delivery signals accumulation, low signals speculative churn. Default 90 days, set days=9999 for full history.",
     {"symbol": str, "days": int},
 )
 async def get_delivery_trend(args):

@@ -171,6 +171,9 @@ End with a JSON code block:
 - Peer context is mandatory for every key metric.
 - Explain causation with expense breakdown — not just "margins improved" but WHY.
 - Teach financial concepts using this company's actual data, not hypotheticals.
+- Extreme ratios need explanations, not just labels. If CFO/PAT > 2x, explain the mechanism (depreciation, deferred tax, impairments). If payout > 100%, explain the funding source. Any ratio far outside normal range demands a "why."
+- Cross-check FCF: if `cagr_table` FCF growth differs from what you compute from `capital_allocation` (CFO minus capex), flag the discrepancy and explain which definition each source uses.
+- When standalone quarterly data differs materially from consolidated annual data (revenue scale, borrowings, margins), explain the gap — subsidiaries, intercompany transactions, or consolidation adjustments.
 """
 
 AGENT_PROMPTS_V2["financials"] = FINANCIAL_AGENT_PROMPT_V2
@@ -666,10 +669,11 @@ This company is a bank, NBFC, or financial services company. Apply BFSI-specific
 - ROCE (Return on Capital Employed) — deposits are raw material, not "capital employed"
 - EBITDA / Operating Margin — not applicable to banking P&L structure
 - CFO/PAT ratio — bank CFO swings with deposit/loan flows, not earnings quality
-- Standard DCF on operating cash flow — use P/B or Residual Income instead
+- **FCF (Free Cash Flow)** — CFO minus capex is meaningless when deposits/loans dominate cash flows. Do NOT report FCF CAGRs or FCF trends for banks.
+- **Standard DCF / Reverse DCF** — invalid for banks. Do NOT include DCF sensitivity matrices. Use P/B or Residual Income instead.
 - Working capital metrics, capex cycle, gross margin
 
-**Emphasize for BFSI:** NIM trend (the single most important metric), book value growth, CASA ratio, credit cost trajectory, advances vs deposit growth, asset quality (GNPA/NNPA), P/B-based valuation.
+**Emphasize for BFSI:** NIM trend (the single most important metric), book value growth, CASA ratio, credit cost trajectory, advances vs deposit growth, asset quality (GNPA/NNPA), P/B-based valuation, and **Credit-Deposit (CD) ratio** (pre-computed in `get_quality_scores` bfsi section as `cd_ratio_pct` — >78% stretched, >85% risky).
 
 **Valuation:** Use P/B band (primary), P/B vs ROE framework (justified P/B = ROE/CoE), Residual Income Model, or Gordon Growth for mature PSU banks. For conglomerates with listed subsidiaries, use Sum-of-the-Parts (SOTP): value core bank on P/ABV + listed subsidiary values per share with 20-25% holding company discount.
 

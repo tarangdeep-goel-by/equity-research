@@ -106,3 +106,5 @@ Pick stocks that stress-test the agent's edge cases:
 | ownership | ADANIENT | 2 | A- | 2026-04-03 |
 | valuation | HDFCBANK | 2 | A | 2026-04-03 |
 | valuation | INDIAMART | 1 | A- | 2026-04-03 |
+| financials | VEDL | 1 | A- | 2026-04-04 |
+| financials | SBIN | 1 | A- | 2026-04-04 |
