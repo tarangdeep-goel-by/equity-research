@@ -1092,7 +1092,95 @@ class ResearchDataAPI:
         adj = self.get_adjustment_factor(symbol)
         factor = adj.get("cumulative_factor", 1.0)
 
-        return build_projections(annual, adjustment_factor=factor)
+        # Dynamic PE from historical band
+        from flowtracker.research.wacc import compute_dynamic_pe
+        pe_band_raw = self.get_valuation_band(symbol, "pe_trailing", days=2500)
+        pe_band = pe_band_raw if pe_band_raw.get("median_val") else None
+        pe_multiples = compute_dynamic_pe(pe_band)
+
+        return build_projections(annual, adjustment_factor=factor, pe_multiples=pe_multiples)
+
+    def get_wacc_params(self, symbol: str) -> dict:
+        """Dynamic WACC: beta, cost of equity, cost of debt, terminal growth, PE multiples."""
+        from flowtracker.research.wacc import build_wacc_params
+
+        is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
+        flags: list[str] = []
+
+        # --- Stock prices (from bhavcopy daily_stock_data) ---
+        stock_rows = self._store.get_stock_delivery(symbol, days=800)
+        stock_prices = [{"date": r.date, "close": r.close} for r in stock_rows if r.close]
+        if not stock_prices:
+            flags.append("no_stock_prices")
+
+        # --- Index prices (Nifty 500) ---
+        index_prices = self._store.get_index_prices("^CRSLDX", days=800)
+        if not index_prices:
+            flags.append("no_index_prices")
+
+        # --- Risk-free rate (G-sec 10Y) ---
+        rf = None
+        macro = self._store.get_macro_latest()
+        if macro and macro.gsec_10y:
+            rf = macro.gsec_10y / 100  # stored as %, convert to decimal
+        if rf is None:
+            # Fallback: scan recent macro rows for last non-null G-sec
+            trend = self._store.get_macro_trend(days=30)
+            for snap in trend:
+                if snap.gsec_10y:
+                    rf = snap.gsec_10y / 100
+                    break
+        if rf is None:
+            rf = 0.07  # absolute fallback
+            flags.append("rf_default")
+
+        # --- Financials for ICR ---
+        annual = self.get_annual_financials(symbol, years=2)
+        interest = 0.0
+        borrowings = 0.0
+        pbt = 0.0
+        eff_tax_rate = None
+        if annual:
+            latest = annual[0]
+            interest = latest.get("interest", 0) or 0
+            borrowings = latest.get("borrowings", 0) or 0
+            pbt = latest.get("profit_before_tax", 0) or 0
+            tax = latest.get("tax", 0) or 0
+            if pbt > 0:
+                eff_tax_rate = tax / pbt
+
+        # --- Market cap ---
+        valuation = self.get_valuation_snapshot(symbol)
+        mcap = valuation.get("market_cap") or 0
+
+        # --- PE band ---
+        pe_band_raw = self.get_valuation_band(symbol, "pe_trailing", days=2500)
+        pe_band = pe_band_raw if pe_band_raw.get("median_val") else None
+
+        # --- Industry ---
+        info = self.get_company_info(symbol)
+        industry = info.get("industry")
+
+        result = build_wacc_params(
+            symbol=symbol,
+            stock_prices=stock_prices,
+            index_prices=index_prices,
+            rf=rf,
+            interest=interest,
+            borrowings=borrowings,
+            pbt=pbt,
+            mcap_cr=mcap,
+            pe_band=pe_band,
+            industry=industry,
+            is_bfsi=is_bfsi,
+            effective_tax_rate=eff_tax_rate,
+        )
+
+        # Merge data-layer flags
+        if flags:
+            result.setdefault("reliability_flags", []).extend(flags)
+
+        return result
 
     def get_sector_benchmarks(self, symbol: str, metric: str | None = None) -> list[dict] | dict:
         """Sector benchmark statistics — single metric or all."""
@@ -1437,9 +1525,10 @@ class ResearchDataAPI:
 
         # 8. ΔGross Margin > 0
         if is_bfsi:
-            # NIM proxy: (revenue - interest) / total_assets
-            gm_t = (rev_t - (interest_t or 0)) / ta_t if rev_t is not None and ta_t and ta_t > 0 else None
-            gm_t1 = (rev_t1 - (interest_t1 or 0)) / ta_t1 if rev_t1 is not None and ta_t1 and ta_t1 > 0 else None
+            # NIM proxy: (revenue - interest) / avg_total_assets
+            avg_ta = (ta_t + ta_t1) / 2 if ta_t and ta_t1 and ta_t > 0 and ta_t1 > 0 else None
+            gm_t = (rev_t - (interest_t or 0)) / avg_ta if rev_t is not None and avg_ta and avg_ta > 0 else None
+            gm_t1 = (rev_t1 - (interest_t1 or 0)) / avg_ta if rev_t1 is not None and avg_ta and avg_ta > 0 else None
             gm_label = "ΔNIM Proxy > 0"
         elif rmc_t is not None:
             gm_t = (rev_t - rmc_t) / rev_t if rev_t and rev_t > 0 else None
@@ -1614,11 +1703,25 @@ class ResearchDataAPI:
         else:
             signal = "gray_zone"
 
+        # SGI dominance check — high revenue growth inflates M-Score without manipulation
+        sgi_contribution = 0.892 * variables["SGI"]  # SGI coefficient * SGI value
+        positive_components = sum(
+            coeff * variables[var]
+            for var, coeff in [
+                ("DSRI", 0.920), ("GMI", 0.528), ("AQI", 0.404),
+                ("SGI", 0.892), ("DEPI", 0.115), ("TATA", 4.679),
+            ]
+            if coeff * variables[var] > 0
+        )
+        sgi_dominant = positive_components > 0 and (sgi_contribution / positive_components) > 0.40
+
         return _clean({
             "m_score": round(m, 4),
             "signal": signal,
             "variables": variables,
             "data_quality": "8/8 variables computed",
+            "sgi_dominant": sgi_dominant,
+            "sgi_contribution_pct": round(sgi_contribution / positive_components * 100, 1) if positive_components > 0 else 0,
         })
 
     # --- Reverse DCF / Capex / Common Size (Batch 1B) ---
@@ -1638,6 +1741,9 @@ class ResearchDataAPI:
         prev = annual[1]
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
 
+        # Dynamic WACC parameters
+        wacc_data = self.get_wacc_params(symbol)
+
         # Common: compute tax rate from latest year
         tax_amount = latest.get("tax", 0) or 0
         pbt = latest.get("profit_before_tax", 0) or 0
@@ -1653,7 +1759,7 @@ class ResearchDataAPI:
             reserves = latest.get("reserves", 0) or 0
             book_value = equity_capital + reserves
             bfsi_roe = base_ni / book_value if book_value > 0 else 0.14
-            discount_rate = 0.14  # Cost of equity for Indian banks
+            discount_rate = wacc_data.get("ke", 0.14)  # Cost of equity from CAPM
             target = market_cap  # FCFE model → PV = Market Cap directly
             model = "FCFE"
             cash = 0
@@ -1687,11 +1793,11 @@ class ResearchDataAPI:
 
             cash = latest.get("cash_and_bank", 0) or 0
             borrowings = latest.get("borrowings", 0) or 0
-            discount_rate = 0.12  # WACC for Indian large-cap
+            discount_rate = wacc_data.get("wacc", 0.12)  # Dynamic WACC
             target = market_cap - cash + borrowings  # Target = Enterprise Value
             model = "FCFF"
 
-        terminal_g = 0.05  # 5% nominal GDP growth
+        terminal_g = wacc_data.get("terminal_growth", 0.05)
 
         # --- 1. Implied Growth Solve ---
         if is_bfsi:
@@ -1928,6 +2034,7 @@ class ResearchDataAPI:
         }
         if normalized:
             result["normalized_5y"] = normalized
+        result["wacc_params"] = wacc_data
         return result
 
     def get_capital_allocation(self, symbol: str, years: int = 5) -> dict:
@@ -2037,6 +2144,13 @@ class ResearchDataAPI:
 
         if market_cap:
             result["market_cap"] = market_cap
+
+        if self._is_bfsi(symbol) or self._is_insurance(symbol):
+            result["bfsi_investments_caveat"] = (
+                "For BFSI companies, 'investments' represent the core loan/investment book, "
+                "not idle cash. Cash position and capital deployment metrics should be interpreted "
+                "differently — high investments are a sign of business growth, not capital misallocation."
+            )
 
         return result
 

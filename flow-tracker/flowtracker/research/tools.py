@@ -111,6 +111,18 @@ async def get_pe_history(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+@tool(
+    "get_wacc_params",
+    "Get WACC parameters for a stock: risk-free rate, equity risk premium, beta (Nifty regression), "
+    "cost of equity (CAPM), cost of debt, debt/equity mix, and final WACC%. Used as discount rate for DCF.",
+    {"symbol": str},
+)
+async def get_wacc_params(args):
+    with ResearchDataAPI() as api:
+        data = api.get_wacc_params(args["symbol"])
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
 # --- Ownership & Institutional ---
 
 
@@ -1142,6 +1154,8 @@ def _get_valuation_section(api, symbol, section, args):
         return api.get_pe_history(symbol, args.get("days", 2500))
     elif section == "key_metrics":
         return api.get_key_metrics_history(symbol, args.get("years", 10))
+    elif section == "wacc":
+        return api.get_wacc_params(symbol)
     elif section == "sotp":
         return api.get_listed_subsidiaries(symbol) or {"info": "No listed subsidiaries found for this company"}
     else:
@@ -1150,7 +1164,7 @@ def _get_valuation_section(api, symbol, section, args):
 
 @tool(
     "get_valuation",
-    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']",
+    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']",
     {"symbol": str, "section": str, "metric": str, "days": int, "years": int},
 )
 async def get_valuation(args):
@@ -1508,6 +1522,7 @@ RESEARCH_TOOLS = [
     get_revenue_estimates, get_growth_estimates, get_price_performance,
     get_sector_kpis,
     get_analytical_profile, screen_stocks,
+    get_wacc_params,
 ]
 
 # V1 agent registries (BUSINESS_TOOLS, *_AGENT_TOOLS, _PEER_TOOLS) removed — see *_AGENT_TOOLS_V2 below

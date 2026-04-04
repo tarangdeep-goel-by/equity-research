@@ -9,6 +9,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -39,8 +40,10 @@ class TestConcurrentWrites:
             except Exception as e:
                 errors.append(e)
 
-        flows_a = [make_daily_flow(dt="2026-03-28", category="FII")]
-        flows_b = [make_daily_flow(dt="2026-03-27", category="FII")]
+        today = date.today().isoformat()
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        flows_a = [make_daily_flow(dt=today, category="FII")]
+        flows_b = [make_daily_flow(dt=yesterday, category="FII")]
 
         t1 = threading.Thread(target=writer, args=(initialized_db, flows_a))
         t2 = threading.Thread(target=writer, args=(initialized_db, flows_b))

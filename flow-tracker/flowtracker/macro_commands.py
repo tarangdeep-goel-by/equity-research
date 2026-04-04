@@ -44,6 +44,20 @@ def fetch(
 
 
 @app.command()
+def fetch_index(
+    period: str = typer.Option("5d", help="yfinance period (e.g. '5d', '1mo', '3y')"),
+) -> None:
+    """Fetch Nifty 500 + Nifty 50 index daily prices."""
+    with MacroClient() as client, FlowStore() as store:
+        records = client.fetch_index_prices(period=period)
+        if records:
+            count = store.upsert_index_daily_prices(records)
+            console.print(f"[green]Upserted {count} index price records[/green]")
+        else:
+            console.print("[yellow]No index price data fetched[/yellow]")
+
+
+@app.command()
 def summary() -> None:
     """Show latest macro indicators with changes."""
     with FlowStore() as store:

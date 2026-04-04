@@ -94,6 +94,37 @@ class MacroClient:
 
         return snapshots
 
+    def fetch_index_prices(
+        self,
+        tickers: list[str] | None = None,
+        period: str = "3y",
+    ) -> list[dict]:
+        """Fetch daily closing prices for Nifty index tickers via yfinance.
+
+        Returns list of dicts: [{"date": "YYYY-MM-DD", "index_ticker": "^CRSLDX", "close": 12345.67}, ...]
+        """
+        if tickers is None:
+            tickers = ["^CRSLDX", "^NSEI"]
+
+        records: list[dict] = []
+        for ticker_sym in tickers:
+            try:
+                hist = yf.Ticker(ticker_sym).history(period=period)
+                for idx, row in hist.iterrows():
+                    close = row["Close"]
+                    if math.isnan(close):
+                        continue
+                    records.append({
+                        "date": idx.strftime("%Y-%m-%d"),
+                        "index_ticker": ticker_sym,
+                        "close": round(close, 2),
+                    })
+            except Exception as e:
+                logger.warning("Failed to fetch index prices for %s: %s", ticker_sym, e)
+
+        logger.info("Fetched %d index price records for %s", len(records), tickers)
+        return records
+
     def _fetch_gsec_yield(self) -> float | None:
         """Scrape CCIL for 10Y G-sec yield. Returns None on failure."""
         try:

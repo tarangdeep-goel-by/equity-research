@@ -199,6 +199,28 @@ def compute_stock(api, engine, symbol: str, index_cache: dict | None, skip_perf:
         elif err:
             errors["price_performance"] = err
 
+    # 10. WACC parameters
+    try:
+        wacc_data = api.get_wacc_params(symbol)
+        if "wacc" in wacc_data:
+            row["wacc"] = wacc_data["wacc"]
+        if "ke" in wacc_data:
+            row["ke"] = wacc_data["ke"]
+        cod = wacc_data.get("cost_of_debt", {})
+        if cod.get("kd_pretax"):
+            row["kd_pretax"] = cod["kd_pretax"]
+        beta = wacc_data.get("beta", {})
+        if isinstance(beta, dict):
+            row["beta_blume"] = beta.get("blume_beta")
+            row["beta_raw"] = beta.get("raw_beta")
+            row["beta_r_squared"] = beta.get("r_squared")
+        row["terminal_growth"] = wacc_data.get("terminal_growth")
+        flags = wacc_data.get("reliability_flags", [])
+        if flags:
+            row["wacc_flags"] = ",".join(flags)
+    except Exception as e:
+        row["wacc_flags"] = f"error:{e}"
+
     row["errors"] = json.dumps(errors) if errors else None
     return row
 

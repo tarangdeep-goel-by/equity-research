@@ -326,6 +326,16 @@ CREATE TABLE IF NOT EXISTS macro_daily (
     UNIQUE(date)
 );
 
+CREATE TABLE IF NOT EXISTS index_daily_prices (
+    date TEXT NOT NULL,
+    index_ticker TEXT NOT NULL,
+    close REAL NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, index_ticker)
+);
+CREATE INDEX IF NOT EXISTS idx_index_daily_prices_ticker ON index_daily_prices(index_ticker);
+CREATE INDEX IF NOT EXISTS idx_index_daily_prices_date ON index_daily_prices(date);
+
 CREATE TABLE IF NOT EXISTS daily_stock_data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
@@ -829,6 +839,16 @@ CREATE TABLE IF NOT EXISTS analytical_snapshot (
     perf_outperformer INTEGER,
     perf_sector_index TEXT,
 
+    -- WACC Parameters
+    wacc REAL,
+    ke REAL,
+    kd_pretax REAL,
+    beta_blume REAL,
+    beta_raw REAL,
+    beta_r_squared REAL,
+    terminal_growth REAL,
+    wacc_flags TEXT,
+
     -- Metadata
     industry TEXT,
     is_bfsi INTEGER,
@@ -870,12 +890,31 @@ class FlowStore:
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        self._conn = sqlite3.connect(str(self.db_path), timeout=10)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
         self._migrate_valuation_snapshot()
         self._migrate_quarterly_and_annual()
+        self._migrate_analytical_snapshot()
+
+    def _migrate_analytical_snapshot(self) -> None:
+        """Add WACC columns to analytical_snapshot if they don't exist."""
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(analytical_snapshot)").fetchall()
+        }
+        new_cols = [
+            ("wacc", "REAL"), ("ke", "REAL"), ("kd_pretax", "REAL"),
+            ("beta_blume", "REAL"), ("beta_raw", "REAL"),
+            ("beta_r_squared", "REAL"), ("terminal_growth", "REAL"),
+            ("wacc_flags", "TEXT"),
+        ]
+        for col, typ in new_cols:
+            if col not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE analytical_snapshot ADD COLUMN {col} {typ}"
+                )
 
     def _migrate_quarterly_and_annual(self) -> None:
         """Add new columns to quarterly_results and annual_financials if they don't exist."""
@@ -1491,6 +1530,29 @@ class FlowStore:
                 gold_inr=r["gold_inr"],
             ))
         return results
+
+    # -- Index Daily Prices --
+
+    def upsert_index_daily_prices(self, records: list[dict]) -> int:
+        """Upsert daily index price records. Returns count of rows upserted."""
+        count = 0
+        for r in records:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO index_daily_prices (date, index_ticker, close) VALUES (?, ?, ?)",
+                (r["date"], r["index_ticker"], r["close"]),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_index_prices(self, index_ticker: str, days: int = 800) -> list[dict]:
+        """Get daily index closing prices, most recent first."""
+        rows = self._conn.execute(
+            "SELECT date, close FROM index_daily_prices "
+            "WHERE index_ticker = ? ORDER BY date DESC LIMIT ?",
+            (index_ticker, days),
+        ).fetchall()
+        return [{"date": r["date"], "close": r["close"]} for r in rows]
 
     # -- Promoter Pledge --
 

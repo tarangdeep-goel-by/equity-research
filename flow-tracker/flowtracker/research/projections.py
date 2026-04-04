@@ -31,6 +31,7 @@ def build_projections(
     annual_data: list[dict],
     adjustment_factor: float = 1.0,
     shares_override: float | None = None,
+    pe_multiples: dict | None = None,
 ) -> dict:
     """Build 3-year bear/base/bull projections from historical annual data.
 
@@ -213,9 +214,14 @@ def build_projections(
     bull_terminal_eps = bull[-1]["eps"]
 
     # PE multiples: use historical median or sector standard
-    pe_low = 15
-    pe_mid = 20
-    pe_high = 30
+    if pe_multiples:
+        pe_low = pe_multiples.get("low", 15)
+        pe_mid = pe_multiples.get("mid", 20)
+        pe_high = pe_multiples.get("high", 30)
+    else:
+        pe_low = 15
+        pe_mid = 20
+        pe_high = 30
 
     fair_values = {
         "bear_low_pe": round(bear_terminal_eps * pe_low, 2),

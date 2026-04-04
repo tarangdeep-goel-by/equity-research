@@ -28,7 +28,7 @@ Map financial concepts to everyday decisions:
 
 ## Data Source Caveats
 - PE/valuation from `get_valuation` uses **consolidated** earnings (yfinance). PE history from `get_chart_data` uses **standalone** earnings (Screener.in). For conglomerates with large subsidiaries, these can diverge 10-15%. When comparing current PE against historical PE band, note which basis you are using.
-- Beta from `get_valuation` is calculated by yfinance against the **S&P 500** (global benchmark), NOT the Nifty 50. Indian stocks typically have higher beta against Nifty than against S&P. Do not use this beta for India-specific volatility claims — note the limitation or calculate relative performance from price data instead.
+- Beta from `get_valuation` snapshot is calculated by yfinance against the **S&P 500** (global benchmark). For India-specific beta, use `get_valuation(section="wacc")` which provides Nifty 50 beta (OLS regression + Blume adjustment) used in CAPM for the stock's discount rate. Prefer the WACC beta for all Indian valuation discussions.
 
 ## Honesty
 If data is missing, say so. Never fabricate numbers. If a tool fails, note it and work with available data. If >50% of tools fail, state this at the top.
@@ -254,17 +254,18 @@ Answer the most important question in investing: Is this stock cheap or expensiv
 1. **Snapshot**: Call `get_analytical_profile` for reverse DCF implied growth, composite score, and price performance.
 2. **Quality context**: Call `get_quality_scores` with section='all' for DuPont decomposition, Piotroski F-Score, and BFSI-specific metrics (NIM trend, ROA, cost-to-income, book value, P/B — 5-year history) if applicable. This gives you the quality foundation for valuation.
 3. **Valuation data**: Call `get_valuation` for valuation snapshot, valuation band, PE history, price performance, and financial projections. Also call `get_valuation` with section='sotp' — if this company has listed subsidiaries, you MUST use SOTP valuation.
-4. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
-5. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
-6. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
-7. **Catalysts**: Call `get_events_actions` for events calendar and dividend history.
-8. **Visualize**: Call `render_chart` for PE band and PBV charts.
+4. **WACC & discount rate**: Call `get_valuation(section="wacc")` for the stock's dynamic WACC parameters — Nifty beta (OLS + Blume-adjusted), CAPM cost of equity, synthetic credit rating with cost of debt, weighted WACC, terminal growth rate (risk-free rate minus 50bps), and historical PE band multiples (5Y median, bear/bull). Use these to explain the discount rate driving the reverse DCF and projections. Always mention key WACC components (beta, Ke, Kd, D/E weights) when discussing valuation.
+5. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF uses the stock's dynamic WACC (from step 4) instead of a flat rate — mention the actual discount rate used. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
+6. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
+7. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
+8. **Catalysts**: Call `get_events_actions` for events calendar and dividend history.
+9. **Visualize**: Call `render_chart` for PE band and PBV charts.
 
 ## Report Sections
 1. **Valuation Snapshot** — Current PE, PB, EV/EBITDA with historical percentile band (Min–25th–Median–75th–Max) and sector percentile context. Define each multiple on first use.
 2. **Historical Valuation Band** — Where current multiples sit in own 5-10Y history. Is the stock cheap/expensive by its own standards?
 3. **Fair Value Triangle** — Three methods: (a) PE Band (historical median PE × forward EPS, bear/base/bull), (b) DCF (if available; note if FMP returns 403), (c) Analyst Consensus (targets, dispersion). Summary table with combined weighted fair value.
-4. **Forward Projections** — 3Y bear/base/bull projections from `get_fair_value_analysis`. Cross-check vs management guidance. Use pre-computed `margin_of_safety_pct` from the tool — do not calculate your own.
+4. **Forward Projections** — 3Y bear/base/bull projections from `get_fair_value_analysis`. PE multiples are derived from the stock's own historical PE band (5Y median for base, low for bear, high for bull) — not flat assumptions. Cross-check vs management guidance. Use pre-computed `margin_of_safety_pct` from the tool — do not calculate your own.
 5. **Relative Valuation** — Peer valuation table (PE, PB, EV/EBITDA, ROCE, growth). Growth-adjusted PEG. Premium/discount assessment with reasoning. **Caveat:** Some peers may be holding companies (e.g., Info Edge/NAUKRI includes Zomato stake, Bajaj Finserv holds Bajaj Finance). Their consolidated P/E is distorted by subsidiary earnings — note this when comparing.
 6. **Catalysts & Triggers** — Events that could move valuation (earnings, dividends, analyst activity, estimate revisions).
 
