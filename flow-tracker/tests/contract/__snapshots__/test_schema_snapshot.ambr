@@ -617,6 +617,17 @@
       'quarter_end',
       'symbol',
     ]),
+    'standalone_financials': list([
+      'equity_capital',
+      'fetched_at',
+      'fiscal_year_end',
+      'id',
+      'net_income',
+      'reserves',
+      'revenue',
+      'symbol',
+      'total_assets',
+    ]),
     'valuation_snapshot': list([
       'avg_volume',
       'beta',
@@ -712,6 +723,7 @@
     'sector_benchmarks',
     'shareholder_detail',
     'shareholding',
+    'standalone_financials',
     'valuation_snapshot',
     'watchlist',
   ])

@@ -634,6 +634,62 @@ class ScreenerClient:
         annual_fin = self.parse_annual_financials(symbol, excel_bytes)
         return quarters, annual_eps, annual_fin
 
+    def download_standalone_excel(self, symbol: str) -> bytes | None:
+        """Download the standalone (non-consolidated) Excel export.
+
+        Returns None if standalone page doesn't exist (single-entity companies).
+        """
+        # Fetch standalone page (no /consolidated/ suffix)
+        url = f"{_SCREENER_BASE}/company/{symbol}/"
+        resp = self._client.get(url)
+        if resp.status_code != 200:
+            return None
+
+        # Check if this IS the standalone page (consolidated page redirects here for some companies)
+        # If page has a "View Consolidated" link, we're on standalone
+        html = resp.text
+        match = re.search(r'formaction="/user/company/export/(\d+)/"', html)
+        if not match:
+            return None
+
+        warehouse_id = match.group(1)
+        csrf = self._client.cookies.get("csrftoken")
+
+        resp = self._client.post(
+            f"{_SCREENER_BASE}/user/company/export/{warehouse_id}/",
+            data={"csrfmiddlewaretoken": csrf},
+            headers={"Referer": url},
+        )
+        if resp.status_code != 200 or resp.headers.get("content-type", "").startswith("text/html"):
+            return None
+
+        return resp.content
+
+    def fetch_standalone_summary(self, symbol: str) -> list[dict]:
+        """Fetch standalone financials summary (revenue, net_income, total_assets, equity).
+
+        Returns list of dicts with keys: symbol, fiscal_year_end, revenue, net_income,
+        total_assets, equity_capital, reserves. For SOTP: consolidated - standalone = subsidiary contribution.
+        """
+        excel_bytes = self.download_standalone_excel(symbol)
+        if not excel_bytes:
+            return []
+
+        # Parse just the key fields from the Data Sheet
+        annual = self.parse_annual_financials(symbol, excel_bytes)
+        return [
+            {
+                "symbol": a.symbol,
+                "fiscal_year_end": a.fiscal_year_end,
+                "revenue": a.revenue,
+                "net_income": a.net_income,
+                "total_assets": a.total_assets,
+                "equity_capital": a.equity_capital,
+                "reserves": a.reserves,
+            }
+            for a in annual
+        ]
+
     # -- HTML Parsing --
 
     @staticmethod

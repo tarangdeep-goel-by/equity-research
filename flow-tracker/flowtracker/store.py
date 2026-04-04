@@ -304,6 +304,19 @@ CREATE TABLE IF NOT EXISTS annual_financials (
     UNIQUE(symbol, fiscal_year_end)
 );
 
+CREATE TABLE IF NOT EXISTS standalone_financials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    fiscal_year_end TEXT NOT NULL,
+    revenue REAL,
+    net_income REAL,
+    total_assets REAL,
+    equity_capital REAL,
+    reserves REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, fiscal_year_end)
+);
+
 CREATE TABLE IF NOT EXISTS mf_daily_flows (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
@@ -1907,6 +1920,33 @@ class FlowStore:
             other_expenses_detail=r["other_expenses_detail"], total_expenses=r["total_expenses"],
             operating_profit=r["operating_profit"],
         ) for r in rows]
+
+    # -- Standalone Financials (for SOTP: consolidated - standalone = subsidiary contribution) --
+
+    def upsert_standalone_financials(self, records: list[dict]) -> int:
+        """Insert or replace standalone financials summary."""
+        cursor = self._conn.cursor()
+        count = 0
+        for r in records:
+            cursor.execute(
+                "INSERT OR REPLACE INTO standalone_financials "
+                "(symbol, fiscal_year_end, revenue, net_income, total_assets, equity_capital, reserves) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (r["symbol"], r["fiscal_year_end"], r.get("revenue"), r.get("net_income"),
+                 r.get("total_assets"), r.get("equity_capital"), r.get("reserves")),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_standalone_financials(self, symbol: str, limit: int = 10) -> list[dict]:
+        """Get stored standalone financials summary, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM standalone_financials WHERE symbol = ? "
+            "ORDER BY fiscal_year_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # -- Screener Ratios --
 

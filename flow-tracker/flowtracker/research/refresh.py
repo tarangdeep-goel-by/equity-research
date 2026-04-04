@@ -244,6 +244,17 @@ def refresh_for_research(
                 except Exception as e:
                     _skip("annual_financials", str(e))
 
+                # Standalone financials (for SOTP: consolidated - standalone = subsidiary contribution)
+                try:
+                    standalone = sc.fetch_standalone_summary(symbol)
+                    if standalone:
+                        store.upsert_standalone_financials(standalone)
+                        _ok("standalone_financials", len(standalone))
+                    else:
+                        _skip("standalone_financials", "no standalone data")
+                except Exception as e:
+                    _skip("standalone_financials", str(e))
+
                 # Extract IDs from already-fetched HTML (avoid duplicate fetch)
                 company_id, warehouse_id = _extract_ids_from_html(html)
                 if company_id or warehouse_id:

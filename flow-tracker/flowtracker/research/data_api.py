@@ -18,10 +18,45 @@ _BFSI_INDUSTRIES = {
     "Private Sector Bank", "Public Sector Bank", "Other Bank",
     "Non Banking Financial Company (NBFC)", "Financial Institution",
     "Other Financial Services", "Financial Products Distributor",
-    "Financial Technology (Fintech)",
+    "Financial Technology (Fintech)", "Housing Finance Company",
+    "Microfinance Institutions",
 }
 
 _INSURANCE_INDUSTRIES = {"Life Insurance", "General Insurance"}
+
+_REALESTATE_INDUSTRIES = {"Residential Commercial Projects"}
+
+_METALS_INDUSTRIES = {
+    "Iron & Steel", "Iron & Steel Products", "Aluminium", "Copper", "Zinc",
+    "Diversified Metals", "Coal", "Industrial Minerals",
+}
+
+_TELECOM_INDUSTRIES = {
+    "Telecom - Cellular & Fixed line services", "Other Telecom Services",
+}
+
+_TELECOM_INFRA_INDUSTRIES = {
+    "Telecom - Infrastructure", "Telecom - Equipment & Accessories",
+}
+
+_REGULATED_POWER_INDUSTRIES = {
+    "Power Generation", "Power Distribution", "Power - Transmission",
+}
+
+_MERCHANT_POWER_INDUSTRIES = {
+    "Integrated Power Utilities",
+}
+
+_BROKER_INDUSTRIES = {"Stockbroking & Allied"}
+
+_AMC_INDUSTRIES = {"Asset Management Company"}
+
+_EXCHANGE_INDUSTRIES = {
+    "Exchange and Data Platform",
+    "Depositories Clearing Houses and Other Intermediaries",
+}
+
+_HOSPITAL_INDUSTRIES = {"Hospital", "Healthcare Service Provider"}
 
 
 class ResearchDataAPI:
@@ -134,6 +169,57 @@ class ResearchDataAPI:
 
     def _is_insurance(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _INSURANCE_INDUSTRIES
+
+    def _is_realestate(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _REALESTATE_INDUSTRIES
+
+    def _is_metals(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _METALS_INDUSTRIES
+
+    def _is_telecom(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _TELECOM_INDUSTRIES
+
+    def _is_telecom_infra(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _TELECOM_INFRA_INDUSTRIES
+
+    def _is_regulated_power(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _REGULATED_POWER_INDUSTRIES
+
+    def _is_merchant_power(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _MERCHANT_POWER_INDUSTRIES
+
+    def _is_broker(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _BROKER_INDUSTRIES
+
+    def _is_amc(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _AMC_INDUSTRIES
+
+    def _is_exchange(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _EXCHANGE_INDUSTRIES
+
+    def _is_hospital(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _HOSPITAL_INDUSTRIES
+
+    def get_sector_type(self, symbol: str) -> str:
+        """Return the sector classification for a symbol (used by dispatch)."""
+        checks = [
+            (self._is_insurance, "insurance"),
+            (self._is_bfsi, "bfsi"),
+            (self._is_realestate, "realestate"),
+            (self._is_metals, "metals"),
+            (self._is_regulated_power, "regulated_power"),
+            (self._is_merchant_power, "merchant_power"),
+            (self._is_broker, "broker"),
+            (self._is_amc, "amc"),
+            (self._is_exchange, "exchange"),
+            (self._is_telecom, "telecom"),
+            (self._is_telecom_infra, "telecom_infra"),
+            (self._is_hospital, "hospital"),
+        ]
+        for checker, label in checks:
+            if checker(symbol):
+                return label
+        return "general"
 
     # --- Core Financials ---
 
@@ -521,9 +607,53 @@ class ResearchDataAPI:
         return _clean([r.model_dump() for r in rows])
 
     def get_technical_indicators(self, symbol: str) -> list[dict]:
-        """Latest RSI, MACD, SMA-50, SMA-200, ADX."""
+        """Latest RSI, MACD, SMA-50, SMA-200, ADX. FMP primary, yfinance fallback."""
         rows = self._store.get_fmp_technical_indicators(symbol)
-        return _clean([r.model_dump() for r in rows])
+        if rows:
+            return _clean([r.model_dump() for r in rows])
+
+        # Fallback: compute basic technicals from daily_stock_data (bhavcopy)
+        conn = self._store._conn
+        prices = conn.execute(
+            "SELECT date, close FROM daily_stock_data WHERE symbol = ? ORDER BY date DESC LIMIT 200",
+            (symbol,),
+        ).fetchall()
+        if len(prices) < 50:
+            return []
+
+        closes = [float(p["close"]) for p in prices]
+        latest = closes[0]
+
+        result: dict = {"date": prices[0]["date"], "close": latest}
+
+        # SMA-50, SMA-200
+        if len(closes) >= 50:
+            result["sma_50"] = round(sum(closes[:50]) / 50, 2)
+        if len(closes) >= 200:
+            result["sma_200"] = round(sum(closes[:200]) / 200, 2)
+
+        # RSI-14 (Wilder's smoothing)
+        if len(closes) >= 15:
+            gains, losses = [], []
+            for i in range(14):
+                diff = closes[i] - closes[i + 1]  # newest first, so diff = today - yesterday
+                gains.append(max(diff, 0))
+                losses.append(max(-diff, 0))
+            avg_gain = sum(gains) / 14
+            avg_loss = sum(losses) / 14
+            if avg_loss > 0:
+                rs = avg_gain / avg_loss
+                result["rsi_14"] = round(100 - (100 / (1 + rs)), 2)
+            else:
+                result["rsi_14"] = 100.0
+
+        # Price vs SMA signals
+        if "sma_50" in result:
+            result["price_vs_sma50"] = "above" if latest > result["sma_50"] else "below"
+        if "sma_200" in result:
+            result["price_vs_sma200"] = "above" if latest > result["sma_200"] else "below"
+
+        return [result] if result else []
 
     def get_dupont_decomposition(self, symbol: str) -> dict:
         """ROE = margin × turnover × leverage (10yr). Uses Screener annual_financials, falls back to FMP key_metrics."""
@@ -1316,14 +1446,20 @@ class ResearchDataAPI:
             return cfo - capex
 
         n = len(annual)
-        metrics = {}
-        for label, extract in [
+        is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
+
+        metric_defs = [
             ("revenue", lambda d, _: _get(d, "revenue")),
             ("ebitda", lambda d, _: _ebitda(d)),
             ("net_income", lambda d, _: _get(d, "net_income")),
             ("eps", lambda d, _: _get(d, "eps")),
-            ("fcf", lambda d, prev: _fcf(d, prev)),
-        ]:
+        ]
+        # FCF is meaningless for BFSI — suppress entirely, not even with caveats
+        if not is_bfsi:
+            metric_defs.append(("fcf", lambda d, prev: _fcf(d, prev)))
+
+        metrics = {}
+        for label, extract in metric_defs:
             values = []
             for i, d in enumerate(annual):
                 prev = annual[i + 1] if i + 1 < n else None
@@ -2378,43 +2514,443 @@ class ResearchDataAPI:
 
         return {"is_bfsi": True, "years": years_data}
 
-    def get_quality_scores_all(self, symbol: str) -> dict:
-        """Aggregate all quality score metrics with BFSI-aware routing.
+    # --- Insurance Metrics ---
 
-        For BFSI: includes piotroski, dupont, common_size, bfsi_metrics.
-        Skips earnings_quality, beneish, capex_cycle (not applicable).
-        For non-BFSI: includes all except bfsi_metrics.
+    def get_insurance_metrics(self, symbol: str) -> dict:
+        """Insurance-specific metrics: ROE, ROA, opex ratio, premium growth, P/B."""
+        if not self._is_insurance(symbol):
+            return {"skipped": True, "reason": f"{symbol} is not an insurance stock"}
+
+        annual = self.get_annual_financials(symbol, years=5)
+        if not annual:
+            return {"error": "No annual financial data"}
+
+        valuation = self.get_valuation_snapshot(symbol)
+        current_price = valuation.get("price")
+
+        industry = self._get_industry(symbol)
+        sub_type = "life" if "Life" in (industry or "") else "general"
+
+        years_data = []
+        prev_revenue = None
+        for row in annual:
+            # Screener stores insurance premiums as "revenue" — proxy for NEP.
+            # Not identical to Net Earned Premium but best available from standardized data.
+            revenue = row.get("revenue", 0) or 0
+            net_income = row.get("net_income", 0) or 0
+            employee_cost = row.get("employee_cost", 0) or 0
+            other_exp = row.get("other_expenses_detail", 0) or row.get("other_expenses", 0) or 0
+            total_assets = row.get("total_assets", 0) or 0
+            equity_capital = row.get("equity_capital", 0) or 0
+            reserves = row.get("reserves", 0) or 0
+            num_shares = row.get("num_shares", 0) or 0
+
+            net_worth = equity_capital + reserves
+            entry = {"fiscal_year": row.get("fiscal_year_end", "")}
+
+            if net_worth > 0:
+                entry["roe_pct"] = round(net_income / net_worth * 100, 2)
+            if total_assets > 0:
+                entry["roa_pct"] = round(net_income / total_assets * 100, 2)
+            if revenue > 0:
+                entry["opex_ratio_pct"] = round((employee_cost + other_exp) / revenue * 100, 2)
+            if prev_revenue and prev_revenue > 0:
+                entry["premium_growth_yoy_pct"] = round((revenue - prev_revenue) / prev_revenue * 100, 2)
+            prev_revenue = revenue
+
+            entry["net_worth"] = round(net_worth, 2)
+            if num_shares > 0:
+                bvps = net_worth * 1e7 / num_shares
+                entry["book_value_per_share"] = round(bvps, 2)
+                if current_price and current_price > 0:
+                    entry["pb_ratio"] = round(current_price / bvps, 2)
+
+            years_data.append(entry)
+
+        # Surface concall KPIs for insurance-specific metrics
+        concall_kpis: dict = {}
+        concall = self.get_concall_insights(symbol)
+        if "error" not in concall:
+            _insurance_keys = {"vnb", "vnb_margin", "combined_ratio", "persistency",
+                               "embedded_value", "solvency"}
+            for q in concall.get("quarters", []):
+                for section in ("operational_metrics", "key_numbers_mentioned"):
+                    metrics = q.get(section, {})
+                    if isinstance(metrics, dict):
+                        for k, v in metrics.items():
+                            if k.lower().replace(" ", "_") in _insurance_keys:
+                                concall_kpis[k] = v
+
+        if not concall_kpis:
+            concall_kpis = {
+                "available": False,
+                "note": "Key insurance KPIs (VNB, combined ratio, persistency, embedded value, "
+                        "solvency) not available from concall data. Flag as open questions.",
+            }
+
+        return {"is_insurance": True, "sub_type": sub_type, "years": years_data, "concall_kpis": concall_kpis}
+
+    # --- Metals/Mining Metrics ---
+
+    def get_metals_metrics(self, symbol: str) -> dict:
+        """Metals/Mining-specific metrics: EBITDA, Net Debt/EBITDA, EV/EBITDA."""
+        if not self._is_metals(symbol):
+            return {"skipped": True, "reason": f"{symbol} is not a metals/mining stock"}
+
+        annual = self.get_annual_financials(symbol, years=5)
+        if not annual:
+            return {"error": "No annual financial data"}
+
+        valuation = self.get_valuation_snapshot(symbol)
+
+        years_data = []
+        prev_revenue = None
+        nd_ebitda_values = []
+
+        for row in annual:
+            op = row.get("operating_profit", 0) or 0
+            dep = row.get("depreciation", 0) or 0
+            borrowings = row.get("borrowings", 0) or 0
+            cash = row.get("cash_and_bank", 0) or 0
+            revenue = row.get("revenue", 0) or 0
+
+            ebitda = op + dep
+            net_debt = borrowings - cash
+
+            entry = {"fiscal_year": row.get("fiscal_year_end", "")}
+            entry["ebitda"] = round(ebitda, 2)
+            entry["net_debt"] = round(net_debt, 2)
+
+            if ebitda > 0:
+                nd_ebitda = round(net_debt / ebitda, 2)
+                entry["net_debt_ebitda"] = nd_ebitda
+                nd_ebitda_values.append(nd_ebitda)
+
+            entry["revenue"] = round(revenue, 2)
+            if prev_revenue and prev_revenue > 0:
+                entry["revenue_yoy_pct"] = round((revenue - prev_revenue) / prev_revenue * 100, 2)
+            prev_revenue = revenue
+
+            if ebitda > 0 and revenue > 0:
+                entry["ebitda_margin_pct"] = round(ebitda / revenue * 100, 2)
+
+            years_data.append(entry)
+
+        return {
+            "is_metals": True,
+            "years": years_data,
+            "current_ev_ebitda": valuation.get("ev_ebitda"),
+            "avg_net_debt_ebitda_5y": round(sum(nd_ebitda_values) / len(nd_ebitda_values), 2) if nd_ebitda_values else None,
+        }
+
+    # --- Real Estate Metrics ---
+
+    def get_realestate_metrics(self, symbol: str) -> dict:
+        """Real estate metrics: Adjusted BV/share, P/Adjusted BV, Net Debt/Equity."""
+        if not self._is_realestate(symbol):
+            return {"skipped": True, "reason": f"{symbol} is not a real estate stock"}
+
+        annual = self.get_annual_financials(symbol, years=5)
+        if not annual:
+            return {"error": "No annual financial data"}
+
+        valuation = self.get_valuation_snapshot(symbol)
+        current_price = valuation.get("price")
+
+        years_data = []
+        prev_revenue = None
+        for row in annual:
+            revenue = row.get("revenue", 0) or 0
+            total_assets = row.get("total_assets", 0) or 0
+            borrowings = row.get("borrowings", 0) or 0
+            other_liabilities = row.get("other_liabilities", 0) or 0
+            equity_capital = row.get("equity_capital", 0) or 0
+            reserves = row.get("reserves", 0) or 0
+            num_shares = row.get("num_shares", 0) or 0
+            cash_and_bank = row.get("cash_and_bank", 0) or 0
+
+            net_worth = equity_capital + reserves
+            entry = {"fiscal_year": row.get("fiscal_year_end", "")}
+
+            # Adjusted Book Value per share (NOT true NAV — no land revaluation)
+            if num_shares > 0:
+                adjusted_bv = (total_assets - borrowings - other_liabilities) / num_shares * 1e7
+                entry["adjusted_bv_per_share"] = round(adjusted_bv, 2)
+                if current_price and current_price > 0 and adjusted_bv > 0:
+                    entry["p_adjusted_bv"] = round(current_price / adjusted_bv, 2)
+
+            if net_worth > 0:
+                entry["net_debt_equity"] = round((borrowings - cash_and_bank) / net_worth, 2)
+
+            if prev_revenue and prev_revenue > 0:
+                entry["revenue_growth_yoy_pct"] = round((revenue - prev_revenue) / prev_revenue * 100, 2)
+            prev_revenue = revenue
+
+            entry["net_worth"] = round(net_worth, 2)
+            years_data.append(entry)
+
+        return {
+            "is_realestate": True,
+            "years": years_data,
+            "note": "Inventory months NOT computed — requires area sold/sales velocity data "
+                    "from investor presentations, not annual financials.",
+        }
+
+    # --- Telecom Metrics ---
+
+    def get_telecom_metrics(self, symbol: str) -> dict:
+        """Telecom-specific metrics: EBITDA, Net Debt/EBITDA, OpFCF, Capex/Revenue."""
+        if not self._is_telecom(symbol) and not self._is_telecom_infra(symbol):
+            return {"skipped": True, "reason": f"{symbol} is not a telecom stock"}
+
+        annual = self.get_annual_financials(symbol, years=5)
+        if not annual:
+            return {"error": "No annual financial data"}
+
+        valuation = self.get_valuation_snapshot(symbol)
+        sub_type = "telecom" if self._is_telecom(symbol) else "telecom_infra"
+
+        years_data = []
+        for row in annual:
+            op = row.get("operating_profit", 0) or 0
+            dep = row.get("depreciation", 0) or 0
+            borrowings = row.get("borrowings", 0) or 0
+            cash = row.get("cash_and_bank", 0) or 0
+            revenue = row.get("revenue", 0) or 0
+            cfo = row.get("cfo", 0) or 0
+            cfi = row.get("cfi", 0) or 0
+
+            ebitda = op + dep
+            net_debt = borrowings - cash
+
+            entry = {"fiscal_year": row.get("fiscal_year_end", "")}
+            entry["ebitda"] = round(ebitda, 2)
+            entry["net_debt"] = round(net_debt, 2)
+
+            if ebitda > 0:
+                entry["net_debt_ebitda"] = round(net_debt / ebitda, 2)
+            if revenue > 0:
+                entry["ebitda_margin_pct"] = round(ebitda / revenue * 100, 2)
+                entry["capex_revenue_pct"] = round(abs(cfi) / revenue * 100, 2) if cfi else None
+
+            # OpFCF = CFO + CFI (CFI is typically negative)
+            if cfo:
+                entry["opfcf"] = round(cfo + cfi, 2)
+
+            years_data.append(entry)
+
+        return {
+            "is_telecom": True,
+            "sub_type": sub_type,
+            "years": years_data,
+            "current_ev_ebitda": valuation.get("ev_ebitda"),
+        }
+
+    # --- Light Sector Metrics (IT, FMCG) ---
+
+    def get_sector_health_metrics(self, symbol: str) -> dict:
+        """Compute sector-specific health metrics for IT (DSO trend) and FMCG (working capital trend).
+
+        Returns computable signals that the prompt caveats reference,
+        so agents get data, not just guidance.
+        """
+        industry = self._get_industry(symbol)
+        annual = self.get_annual_financials(symbol, years=5)
+        if not annual or len(annual) < 2:
+            return {"skipped": True, "reason": "Insufficient annual data"}
+
+        _IT = {"Computers - Software & Consulting", "IT Enabled Services", "Software Products",
+               "Business Process Outsourcing (BPO)/ Knowledge Process Outsourcing (KPO)"}
+        _FMCG = {"Diversified FMCG", "Household Products", "Personal Care",
+                 "Packaged Foods", "Other Food Products", "Household Appliances"}
+
+        if industry in _IT:
+            dso_values = []
+            for row in annual:
+                recv = row.get("receivables", 0) or 0
+                rev = row.get("revenue", 0) or 0
+                if rev > 0:
+                    dso_values.append({"fiscal_year": row.get("fiscal_year_end", ""),
+                                       "dso_days": round(recv / rev * 365, 1)})
+            if len(dso_values) >= 2:
+                latest = dso_values[0]["dso_days"]
+                prev = dso_values[1]["dso_days"]
+                change = round(latest - prev, 1)
+                flag = "WARNING: DSO rising" if change > 5 else "stable" if abs(change) <= 5 else "improving"
+                return {"sector": "it", "dso_trend": dso_values, "dso_yoy_change": change, "signal": flag}
+            return {"sector": "it", "dso_trend": dso_values}
+
+        if industry in _FMCG:
+            wc_values = []
+            for row in annual:
+                recv = row.get("receivables", 0) or 0
+                inv = row.get("inventory", 0) or 0
+                rev = row.get("revenue", 0) or 0
+                # payables not a direct field — approximate from other_liabilities
+                payables = row.get("other_liabilities", 0) or 0
+                if rev > 0:
+                    recv_days = round(recv / rev * 365, 1)
+                    inv_days = round(inv / rev * 365, 1)
+                    pay_days = round(payables / rev * 365, 1)
+                    nwc_days = round(recv_days + inv_days - pay_days, 1)
+                    wc_values.append({"fiscal_year": row.get("fiscal_year_end", ""),
+                                      "receivable_days": recv_days, "inventory_days": inv_days,
+                                      "payable_days": pay_days, "nwc_days": nwc_days})
+            if len(wc_values) >= 2:
+                latest = wc_values[0]["nwc_days"]
+                prev = wc_values[1]["nwc_days"]
+                change = round(latest - prev, 1)
+                negative_wc = latest < 0
+                flag = "negative WC advantage intact" if negative_wc else "positive WC"
+                if change > 5:
+                    flag += " — WARNING: WC deteriorating"
+                return {"sector": "fmcg", "wc_trend": wc_values, "nwc_yoy_change": change, "signal": flag}
+            return {"sector": "fmcg", "wc_trend": wc_values}
+
+        return {"skipped": True, "reason": f"No light metrics for industry: {industry}"}
+
+    # --- Subsidiary Contribution (Consolidated - Standalone) for SOTP ---
+
+    def get_subsidiary_contribution(self, symbol: str) -> dict:
+        """Compute subsidiary profit contribution: consolidated - standalone financials.
+
+        Returns per-year breakdown of subsidiary revenue and profit contribution.
+        For SOTP: tells the agent how much profit comes from subsidiaries.
+        """
+        consolidated = self.get_annual_financials(symbol, years=5)
+        standalone = self._store.get_standalone_financials(symbol.upper(), limit=5)
+
+        if not consolidated:
+            return {"available": False, "reason": "No consolidated financials"}
+        if not standalone:
+            return {"available": False, "reason": "No standalone financials — fetch standalone data first"}
+
+        # Build lookup by fiscal year
+        sa_by_year = {r["fiscal_year_end"]: r for r in standalone}
+
+        years = []
+        for c in consolidated:
+            fy = c.get("fiscal_year_end", "")
+            sa = sa_by_year.get(fy)
+            if not sa:
+                continue
+
+            c_rev = c.get("revenue", 0) or 0
+            s_rev = sa.get("revenue", 0) or 0
+            c_ni = c.get("net_income", 0) or 0
+            s_ni = sa.get("net_income", 0) or 0
+
+            sub_rev = round(c_rev - s_rev, 2)
+            sub_ni = round(c_ni - s_ni, 2)
+            sub_pct = round(sub_ni / c_ni * 100, 1) if c_ni else None
+
+            years.append({
+                "fiscal_year": fy,
+                "consolidated_net_income": round(c_ni, 2),
+                "standalone_net_income": round(s_ni, 2),
+                "subsidiary_net_income": sub_ni,
+                "subsidiary_profit_pct": sub_pct,
+                "consolidated_revenue": round(c_rev, 2),
+                "standalone_revenue": round(s_rev, 2),
+                "subsidiary_revenue": sub_rev,
+            })
+
+        if not years:
+            return {"available": False, "reason": "No overlapping fiscal years between consolidated and standalone"}
+
+        return {
+            "available": True,
+            "years": years,
+            "note": "subsidiary_net_income = consolidated - standalone. Apply peer multiples to estimate subsidiary value for SOTP.",
+        }
+
+    def get_power_metrics(self, symbol: str) -> dict:
+        """Power/Utility-specific metrics: dividend yield vs G-sec spread, justified P/B."""
+        if not self._is_regulated_power(symbol) and not self._is_merchant_power(symbol):
+            return {"skipped": True, "reason": f"{symbol} is not a power/utility stock"}
+
+        valuation = self.get_valuation_snapshot(symbol)
+        macro = self.get_macro_snapshot()
+
+        dividend_yield = valuation.get("dividend_yield")  # %
+        pb_ratio = valuation.get("pb_ratio")
+        roe = valuation.get("roe")  # %
+        gsec_yield = macro.get("gsec_10y")  # yield %
+        gsec_date = macro.get("date")  # "YYYY-MM-DD"
+
+        sub_type = "regulated" if self._is_regulated_power(symbol) else "merchant"
+
+        result: dict = {"is_power": True, "sub_type": sub_type}
+
+        if dividend_yield is not None:
+            result["dividend_yield"] = dividend_yield
+        if gsec_yield is not None:
+            result["gsec_yield"] = gsec_yield
+            result["gsec_as_of"] = gsec_date
+        if dividend_yield is not None and gsec_yield is not None:
+            result["div_yield_spread"] = round(dividend_yield - gsec_yield, 2)
+
+        # Justified P/B = ROE / Cost of Equity
+        # CoE approximated as G-sec yield + 5% equity risk premium
+        if roe is not None and gsec_yield is not None:
+            cost_of_equity = gsec_yield + 5.0  # %
+            if cost_of_equity > 0:
+                result["justified_pb"] = round((roe / cost_of_equity), 2)
+            result["roe"] = roe
+
+        if pb_ratio is not None:
+            result["actual_pb"] = pb_ratio
+
+        return result
+
+    def get_quality_scores_all(self, symbol: str) -> dict:
+        """Aggregate all quality score metrics with sector-aware routing.
+
+        Routing priority: insurance > BFSI > general.
+        Sector-specific metrics (metals, realestate, telecom, power) are additive.
         """
         bfsi = self._is_bfsi(symbol)
-        result: dict = {"is_bfsi": bfsi}
+        insurance = self._is_insurance(symbol)
+        sector = self.get_sector_type(symbol)
+        result: dict = {"is_bfsi": bfsi, "is_insurance": insurance, "sector_type": sector}
 
         # Always included
         result["piotroski"] = self.get_piotroski_score(symbol)
         result["dupont"] = self.get_dupont_decomposition(symbol)
         result["common_size"] = self.get_common_size_pl(symbol)
 
-        if bfsi:
+        _skip_financial = {
+            "skipped": True,
+            "reason": "not applicable for financial companies",
+        }
+
+        if insurance:
+            result["insurance"] = self.get_insurance_metrics(symbol)
+            result["bfsi"] = {"skipped": True, "reason": "insurance uses dedicated metrics"}
+            result["earnings_quality"] = _skip_financial
+            result["beneish"] = _skip_financial
+            result["capex_cycle"] = _skip_financial
+        elif bfsi:
             result["bfsi"] = self.get_bfsi_metrics(symbol)
-            result["earnings_quality"] = {
-                "skipped": "not applicable for BFSI stocks",
-                "reason": "requires manufacturing/service cost structure",
-            }
-            result["beneish"] = {
-                "skipped": "not applicable for BFSI stocks",
-                "reason": "designed for non-financial companies",
-            }
+            result["earnings_quality"] = _skip_financial
+            result["beneish"] = _skip_financial
             result["capex_cycle"] = {
-                "skipped": "not applicable for BFSI stocks",
+                "skipped": True,
                 "reason": "BFSI has no CWIP/capex cycle",
             }
         else:
             result["earnings_quality"] = self.get_earnings_quality(symbol)
             result["beneish"] = self.get_beneish_score(symbol)
             result["capex_cycle"] = self.get_capex_cycle(symbol)
-            result["bfsi"] = {
-                "skipped": "only for banks/NBFCs",
-                "reason": "non-BFSI company",
-            }
+            result["bfsi"] = {"skipped": True, "reason": "non-BFSI company"}
+
+        # Additive sector metrics — included alongside standard metrics
+        result["metals"] = self.get_metals_metrics(symbol)
+        result["realestate"] = self.get_realestate_metrics(symbol)
+        result["telecom"] = self.get_telecom_metrics(symbol)
+        result["power"] = self.get_power_metrics(symbol)
+        result["sector_health"] = self.get_sector_health_metrics(symbol)
+        result["subsidiary"] = self.get_subsidiary_contribution(symbol)
 
         return result
 

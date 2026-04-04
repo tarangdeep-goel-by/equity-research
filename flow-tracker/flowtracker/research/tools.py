@@ -1047,14 +1047,28 @@ def _get_quality_scores_section(api, symbol, section, args):
         return api.get_capex_cycle(symbol)
     elif section == "bfsi":
         return api.get_bfsi_metrics(symbol)
+    elif section == "subsidiary":
+        return api.get_subsidiary_contribution(symbol)
+    elif section == "insurance":
+        return api.get_insurance_metrics(symbol)
+    elif section == "metals":
+        return api.get_metals_metrics(symbol)
+    elif section == "realestate":
+        return api.get_realestate_metrics(symbol)
+    elif section == "telecom":
+        return api.get_telecom_metrics(symbol)
+    elif section == "power":
+        return api.get_power_metrics(symbol)
+    elif section == "sector_health":
+        return api.get_sector_health_metrics(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_quality_scores",
-    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | ['section1', 'section2']. "
-    "BFSI routing: 'all' auto-skips non-applicable sections based on sector.",
+    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | ['section1', 'section2']. "
+    "BFSI routing: 'all' auto-skips non-applicable sections. 'subsidiary' returns consolidated-standalone diff for SOTP analysis.",
     {"symbol": str, "section": str},
 )
 async def get_quality_scores(args):
