@@ -749,7 +749,7 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> str:
         mcap = api.get_valuation_snapshot(symbol).get("market_cap_cr", 0) or 0
 
     # BFSI injection for relevant agents
-    _bfsi_agents = {"financials", "valuation", "risk", "ownership", "sector"}
+    _bfsi_agents = {"financials", "valuation", "risk", "ownership", "sector", "technical"}
     if is_bfsi and agent_name in _bfsi_agents:
         prompt += _build_bfsi_injection()
 
