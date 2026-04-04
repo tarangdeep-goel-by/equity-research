@@ -1061,6 +1061,8 @@ def _get_quality_scores_section(api, symbol, section, args):
         return api.get_power_metrics(symbol)
     elif section == "sector_health":
         return api.get_sector_health_metrics(symbol)
+    elif section == "risk_flags":
+        return api.get_risk_flags(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 

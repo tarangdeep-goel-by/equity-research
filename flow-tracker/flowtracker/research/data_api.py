@@ -653,6 +653,15 @@ class ResearchDataAPI:
         if "sma_200" in result:
             result["price_vs_sma200"] = "above" if latest > result["sma_200"] else "below"
 
+        # Death cross / Golden cross detection
+        if "sma_50" in result and "sma_200" in result:
+            if result["sma_50"] < result["sma_200"]:
+                result["sma_cross"] = "death_cross"
+                result["sma_cross_note"] = "SMA50 below SMA200 — bearish trend signal (death cross)"
+            else:
+                result["sma_cross"] = "golden_cross"
+                result["sma_cross_note"] = "SMA50 above SMA200 — bullish trend signal (golden cross)"
+
         return [result] if result else []
 
     def get_dupont_decomposition(self, symbol: str) -> dict:
@@ -763,10 +772,24 @@ class ResearchDataAPI:
             bear = ((pe_band.min_val + pe_band.median_val) / 2) * forward_eps
             base = pe_band.median_val * forward_eps
             bull = ((pe_band.median_val + pe_band.max_val) / 2) * forward_eps
+
+            # Flag narrow PE band (data window < 3 years)
+            pe_data_points = pe_band.data_points if hasattr(pe_band, "data_points") else None
+            pe_range = round(pe_band.max_val - pe_band.min_val, 1) if pe_band.max_val and pe_band.min_val else None
+            narrow_band_warning = None
+            if pe_range is not None and pe_range < 10:
+                narrow_band_warning = (
+                    f"PE band is narrow ({pe_band.min_val:.1f}x–{pe_band.max_val:.1f}x, range {pe_range}x). "
+                    "This may reflect a short data window or recent regime change. "
+                    "Use 5Y+ historical PE from chart data for context."
+                )
+
             result["pe_band"] = {
                 "bear": round(bear, 2), "base": round(base, 2), "bull": round(bull, 2),
                 "forward_eps": forward_eps, "pe_percentile": pe_band.percentile,
             }
+            if narrow_band_warning:
+                result["pe_band"]["narrow_band_warning"] = narrow_band_warning
             pe_fair = base
 
         # 2. FMP DCF (exclude for BFSI — unreliable for Indian financials)
@@ -1497,6 +1520,72 @@ class ResearchDataAPI:
             "cagrs": metrics,
             "growth_trajectory": trajectory,
         }
+
+    # --- Auto-Detected Risk Flags ---
+
+    def get_risk_flags(self, symbol: str) -> dict:
+        """Auto-detect generic risk patterns from financial data.
+
+        Flags: Q4 revenue concentration, raw material cost spikes,
+        large YoY swings in cost structure.
+        """
+        flags = []
+
+        # Q4 revenue concentration: if Q4 > 35% of annual revenue
+        quarters = self.get_quarterly_results(symbol, quarters=8)
+        annual = self.get_annual_financials(symbol, years=2)
+        if quarters and annual:
+            latest_fy = annual[0].get("fiscal_year_end", "")[:4]  # "2025"
+            fy_quarters = [q for q in quarters if q.get("quarter", "").startswith(f"Q") and
+                           latest_fy in (q.get("quarter", "") or "")]
+            # Simpler: group by fiscal year from quarter dates
+            q4_revs = []
+            annual_revs = []
+            for q in quarters[:4]:  # last 4 quarters
+                q4_revs.append(q.get("revenue", 0) or 0)
+            if q4_revs and annual and annual[0].get("revenue"):
+                annual_rev = annual[0]["revenue"]
+                # Q4 is the first quarter in our list (most recent = Q4 if near March)
+                # Better approach: find the Jan-Mar quarter
+                for q in quarters[:8]:
+                    period = q.get("quarter", "") or q.get("period", "")
+                    if "Mar" in period or "Q4" in period:
+                        q4_rev = q.get("revenue", 0) or 0
+                        if annual_rev and annual_rev > 0:
+                            q4_pct = round(q4_rev / annual_rev * 100, 1)
+                            if q4_pct > 35:
+                                flags.append({
+                                    "flag": "q4_revenue_concentration",
+                                    "severity": "medium",
+                                    "detail": f"Q4 contributed {q4_pct}% of annual revenue — lumpy recognition risk",
+                                    "value": q4_pct,
+                                })
+                        break
+
+        # Raw material cost spike: >15pp YoY change in RM/revenue
+        if len(annual) >= 2:
+            for i in range(len(annual) - 1):
+                curr = annual[i]
+                prev = annual[i + 1]
+                c_rev = curr.get("revenue", 0) or 0
+                p_rev = prev.get("revenue", 0) or 0
+                c_rm = curr.get("raw_material_cost", 0) or 0
+                p_rm = prev.get("raw_material_cost", 0) or 0
+
+                if c_rev > 0 and p_rev > 0 and (c_rm > 0 or p_rm > 0):
+                    c_pct = c_rm / c_rev * 100
+                    p_pct = p_rm / p_rev * 100
+                    change = round(c_pct - p_pct, 1)
+                    if abs(change) > 15:
+                        flags.append({
+                            "flag": "raw_material_cost_spike",
+                            "severity": "high" if abs(change) > 20 else "medium",
+                            "detail": f"Raw material cost shifted {change:+.1f}pp YoY ({p_pct:.1f}% → {c_pct:.1f}% of revenue) in {curr.get('fiscal_year_end', '')}",
+                            "value": change,
+                        })
+                break  # only check most recent year
+
+        return {"flags": flags} if flags else {"flags": [], "note": "No auto-detected risk flags"}
 
     # --- Analytical Frameworks ---
 
@@ -2951,6 +3040,7 @@ class ResearchDataAPI:
         result["power"] = self.get_power_metrics(symbol)
         result["sector_health"] = self.get_sector_health_metrics(symbol)
         result["subsidiary"] = self.get_subsidiary_contribution(symbol)
+        result["risk_flags"] = self.get_risk_flags(symbol)
 
         return result
 
