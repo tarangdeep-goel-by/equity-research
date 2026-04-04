@@ -47,6 +47,13 @@ If data is missing, say so. Never fabricate numbers. If a tool fails, note it an
 Cite inline after every table: `*Source: [Screener.in annual financials](URL) via get_fundamentals · FY16–FY25*`
 End your report with a `## Data Sources` table listing all sources used.
 
+## Open Questions
+When you encounter something that materially affects the investment thesis but cannot be answered from your available tools, add it to the `open_questions` field in your structured briefing. A future web research agent will resolve these. Good open questions are:
+- **Specific** — "Has SEBI finalized the F&O lot size increase?" not "What is the regulatory environment?"
+- **Verifiable** — answerable with a web search or document lookup
+- **Tied to a signal** — connected to a finding in your report ("The 7.7pp FII exit may be driven by SEBI FPI concentration norms — needs verification")
+Do NOT speculate or assert causes you cannot verify from your data. Pose them as open questions instead.
+
 ## Fallback Strategies
 - FMP tools return empty → note it, use Screener + yfinance data
 - Few peers (<3) → caveat that benchmarks are less reliable
@@ -103,6 +110,7 @@ End with a JSON code block:
     "debt_equity": 0
   },
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
+  "open_questions": ["<question that needs web research to answer>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -161,6 +169,7 @@ End with a JSON code block:
   "growth_trajectory": "<accelerating|stable|decelerating>",
   "quality_signal": "<string, e.g. 'Margin-driven ROE expansion with strong cash conversion'>",
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
+  "open_questions": ["<question that needs web research to answer>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -202,7 +211,7 @@ Analyze who owns this stock, who is buying, who is selling, and what the money f
 4. **Mutual Fund Conviction** — Scheme-level table, adding vs trimming tables. Summary: total schemes, fund houses, MF % of equity, net change. Interpret breadth vs concentration.
 5. **Risk Signals: Pledge & Delivery** — Pledge % with trend and risk thresholds. Delivery % trend with interpretation (accumulation, distribution, speculative). Cross-reference all signals.
 6. **Institutional Verdict** — Synthesize all ownership signals into a clear conclusion.
-7. **Open Questions** — Questions that could not be answered from available data but would materially affect the ownership thesis. These are for a future web research agent to resolve. Each question should be specific, verifiable, and tied to an ownership signal in the report.
+7. **Open Questions** — Unanswered questions tied to ownership signals (see shared preamble for format).
 
 ## Structured Briefing
 End with a JSON code block:
@@ -287,6 +296,7 @@ End with a JSON code block:
   "analyst_dispersion": "<tight|moderate|wide>",
   "vs_peers": "<discount|inline|premium>",
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
+  "open_questions": ["<question that needs web research to answer>"],
   "signal_direction": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -330,6 +340,7 @@ Identify, quantify, and rank every material risk facing this company — financi
 5. **Operational Risk** — Revenue concentration, growth deceleration, margin pressure, competitive position erosion, management execution (beat/miss track record). Rank by severity.
 6. **Pre-Mortem: Bear Case** — Specific scenario for 30-50% decline with trigger events, quantified downside, historical precedent, probability assessment, and 2-3 leading indicators.
 7. **Risk Matrix** — Summary table: Risk × Probability × Impact ranking.
+8. **Open Questions** — Unverifiable risks that need web research (see shared preamble for format).
 
 ## Structured Briefing
 End with a JSON code block:
@@ -347,6 +358,7 @@ End with a JSON code block:
   "bear_case_trigger": "<string>",
   "macro_sensitivity": "<high|medium|low>",
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
+  "open_questions": ["<question that needs web research to answer>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -357,6 +369,7 @@ End with a JSON code block:
 - Rank by probability × impact, not by category.
 - Cross-reference signals: pledge rising + insider selling = governance alarm.
 - Connect every risk to stock price impact.
+- Regulatory risk is sector-specific and often existential — always identify the key regulator (RBI for banks, SEBI for brokers/capital markets, TRAI for telecom, FSSAI for food, NPPA for pharma) and assess pending or recent regulatory actions that could disrupt the business model. Use `get_company_context` and concall insights for regulatory signals.
 """
 
 AGENT_PROMPTS_V2["risk"] = RISK_AGENT_PROMPT_V2
@@ -403,6 +416,7 @@ End with a JSON code block:
   "accumulation_signal": false,
   "timing_suggestion": "<string summarizing the entry timing context>",
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
+  "open_questions": ["<question that needs web research to answer>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -463,7 +477,8 @@ End with a JSON code block:
   "regulatory_risk": "<low|medium|high>",
   "key_sector_tailwinds": ["<tailwind1>", "<tailwind2>"],
   "key_sector_headwinds": ["<headwind1>", "<headwind2>"],
-  "top_sector_picks": ["<SYMBOL1>", "<SYMBOL2>", "<SYMBOL3>"]
+  "top_sector_picks": ["<SYMBOL1>", "<SYMBOL2>", "<SYMBOL3>"],
+  "open_questions": ["<question that needs web research to answer>"]
 }
 ```
 

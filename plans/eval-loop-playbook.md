@@ -108,3 +108,5 @@ Pick stocks that stress-test the agent's edge cases:
 | valuation | INDIAMART | 1 | A- | 2026-04-03 |
 | financials | VEDL | 1 | A- | 2026-04-04 |
 | financials | SBIN | 1 | A- | 2026-04-04 |
+| risk | TCS | 1 | A+ | 2026-04-04 |
+| risk | GROWW | 1 | B+ | 2026-04-04 |
