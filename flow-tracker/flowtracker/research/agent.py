@@ -56,6 +56,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "sector": "claude-sonnet-4-6",
     "synthesis": "claude-sonnet-4-6",
     "verifier": "claude-haiku-4-5-20251001",
+    "explainer": "claude-sonnet-4-6",
 }
 
 AGENT_TOOLS: dict[str, list] = {
@@ -257,18 +258,21 @@ async def _run_specialist(
 ) -> BriefingEnvelope:
     """Run a single specialist agent. Returns BriefingEnvelope with report, briefing, evidence, cost."""
 
-    tools = tools or AGENT_TOOLS.get(name, [])
+    tools = tools if tools is not None else AGENT_TOOLS.get(name, [])
     max_turns = max_turns or AGENT_MAX_TURNS.get(name, 20)
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
     model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
 
-    # Create MCP server with agent's tool subset
-    server = create_sdk_mcp_server(f"{name}-data", tools=tools)
+    # Create MCP server with agent's tool subset (skip if no tools)
+    mcp_servers = {}
+    if tools:
+        server = create_sdk_mcp_server(f"{name}-data", tools=tools)
+        mcp_servers[name] = server
 
     # Build options
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        mcp_servers={name: server},
+        mcp_servers=mcp_servers,
         max_turns=max_turns,
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
@@ -816,6 +820,38 @@ async def run_synthesis_agent(
         tools=synthesis_tools,
         max_turns=10,
         max_budget=0.30,
+        model=model,
+        user_prompt=user_prompt,
+    )
+
+
+async def run_explainer_agent(
+    symbol: str,
+    technical_report: str,
+    model: str | None = None,
+) -> BriefingEnvelope:
+    """Run the explainer agent to add beginner-friendly annotations to a technical report.
+
+    Takes the assembled technical markdown and returns an annotated version with
+    blockquote callouts explaining financial terms and concepts. No tools needed —
+    pure text transformation.
+    """
+    from flowtracker.research.prompts import EXPLAINER_AGENT_PROMPT
+
+    model = model or DEFAULT_MODELS.get("explainer", "claude-sonnet-4-6")
+
+    user_prompt = (
+        f"Add beginner-friendly annotations to this equity research report for {symbol}.\n\n"
+        f"---\n\n{technical_report}"
+    )
+
+    return await _run_specialist(
+        name="explainer",
+        symbol=symbol,
+        system_prompt=EXPLAINER_AGENT_PROMPT,
+        tools=[],
+        max_turns=3,
+        max_budget=1.00,
         model=model,
         user_prompt=user_prompt,
     )
