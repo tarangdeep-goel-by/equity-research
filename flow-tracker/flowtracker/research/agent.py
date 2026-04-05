@@ -408,9 +408,8 @@ async def _run_specialist(
         ),
     )
 
-    # Save to vault (skip for non-analyst agents — explainer output is saved by the caller)
-    if name not in ("explainer",):
-        save_envelope(envelope)
+    # Save to vault
+    save_envelope(envelope)
 
     return envelope
 
