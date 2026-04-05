@@ -6,6 +6,7 @@ in markdown reports as ![chart](path).
 
 from __future__ import annotations
 
+import time
 from datetime import date
 from pathlib import Path
 
@@ -1482,6 +1483,30 @@ _AVAILABLE_CHARTS = [
 ]
 
 
+_CHART_FILENAMES: dict[str, str] = {
+    "price": "price_sma.png",
+    "pe": "pe_history.png",
+    "delivery": "delivery_trend.png",
+    "revenue_profit": "revenue_profit.png",
+    "shareholding": "shareholding.png",
+    "quarterly": "quarterly_earnings.png",
+    "margin_trend": "margin_trend.png",
+    "roce_trend": "roce_trend.png",
+    "dupont": "dupont.png",
+    "cashflow": "cashflow.png",
+    "fair_value_range": "fair_value_range.png",
+    "expense_pie": "expense_pie.png",
+    "composite_radar": "composite_radar.png",
+    "sector_mcap": "sector_mcap.png",
+    "sector_valuation_scatter": "sector_valuation_scatter.png",
+    "sector_ownership_flow": "sector_ownership_flow.png",
+    "sector_growth_bars": "sector_growth_bars.png",
+    "sector_profitability_bars": "sector_profitability_bars.png",
+    "sector_pe_distribution": "sector_pe_distribution.png",
+    "dividend_history": "dividend_history.png",
+}
+
+
 def _get_composite_score(symbol: str) -> dict:
     """Fetch composite score for a symbol via ScreenerEngine."""
     from flowtracker.screener_engine import ScreenerEngine
@@ -1542,6 +1567,22 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
 
     if chart_type not in _AVAILABLE_CHARTS:
         return {"error": f"Unknown chart type: {chart_type}", "available": _AVAILABLE_CHARTS}
+
+    # Cache check: return early if chart PNG is fresh (<1 hour) and no custom data
+    if data is None and not chart_type.startswith("comparison_"):
+        fname = _CHART_FILENAMES.get(chart_type)
+        if fname:
+            expected_path = _chart_dir(symbol) / fname
+            if expected_path.exists():
+                age_seconds = time.time() - expected_path.stat().st_mtime
+                if age_seconds < 3600:
+                    return {
+                        "path": str(expected_path),
+                        "chart_type": chart_type,
+                        "symbol": symbol,
+                        "embed_markdown": f"![{symbol} {chart_type}]({expected_path})",
+                        "cached": True,
+                    }
 
     with ResearchDataAPI() as api:
         if chart_type == "price":

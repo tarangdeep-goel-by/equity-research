@@ -213,8 +213,9 @@ class TestFMPClientErrors:
 
                 from flowtracker.fmp_client import FMPClient
                 client = FMPClient()
-                # _get swallows the error and returns []
-                result = client.fetch_dcf("SBIN")
+                # _get swallows the error and returns [] (retries are no-op'd)
+                with patch("flowtracker.fmp_client.time.sleep"):
+                    result = client.fetch_dcf("SBIN")
                 assert result is None
 
     def test_error_message_json_returns_empty(self, tmp_path):

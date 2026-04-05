@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://nsearchives.nseindia.com/products/content"
 MAX_RETRIES = 3
-BACKOFF_BASE = 2
+BACKOFF_BASE = 1
 
 
 class BhavcopyFetchError(Exception):
@@ -63,11 +63,11 @@ class BhavcopyClient:
                     return []
                 logger.warning("Attempt %d for %s failed: %s", attempt + 1, target_date, e)
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(BACKOFF_BASE ** (attempt + 1))
+                    time.sleep(BACKOFF_BASE * (2 ** attempt))
             except Exception as e:
                 logger.warning("Attempt %d for %s failed: %s", attempt + 1, target_date, e)
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(BACKOFF_BASE ** (attempt + 1))
+                    time.sleep(BACKOFF_BASE * (2 ** attempt))
 
         logger.error("Failed to fetch bhavcopy for %s after %d attempts", target_date, MAX_RETRIES)
         return []

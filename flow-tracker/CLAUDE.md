@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-CLI tool (`flowtrack`) for tracking FII/DII institutional flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and FMP valuation data in Indian markets. Includes a multi-agent AI research system (6 specialist agents + verification + synthesis) that generates comprehensive equity research reports, plus portfolio tracking, alerts, and thesis condition tracking. Single-user research tool — SQLite-backed, CLI-first, no server.
+CLI tool (`flowtrack`) for tracking FII/DII institutional flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and FMP valuation data in Indian markets. Includes a multi-agent AI research system (7 specialist agents + verification + synthesis + explainer) that generates comprehensive equity research reports, plus portfolio tracking, alerts, catalyst events, and thesis condition tracking. Single-user research tool — SQLite-backed, CLI-first, no server.
 
 ## Commands
 
@@ -36,8 +36,8 @@ uv run flowtrack fmp fetch -s RELIANCE                    # DCF, technicals, met
 
 ```bash
 uv sync --extra test                         # install test deps (first time)
-uv run pytest tests/ -m "not slow"           # fast suite (~20s, 929 tests)
-uv run pytest tests/                         # full suite with CLI smoke (~120s, 1048 tests)
+uv run pytest tests/ -m "not slow"           # fast suite (~20s, ~950 tests)
+uv run pytest tests/                         # full suite with CLI smoke (~120s)
 uv run pytest tests/ --cov=flowtracker -q    # with coverage report
 uv run python scripts/check-freshness.py     # verify production DB data is current
 ```
@@ -98,7 +98,7 @@ Every feature module follows:
 | **Display** | `*_display.py` | Rich tables/panels for terminal output |
 | **Commands** | `*_commands.py` | Typer subcommand group, wires client → store → display |
 
-### Command Groups (18 modules, 100+ commands)
+### Command Groups (19 modules, 120+ commands)
 
 | Prefix | Subcommand | Data Source |
 |--------|-----------|-------------|
@@ -120,7 +120,8 @@ Every feature module follows:
 | `filing_` | `filing` | BSE corporate filings |
 | `portfolio_` | `portfolio` | Portfolio tracking — holdings, P&L, sector concentration |
 | `alert_` | `alert` | Condition-based alerts — price, PE, RSI, ownership, pledge |
-| `research_` | `research` | Multi-agent research (6 specialists + verify + synthesis) + thesis tracker |
+| `catalyst_` | `catalyst` | Upcoming stock catalyst events |
+| `research_` | `research` | Multi-agent research (7 specialists + verify + synthesis + explainer) + thesis tracker |
 
 ### Research Layer (multi-agent architecture)
 
@@ -128,26 +129,31 @@ Every feature module follows:
 Phase 0:  Data Refresh → 6 sources + peers + concall extraction
 Phase 1:  7 Specialist Agents (parallel) → 7 standalone technical reports + briefings
 Phase 1.5: 7 Verification Agents (parallel) → spot-check data accuracy + corrections
+Phase 1.7: Web Research Agent → resolves open questions from specialists via WebSearch/WebFetch
 Phase 2:  Synthesis Agent → Verdict + Executive Summary + Key Signals
 Phase 3:  Assembly → Technical Markdown + HTML
 Phase 4:  Explainer Agent → Beginner-friendly annotations → Final HTML (skip with --technical)
+(Comparison Agent also available for multi-stock comparative reports)
 ```
 
-**7 specialist agents** (Business, Financial, Ownership, Valuation, Risk, Technical, Sector) each have an expert persona, 8-18 curated MCP tools, and produce a standalone technical report. Verification agents independently spot-check data accuracy using a different model. The synthesis agent cross-references all 7 briefings for the final verdict. The explainer agent then adds beginner-friendly annotations (definitions, analogies, callouts) to the assembled report.
+**7 specialist agents** (Business, Financial, Ownership, Valuation, Risk, Technical, Sector) each have an expert persona, curated MCP tools, and produce a standalone technical report. Verification agents independently spot-check data accuracy using a different model. The **web research agent** then resolves open questions surfaced by specialists (no MCP tools — uses WebSearch/WebFetch builtins only). The synthesis agent cross-references all 7 briefings + web research for the final verdict. The explainer agent adds beginner-friendly annotations to the assembled report. A **comparison agent** supports multi-stock comparative analysis.
 
 Key files in `research/`:
 - `refresh.py` — `refresh_for_research(symbol)` fetches live data from 6 sources + peers + concalls before agents run
-- `data_api.py` — `ResearchDataAPI` wraps FlowStore into ~35 clean methods (incl. fair value model, DuPont decomposition)
-- `tools.py` — 44 MCP tools (39 original + 5 new: peer_metrics, peer_growth, sector_benchmarks, concall_insights, render_chart), organized into 6 specialist registries
+- `data_api.py` — `ResearchDataAPI` wraps FlowStore into clean methods (incl. fair value model, DuPont decomposition, WACC)
+- `tools.py` — 80 MCP tools organized into specialist registries (via `claude_agent_sdk.tool`)
 - `agent.py` — `_run_specialist()`, `run_all_agents()`, `run_synthesis_agent()`, `run_explainer_agent()`, directed synthesis orchestration
-- `prompts.py` — 9 agent prompts (7 specialists + synthesis + explainer), shared preamble
+- `prompts.py` — 11 agent prompts (7 specialists + web_research + synthesis + explainer + comparison), shared preamble, sector-specific injection (BFSI, metals, telecom, real estate, power, etc.)
 - `briefing.py` — `BriefingEnvelope` model, save/load, parse briefing from markdown
 - `verifier.py` — Verification agent, correction flow
 - `assembly.py` — Final report assembly, HTML rendering with mermaid.js
-- `charts.py` — 13 chart types via matplotlib (price, pe, delivery, quarterly, margin_trend, roce_trend, dupont, cashflow, revenue_profit, shareholding, fair_value_range, expense_pie, composite_radar)
+- `charts.py` — 25 chart types via matplotlib (13 stock, 6 sector, 5 comparison, 1 dividend)
 - `peer_refresh.py` — Peer data refresh (Screener + yfinance), sector benchmarks computation
 - `concall_extractor.py` — PDF extraction pipeline via Agent SDK (4 quarters of management commentary)
 - `thesis_tracker.py` — YAML frontmatter thesis conditions evaluated against live data
+- `sector_kpis.py` — Sector-specific KPI definitions and routing
+- `wacc.py` — Weighted average cost of capital computation
+- `projections.py` — Revenue/earnings projection models
 - `data_collector.py` — Legacy collector for HTML fundamentals report (separate from agent path)
 
 Both the `thesis` command (multi-agent) and `data` command (interactive) use the same `ResearchDataAPI` → `FlowStore` → SQLite path.
@@ -162,8 +168,8 @@ Both the `thesis` command (multi-agent) and `data` command (interactive) use the
 
 ### Shared Infrastructure
 
-- `store.py` (~2900 lines) — Single `FlowStore` class wrapping SQLite. 40 tables (39 + sector_benchmarks), ~117 methods. DB at `~/.local/share/flowtracker/flows.db`.
-- `screener_client.py` (1232 lines) — Screener.in HTTP client. 11 API methods: HTML scraping, Excel export, Chart API, Peers API, Shareholders API, Schedules API.
+- `store.py` (~3800 lines) — Single `FlowStore` class wrapping SQLite. 48 tables, ~147 methods. DB at `~/.local/share/flowtracker/flows.db`.
+- `screener_client.py` (1340 lines) — Screener.in HTTP client. 11 API methods: HTML scraping, Excel export, Chart API, Peers API, Shareholders API, Schedules API.
 - `fmp_client.py` — FMP API client (httpx). DCF, technicals, key metrics, growth, analyst grades, price targets. Uses `/stable/` endpoints. Key at `~/.config/flowtracker/fmp.env`.
 - `screener_engine.py` — 8-factor composite scoring engine (ownership, insider, valuation, earnings, quality, delivery, estimates, risk). Valuation factor incorporates DCF margin of safety when FMP data available.
 - `alert_engine.py` — Evaluates alert conditions against cached store data. 10 condition types.

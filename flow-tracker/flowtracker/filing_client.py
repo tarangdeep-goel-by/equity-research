@@ -123,6 +123,24 @@ class FilingClient:
         )
         self._scrip_cache: dict[str, str] = {}
 
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> httpx.Response:
+        """HTTP request with exponential backoff + jitter."""
+        import random
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self._client.request(method, url, **kwargs)
+                resp.raise_for_status()
+                return resp
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_exc = exc
+                if attempt < max_retries:
+                    wait = (2 ** attempt) + random.uniform(0, 1)
+                    logger.warning("BSE request failed (attempt %d/%d): %s — retrying in %.1fs",
+                                  attempt + 1, max_retries + 1, exc, wait)
+                    time.sleep(wait)
+        raise last_exc or httpx.HTTPError(f"Failed after {max_retries + 1} attempts: {url}")
+
     # -- BSE Scrip Code Lookup --
 
     def get_bse_code(self, symbol: str) -> str | None:
@@ -136,8 +154,8 @@ class FilingClient:
             return self._scrip_cache[symbol]
 
         try:
-            resp = self._client.get(
-                f"{_BSE_API}/PeerSmartSearch/w",
+            resp = self._request_with_retry(
+                "GET", f"{_BSE_API}/PeerSmartSearch/w",
                 params={"Type": "SS", "text": symbol},
             )
             resp.raise_for_status()
@@ -253,8 +271,8 @@ class FilingClient:
 
         while True:
             try:
-                resp = self._client.get(
-                    f"{_BSE_API}/AnnSubCategoryGetData/w",
+                resp = self._request_with_retry(
+                    "GET", f"{_BSE_API}/AnnSubCategoryGetData/w",
                     params={
                         "pageno": str(page),
                         "strCat": category,
@@ -506,8 +524,8 @@ class FilingClient:
             return []
 
         try:
-            resp = self._client.get(
-                f"{_BSE_API}/CorporateAction/w",
+            resp = self._request_with_retry(
+                "GET", f"{_BSE_API}/CorporateAction/w",
                 params={"scripcode": bse_code, "index": "", "sector": "", "status": ""},
             )
             resp.raise_for_status()

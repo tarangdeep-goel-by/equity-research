@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import io
+import logging
+import random
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
 import httpx
 import openpyxl
+
+logger = logging.getLogger(__name__)
 
 from bs4 import BeautifulSoup
 
@@ -81,16 +86,17 @@ class ScreenerClient:
     """Screener.in client for downloading Excel exports with 10yr quarterly data."""
 
     def __init__(self) -> None:
-        email, password = _load_credentials()
+        self._email, self._password = _load_credentials()
         self._client = httpx.Client(
             follow_redirects=True,
-            timeout=30,
+            timeout=httpx.Timeout(connect=15, read=45, write=10, pool=10),
             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"},
         )
-        self._login(email, password)
+        self._login()
 
-    def _login(self, email: str, password: str) -> None:
+    def _login(self) -> None:
         """Login to Screener.in and establish session cookies."""
+        email, password = self._email, self._password
         # Step 1: GET login page to get CSRF token
         resp = self._client.get(f"{_SCREENER_BASE}/login/")
         resp.raise_for_status()
@@ -114,6 +120,29 @@ class ScreenerClient:
         if "/login/" in str(resp.url):
             raise ScreenerError("Login failed — check credentials in screener.env")
 
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> httpx.Response:
+        """HTTP request with exponential backoff and session recovery."""
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self._client.request(method, url, **kwargs)
+                if resp.status_code == 403:
+                    logger.warning("Screener 403 on %s (attempt %d) — re-logging in", url, attempt + 1)
+                    self._login()
+                    continue
+                resp.raise_for_status()
+                return resp
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_exc = exc
+                if attempt < max_retries:
+                    wait = (2 ** attempt) + random.uniform(0, 1)
+                    logger.warning(
+                        "Screener request failed (attempt %d/%d): %s — retrying in %.1fs",
+                        attempt + 1, max_retries + 1, exc, wait,
+                    )
+                    time.sleep(wait)
+        raise last_exc or httpx.HTTPError(f"Failed after {max_retries + 1} attempts: {url}")
+
     def _get_warehouse_id(self, symbol: str) -> str:
         """Fetch company page and extract the Excel export warehouse ID."""
         html = self.fetch_company_page(symbol)
@@ -128,10 +157,13 @@ class ScreenerClient:
         """Fetch Screener.in company page HTML (consolidated preferred)."""
         for suffix in ["/consolidated/", "/"]:
             url = f"{_SCREENER_BASE}/company/{symbol}{suffix}"
-            resp = self._client.get(url)
-            if resp.status_code == 200:
-                self._last_html = resp.text
-                return resp.text
+            try:
+                resp = self._request_with_retry("GET", url)
+                if resp.status_code == 200:
+                    self._last_html = resp.text
+                    return resp.text
+            except (httpx.HTTPStatusError, httpx.TransportError):
+                continue
         raise ScreenerError(f"Company page not found for {symbol}")
 
     def download_excel(self, symbol: str) -> bytes:
@@ -139,12 +171,12 @@ class ScreenerClient:
         warehouse_id = self._get_warehouse_id(symbol)
         csrf = self._client.cookies.get("csrftoken")
 
-        resp = self._client.post(
+        resp = self._request_with_retry(
+            "POST",
             f"{_SCREENER_BASE}/user/company/export/{warehouse_id}/",
             data={"csrfmiddlewaretoken": csrf},
             headers={"Referer": f"{_SCREENER_BASE}/company/{symbol}/consolidated/"},
         )
-        resp.raise_for_status()
 
         if resp.headers.get("content-type", "").startswith("text/html"):
             raise ScreenerError(f"Export failed for {symbol} — got HTML instead of Excel")
@@ -641,7 +673,10 @@ class ScreenerClient:
         """
         # Fetch standalone page (no /consolidated/ suffix)
         url = f"{_SCREENER_BASE}/company/{symbol}/"
-        resp = self._client.get(url)
+        try:
+            resp = self._request_with_retry("GET", url)
+        except (httpx.HTTPStatusError, httpx.TransportError):
+            return None
         if resp.status_code != 200:
             return None
 
@@ -655,11 +690,15 @@ class ScreenerClient:
         warehouse_id = match.group(1)
         csrf = self._client.cookies.get("csrftoken")
 
-        resp = self._client.post(
-            f"{_SCREENER_BASE}/user/company/export/{warehouse_id}/",
-            data={"csrfmiddlewaretoken": csrf},
-            headers={"Referer": url},
-        )
+        try:
+            resp = self._request_with_retry(
+                "POST",
+                f"{_SCREENER_BASE}/user/company/export/{warehouse_id}/",
+                data={"csrfmiddlewaretoken": csrf},
+                headers={"Referer": url},
+            )
+        except (httpx.HTTPStatusError, httpx.TransportError):
+            return None
         if resp.status_code != 200 or resp.headers.get("content-type", "").startswith("text/html"):
             return None
 
@@ -1100,8 +1139,9 @@ class ScreenerClient:
 
         for key, (classification, period) in api_calls.items():
             try:
-                resp = self._client.get(
-                    f"{_SCREENER_BASE}/api/3/{company_id}/investors/{classification}/{period}/"
+                resp = self._request_with_retry(
+                    "GET",
+                    f"{_SCREENER_BASE}/api/3/{company_id}/investors/{classification}/{period}/",
                 )
                 if resp.status_code != 200:
                     continue
@@ -1172,8 +1212,9 @@ class ScreenerClient:
 
         for key, q in queries.items():
             try:
-                resp = self._client.get(
-                    f"{_SCREENER_BASE}/api/company/{company_id}/chart/?q={q}&days=10000"
+                resp = self._request_with_retry(
+                    "GET",
+                    f"{_SCREENER_BASE}/api/company/{company_id}/chart/?q={q}&days=10000",
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -1208,8 +1249,7 @@ class ScreenerClient:
 
     def search(self, query: str) -> list[dict]:
         """Search for companies. Returns [{id, name, url}, ...]."""
-        resp = self._client.get(f"{_SCREENER_BASE}/api/company/search/", params={"q": query})
-        resp.raise_for_status()
+        resp = self._request_with_retry("GET", f"{_SCREENER_BASE}/api/company/search/", params={"q": query})
         return resp.json()
 
     def fetch_chart_data_by_type(self, company_id: str, chart_type: str, days: int = 10000) -> dict:
@@ -1230,8 +1270,7 @@ class ScreenerClient:
         if not q:
             return {"datasets": []}
         url = f"{_SCREENER_BASE}/api/company/{company_id}/chart/?q={q}&days={days}&consolidated=true"
-        resp = self._client.get(url)
-        resp.raise_for_status()
+        resp = self._request_with_retry("GET", url)
         return resp.json()
 
     # Deprecated alias
@@ -1240,8 +1279,7 @@ class ScreenerClient:
     def fetch_peers(self, warehouse_id: str) -> list[dict]:
         """Fetch peer comparison table. Returns list of peer dicts."""
         url = f"{_SCREENER_BASE}/api/company/{warehouse_id}/peers/"
-        resp = self._client.get(url)
-        resp.raise_for_status()
+        resp = self._request_with_retry("GET", url)
         soup = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table")
         if not table:
@@ -1282,8 +1320,7 @@ class ScreenerClient:
         for cls in classifications:
             url = f"{_SCREENER_BASE}/api/3/{company_id}/investors/{cls}/quarterly/"
             try:
-                resp = self._client.get(url)
-                resp.raise_for_status()
+                resp = self._request_with_retry("GET", url)
                 raw = resp.json()
                 holders: list[dict] = []
                 if isinstance(raw, dict):
@@ -1305,8 +1342,7 @@ class ScreenerClient:
         """
         url = f"{_SCREENER_BASE}/api/company/{company_id}/schedules/"
         params = {"parent": parent, "section": section, "consolidated": ""}
-        resp = self._client.get(url, params=params)
-        resp.raise_for_status()
+        resp = self._request_with_retry("GET", url, params=params)
         data = resp.json()
         return data if isinstance(data, dict) else {}
 

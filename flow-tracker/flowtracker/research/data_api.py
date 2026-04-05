@@ -58,6 +58,27 @@ _EXCHANGE_INDUSTRIES = {
 
 _HOSPITAL_INDUSTRIES = {"Hospital", "Healthcare Service Provider"}
 
+_IT_INDUSTRIES = {
+    "Computers - Software & Consulting", "IT Enabled Services",
+    "Software Products", "Business Process Outsourcing (BPO)/ Knowledge Process Outsourcing (KPO)",
+}
+
+_GOLD_LOAN_KEYWORDS = {"gold", "muthoot", "manappuram"}
+
+_MICROFINANCE_INDUSTRIES = {"Microfinance Institutions"}
+
+_HOLDING_COMPANY_INDUSTRIES = {
+    "Holding Company", "Investment Company",
+    "Diversified Commercial Services",  # some holding cos classified here
+}
+_HOLDING_COMPANY_KEYWORDS = {"holdings", "investment", "enterprises"}
+
+_CONGLOMERATE_INDUSTRIES = {"Diversified", "Conglomerate"}
+_CONGLOMERATE_KEYWORDS = {
+    "reliance", "tata", "adani", "bajaj", "mahindra", "godrej",
+    "aditya birla", "itc", "l&t", "larsen",
+}
+
 
 class ResearchDataAPI:
     """Unified data access for equity research — wraps FlowStore for agent tools."""
@@ -199,6 +220,34 @@ class ResearchDataAPI:
 
     def _is_hospital(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _HOSPITAL_INDUSTRIES
+
+    def _is_it_services(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _IT_INDUSTRIES
+
+    def _is_gold_loan_nbfc(self, symbol: str) -> bool:
+        """Detect gold loan NBFCs by company name keywords + NBFC industry."""
+        if not self._is_bfsi(symbol):
+            return False
+        info = self.get_company_info(symbol)
+        name = info.get("company_name", "").lower()
+        return any(kw in name for kw in _GOLD_LOAN_KEYWORDS)
+
+    def _is_microfinance(self, symbol: str) -> bool:
+        return self._get_industry(symbol) in _MICROFINANCE_INDUSTRIES
+
+    def _is_holding_company(self, symbol: str) -> bool:
+        industry = self._get_industry(symbol)
+        if industry in _HOLDING_COMPANY_INDUSTRIES:
+            return True
+        name = self.get_company_info(symbol).get("company_name", "").lower()
+        return any(kw in name for kw in _HOLDING_COMPANY_KEYWORDS) and industry not in _BFSI_INDUSTRIES
+
+    def _is_conglomerate(self, symbol: str) -> bool:
+        industry = self._get_industry(symbol)
+        if industry in _CONGLOMERATE_INDUSTRIES:
+            return True
+        name = self.get_company_info(symbol).get("company_name", "").lower()
+        return any(kw in name for kw in _CONGLOMERATE_KEYWORDS)
 
     def get_sector_type(self, symbol: str) -> str:
         """Return the sector classification for a symbol (used by dispatch)."""

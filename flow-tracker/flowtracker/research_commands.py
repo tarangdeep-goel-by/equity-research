@@ -191,6 +191,7 @@ def thesis(
     model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for all agents")] = None,
     verify_model: Annotated[str | None, typer.Option("--verify-model", help="Override model for verifiers")] = None,
     technical_only: Annotated[bool, typer.Option("--technical", help="Skip explainer, output technical report only")] = False,
+    effort: Annotated[str | None, typer.Option("--effort", help="Override effort level: low|medium|high|max")] = None,
 ) -> None:
     """Generate comprehensive multi-agent equity research thesis.
 
@@ -289,6 +290,7 @@ def thesis(
         model=model,
         verify=not skip_verify,
         verify_model=verify_model,
+        effort=effort,
     ))
 
     if not envelopes:
@@ -308,7 +310,7 @@ def thesis(
 
     # Phase 2: Synthesis
     console.print(f"\n[bold]Phase 2: Synthesis agent[/]")
-    synthesis = asyncio.run(run_synthesis_agent(symbol, model))
+    synthesis = asyncio.run(run_synthesis_agent(symbol, model, effort=effort))
     console.print("[green]✓[/] Synthesis complete")
 
     # Phase 3: Assembly (technical report)
@@ -668,6 +670,7 @@ def compare(
     skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Use cached data only")] = False,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Override model")] = None,
     force: Annotated[bool, typer.Option("--force", help="Re-run agents even if briefings exist")] = False,
+    effort: Annotated[str | None, typer.Option("--effort", help="Override effort level: low|medium|high|max")] = None,
 ) -> None:
     """Compare 2-5 stocks side-by-side with AI-generated comparative analysis."""
     import webbrowser
@@ -689,6 +692,7 @@ def compare(
         model=model,
         skip_fetch=skip_fetch,
         force=force,
+        effort=effort,
     ))
 
     from flowtracker.research.assembly import assemble_comparison_report
@@ -712,6 +716,7 @@ def run_agent(
     verify: Annotated[bool, typer.Option("--verify", help="Run verification after agents")] = False,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for agent")] = None,
     assemble: Annotated[bool, typer.Option("--assemble", help="Assemble final report from all existing briefings after running")] = False,
+    effort: Annotated[str | None, typer.Option("--effort", help="Override effort level: low|medium|high|max")] = None,
 ) -> None:
     """Run specialist research agents on a stock.
 
@@ -771,7 +776,7 @@ def run_agent(
 
         try:
             from flowtracker.research.agent import run_single_agent
-            envelope = asyncio.run(run_single_agent(agent, symbol, model=model))
+            envelope = asyncio.run(run_single_agent(agent, symbol, model=model, effort=effort))
         except Exception as e:
             console.print(f"[red]{agent} agent error: {e}[/]")
             continue
@@ -803,7 +808,7 @@ def run_agent(
         console.print(f"\n[bold]Running synthesis agent for {symbol}...[/]")
         try:
             from flowtracker.research.agent import run_synthesis_agent
-            synthesis = asyncio.run(run_synthesis_agent(symbol, model))
+            synthesis = asyncio.run(run_synthesis_agent(symbol, model, effort=effort))
             total_cost += synthesis.cost.total_cost_usd
             console.print(f"  [green]✓[/] synthesis: {len(synthesis.report):,} chars, ${synthesis.cost.total_cost_usd:.2f}")
         except Exception as e:

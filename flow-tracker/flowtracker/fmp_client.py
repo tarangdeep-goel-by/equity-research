@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import time
 from pathlib import Path
 
@@ -59,7 +60,34 @@ class FMPClient:
 
     def __init__(self) -> None:
         self._api_key = _load_api_key()
-        self._client = httpx.Client(timeout=30)
+        self._client = httpx.Client(
+            timeout=httpx.Timeout(connect=15, read=45, write=10, pool=10),
+        )
+
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> httpx.Response:
+        """HTTP request with exponential backoff and 429/5xx handling."""
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self._client.request(method, url, **kwargs)
+                if resp.status_code == 429:
+                    retry_after = resp.headers.get("Retry-After")
+                    wait = float(retry_after) if retry_after else (2 ** attempt) + random.uniform(0, 1)
+                    logger.warning("FMP 429 on %s — retrying in %.1fs", url, wait)
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                return resp
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_exc = exc
+                if attempt < max_retries:
+                    wait = (2 ** attempt) + random.uniform(0, 1)
+                    logger.warning(
+                        "FMP request failed (attempt %d/%d): %s — retrying in %.1fs",
+                        attempt + 1, max_retries + 1, exc, wait,
+                    )
+                    time.sleep(wait)
+        raise last_exc or httpx.HTTPError(f"Failed after {max_retries + 1} attempts: {url}")
 
     def _get(self, path: str, params: dict | None = None) -> list[dict]:
         """GET request with API key, return JSON list."""
@@ -68,8 +96,7 @@ class FMPClient:
         if params:
             p.update(params)
         try:
-            resp = self._client.get(url, params=p)
-            resp.raise_for_status()
+            resp = self._request_with_retry("GET", url, params=p)
             data = resp.json()
             if isinstance(data, list):
                 return data
