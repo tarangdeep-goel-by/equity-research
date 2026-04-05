@@ -408,8 +408,9 @@ async def _run_specialist(
         ),
     )
 
-    # Save to vault
-    save_envelope(envelope)
+    # Save to vault (explainer output is saved by the caller to thesis/ paths)
+    if name != "explainer":
+        save_envelope(envelope)
 
     return envelope
 
