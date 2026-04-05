@@ -263,21 +263,17 @@ async def _run_specialist(
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
     model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
 
-    # Create MCP server with agent's tool subset (skip if no tools)
-    mcp_servers = {}
-    if tools:
-        server = create_sdk_mcp_server(f"{name}-data", tools=tools)
-        mcp_servers[name] = server
-
-    # Build options
+    # Build options — only create MCP server when agent has tools
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        mcp_servers=mcp_servers,
         max_turns=max_turns,
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
     )
+    if tools:
+        server = create_sdk_mcp_server(f"{name}-data", tools=tools)
+        options.mcp_servers = {name: server}
 
     # Block dangerous Claude Code built-ins (Bash, Write, Edit, etc.)
     # MCP tools registered via mcp_servers are available regardless.
@@ -390,8 +386,10 @@ async def _run_specialist(
 
     duration = time.time() - start_time
 
-    # Phase 2: Extract structured briefing (two-pass approach)
-    briefing = await _extract_briefing(name, symbol, report_text)
+    # Phase 2: Extract structured briefing (skip for non-analyst agents like explainer)
+    briefing = {}
+    if name not in ("explainer",):
+        briefing = await _extract_briefing(name, symbol, report_text)
 
     # Build envelope
     envelope = BriefingEnvelope(
@@ -410,8 +408,9 @@ async def _run_specialist(
         ),
     )
 
-    # Save to vault
-    save_envelope(envelope)
+    # Save to vault (skip for non-analyst agents — explainer output is saved by the caller)
+    if name not in ("explainer",):
+        save_envelope(envelope)
 
     return envelope
 
