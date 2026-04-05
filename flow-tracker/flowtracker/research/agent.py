@@ -32,6 +32,7 @@ from flowtracker.research.briefing import (
 from flowtracker.research.tools import (
     BUSINESS_AGENT_TOOLS_V2,
     FINANCIAL_AGENT_TOOLS_V2,
+    NEWS_AGENT_TOOLS_V2,
     OWNERSHIP_AGENT_TOOLS_V2,
     RISK_AGENT_TOOLS_V2,
     SECTOR_AGENT_TOOLS_V2,
@@ -54,10 +55,25 @@ DEFAULT_MODELS: dict[str, str] = {
     "risk": "claude-sonnet-4-6",
     "technical": "claude-sonnet-4-6",
     "sector": "claude-sonnet-4-6",
-    "synthesis": "claude-sonnet-4-6",
+    "news": "claude-sonnet-4-6",
+    "synthesis": "claude-opus-4-6",
     "verifier": "claude-haiku-4-5-20251001",
     "web_research": "claude-sonnet-4-6",
     "explainer": "claude-sonnet-4-6",
+}
+
+DEFAULT_EFFORT: dict[str, str] = {
+    "financials": "max",
+    "valuation": "max",
+    "synthesis": "max",
+    "business": "high",
+    "risk": "high",
+    "sector": "high",
+    "ownership": "medium",
+    "technical": "medium",
+    "news": "medium",
+    "web_research": "medium",  # fact-retrieval, not deep reasoning
+    "explainer": "high",
 }
 
 AGENT_TOOLS: dict[str, list] = {
@@ -68,6 +84,7 @@ AGENT_TOOLS: dict[str, list] = {
     "risk": RISK_AGENT_TOOLS_V2,
     "technical": TECHNICAL_AGENT_TOOLS_V2,
     "sector": SECTOR_AGENT_TOOLS_V2,
+    "news": NEWS_AGENT_TOOLS_V2,
 }
 
 # Agent failure severity tiers for synthesis confidence capping
@@ -77,7 +94,7 @@ AGENT_TIERS = {
     # Tier 2: Core context — business model and ownership
     "business": 2, "ownership": 2,
     # Tier 3: Enhancers — sector and market timing
-    "sector": 3, "technical": 3,
+    "sector": 3, "technical": 3, "news": 3,
 }
 
 AGENT_MAX_TURNS: dict[str, int] = {
@@ -88,6 +105,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "risk": 30,
     "technical": 30,
     "sector": 25,
+    "news": 25,
     "web_research": 20,
 }
 
@@ -99,6 +117,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "risk": 0.60,
     "technical": 0.60,
     "sector": 0.50,
+    "news": 0.50,
     "web_research": 0.50,
 }
 
@@ -115,8 +134,146 @@ _DISALLOWED_BUILTINS = [
 AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
     "business": ["WebSearch", "WebFetch"],  # needs web research for industry context
     "sector": ["WebSearch", "WebFetch"],  # needs web research for sector dynamics
+    "news": ["WebFetch"],  # needs web fetch to read full articles
     "web_research": ["WebSearch", "WebFetch"],
 }
+
+# Fields to extract from briefings for synthesis context.
+# Full briefings can exceed 100K tokens; synthesis only needs structured signals.
+_SYNTHESIS_FIELDS = {
+    "agent", "symbol", "confidence", "signal", "key_findings", "open_questions",
+    # Business
+    "business_model", "moat_strength", "moat_type", "revenue_drivers", "management_quality",
+    # Financial
+    "revenue_cagr_5yr", "opm_trend", "dupont_driver", "fcf_positive", "growth_trajectory", "quality_signal",
+    # Ownership
+    "promoter_pct", "promoter_trend", "fii_pct", "fii_trend", "mf_trend", "institutional_handoff", "insider_signal", "pledge_pct",
+    # Valuation
+    "current_pe", "pe_percentile", "fair_value_base", "fair_value_bear", "fair_value_bull", "margin_of_safety_pct", "valuation_signal", "vs_peers",
+    # Risk
+    "composite_score", "top_risks", "governance_signal", "bear_case_trigger", "macro_sensitivity",
+    # Technical
+    "rsi_signal", "trend_strength", "accumulation_signal", "timing_suggestion",
+    # Sector
+    "sector_growth_signal", "competitive_position", "regulatory_risk",
+    # News
+    "top_events", "sentiment_signal", "catalysts_identified",
+}
+
+
+def _build_baseline_context(symbol: str) -> str:
+    """Build a compact tear sheet from cached DB data for injection into agent prompts."""
+    from flowtracker.research.data_api import ResearchDataAPI
+
+    symbol = symbol.upper()
+    baseline: dict = {"symbol": symbol}
+
+    try:
+        with ResearchDataAPI() as api:
+            # Company identity
+            info = api.get_company_info(symbol)
+            if info:
+                baseline["company"] = info.get("company_name", "")
+                baseline["industry"] = info.get("industry", "")
+
+            # Valuation snapshot (subset of key fields)
+            snap = api.get_valuation_snapshot(symbol)
+            if snap and isinstance(snap, dict):
+                baseline["snapshot"] = {
+                    k: snap.get(k)
+                    for k in [
+                        "current_price", "market_cap", "pe_ratio", "pb_ratio",
+                        "roe", "roce", "debt_to_equity", "dividend_yield",
+                        "fifty_two_week_high", "fifty_two_week_low",
+                        "sector", "industry",
+                    ]
+                    if snap.get(k) is not None
+                }
+
+            # Ownership (latest 4 quarters, compressed)
+            own = api.get_shareholding(symbol, quarters=4)
+            if own:
+                ownership: dict = {}
+                for row in own:
+                    cat = row.get("category", "")
+                    pct = row.get("percentage")
+                    qtr = row.get("quarter_end", "")
+                    if cat and pct is not None:
+                        ownership.setdefault(cat, []).append({"q": qtr, "pct": round(float(pct), 2)})
+                baseline["ownership"] = ownership
+
+            # Consensus estimate
+            est = api.get_consensus_estimate(symbol)
+            if est and isinstance(est, dict):
+                baseline["consensus"] = {
+                    k: est.get(k)
+                    for k in [
+                        "target_mean", "target_median", "target_high", "target_low",
+                        "num_analysts", "recommendation", "forward_pe", "forward_eps",
+                    ]
+                    if est.get(k) is not None
+                }
+
+            # Fair value signal
+            fv = api.get_fair_value(symbol)
+            if fv and isinstance(fv, dict):
+                baseline["fair_value"] = {
+                    k: fv.get(k)
+                    for k in [
+                        "signal", "margin_of_safety_pct", "current_price",
+                        "combined_fair_value",
+                    ]
+                    if fv.get(k) is not None
+                }
+
+            # Data freshness
+            fresh = api.get_data_freshness(symbol)
+            if fresh:
+                baseline["data_freshness"] = fresh
+
+            # SME detection: market cap < ₹500 Cr suggests SME/micro-cap
+            mcap = (snap or {}).get("market_cap")
+            if mcap is not None and float(mcap) < 500:
+                baseline["is_sme"] = True
+                baseline["sme_note"] = (
+                    "Small/SME stock — may report half-yearly instead of quarterly. "
+                    "Adapt financial analysis to available reporting frequency."
+                )
+
+            # Corporate actions: check for recent stock splits/bonus
+            try:
+                events = api.get_upcoming_catalysts(symbol)
+                if events and isinstance(events, list):
+                    corp_actions = [
+                        e for e in events
+                        if any(kw in str(e.get("event", "")).lower()
+                               for kw in ("split", "bonus", "rights", "subdivision"))
+                    ]
+                    if corp_actions:
+                        baseline["corporate_actions_warning"] = (
+                            "Recent/upcoming corporate actions detected (split/bonus/rights). "
+                            "Historical per-share data may need adjustment."
+                        )
+                        baseline["corporate_actions"] = corp_actions
+            except Exception:
+                pass  # non-critical — don't block baseline
+
+            # Recent news headlines (so specialists see current events)
+            try:
+                news_items = api.get_stock_news(symbol, days=30)
+                if news_items:
+                    baseline["recent_headlines"] = [
+                        {"title": n["title"], "source": n["source"], "date": n["date"]}
+                        for n in news_items[:10]
+                    ]
+            except Exception:
+                pass  # non-critical
+
+    except Exception as exc:
+        logger.warning("Failed to build baseline context for %s: %s", symbol, exc)
+        baseline["error"] = str(exc)
+
+    return f"<company_baseline>\n{json.dumps(baseline, indent=2, default=str)}\n</company_baseline>"
 
 
 def generate_business_profile(symbol: str, model: str | None = None) -> Path:
@@ -247,6 +404,63 @@ _HTML_TEMPLATE = """\
 """
 
 
+# --- Verification issue classification & patching ---
+
+
+def _classify_verification_issues(
+    issues: list[dict],
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Classify verification issues into factual, logic, and missing_data categories.
+
+    Factual: wrong numbers (contain specific numeric claims vs actuals)
+    Logic: wrong reasoning or unsupported conclusions
+    Missing: data gaps flagged by verifier
+    """
+    import re
+
+    factual, logic, missing_data = [], [], []
+    for issue in issues:
+        claim = str(issue.get("claim", ""))
+        actual = str(issue.get("actual", ""))
+
+        # Missing data: mentions "missing", "not available", "no data", "unavailable"
+        if any(
+            kw in claim.lower()
+            for kw in ("missing", "not available", "no data", "unavailable", "could not find")
+        ) or any(
+            kw in actual.lower()
+            for kw in ("missing", "not available", "no data", "unavailable", "could not find")
+        ):
+            missing_data.append(issue)
+        # Factual: contains numbers in both the claim and actual value
+        elif re.search(r"\d+\.?\d*", claim) and re.search(r"\d+\.?\d*", actual):
+            factual.append(issue)
+        else:
+            logic.append(issue)
+
+    return factual, logic, missing_data
+
+
+def _patch_factual_errors(
+    envelope: BriefingEnvelope, factual_issues: list[dict]
+) -> BriefingEnvelope:
+    """Append a corrections section to the report without re-running the agent."""
+    if not factual_issues:
+        return envelope
+
+    corrections_text = "\n\n## Auto-Corrections Applied\n"
+    corrections_text += "*The following factual errors were detected and corrected by the verification system:*\n\n"
+    for issue in factual_issues:
+        claim = issue.get("claim", "")
+        actual = issue.get("actual", "")
+        section = issue.get("section", "")
+        section_prefix = f" ({section})" if section else ""
+        corrections_text += f"- **Reported{section_prefix}:** {claim}\n  **Actual:** {actual}\n"
+
+    envelope.report = (envelope.report or "") + corrections_text
+    return envelope
+
+
 # --- Multi-agent specialist functions ---
 
 
@@ -259,6 +473,7 @@ async def _run_specialist(
     max_budget: float | None = None,
     model: str | None = None,
     user_prompt: str | None = None,
+    effort: str | None = None,
 ) -> BriefingEnvelope:
     """Run a single specialist agent. Returns BriefingEnvelope with report, briefing, evidence, cost."""
 
@@ -275,6 +490,9 @@ async def _run_specialist(
         permission_mode="bypassPermissions",
         model=model,
     )
+    effort = effort or DEFAULT_EFFORT.get(name)
+    if effort:
+        options.effort = effort
     if tools:
         server = create_sdk_mcp_server(f"{name}-data", tools=tools)
         options.mcp_servers = {name: server}
@@ -420,33 +638,52 @@ async def _run_specialist(
 
 
 async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
-    """Extract structured briefing JSON from a report using a cheap second pass.
+    """Extract structured briefing JSON from a report.
 
-    Falls back to parse_briefing_from_markdown if the second pass fails.
+    First tries to parse the ```json block that agents are instructed to include.
+    Falls back to a cheap haiku pass that re-uses the agent's own prompt schema.
     """
     # First try: parse from markdown (if agent included a JSON block)
     briefing = parse_briefing_from_markdown(report_text)
     if briefing:
         return briefing
 
-    # Second pass: use a cheap model to extract structured data
+    # No point running haiku on empty/tiny reports
+    if len(report_text.strip()) < 200:
+        logger.warning(
+            "Briefing extraction skipped for '%s' %s: report too short (%d chars)",
+            name, symbol, len(report_text),
+        )
+        return {"agent": name, "symbol": symbol, "extraction_failed": True}
+
+    # Second pass: extract the briefing JSON schema from the agent's own prompt
+    # and ask haiku to fill it from the report text
+    from flowtracker.research.prompts import AGENT_PROMPTS_V2
+    agent_prompt = AGENT_PROMPTS_V2.get(name, "")
+
+    # Find the JSON schema block in the agent's prompt (between ```json and ```)
+    schema_hint = ""
+    if agent_prompt:
+        import re
+        schema_matches = re.findall(r"```json\s*\n(.*?)```", agent_prompt, re.DOTALL)
+        if schema_matches:
+            schema_hint = f"\nThe JSON must follow this exact schema:\n```json\n{schema_matches[-1].strip()}\n```\n"
+
     try:
         extraction_prompt = (
-            f"Extract a structured briefing from this {name} analysis report for {symbol}.\n\n"
-            "Return a JSON object with these fields:\n"
-            f'- agent: "{name}"\n'
-            f'- symbol: "{symbol}"\n'
-            "- confidence: float 0-1 (how confident the analysis is)\n"
-            "- key_metrics: dict of important numerical metrics found in the report\n"
-            "- key_findings: list of 3-5 key findings as strings\n"
-            '- signal: overall signal (e.g. "bullish", "bearish", "neutral", "mixed")\n\n'
-            f"Report:\n{report_text[:8000]}"
+            f"Extract the structured briefing JSON from this {name} analysis report for {symbol}.\n\n"
+            "The report should have ended with a JSON briefing block but it's missing. "
+            "Read the report and produce the JSON that the analyst should have included.\n"
+            f"{schema_hint}\n"
+            "Return ONLY valid JSON — no markdown fences, no explanation.\n\n"
+            f"Report:\n{report_text[:12000]}"
         )
 
         options = ClaudeAgentOptions(
             system_prompt=(
                 "You are a data extraction assistant. Extract structured data "
-                "from research reports. Return only valid JSON."
+                "from equity research reports. Return ONLY valid JSON — no markdown, "
+                "no explanation, no code fences. Just the JSON object."
             ),
             max_turns=1,
             permission_mode="bypassPermissions",
@@ -468,14 +705,19 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
         if not result_text and text_parts:
             result_text = "\n".join(text_parts)
 
+        # Try parsing from markdown fences first (haiku might wrap in ```)
         extracted = parse_briefing_from_markdown(result_text)
         if extracted:
             return extracted
 
         # Try parsing the raw text as JSON
-        return json.loads(result_text.strip())
+        raw = result_text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw.rsplit("```", 1)[0]
+        return json.loads(raw.strip())
     except Exception as exc:
-        # Final fallback: return minimal briefing
         logger.warning(
             "Briefing extraction failed for '%s' %s: %s: %s (report length: %d chars)",
             name, symbol, type(exc).__name__, exc, len(report_text),
@@ -487,19 +729,25 @@ async def run_single_agent(
     agent_name: str,
     symbol: str,
     model: str | None = None,
+    effort: str | None = None,
 ) -> BriefingEnvelope:
     """Run a single specialist agent. Uses same V2 prompts/tools as run_all_agents."""
     from flowtracker.research.prompts import build_specialist_prompt
 
-    prompt = build_specialist_prompt(agent_name, symbol.upper())
-    if not prompt:
+    symbol_upper = symbol.upper()
+    system_prompt, instructions = build_specialist_prompt(agent_name, symbol_upper)
+    if not system_prompt:
         raise ValueError(f"Unknown agent: {agent_name}")
+
+    baseline = _build_baseline_context(symbol_upper)
 
     return await _run_specialist(
         name=agent_name,
-        symbol=symbol.upper(),
-        system_prompt=prompt,
+        symbol=symbol_upper,
+        system_prompt=system_prompt,
         model=model,
+        effort=effort,
+        user_prompt=f"{baseline}\n\n{instructions}\n\nAnalyze {symbol_upper} for the {agent_name} section of the equity research report.",
     )
 
 
@@ -582,6 +830,14 @@ def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
     if sector_valuation == "expensive" and "EXPENSIVE" in str(val_signal).upper():
         cross_signals.append("Both sector and stock are expensive — correction risk is amplified.")
 
+    # News sentiment + ownership: contrarian signals
+    news = briefings.get("news", {})
+    news_sentiment = news.get("sentiment_signal", "")
+    if news_sentiment == "negative" and mf_trend == "increasing":
+        cross_signals.append("Negative news sentiment BUT MF accumulating — smart money buying the dip?")
+    if news_sentiment == "positive" and fii_trend == "decreasing":
+        cross_signals.append("Positive news flow BUT FII selling — institutions see something headlines don't?")
+
     if cross_signals:
         lines.append("\n**Potential cross-signals (orchestrator suggestions — validate against briefing data):**")
         for i, sig in enumerate(cross_signals, 1):
@@ -597,25 +853,31 @@ async def run_all_agents(
     model: str | None = None,
     verify: bool = True,
     verify_model: str | None = None,
+    effort: str | None = None,
 ) -> dict[str, BriefingEnvelope]:
-    """Run all 7 specialist agents in parallel, optionally verify, return results."""
+    """Run all 8 specialist agents in parallel, optionally verify, return results."""
     from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
-    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector"]
+    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news"]
+
+    # Pre-fetch baseline context once for all agents
+    baseline = _build_baseline_context(symbol)
 
     # Phase 1: Run specialists with concurrency limit and retry
     MAX_CONCURRENT = 3  # max agents running simultaneously
     MAX_RETRIES = 1     # retry once on failure
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
-    async def _run_with_limit(name: str, prompt: str) -> tuple[str, BriefingEnvelope | Exception]:
+    async def _run_with_limit(name: str, sys_prompt: str, instr: str) -> tuple[str, BriefingEnvelope | Exception]:
         """Run a specialist with concurrency limiting and retry."""
         for attempt in range(1 + MAX_RETRIES):
             async with semaphore:
                 try:
                     envelope = await _run_specialist(
-                        name=name, symbol=symbol, system_prompt=prompt, model=model,
+                        name=name, symbol=symbol, system_prompt=sys_prompt, model=model,
+                        effort=effort,
+                        user_prompt=f"{baseline}\n\n{instr}\n\nAnalyze {symbol} for the {name} section of the equity research report.",
                     )
                     # Check if agent actually produced content
                     if envelope.report and len(envelope.report.strip()) > 100:
@@ -648,10 +910,10 @@ async def run_all_agents(
     # Build tasks for all agents that have prompts
     specialist_tasks = []
     for name in agent_names:
-        prompt = build_specialist_prompt(name, symbol)
-        if not prompt:
+        system_prompt, instructions = build_specialist_prompt(name, symbol)
+        if not system_prompt:
             continue
-        specialist_tasks.append(_run_with_limit(name, prompt))
+        specialist_tasks.append(_run_with_limit(name, system_prompt, instructions))
 
     # Run with concurrency limit — gather still handles parallelism,
     # but the semaphore ensures only MAX_CONCURRENT run at once
@@ -681,6 +943,7 @@ async def run_all_agents(
         from flowtracker.research.verifier import _run_verifier, apply_corrections
 
         verify_sem = asyncio.Semaphore(MAX_CONCURRENT)
+        verification_questions: list[dict] = []  # missing data issues -> web research
 
         async def _verify_with_limit(name: str, envelope: BriefingEnvelope):
             async with verify_sem:
@@ -720,35 +983,85 @@ async def run_all_agents(
             # Re-save corrected envelope
             save_envelope(envelopes[name])
 
-            # If verification failed, re-run with corrections injected into prompt.
-            # We use the SAME specialist prompt + correction context so the agent
-            # starts with full domain knowledge and knows exactly what to fix.
+            # Tiered handling for verification failures:
+            # - Logic errors -> full re-run (expensive but necessary)
+            # - Factual errors only -> patch in-place (no re-run)
+            # - Missing data -> route to web research agent
             if vdata.verdict == "fail":
-                print(f"  🔄 {name} failed verification — re-running once with corrections")
-                base_prompt = build_specialist_prompt(name, symbol)
-                corrections_context = (
-                    f"\n\n## CORRECTIONS REQUIRED (from verification agent)\n"
-                    f"Your previous report was independently verified and flagged.\n"
-                    f"**Issues found:**\n{json.dumps(vdata.issues, indent=2)}\n\n"
-                    f"**Required corrections:**\n{json.dumps(vdata.corrections, indent=2)}\n\n"
-                    f"Re-generate your report. Fix the flagged issues. "
-                    f"Re-fetch the specific data points that were wrong — don't guess."
-                )
-                try:
-                    rerun = await _run_specialist(
-                        name=name,
-                        symbol=symbol,
-                        system_prompt=base_prompt + corrections_context,
-                        model=model,
+                factual, logic, missing = _classify_verification_issues(vdata.issues or [])
+
+                # Collect missing data issues for web research
+                if missing:
+                    for issue in missing:
+                        claim = issue.get("claim", "") or issue.get("actual", "")
+                        verification_questions.append({
+                            "question": f"Verify: {claim}",
+                            "source_agent": name,
+                        })
+
+                if logic and len(logic) >= 3:
+                    # Logic/reasoning errors -> re-run only when >=3 errors (systemic issue)
+                    print(f"  🔄 {name} has {len(logic)} logic error(s) — re-running once with corrections")
+                    rerun_system, rerun_instructions = build_specialist_prompt(name, symbol)
+                    corrections_context = (
+                        f"\n\n## CORRECTIONS REQUIRED (from verification agent)\n"
+                        f"Your previous report was independently verified and flagged.\n"
+                        f"**Issues found:**\n{json.dumps(vdata.issues, indent=2)}\n\n"
+                        f"**Required corrections:**\n{json.dumps(vdata.corrections, indent=2)}\n\n"
+                        f"Re-generate your report. Fix the flagged issues. "
+                        f"Re-fetch the specific data points that were wrong — don't guess."
                     )
-                    envelopes[name] = rerun
-                except Exception as e:
-                    print(f"  ⚠ {name} re-run failed — marking as failed: {e}")
-                    envelopes[name] = BriefingEnvelope(
-                        agent=name, symbol=symbol,
-                        status="failed",
-                        failure_reason=f"Failed verification and re-run: {e}",
+                    try:
+                        rerun = await _run_specialist(
+                            name=name,
+                            symbol=symbol,
+                            system_prompt=rerun_system + corrections_context,
+                            model=model,
+                            user_prompt=f"{baseline}\n\n{rerun_instructions}\n\nAnalyze {symbol} for the {name} section of the equity research report.",
+                        )
+                        envelopes[name] = rerun
+                    except Exception as e:
+                        print(f"  ⚠ {name} re-run failed — marking as failed: {e}")
+                        envelopes[name] = BriefingEnvelope(
+                            agent=name, symbol=symbol,
+                            status="failed",
+                            failure_reason=f"Failed verification and re-run: {e}",
+                        )
+                elif logic:
+                    # Fewer than 3 logic errors — downgrade to pass_with_notes, no re-run
+                    logger.info(
+                        "%s verification downgraded: fail -> pass_with_notes (%d logic errors < 3 threshold)",
+                        name, len(logic),
                     )
+                    vdata.verdict = "pass_with_notes"
+                    print(f"  ↓ {name} verification downgraded to pass_with_notes ({len(logic)} logic errors, below re-run threshold)")
+                    envelopes[name] = apply_corrections(envelopes[name], vdata)
+                    save_envelope(envelopes[name])
+                elif factual:
+                    # Factual errors only -> patch directly, no expensive re-run
+                    print(f"  ✓ {name} — patching {len(factual)} factual error(s) (no re-run)")
+                    envelopes[name] = _patch_factual_errors(envelopes[name], factual)
+                    save_envelope(envelopes[name])
+
+        # Inject verification-sourced missing data questions into briefings
+        # so run_web_research_agent picks them up via open_questions
+        if verification_questions:
+            updated_agents: set[str] = set()
+            for vq in verification_questions:
+                agent_name = vq["source_agent"]
+                if agent_name in envelopes and envelopes[agent_name].briefing:
+                    oq = envelopes[agent_name].briefing.setdefault("open_questions", [])
+                    oq.append(vq["question"])
+                    updated_agents.add(agent_name)
+            # Re-save updated envelopes so run_web_research_agent picks up the
+            # injected questions when it calls load_all_briefings from vault
+            for agent_name in updated_agents:
+                save_envelope(envelopes[agent_name])
+            logger.info(
+                "Injected %d verification questions into %d briefing(s) for web research",
+                len(verification_questions),
+                len(updated_agents),
+            )
 
     # Phase 1.75: Web research to resolve open questions
     try:
@@ -771,6 +1084,7 @@ async def run_synthesis_agent(
     symbol: str,
     model: str | None = None,
     failed_agents: list[str] | None = None,
+    effort: str | None = None,
 ) -> BriefingEnvelope:
     """Run the synthesis agent on existing briefings."""
     from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2 as SYNTHESIS_AGENT_PROMPT
@@ -783,10 +1097,12 @@ async def run_synthesis_agent(
     if not briefings:
         raise ValueError(f"No briefings found for {symbol}. Run specialist agents first.")
 
-    # Format briefings for the synthesis prompt
+    # Format briefings for the synthesis prompt — trim to signal fields only
+    # to avoid exceeding context limits with full nested briefing data
     briefing_text = ""
     for agent_name, data in briefings.items():
-        briefing_text += f"\n### {agent_name.upper()} Briefing\n```json\n{json.dumps(data, indent=2)}\n```\n"
+        trimmed = {k: v for k, v in data.items() if k in _SYNTHESIS_FIELDS}
+        briefing_text += f"\n### {agent_name.upper()} Briefing\n```json\n{json.dumps(trimmed, indent=2)}\n```\n"
 
     if failed_agents:
         # Build tier-weighted failure info
@@ -818,7 +1134,7 @@ async def run_synthesis_agent(
     # Synthesis tools: just composite_score and fair_value
     synthesis_tools = [get_composite_score, get_fair_value]
 
-    model = model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-20250514")
+    model = model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-6")
 
     # Inject web research results if available
     web_research_section = ""
@@ -848,10 +1164,25 @@ async def run_synthesis_agent(
                 web_research_section += f"- {q} — *{reason}*\n"
         web_research_section += "\n"
 
+    # Inject news briefing highlights if available
+    news_section = ""
+    news_briefing = briefings.get("news", {})
+    top_events = news_briefing.get("top_events", [])
+    if top_events:
+        news_section = "\n## Recent News & Catalysts (from news agent)\n"
+        for event in top_events[:10]:
+            news_section += (
+                f"- **[{event.get('category', '?')}]** {event.get('event', '?')} "
+                f"({event.get('date', '?')}) — Impact: {event.get('impact', '?')}\n"
+            )
+        sentiment = news_briefing.get("sentiment_signal", "unknown")
+        news_section += f"\nOverall news sentiment: **{sentiment}**\n"
+
     user_prompt = (
         f"Synthesize the analysis for {symbol}.\n\n"
         f"## Orchestrator Pre-Analysis (suggestions to investigate, not conclusions)\n{signals_analysis}\n\n"
         f"{web_research_section}"
+        f"{news_section}"
         f"## Specialist Briefings\n{briefing_text}\n\n"
         "The orchestrator has flagged potential signals above — treat these as suggestions to investigate, "
         "not conclusions. You may find additional signals or disagree with the orchestrator's assessment. "
@@ -868,6 +1199,7 @@ async def run_synthesis_agent(
         max_budget=0.30,
         model=model,
         user_prompt=user_prompt,
+        effort=effort,
     )
 
 
@@ -1049,6 +1381,7 @@ async def _ensure_briefings(
     force: bool = False,
     skip_fetch: bool = False,
     model: str | None = None,
+    effort: str | None = None,
 ) -> dict[str, dict[str, dict]]:
     """Ensure all stocks have fresh briefings. Returns {symbol: {agent_name: briefing_dict}}."""
     from flowtracker.research.briefing import load_all_briefings
@@ -1065,7 +1398,19 @@ async def _ensure_briefings(
 
                 refresh_for_research(symbol)
                 refresh_peers(symbol)
-            envelopes = await run_all_agents(symbol, model=model, verify=True)
+
+            # Pre-render common charts so agents get cache hits
+            try:
+                from flowtracker.research.charts import render_chart as _render_chart
+                for ct in ["price", "pe", "shareholding", "revenue_profit", "composite_radar"]:
+                    try:
+                        _render_chart(symbol, ct)
+                    except Exception:
+                        pass  # non-critical — agent will render on demand
+            except ImportError:
+                pass
+
+            envelopes = await run_all_agents(symbol, model=model, verify=True, effort=effort)
             result[symbol] = {name: env.briefing for name, env in envelopes.items()}
     return result
 
@@ -1075,6 +1420,7 @@ async def run_comparison_agent(
     model: str | None = None,
     skip_fetch: bool = False,
     force: bool = False,
+    effort: str | None = None,
 ) -> BriefingEnvelope:
     """Run the comparison agent across multiple stocks. Returns BriefingEnvelope."""
     from flowtracker.research.prompts import COMPARISON_AGENT_PROMPT
@@ -1090,14 +1436,15 @@ async def run_comparison_agent(
     )
 
     # Step 1: Ensure briefings exist and are fresh
-    all_briefings = await _ensure_briefings(symbols, force, skip_fetch, model)
+    all_briefings = await _ensure_briefings(symbols, force, skip_fetch, model, effort=effort)
 
-    # Step 2: Format briefings for the comparison agent
+    # Step 2: Format briefings for the comparison agent — trim to signal fields
     briefing_text = ""
     for symbol, briefings in all_briefings.items():
         briefing_text += f"\n### {symbol}\n"
         for agent_name, data in briefings.items():
-            briefing_text += f"**{agent_name}:** {json.dumps(data, indent=2)}\n"
+            trimmed = {k: v for k, v in data.items() if k in _SYNTHESIS_FIELDS}
+            briefing_text += f"**{agent_name}:** {json.dumps(trimmed, indent=2)}\n"
 
     # Step 3: Run comparison agent
     comparison_tools = [get_fair_value_analysis, get_composite_score,
@@ -1119,6 +1466,7 @@ async def run_comparison_agent(
         tools=comparison_tools,
         max_turns=20,
         max_budget=1.00,
-        model=model or DEFAULT_MODELS.get("synthesis", "claude-sonnet-4-6"),
+        model=model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-6"),
         user_prompt=user_prompt,
+        effort=effort,
     )

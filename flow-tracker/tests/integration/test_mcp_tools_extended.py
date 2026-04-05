@@ -385,3 +385,53 @@ class TestGetEventsActions:
         assert isinstance(data, dict)
         for key in ("events", "dividends", "corporate_actions", "adjusted_eps", "catalysts"):
             assert key in data
+
+
+# ---------------------------------------------------------------------------
+# News
+# ---------------------------------------------------------------------------
+
+class TestGetStockNews:
+    @pytest.mark.asyncio
+    async def test_returns_valid_response_shape(self, db_env):
+        from unittest.mock import patch
+
+        from flowtracker.research.tools import get_stock_news
+
+        mock_data = [
+            {
+                "title": "Test News",
+                "source": "Test",
+                "date": "2026-03-01",
+                "url": "https://example.com",
+                "summary": None,
+                "provider": "google_rss",
+            }
+        ]
+        with patch(
+            "flowtracker.research.data_api.ResearchDataAPI.get_stock_news",
+            return_value=mock_data,
+        ):
+            result = await get_stock_news.handler({"symbol": "INFY", "days": 30})
+
+        data = _parse_tool_result(result)
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["title"] == "Test News"
+        assert data[0]["provider"] == "google_rss"
+
+    @pytest.mark.asyncio
+    async def test_empty_news_returns_empty_list(self, db_env):
+        from unittest.mock import patch
+
+        from flowtracker.research.tools import get_stock_news
+
+        with patch(
+            "flowtracker.research.data_api.ResearchDataAPI.get_stock_news",
+            return_value=[],
+        ):
+            result = await get_stock_news.handler({"symbol": "NONEXIST", "days": 30})
+
+        data = _parse_tool_result(result)
+        assert isinstance(data, list)
+        assert len(data) == 0

@@ -936,6 +936,8 @@ async def get_bfsi_metrics(args):
 async def get_analytical_profile(args):
     with ResearchDataAPI() as api:
         data = api.get_analytical_profile(args["symbol"])
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, args["symbol"])
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1240,6 +1242,8 @@ async def get_fair_value_analysis(args):
             }
         else:
             data = _get_fair_value_analysis_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1289,6 +1293,8 @@ async def get_peer_sector(args):
             }
         else:
             data = _get_peer_sector_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1383,6 +1389,8 @@ async def get_market_context(args):
             }
         else:
             data = _get_market_context_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1431,6 +1439,8 @@ async def get_company_context(args):
             }
         else:
             data = _get_company_context_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1471,6 +1481,26 @@ async def get_events_actions(args):
             }
         else:
             data = _get_events_actions_section(api, symbol, section, args)
+        if isinstance(data, dict) and "error" not in data:
+            data = _add_freshness_meta(data, api, symbol)
+    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+
+
+# --- News ---
+
+
+@tool(
+    "get_stock_news",
+    "Get recent news articles for a stock from Google News RSS + yfinance. "
+    "Returns up to 100 articles from the last N days (default 90). "
+    "Pre-filtered to remove market commentary — focuses on business events, "
+    "catalysts, regulatory actions, M&A, management changes. "
+    "Each article has: title, source, date, url, summary.",
+    {"symbol": str, "days": int},
+)
+async def get_stock_news(args):
+    with ResearchDataAPI() as api:
+        data = api.get_stock_news(args["symbol"], args.get("days", 90))
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
@@ -1575,7 +1605,7 @@ RISK_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_composite_score, get_fundamentals,
     get_quality_scores, get_ownership, get_market_context,
     get_peer_sector, get_company_context, get_events_actions,
-    get_estimates,
+    get_estimates, render_chart,
 ]
 
 TECHNICAL_AGENT_TOOLS_V2 = [
@@ -1587,4 +1617,9 @@ SECTOR_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_peer_sector,
     get_market_context, get_fundamentals, get_estimates,
     get_valuation, get_chart_data, render_chart,
+]
+
+NEWS_AGENT_TOOLS_V2 = [
+    get_analytical_profile, get_company_context,
+    get_stock_news, get_events_actions,
 ]
