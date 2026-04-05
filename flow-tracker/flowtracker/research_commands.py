@@ -240,9 +240,19 @@ def thesis(
     extraction_path = Path.home() / "vault" / "stocks" / symbol / "fundamentals" / "concall_extraction_v2.json"
     extraction_fresh = False
     if extraction_path.exists():
-        import os
+        import os, json as _json
         mtime = date.fromtimestamp(os.path.getmtime(extraction_path))
-        extraction_fresh = (date.today() - mtime) < timedelta(days=30)
+        if (date.today() - mtime) < timedelta(days=30):
+            # Validate content — check that at least half the quarters have real data
+            try:
+                _data = _json.loads(extraction_path.read_text())
+                _quarters = _data.get("quarters", [])
+                _good = sum(1 for q in _quarters if "extraction_error" not in q)
+                extraction_fresh = _good >= len(_quarters) / 2
+                if not extraction_fresh and _quarters:
+                    console.print(f"  [yellow]⚠[/] Previous concall extraction had {_good}/{len(_quarters)} quarters — re-extracting")
+            except Exception:
+                pass  # corrupt file — re-extract
 
     if not extraction_fresh:
         console.print(f"\n[bold]Phase 0b: Concall Pipeline[/]")

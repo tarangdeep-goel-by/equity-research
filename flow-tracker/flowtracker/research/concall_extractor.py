@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import date
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -381,12 +384,15 @@ Rules:
 """
 
 
-async def _call_claude(system_prompt: str, user_prompt: str, model: str) -> str:
+async def _call_claude(
+    system_prompt: str, user_prompt: str, model: str,
+    max_budget: float = 0.50, max_turns: int = 3,
+) -> str:
     """Call Claude via Agent SDK. Handles the TextBlock fallback for empty ResultMessage."""
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        max_turns=3,
-        max_budget_usd=0.30,
+        max_turns=max_turns,
+        max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
     )
@@ -413,6 +419,44 @@ def _extract_json(text: str) -> dict:
         return json.loads(m.group(1).strip())
     # Try parsing the whole text as JSON
     return json.loads(text.strip())
+
+
+async def _recover_json_from_prose(
+    prose: str, quarter_label: str, symbol: str, model: str,
+) -> dict:
+    """Second-pass: convert a prose summary into the expected JSON schema using a cheap model.
+
+    When the primary extraction produces markdown instead of JSON, this feeds
+    the prose back with a tighter prompt to get structured output.
+    """
+    recovery_prompt = (
+        f"The following is a prose summary of a {quarter_label} earnings concall for {symbol}. "
+        "It was supposed to be structured JSON but came out as text.\n\n"
+        "Convert this into the JSON structure below. Extract EVERY number and metric mentioned. "
+        "Return ONLY valid JSON — no markdown, no explanation.\n\n"
+        "Required structure:\n"
+        "```json\n"
+        "{\n"
+        f'  "label": "{quarter_label}",\n'
+        f'  "fy_quarter": "{quarter_label}",\n'
+        '  "operational_metrics": { "<metric_name>": {"value": "<exact value>", "yoy_change": "", "context": ""} },\n'
+        '  "financial_metrics": { "consolidated": {"revenue_from_operations_cr": {"value": null}, "ebitda_cr": {"value": null, "margin_pct": null}, "net_profit_cr": {"value": null}}, "segment_breakdown": [{"segment": "", "revenue_cr": null, "growth": "", "margin_pct": null}] },\n'
+        '  "management_commentary": { "guidance": {"revenue_growth": "", "margin_target": ""}, "strategy_updates": [], "challenges_acknowledged": [] },\n'
+        '  "flags": { "guidance_change": "", "positive_surprises": [], "red_flags": [] },\n'
+        '  "key_numbers_mentioned": {}\n'
+        "}\n"
+        "```\n\n"
+        f"Prose to convert:\n{prose[:8000]}"
+    )
+
+    response = await _call_claude(
+        system_prompt="You are a data extraction assistant. Convert prose into JSON. Return ONLY valid JSON.",
+        user_prompt=recovery_prompt,
+        model="claude-sonnet-4-6",
+        max_budget=0.15,
+        max_turns=1,
+    )
+    return _extract_json(response)
 
 
 def _quarter_label_from_path(pdf_path: Path) -> str:
@@ -476,18 +520,42 @@ async def extract_concalls(
             + "\n".join(user_parts)
         )
 
-        response = await _call_claude(CONCALL_EXTRACTION_PROMPT, user_prompt, model)
+        response = await _call_claude(
+            CONCALL_EXTRACTION_PROMPT, user_prompt, model,
+            max_budget=0.60, max_turns=3,
+        )
 
         try:
             extraction = _extract_json(response)
         except (json.JSONDecodeError, ValueError):
-            # If JSON parsing fails, store raw text as fallback
-            extraction = {
-                "label": quarter_label,
-                "fy_quarter": quarter_label,
-                "extraction_error": "Failed to parse JSON from Claude response",
-                "raw_response": response[:2000],
-            }
+            # Primary extraction returned prose — try recovery with cheap model
+            if len(response.strip()) > 200:
+                logger.warning(
+                    "Concall extraction for %s %s returned prose (%d chars) — attempting JSON recovery",
+                    symbol, quarter_label, len(response),
+                )
+                try:
+                    extraction = await _recover_json_from_prose(
+                        response, quarter_label, symbol, model,
+                    )
+                except (json.JSONDecodeError, ValueError, Exception) as exc:
+                    logger.warning(
+                        "JSON recovery also failed for %s %s: %s",
+                        symbol, quarter_label, exc,
+                    )
+                    extraction = {
+                        "label": quarter_label,
+                        "fy_quarter": quarter_label,
+                        "extraction_error": "Failed to parse JSON — recovery also failed",
+                        "raw_response": response[:2000],
+                    }
+            else:
+                extraction = {
+                    "label": quarter_label,
+                    "fy_quarter": quarter_label,
+                    "extraction_error": "Failed to parse JSON from Claude response",
+                    "raw_response": response[:2000],
+                }
 
         # Ensure consistent fields
         extraction.setdefault("fy_quarter", quarter_label)
