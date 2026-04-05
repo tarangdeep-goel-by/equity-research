@@ -190,16 +190,18 @@ def thesis(
     skip_verify: Annotated[bool, typer.Option("--skip-verify", help="Skip verification step")] = False,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for all agents")] = None,
     verify_model: Annotated[str | None, typer.Option("--verify-model", help="Override model for verifiers")] = None,
+    technical_only: Annotated[bool, typer.Option("--technical", help="Skip explainer, output technical report only")] = False,
 ) -> None:
     """Generate comprehensive multi-agent equity research thesis.
 
     Runs 7 specialist agents in parallel (business, financials, ownership,
-    valuation, risk, technical, sector), verifies their reports, then synthesizes
-    everything into a final research document.
+    valuation, risk, technical, sector), verifies their reports, synthesizes
+    everything, then adds beginner-friendly annotations via the explainer agent.
 
     Use --no-agent to fall back to the data-only HTML fundamentals report.
     Use --skip-fetch to skip refreshing data from live sources.
     Use --skip-verify to skip the verification step.
+    Use --technical to skip the explainer and output technical-only report.
     """
     import logging
     import webbrowser
@@ -211,7 +213,7 @@ def thesis(
         datefmt="%H:%M:%S",
     )
 
-    from flowtracker.research.agent import format_cost_summary, run_all_agents, run_synthesis_agent
+    from flowtracker.research.agent import format_cost_summary, run_all_agents, run_explainer_agent, run_synthesis_agent
     from flowtracker.research.assembly import assemble_final_report
 
     symbol = symbol.upper()
@@ -309,13 +311,58 @@ def thesis(
     synthesis = asyncio.run(run_synthesis_agent(symbol, model))
     console.print("[green]✓[/] Synthesis complete")
 
-    # Phase 3: Assembly
-    console.print(f"\n[bold]Phase 3: Assembling final report[/]")
+    # Phase 3: Assembly (technical report)
+    console.print(f"\n[bold]Phase 3: Assembling technical report[/]")
     md_path, html_path = assemble_final_report(symbol, envelopes, synthesis)
-    console.print(f"[green]✓[/] Report assembled")
+    console.print(f"[green]✓[/] Technical report assembled")
+
+    # Phase 4: Explainer (beginner-friendly annotations)
+    explainer_envelope = None
+    if not technical_only:
+        console.print(f"\n[bold]Phase 4: Adding beginner-friendly annotations[/]")
+        technical_md = md_path.read_text(encoding="utf-8")
+        explainer_envelope = asyncio.run(run_explainer_agent(symbol, technical_md, model))
+
+        if explainer_envelope.report and len(explainer_envelope.report) > len(technical_md) * 0.8:
+            friendly_md = explainer_envelope.report
+
+            # Save technical versions with -technical suffix
+            tech_md_path = md_path.parent / f"{md_path.stem}-technical{md_path.suffix}"
+            tech_md_path.write_text(md_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+            from flowtracker.research.assembly import _render_html
+            tech_html_path = html_path.parent / f"{html_path.stem}-technical{html_path.suffix}"
+            tech_html_path.write_text(html_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+            # Friendly versions at default paths
+            md_path.write_text(friendly_md, encoding="utf-8")
+
+            # Get company name for HTML title
+            biz = envelopes.get("business")
+            company_name = ""
+            if biz and biz.briefing:
+                company_name = biz.briefing.get("company_name", symbol)
+            from datetime import date as _date
+            friendly_html = _render_html(friendly_md, symbol, company_name, _date.today().isoformat())
+            html_path.write_text(friendly_html, encoding="utf-8")
+
+            # Also update the reports dir copy
+            from pathlib import Path as _Path
+            reports_dir = _Path(__file__).parent.parent / "reports"
+            reports_md = reports_dir / f"{symbol.lower()}-thesis.md"
+            reports_md.write_text(friendly_md, encoding="utf-8")
+            reports_html = reports_dir / f"{symbol.lower()}-thesis.html"
+            reports_html.write_text(friendly_html, encoding="utf-8")
+
+            console.print(f"[green]✓[/] Friendly report generated")
+            console.print(f"  Technical backup: {tech_md_path}")
+        else:
+            console.print(f"[yellow]⚠[/] Explainer output too short — using technical version")
 
     # Cost summary
     all_envelopes = {**envelopes, "synthesis": synthesis}
+    if explainer_envelope:
+        all_envelopes["explainer"] = explainer_envelope
     console.print(format_cost_summary(all_envelopes))
 
     # Output paths
@@ -326,6 +373,87 @@ def thesis(
     console.print(f"  Briefings: ~/vault/stocks/{symbol}/briefings/")
 
     # Open HTML in browser
+    webbrowser.open(f"file://{html_path}")
+
+
+@app.command()
+def explain(
+    symbol: Annotated[str | None, typer.Option("--symbol", "-s", help="Stock symbol (reads latest thesis from vault)")] = None,
+    file: Annotated[str | None, typer.Option("--file", "-f", help="Path to markdown report file")] = None,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Override model")] = None,
+) -> None:
+    """Run the explainer agent on an existing report to add beginner-friendly annotations.
+
+    Provide either --symbol (reads latest thesis from vault) or --file (any markdown file).
+
+    Examples:
+        uv run flowtrack research explain -s GROWW
+        uv run flowtrack research explain -f ~/reports/custom-report.md
+    """
+    import webbrowser
+    from pathlib import Path
+
+    from flowtracker.research.agent import format_cost_summary, run_explainer_agent
+    from flowtracker.research.assembly import _render_html
+
+    # Resolve input file
+    if file:
+        input_path = Path(file).expanduser().resolve()
+        if not input_path.exists():
+            console.print(f"[red]File not found: {input_path}[/]")
+            raise typer.Exit(1)
+        # Derive symbol from filename if not provided
+        if not symbol:
+            symbol = input_path.stem.split("-")[0].upper()
+    elif symbol:
+        symbol = symbol.upper()
+        # Find latest thesis in vault
+        vault_dir = Path.home() / "vault" / "stocks" / symbol / "thesis"
+        if not vault_dir.exists():
+            console.print(f"[red]No thesis found for {symbol} in vault[/]")
+            raise typer.Exit(1)
+        md_files = sorted(vault_dir.glob("*.md"), reverse=True)
+        # Skip -technical and -friendly files, and stubs (<1KB)
+        md_files = [f for f in md_files if "-technical" not in f.stem and "-friendly" not in f.stem and f.stat().st_size > 1000]
+        if not md_files:
+            console.print(f"[red]No thesis markdown found in {vault_dir}[/]")
+            raise typer.Exit(1)
+        input_path = md_files[0]
+        console.print(f"Using: {input_path}")
+    else:
+        console.print("[red]Provide --symbol or --file[/]")
+        raise typer.Exit(1)
+
+    technical_md = input_path.read_text(encoding="utf-8")
+    console.print(f"Input: {len(technical_md):,} chars")
+
+    console.print(f"\n[bold]Running explainer agent for {symbol}...[/]")
+    envelope = asyncio.run(run_explainer_agent(symbol, technical_md, model))
+
+    if not envelope.report or len(envelope.report) < len(technical_md) * 0.8:
+        console.print(f"[red]Explainer output too short ({len(envelope.report or '')} chars). Aborting.[/]")
+        raise typer.Exit(1)
+
+    friendly_md = envelope.report
+
+    # Save output
+    output_dir = input_path.parent
+    friendly_md_path = output_dir / f"{input_path.stem}-friendly.md"
+    friendly_md_path.write_text(friendly_md, encoding="utf-8")
+
+    # Render HTML
+    from datetime import date
+    friendly_html = _render_html(friendly_md, symbol, symbol, date.today().isoformat())
+    reports_dir = Path(__file__).parent.parent / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    html_path = reports_dir / f"{symbol.lower()}-thesis-friendly.html"
+    html_path.write_text(friendly_html, encoding="utf-8")
+
+    console.print(format_cost_summary({"explainer": envelope}))
+    console.print(f"\n[bold]Output:[/]")
+    console.print(f"  Friendly MD:   {friendly_md_path}")
+    console.print(f"  Friendly HTML: {html_path}")
+
     webbrowser.open(f"file://{html_path}")
 
 

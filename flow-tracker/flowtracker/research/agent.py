@@ -57,6 +57,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "synthesis": "claude-sonnet-4-6",
     "verifier": "claude-haiku-4-5-20251001",
     "web_research": "claude-sonnet-4-6",
+    "explainer": "claude-sonnet-4-6",
 }
 
 AGENT_TOOLS: dict[str, list] = {
@@ -266,21 +267,17 @@ async def _run_specialist(
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
     model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
 
-    # Create MCP server with agent's tool subset (skip if no tools — e.g. web_research)
-    mcp_servers = {}
-    if tools:
-        server = create_sdk_mcp_server(f"{name}-data", tools=tools)
-        mcp_servers[name] = server
-
-    # Build options
+    # Build options — only create MCP server when agent has tools
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        mcp_servers=mcp_servers,
         max_turns=max_turns,
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
     )
+    if tools:
+        server = create_sdk_mcp_server(f"{name}-data", tools=tools)
+        options.mcp_servers = {name: server}
 
     # Block dangerous Claude Code built-ins (Bash, Write, Edit, etc.)
     # MCP tools registered via mcp_servers are available regardless.
@@ -393,8 +390,10 @@ async def _run_specialist(
 
     duration = time.time() - start_time
 
-    # Phase 2: Extract structured briefing (two-pass approach)
-    briefing = await _extract_briefing(name, symbol, report_text)
+    # Phase 2: Extract structured briefing (skip for non-analyst agents like explainer)
+    briefing = {}
+    if name not in ("explainer",):
+        briefing = await _extract_briefing(name, symbol, report_text)
 
     # Build envelope
     envelope = BriefingEnvelope(
@@ -413,8 +412,9 @@ async def _run_specialist(
         ),
     )
 
-    # Save to vault
-    save_envelope(envelope)
+    # Save to vault (explainer output is saved by the caller to thesis/ paths)
+    if name != "explainer":
+        save_envelope(envelope)
 
     return envelope
 
@@ -945,6 +945,38 @@ async def run_web_research_agent(
         system_prompt=WEB_RESEARCH_AGENT_PROMPT,
         tools=[],  # no MCP tools — only WebSearch/WebFetch builtins
         max_turns=dynamic_turns,
+        model=model,
+        user_prompt=user_prompt,
+    )
+
+
+async def run_explainer_agent(
+    symbol: str,
+    technical_report: str,
+    model: str | None = None,
+) -> BriefingEnvelope:
+    """Run the explainer agent to add beginner-friendly annotations to a technical report.
+
+    Takes the assembled technical markdown and returns an annotated version with
+    blockquote callouts explaining financial terms and concepts. No tools needed —
+    pure text transformation.
+    """
+    from flowtracker.research.prompts import EXPLAINER_AGENT_PROMPT
+
+    model = model or DEFAULT_MODELS.get("explainer", "claude-sonnet-4-6")
+
+    user_prompt = (
+        f"Add beginner-friendly annotations to this equity research report for {symbol}.\n\n"
+        f"---\n\n{technical_report}"
+    )
+
+    return await _run_specialist(
+        name="explainer",
+        symbol=symbol,
+        system_prompt=EXPLAINER_AGENT_PROMPT,
+        tools=[],
+        max_turns=3,
+        max_budget=1.00,
         model=model,
         user_prompt=user_prompt,
     )

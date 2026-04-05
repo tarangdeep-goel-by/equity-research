@@ -126,20 +126,21 @@ Every feature module follows:
 
 ```
 Phase 0:  Data Refresh → 6 sources + peers + concall extraction
-Phase 1:  6 Specialist Agents (parallel) → 6 standalone reports + briefings
-Phase 1.5: 6 Verification Agents (parallel) → spot-check data accuracy + corrections
+Phase 1:  7 Specialist Agents (parallel) → 7 standalone technical reports + briefings
+Phase 1.5: 7 Verification Agents (parallel) → spot-check data accuracy + corrections
 Phase 2:  Synthesis Agent → Verdict + Executive Summary + Key Signals
-Phase 3:  Assembly → Markdown + HTML with charts (13 types)
+Phase 3:  Assembly → Technical Markdown + HTML
+Phase 4:  Explainer Agent → Beginner-friendly annotations → Final HTML (skip with --technical)
 ```
 
-**6 specialist agents** (Business, Financial, Ownership, Valuation, Risk, Technical) each have an expert persona, 8-18 curated MCP tools, and produce a standalone beginner-friendly report. Verification agents independently spot-check data accuracy using a different model. The synthesis agent cross-references all 6 briefings for the final verdict.
+**7 specialist agents** (Business, Financial, Ownership, Valuation, Risk, Technical, Sector) each have an expert persona, 8-18 curated MCP tools, and produce a standalone technical report. Verification agents independently spot-check data accuracy using a different model. The synthesis agent cross-references all 7 briefings for the final verdict. The explainer agent then adds beginner-friendly annotations (definitions, analogies, callouts) to the assembled report.
 
 Key files in `research/`:
 - `refresh.py` — `refresh_for_research(symbol)` fetches live data from 6 sources + peers + concalls before agents run
 - `data_api.py` — `ResearchDataAPI` wraps FlowStore into ~35 clean methods (incl. fair value model, DuPont decomposition)
 - `tools.py` — 44 MCP tools (39 original + 5 new: peer_metrics, peer_growth, sector_benchmarks, concall_insights, render_chart), organized into 6 specialist registries
-- `agent.py` — `_run_specialist()`, `run_all_agents()`, `run_synthesis_agent()`, directed synthesis orchestration
-- `prompts.py` — 7 agent prompts (6 specialists + synthesis), shared preamble with 14 rules (~153K chars total)
+- `agent.py` — `_run_specialist()`, `run_all_agents()`, `run_synthesis_agent()`, `run_explainer_agent()`, directed synthesis orchestration
+- `prompts.py` — 9 agent prompts (7 specialists + synthesis + explainer), shared preamble
 - `briefing.py` — `BriefingEnvelope` model, save/load, parse briefing from markdown
 - `verifier.py` — Verification agent, correction flow
 - `assembly.py` — Final report assembly, HTML rendering with mermaid.js
