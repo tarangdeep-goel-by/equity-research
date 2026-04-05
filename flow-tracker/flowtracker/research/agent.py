@@ -659,13 +659,15 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
     # Second pass: extract the briefing JSON schema from the agent's own prompt
     # and ask haiku to fill it from the report text
     from flowtracker.research.prompts import AGENT_PROMPTS_V2
-    agent_prompt = AGENT_PROMPTS_V2.get(name, "")
+    entry = AGENT_PROMPTS_V2.get(name)
 
     # Find the JSON schema block in the agent's prompt (between ```json and ```)
+    # AGENT_PROMPTS_V2 stores (system, instructions) tuples — schema is in instructions
     schema_hint = ""
-    if agent_prompt:
+    if entry:
         import re
-        schema_matches = re.findall(r"```json\s*\n(.*?)```", agent_prompt, re.DOTALL)
+        prompt_text = entry[1] if isinstance(entry, tuple) else entry
+        schema_matches = re.findall(r"```json\s*\n(.*?)```", prompt_text, re.DOTALL)
         if schema_matches:
             schema_hint = f"\nThe JSON must follow this exact schema:\n```json\n{schema_matches[-1].strip()}\n```\n"
 
