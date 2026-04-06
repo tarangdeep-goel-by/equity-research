@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import statistics
+import logging
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+
+import httpx
 
 from flowtracker.store import FlowStore
 from flowtracker.utils import _clean
+
+
+logger = logging.getLogger(__name__)
 
 
 def _percentile_rank(values: list[float], value: float) -> float:
@@ -3215,3 +3225,184 @@ class ResearchDataAPI:
             "industry": industry,
             "outperformer": outperformer,
         }
+
+    # --- News ---
+
+    _NEWS_NOISE_PATTERNS = [
+        "stocks to watch", "share price today", "top picks", "market update",
+        "stocks to buy", "multibagger", "best stocks", "portfolio picks",
+        "stock market today", "intraday", "short term target",
+        "stocks in focus", "market cap of", "penny stocks",
+        "stocks under", "stocks for", "shares to buy",
+    ]
+
+    _LISTICLE_RE = re.compile(r"^\d+\s+(stocks?|picks?|shares?|companies)\b", re.IGNORECASE)
+
+    def get_stock_news(self, symbol: str, days: int = 90) -> list[dict]:
+        """Fetch recent news from Google News RSS + yfinance. Filters noise, deduplicates.
+
+        This is the only method that fetches live HTTP (not from SQLite).
+        Returns list of dicts sorted by date descending:
+          {"title", "source", "date", "url", "summary", "provider"}
+        """
+        symbol = symbol.upper()
+        info = self.get_company_info(symbol)
+        company_name = info.get("company_name", symbol)
+
+        articles: list[dict] = []
+
+        # --- Google News RSS ---
+        try:
+            articles.extend(self._fetch_google_news(company_name, symbol, days))
+        except Exception as exc:
+            logger.warning("Google News fetch failed for %s: %s", symbol, exc)
+
+        # --- yfinance news ---
+        try:
+            articles.extend(self._fetch_yfinance_news(symbol))
+        except Exception as exc:
+            logger.warning("yfinance news fetch failed for %s: %s", symbol, exc)
+
+        # Deduplicate
+        articles = self._deduplicate_news(articles)
+
+        # Filter noise
+        articles = [a for a in articles if not self._is_news_noise(a["title"])]
+
+        # Filter by date range
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+        articles = [a for a in articles if a.get("date", "") >= cutoff]
+
+        # Sort by date descending
+        articles.sort(key=lambda a: a.get("date", ""), reverse=True)
+
+        return articles
+
+    def _fetch_google_news(self, company_name: str, symbol: str, days: int) -> list[dict]:
+        """Fetch from Google News RSS. Returns raw article dicts."""
+        import urllib.parse
+
+        query = urllib.parse.quote(f"{company_name} {symbol} stock India")
+        url = (
+            f"https://news.google.com/rss/search?"
+            f"q={query}&hl=en-IN&gl=IN&ceid=IN:en"
+        )
+        resp = httpx.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        resp.raise_for_status()
+
+        root = ET.fromstring(resp.content)
+        items = root.findall(".//item")
+
+        results = []
+        for item in items:
+            title_el = item.find("title")
+            source_el = item.find("source")
+            pub_el = item.find("pubDate")
+            link_el = item.find("link")
+
+            title = title_el.text.strip() if title_el is not None and title_el.text else ""
+            if not title:
+                continue
+
+            # Parse RFC 2822 date from RSS
+            date_str = ""
+            if pub_el is not None and pub_el.text:
+                try:
+                    dt = parsedate_to_datetime(pub_el.text)
+                    date_str = dt.date().isoformat()
+                except Exception:
+                    pass
+
+            results.append({
+                "title": title,
+                "source": source_el.text.strip() if source_el is not None and source_el.text else "Google News",
+                "date": date_str,
+                "url": link_el.text.strip() if link_el is not None and link_el.text else "",
+                "summary": None,
+                "provider": "google_rss",
+            })
+
+        return results
+
+    def _fetch_yfinance_news(self, symbol: str) -> list[dict]:
+        """Fetch from yfinance .news property. Returns raw article dicts."""
+        import yfinance as yf
+
+        ticker = yf.Ticker(f"{symbol}.NS")
+        news = ticker.news or []
+
+        results = []
+        for item in news:
+            content = item.get("content", item)
+            title = content.get("title", "")
+            if not title:
+                continue
+
+            # Parse date
+            date_str = ""
+            pub = content.get("pubDate") or content.get("providerPublishTime")
+            if pub:
+                try:
+                    if isinstance(pub, (int, float)):
+                        date_str = datetime.fromtimestamp(pub, tz=timezone.utc).date().isoformat()
+                    else:
+                        date_str = pub[:10]  # ISO prefix
+                except Exception:
+                    pass
+
+            # Extract URL
+            url = ""
+            canon = content.get("canonicalUrl") or content.get("clickThroughUrl")
+            if isinstance(canon, dict):
+                url = canon.get("url", "")
+            elif isinstance(canon, str):
+                url = canon
+
+            provider = content.get("provider", {})
+            source = provider.get("displayName", "Yahoo Finance") if isinstance(provider, dict) else "Yahoo Finance"
+
+            results.append({
+                "title": title.strip(),
+                "source": source,
+                "date": date_str,
+                "url": url,
+                "summary": content.get("summary", None),
+                "provider": "yfinance",
+            })
+
+        return results
+
+    def _is_news_noise(self, title: str) -> bool:
+        """Check if a title is market commentary noise rather than a business event."""
+        lower = title.lower()
+        for pattern in self._NEWS_NOISE_PATTERNS:
+            if pattern in lower:
+                return True
+        if self._LISTICLE_RE.match(title):
+            return True
+        return False
+
+    @staticmethod
+    def _deduplicate_news(articles: list[dict]) -> list[dict]:
+        """Deduplicate articles by title word overlap (>70% = duplicate)."""
+        seen: list[set[str]] = []
+        unique: list[dict] = []
+
+        for article in articles:
+            words = set(re.sub(r"[^\w\s]", "", article["title"].lower()).split())
+            if not words:
+                continue
+
+            is_dup = False
+            for seen_words in seen:
+                overlap = len(words & seen_words)
+                max_len = max(len(words), len(seen_words))
+                if max_len > 0 and overlap / max_len > 0.7:
+                    is_dup = True
+                    break
+
+            if not is_dup:
+                seen.append(words)
+                unique.append(article)
+
+        return unique

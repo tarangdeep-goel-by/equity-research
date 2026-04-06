@@ -61,6 +61,7 @@ def assemble_final_report(
         ("risk", "Risk Assessment"),
         ("sector", "Sector & Industry"),
         ("technical", "Technical & Market Context"),
+        ("news", "Recent News & Catalysts"),
     ]
 
     for agent_name, section_title in report_order:

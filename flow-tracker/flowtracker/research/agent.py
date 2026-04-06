@@ -32,6 +32,7 @@ from flowtracker.research.briefing import (
 from flowtracker.research.tools import (
     BUSINESS_AGENT_TOOLS_V2,
     FINANCIAL_AGENT_TOOLS_V2,
+    NEWS_AGENT_TOOLS_V2,
     OWNERSHIP_AGENT_TOOLS_V2,
     RISK_AGENT_TOOLS_V2,
     SECTOR_AGENT_TOOLS_V2,
@@ -54,6 +55,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "risk": "claude-sonnet-4-6",
     "technical": "claude-sonnet-4-6",
     "sector": "claude-sonnet-4-6",
+    "news": "claude-sonnet-4-6",
     "synthesis": "claude-opus-4-6",
     "verifier": "claude-haiku-4-5-20251001",
     "web_research": "claude-sonnet-4-6",
@@ -69,6 +71,7 @@ DEFAULT_EFFORT: dict[str, str] = {
     "sector": "high",
     "ownership": "medium",
     "technical": "medium",
+    "news": "medium",
     "web_research": "medium",  # fact-retrieval, not deep reasoning
     "explainer": "high",
 }
@@ -81,6 +84,7 @@ AGENT_TOOLS: dict[str, list] = {
     "risk": RISK_AGENT_TOOLS_V2,
     "technical": TECHNICAL_AGENT_TOOLS_V2,
     "sector": SECTOR_AGENT_TOOLS_V2,
+    "news": NEWS_AGENT_TOOLS_V2,
 }
 
 # Agent failure severity tiers for synthesis confidence capping
@@ -90,7 +94,7 @@ AGENT_TIERS = {
     # Tier 2: Core context — business model and ownership
     "business": 2, "ownership": 2,
     # Tier 3: Enhancers — sector and market timing
-    "sector": 3, "technical": 3,
+    "sector": 3, "technical": 3, "news": 3,
 }
 
 AGENT_MAX_TURNS: dict[str, int] = {
@@ -101,6 +105,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "risk": 30,
     "technical": 30,
     "sector": 25,
+    "news": 25,
     "web_research": 20,
 }
 
@@ -112,6 +117,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "risk": 0.60,
     "technical": 0.60,
     "sector": 0.50,
+    "news": 0.50,
     "web_research": 0.50,
 }
 
@@ -128,6 +134,7 @@ _DISALLOWED_BUILTINS = [
 AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
     "business": ["WebSearch", "WebFetch"],  # needs web research for industry context
     "sector": ["WebSearch", "WebFetch"],  # needs web research for sector dynamics
+    "news": ["WebFetch"],  # needs web fetch to read full articles
     "web_research": ["WebSearch", "WebFetch"],
 }
 
@@ -149,6 +156,8 @@ _SYNTHESIS_FIELDS = {
     "rsi_signal", "trend_strength", "accumulation_signal", "timing_suggestion",
     # Sector
     "sector_growth_signal", "competitive_position", "regulatory_risk",
+    # News
+    "top_events", "sentiment_signal", "catalysts_identified",
 }
 
 
@@ -248,6 +257,17 @@ def _build_baseline_context(symbol: str) -> str:
                         baseline["corporate_actions"] = corp_actions
             except Exception:
                 pass  # non-critical — don't block baseline
+
+            # Recent news headlines (so specialists see current events)
+            try:
+                news_items = api.get_stock_news(symbol, days=30)
+                if news_items:
+                    baseline["recent_headlines"] = [
+                        {"title": n["title"], "source": n["source"], "date": n["date"]}
+                        for n in news_items[:10]
+                    ]
+            except Exception:
+                pass  # non-critical
 
     except Exception as exc:
         logger.warning("Failed to build baseline context for %s: %s", symbol, exc)
@@ -618,33 +638,54 @@ async def _run_specialist(
 
 
 async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
-    """Extract structured briefing JSON from a report using a cheap second pass.
+    """Extract structured briefing JSON from a report.
 
-    Falls back to parse_briefing_from_markdown if the second pass fails.
+    First tries to parse the ```json block that agents are instructed to include.
+    Falls back to a cheap haiku pass that re-uses the agent's own prompt schema.
     """
     # First try: parse from markdown (if agent included a JSON block)
     briefing = parse_briefing_from_markdown(report_text)
     if briefing:
         return briefing
 
-    # Second pass: use a cheap model to extract structured data
+    # No point running haiku on empty/tiny reports
+    if len(report_text.strip()) < 200:
+        logger.warning(
+            "Briefing extraction skipped for '%s' %s: report too short (%d chars)",
+            name, symbol, len(report_text),
+        )
+        return {"agent": name, "symbol": symbol, "extraction_failed": True}
+
+    # Second pass: extract the briefing JSON schema from the agent's own prompt
+    # and ask haiku to fill it from the report text
+    from flowtracker.research.prompts import AGENT_PROMPTS_V2
+    entry = AGENT_PROMPTS_V2.get(name)
+
+    # Find the JSON schema block in the agent's prompt (between ```json and ```)
+    # AGENT_PROMPTS_V2 stores (system, instructions) tuples — schema is in instructions
+    schema_hint = ""
+    if entry:
+        import re
+        prompt_text = entry[1] if isinstance(entry, tuple) else entry
+        schema_matches = re.findall(r"```json\s*\n(.*?)```", prompt_text, re.DOTALL)
+        if schema_matches:
+            schema_hint = f"\nThe JSON must follow this exact schema:\n```json\n{schema_matches[-1].strip()}\n```\n"
+
     try:
         extraction_prompt = (
-            f"Extract a structured briefing from this {name} analysis report for {symbol}.\n\n"
-            "Return a JSON object with these fields:\n"
-            f'- agent: "{name}"\n'
-            f'- symbol: "{symbol}"\n'
-            "- confidence: float 0-1 (how confident the analysis is)\n"
-            "- key_metrics: dict of important numerical metrics found in the report\n"
-            "- key_findings: list of 3-5 key findings as strings\n"
-            '- signal: overall signal (e.g. "bullish", "bearish", "neutral", "mixed")\n\n'
-            f"Report:\n{report_text[:8000]}"
+            f"Extract the structured briefing JSON from this {name} analysis report for {symbol}.\n\n"
+            "The report should have ended with a JSON briefing block but it's missing. "
+            "Read the report and produce the JSON that the analyst should have included.\n"
+            f"{schema_hint}\n"
+            "Return ONLY valid JSON — no markdown fences, no explanation.\n\n"
+            f"Report:\n{report_text[:12000]}"
         )
 
         options = ClaudeAgentOptions(
             system_prompt=(
                 "You are a data extraction assistant. Extract structured data "
-                "from research reports. Return only valid JSON."
+                "from equity research reports. Return ONLY valid JSON — no markdown, "
+                "no explanation, no code fences. Just the JSON object."
             ),
             max_turns=1,
             permission_mode="bypassPermissions",
@@ -666,14 +707,19 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
         if not result_text and text_parts:
             result_text = "\n".join(text_parts)
 
+        # Try parsing from markdown fences first (haiku might wrap in ```)
         extracted = parse_briefing_from_markdown(result_text)
         if extracted:
             return extracted
 
         # Try parsing the raw text as JSON
-        return json.loads(result_text.strip())
+        raw = result_text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw.rsplit("```", 1)[0]
+        return json.loads(raw.strip())
     except Exception as exc:
-        # Final fallback: return minimal briefing
         logger.warning(
             "Briefing extraction failed for '%s' %s: %s: %s (report length: %d chars)",
             name, symbol, type(exc).__name__, exc, len(report_text),
@@ -786,6 +832,14 @@ def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
     if sector_valuation == "expensive" and "EXPENSIVE" in str(val_signal).upper():
         cross_signals.append("Both sector and stock are expensive — correction risk is amplified.")
 
+    # News sentiment + ownership: contrarian signals
+    news = briefings.get("news", {})
+    news_sentiment = news.get("sentiment_signal", "")
+    if news_sentiment == "negative" and mf_trend == "increasing":
+        cross_signals.append("Negative news sentiment BUT MF accumulating — smart money buying the dip?")
+    if news_sentiment == "positive" and fii_trend == "decreasing":
+        cross_signals.append("Positive news flow BUT FII selling — institutions see something headlines don't?")
+
     if cross_signals:
         lines.append("\n**Potential cross-signals (orchestrator suggestions — validate against briefing data):**")
         for i, sig in enumerate(cross_signals, 1):
@@ -803,11 +857,11 @@ async def run_all_agents(
     verify_model: str | None = None,
     effort: str | None = None,
 ) -> dict[str, BriefingEnvelope]:
-    """Run all 7 specialist agents in parallel, optionally verify, return results."""
+    """Run all 8 specialist agents in parallel, optionally verify, return results."""
     from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
-    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector"]
+    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news"]
 
     # Pre-fetch baseline context once for all agents
     baseline = _build_baseline_context(symbol)
@@ -1112,10 +1166,25 @@ async def run_synthesis_agent(
                 web_research_section += f"- {q} — *{reason}*\n"
         web_research_section += "\n"
 
+    # Inject news briefing highlights if available
+    news_section = ""
+    news_briefing = briefings.get("news", {})
+    top_events = news_briefing.get("top_events", [])
+    if top_events:
+        news_section = "\n## Recent News & Catalysts (from news agent)\n"
+        for event in top_events[:10]:
+            news_section += (
+                f"- **[{event.get('category', '?')}]** {event.get('event', '?')} "
+                f"({event.get('date', '?')}) — Impact: {event.get('impact', '?')}\n"
+            )
+        sentiment = news_briefing.get("sentiment_signal", "unknown")
+        news_section += f"\nOverall news sentiment: **{sentiment}**\n"
+
     user_prompt = (
         f"Synthesize the analysis for {symbol}.\n\n"
         f"## Orchestrator Pre-Analysis (suggestions to investigate, not conclusions)\n{signals_analysis}\n\n"
         f"{web_research_section}"
+        f"{news_section}"
         f"## Specialist Briefings\n{briefing_text}\n\n"
         "The orchestrator has flagged potential signals above — treat these as suggestions to investigate, "
         "not conclusions. You may find additional signals or disagree with the orchestrator's assessment. "
