@@ -375,6 +375,7 @@ Identify, quantify, and rank every material risk facing this company — financi
 - **CXO Churn** — High turnover in C-suite (2+ departures of CFO/CEO/COO/CTO in 3 years) = management instability red flag. If data unavailable, pose as open question: "Have any key CXOs (CFO, CEO, COO) departed in the last 3 years?"
 - **Capital misallocation risk** — Cross-reference capital allocation data with business quality: if capex intensity (capex as % of CFO) is rising but ROCE is falling, flag "capital misallocation risk." Check if management compensation is outpacing shareholder returns. If KMP compensation data unavailable, pose as open question: "Is KMP/promoter total compensation growing faster than earnings? What is promoter compensation as % of PAT?"
 - **Management skin in the game** — Promoter open-market buying (not ESOP exercise, not preferential allotment at discount) is the single strongest bullish governance signal in Indian markets. Distinguish: (a) open-market buys at current price = genuine conviction, (b) preferential allotment at discount = dilution to self, (c) ESOP exercise = compensation, not conviction. If insider data shows promoter buying at market price during weakness, flag prominently as a positive signal.
+- **Liquidity risk** — Check average daily traded value (ADTV) from market context or delivery data. If ADTV < ₹5 Cr, flag "severe liquidity risk — institutional position building/exit would take weeks." If ADTV < ₹20 Cr, flag "moderate liquidity risk — position sizing constrained for large funds." A fundamentally sound stock with zero liquidity is uninvestable for institutional portfolios. Always mention this in the Risk Matrix if the company is small/mid-cap.
 """
 
 RISK_INSTRUCTIONS_V2 = """
@@ -500,6 +501,8 @@ Analyze the industry-level dynamics for a given stock's sector — market size, 
 - Use sector-specific charts (sector_mcap, sector_valuation_scatter, sector_ownership_flow) for visual context.
 - **Market-Cap Tier Analysis** — When comparing growth within a sector, segment by market-cap tier: Top-100 (large-cap), 101-250 (mid-cap), 251-500 (small-cap). Kotak research shows small-caps consistently lag large-caps on earnings delivery. If the target company is small-cap, contextualize its growth vs the large-cap leaders — are small-caps genuinely growing faster or just promising more?
 - **EBITDA Margin Reversion** — BSE-500 ex-BFSI EBITDA margins mean-revert to 16-17% over market cycles. If this company's sector is running >5 percentage points above this equilibrium, flag margin compression risk. If below, note potential for mean reversion upward. **Exception:** Structurally high-margin sectors (IT Services, FMCG, Pharma) should be anchored to their own 10-year historical averages, not the broader BSE-500 — these sectors sustainably operate at 20-25%+ EBITDA margins due to asset-light models or brand premiums.
+- **Peer KPI comparison table** — When sector KPIs are available from `get_company_context` section='sector_kpis', build a comparison table showing the subject vs 3-5 closest peers on the top 3-5 sector-specific KPIs (e.g., CASA ratio for banks, attrition for IT, volume growth for FMCG). Don't just report the subject's KPIs in isolation — compare them. Only include peers where KPI data is strictly comparable; exclude peers with missing data rather than hallucinating numbers. If peer KPI data isn't available, pose as open question.
+- **Growth vs industry positioning** — Explicitly compute: company revenue CAGR (from peer_growth data) minus sector median revenue CAGR = market share gain/loss rate. Frame: "Company is growing X pp faster/slower than the industry — gaining/losing share." Caveat base effects: if the company's revenue is less than 10% of the market leader, a high growth differential may reflect small base rather than genuine share capture.
 """
 
 SECTOR_INSTRUCTIONS_V2 = """
@@ -715,6 +718,15 @@ Consider downgrade toward SELL when multiple triggers fire:
 - **Marcellus triggers:** (a) Management/board composition changes post-acquisition, (b) Volume growth decelerates in core categories for 2+ quarters, (c) Market share loss in key products, (d) CXO churn accelerates (2+ departures in 3 years).
 - **Ambit triggers:** Greatness score deterioration — specifically: (a) Pricing discipline lost (PBIT margins declining 2+ years), (b) Balance sheet discipline broken (D/E rising + equity dilution), (c) Return ratios (ROCE/ROE) declining for 2+ consecutive years.
 When 3+ triggers fire simultaneously, the thesis is likely broken regardless of valuation support.
+
+## Variant Perception (Buy-Side Core)
+State explicitly: (a) What does the market/consensus believe about this stock? (b) What does our multi-agent analysis show that differs? (c) Why is the market wrong — what are they missing or mispricing? If our analysis aligns with consensus, state that clearly — no forced contrarianism. If the stock has little to no institutional coverage, state: "The variant perception is the discovery of the asset itself." This section must appear before the verdict — it IS the thesis.
+
+## Risk/Reward Framing
+Evaluate the asymmetry between bull upside and bear downside using the Valuation Agent's fair_value_bull and fair_value_bear. Compute: Upside % = (bull_target - CMP) / CMP, Downside % = (CMP - bear_target) / CMP. Frame as: "Favorable skew: X% upside vs Y% downside" or "Unfavorable skew." Do NOT rely on the ratio alone — a 3:1 ratio is meaningless if absolute upside is only 10%. Always state absolute percentages. Factor upside conviction: high if supported by 4+ agent signals, moderate if 2-3, low if only valuation-driven.
+
+## Catalyst Discipline
+Each catalyst in section 4 must include: (a) **specific event** (not "margin expansion" — that's an outcome, not a catalyst), (b) **expected timing** (quarter or month), (c) **estimated per-share impact** if quantifiable ("new plant commissioning Q3 FY26, adding ₹200 Cr revenue at 25% EBITDA margin = ~₹3.5/share EPS accretion"), (d) **probability** (high/medium/low). Catalysts without timing are hopes, not trades.
 
 ## Verdict Calibration (Guidelines, Not Rules)
 - These are starting points, not formulas. Your verdict must be a defensible thesis grounded in cross-signal analysis.
