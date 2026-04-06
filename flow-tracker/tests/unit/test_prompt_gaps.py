@@ -52,10 +52,36 @@ class TestPromptCoverage:
         assert "data_age_hours" in SHARED_PREAMBLE_V2
 
     def test_preamble_has_capex_cycle(self):
-        assert "capex_cycle" in SHARED_PREAMBLE_V2
+        assert "Capex cycle" in SHARED_PREAMBLE_V2
 
     def test_preamble_has_f_score(self):
-        assert "f_score" in SHARED_PREAMBLE_V2
+        assert "F-Score" in SHARED_PREAMBLE_V2
+
+
+class TestNoRedundantFetches:
+    """Verify prompts don't instruct re-fetching data already in analytical_profile."""
+
+    def test_financial_no_piotroski_in_quality_scores(self):
+        assert "'piotroski'" not in FINANCIAL_INSTRUCTIONS_V2.split("get_quality_scores")[1].split("\n")[0]
+
+    def test_financial_no_beneish_in_quality_scores(self):
+        assert "'beneish'" not in FINANCIAL_INSTRUCTIONS_V2.split("get_quality_scores")[1].split("\n")[0]
+
+    def test_risk_no_composite_score_tool(self):
+        assert "get_composite_score" not in RISK_INSTRUCTIONS_V2
+
+    def test_valuation_single_valuation_call(self):
+        # Should only have one get_valuation call, not two
+        count = VALUATION_INSTRUCTIONS_V2.count("Call `get_valuation`")
+        assert count == 1, f"Expected 1 get_valuation call, found {count}"
+
+    def test_preamble_warns_against_refetch(self):
+        assert "Do NOT re-fetch" in SHARED_PREAMBLE_V2
+
+    def test_preamble_lists_profile_contents(self):
+        assert "Quality scores" in SHARED_PREAMBLE_V2
+        assert "Reverse DCF" in SHARED_PREAMBLE_V2
+        assert "WACC" in SHARED_PREAMBLE_V2
 
 
 class TestMFHoldingChangesFix:

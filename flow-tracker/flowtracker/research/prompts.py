@@ -68,13 +68,17 @@ If `<company_baseline>` contains `corporate_actions_warning`, a recent stock spl
 ## Data Freshness
 Check `_meta.data_age_hours` in tool responses. If data is >336 hours (2 weeks) old, caveat your analysis: "Note: Financial data is X days old — recent developments may not be reflected." If >720 hours (1 month), flag prominently at the top of your section.
 
-## Using Analytical Profile
-`get_analytical_profile` returns pre-computed metrics — use them explicitly:
-- `capex_cycle`: "growth" phase = heavy investment, margin pressure expected; "harvest" = improving FCF
-- `reverse_dcf_implied_growth`: compare to consensus growth — if market implies 25% but consensus is 15%, stock is priced for perfection
-- `f_score` (Piotroski): <3 = weak financial health, 7+ = strong
-- `m_score` (Beneish): >-1.78 = elevated manipulation risk
-- `common_size_pl`: use for margin decomposition without extra tool calls
+## Using Analytical Profile (IMPORTANT — Avoid Redundant Calls)
+`get_analytical_profile` returns 80+ pre-computed metrics in ONE call. Do NOT re-fetch these from other tools:
+- **Quality scores**: F-Score, M-Score, earnings quality signal, forensic checks — all included. Only call `get_quality_scores` for full 10Y history (DuPont decomposition) or sections NOT in the profile (subsidiary, altman_zscore, receivables_quality).
+- **Reverse DCF**: implied growth, assessment, 5x5 sensitivity matrix — all included. Only call `get_fair_value_analysis` for DCF valuation + projections.
+- **WACC**: beta, Ke, Kd, terminal growth — all included. Only call `get_valuation(section='wacc')` if you need the full methodology breakdown.
+- **Capex cycle**: phase, intensity, asset turnover — all included.
+- **Common-size P&L**: biggest cost, fastest-growing cost, key expense %s — all included.
+- **Price performance**: 1M/3M/6M/1Y returns + excess vs Nifty — all included.
+- **BFSI metrics**: NIM, ROA, cost-to-income, P/B — all included (null for non-BFSI).
+
+Use these directly from analytical_profile. Drill deeper ONLY when you need full time-series history.
 """
 
 
@@ -185,7 +189,7 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data. **If `is_sme: true` is present, this stock reports half-yearly — adapt your analysis: use "6 half-yearly periods" instead of "12 quarters" for trend tables, and note the lower reporting frequency as a data limitation.**
 1. **Snapshot**: Call `get_analytical_profile` for composite score, DuPont, earnings quality, capex cycle, common-size P&L.
 2. **Core financials**: Call `get_fundamentals` with section=['quarterly_results', 'annual_financials', 'ratios', 'cost_structure', 'quarterly_balance_sheet', 'balance_sheet_detail', 'cash_flow_quality', 'working_capital', 'growth_rates', 'capital_allocation', 'cagr_table'] to get all financial data in one call.
-3. **Quality scores**: Call `get_quality_scores` with section=['dupont', 'earnings_quality', 'piotroski', 'beneish', 'subsidiary', 'improvement_metrics', 'capital_discipline', 'incremental_roce', 'operating_leverage', 'fcf_yield', 'tax_rate_analysis'] to get all quality data in one call.
+3. **Quality deep-dive**: Call `get_quality_scores` with section=['dupont', 'subsidiary'] for full 10Y DuPont decomposition and subsidiary P&L split. Note: F-Score, M-Score, earnings quality, forensic checks, capex cycle, and other quality signals are already in `get_analytical_profile` from step 1 — use those directly, do NOT re-fetch.
 4. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 5. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
 6. **Visualizations**: Call `render_chart` for PE history, price, sales/margin, and cashflow charts.
@@ -317,15 +321,14 @@ VALUATION_INSTRUCTIONS_V2 = """
 ## Workflow
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data.
 1. **Snapshot**: Call `get_analytical_profile` for reverse DCF implied growth, composite score, and price performance.
-2. **Quality context**: Call `get_quality_scores` with section='all' for DuPont decomposition, Piotroski F-Score, and BFSI-specific metrics (NIM trend, ROA, cost-to-income, book value, P/B — 5-year history) if applicable. This gives you the quality foundation for valuation.
+2. **Quality deep-dive**: Call `get_quality_scores` with section=['dupont', 'subsidiary'] for DuPont decomposition and subsidiary P&L. F-Score, M-Score, BFSI metrics, and WACC are already in `get_analytical_profile` — reference those directly.
 3. **Cash flow verification**: Call `get_fundamentals` with section=['cash_flow_quality', 'capital_allocation'] to verify FCF quality before DCF — check if operating CF is driven by real cash or working capital manipulation.
-4. **Valuation data**: Call `get_valuation` for valuation snapshot, valuation band, PE history, price performance, and financial projections. Also call `get_valuation` with section='sotp' — if this company has listed subsidiaries, you MUST use SOTP valuation.
-5. **WACC & discount rate**: Call `get_valuation(section="wacc")` for the stock's dynamic WACC parameters — Nifty beta (OLS + Blume-adjusted), CAPM cost of equity, synthetic credit rating with cost of debt, weighted WACC, terminal growth rate (risk-free rate minus 50bps), and historical PE band multiples (5Y median, bear/bull). Use these to explain the discount rate driving the reverse DCF and projections. Always mention key WACC components (beta, Ke, Kd, D/E weights) when discussing valuation.
-6. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF uses the stock's dynamic WACC (from step 4) instead of a flat rate — mention the actual discount rate used. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
-7. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
-8. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
-9. **Catalysts**: Call `get_events_actions` with section=['catalysts', 'material_events', 'dividends', 'dividend_policy'] for catalyst timeline, material events, dividend history, and dividend policy analysis (payout trend, consistency).
-10. **Visualize**: Call `render_chart` for PE band and PBV charts.
+4. **Valuation data**: Call `get_valuation` with section=['snapshot', 'band', 'pe_history', 'wacc', 'sotp'] to get all valuation data in one call. WACC params (beta, Ke, Kd) are also in analytical_profile — cross-check for consistency. If this company has listed subsidiaries, use SOTP valuation.
+5. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF uses the stock's dynamic WACC (from step 4) instead of a flat rate — mention the actual discount rate used. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
+6. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
+7. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
+8. **Catalysts**: Call `get_events_actions` with section=['catalysts', 'material_events', 'dividends', 'dividend_policy'] for catalyst timeline, material events, dividend history, and dividend policy analysis (payout trend, consistency).
+9. **Visualize**: Call `render_chart` for PE band and PBV charts.
 
 ## Report Sections
 1. **Valuation Snapshot** — Current PE, PB, EV/EBITDA with historical percentile band (Min–25th–Median–75th–Max) and sector percentile context. Define each multiple on first use.
@@ -395,9 +398,9 @@ Identify, quantify, and rank every material risk facing this company — financi
 RISK_INSTRUCTIONS_V2 = """
 ## Workflow
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data.
-1. **Snapshot + Score**: Call `get_analytical_profile` and `get_composite_score` for the 8-factor risk/quality rating.
+1. **Snapshot**: Call `get_analytical_profile` for composite score (8-factor), F-Score, M-Score, forensic checks, capex phase, earnings quality, and price performance. This is your risk dashboard foundation — do NOT re-fetch these from get_quality_scores.
 2. **Financial risk**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'quarterly_balance_sheet', 'rate_sensitivity', 'cost_structure', 'working_capital'] for debt trajectory, interest coverage, cash position, rate sensitivity, cost inflation signals, and working capital stress.
-3. **Forensic checks**: Call `get_quality_scores` with section=['beneish', 'earnings_quality', 'piotroski', 'forensic_checks', 'common_size', 'altman_zscore', 'working_capital', 'receivables_quality'] for forensic and distress analysis in one call.
+3. **Forensic deep-dive**: Call `get_quality_scores` with section=['altman_zscore', 'receivables_quality', 'working_capital'] for distress prediction and receivables quality — these provide full detail beyond the signals in analytical_profile.
 4. **Governance signals**: Call `get_ownership` with section=['promoter_pledge', 'insider', 'bulk_block'] for governance data in one call.
 5. **Market & macro**: Call `get_market_context` with section=['macro', 'fii_dii_flows', 'fii_dii_streak', 'delivery', 'delivery_analysis'] for macro, flows, delivery trend, and delivery acceleration analysis. Volume-delivery divergence flags speculative churn or quiet accumulation.
 6. **Corporate context**: Call `get_company_context` for recent filings and company documents.
@@ -460,7 +463,7 @@ Decode a stock's price action, technical indicators, and market positioning — 
 TECHNICAL_INSTRUCTIONS_V2 = """
 ## Workflow
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data.
-1. **Snapshot**: Call `get_analytical_profile` for price performance and composite score.
+1. **Snapshot**: Call `get_analytical_profile` for price performance (1M/3M/6M/1Y + excess vs Nifty) and composite score. Focus on the performance and delivery data — ignore quality metrics like F-Score/M-Score which are not relevant to technical analysis.
 2. **Market signals**: Call `get_market_context` with section=['technicals', 'delivery', 'delivery_analysis', 'fii_dii_flows', 'fii_dii_streak', 'price_performance'] for technical indicators, delivery trend, delivery acceleration analysis, FII/DII flows and streak, and price performance.
 3. **Valuation anchor**: Call `get_valuation` for valuation snapshot (PE, beta, 52-week range) and price chart data.
 4. **Sector context**: Call `get_peer_sector` for sector benchmarks to anchor relative performance.
