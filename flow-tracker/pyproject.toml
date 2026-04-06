@@ -30,6 +30,9 @@ test = [
     "pytest-cov>=5",
     "syrupy>=4",
 ]
+autoeval = [
+    "google-genai>=1.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

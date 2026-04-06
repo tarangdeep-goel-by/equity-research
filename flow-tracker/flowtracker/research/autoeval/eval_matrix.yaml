@@ -1,0 +1,87 @@
+# Eval Matrix — one representative stock per sector type
+# Chosen to stress-test agent edge cases for that sector
+# IMMUTABLE — do not modify during autoeval runs
+
+target_grade: "A-"
+target_grade_numeric: 90
+max_cycles_per_sector: 3
+
+agents:
+  - business
+  - financials
+  - ownership
+  - valuation
+  - risk
+  - technical
+  - sector
+
+sectors:
+  bfsi:
+    stock: SBIN
+    type: PSU bank
+    why: "PSU bank, high NPA history, government ownership, 0% promoter"
+
+  it_services:
+    stock: TCS
+    type: IT services
+    why: "IT bellwether, deal pipeline, attrition, promoter group = Tata Sons"
+
+  metals:
+    stock: VEDL
+    type: Diversified metals
+    why: "Cyclical, commodity-linked, high pledge promoter, Cairn demerger"
+
+  platform:
+    stock: INDIAMART
+    type: B2B platform
+    why: "Platform economics, subscriber metrics, no debt, cash-rich"
+
+  conglomerate:
+    stock: ADANIENT
+    type: Diversified conglomerate
+    why: "SOTP valuation, governance questions, high pledge, multiple listed subs"
+
+  telecom:
+    stock: BHARTIARTL
+    type: Telecom operator
+    why: "Spectrum amortization, ARPU trajectory, capex heavy, Africa ops"
+
+  real_estate:
+    stock: GODREJPROP
+    type: Real estate developer
+    why: "Revenue recognition distortions, presales vs booking, launch pipeline"
+
+  pharma:
+    stock: SUNPHARMA
+    type: Pharma
+    why: "FDA pipeline, specialty vs generics, R&D capitalization, Taro sub"
+
+  regulated_power:
+    stock: NTPC
+    type: Regulated utility
+    why: "Regulated ROE, capacity addition, fuel cost passthrough, green pivot"
+
+  insurance:
+    stock: SBILIFE
+    type: Life insurance
+    why: "VNB margin, persistency ratio, embedded value, bancassurance channel"
+
+  broker:
+    stock: ANGELONE
+    type: Discount broker
+    why: "SEBI regulation risk, ARPU, client additions, F&O restrictions"
+
+  auto:
+    stock: MARUTI
+    type: Auto OEM
+    why: "Volume-driven, EV transition, dealer channel, export mix"
+
+  chemicals:
+    stock: PIDILITIND
+    type: Specialty chemicals
+    why: "Brand moat, dealer network, seasonal demand, Fevicol franchise"
+
+  fmcg:
+    stock: HINDUNILVR
+    type: FMCG
+    why: "Volume vs price growth, distribution moat, rural demand, premiumization"

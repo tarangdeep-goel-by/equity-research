@@ -1587,6 +1587,7 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     Returns (system_prompt, user_instructions) tuple.
 
     system_prompt  = SHARED_PREAMBLE_V2 + Persona + Mission + Key Rules + sector/mcap injections
+                     + sector skill (if exists)
     user_instructions = Workflow + Report Sections + Structured Briefing
 
     Uses V2 prompts (macro-tool optimized). Walks the _SECTOR_INJECTIONS
@@ -1594,7 +1595,10 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     Falls back to light sector caveats if no full injection matches.
     Always appends market-cap persona injection to system_prompt.
     Conglomerate injection runs as a secondary check (additive, not cascade).
+    Sector skills (from autoeval) are loaded last as additive guidance.
     """
+    from pathlib import Path
+
     from flowtracker.research.data_api import ResearchDataAPI
 
     entry = AGENT_PROMPTS_V2.get(agent_name)
@@ -1603,6 +1607,7 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
 
     system_base, instructions = entry
     system_prompt = SHARED_PREAMBLE_V2 + system_base
+    matched_sector: str | None = None
 
     with ResearchDataAPI() as api:
         mcap = api.get_valuation_snapshot(symbol).get("market_cap_cr", 0) or 0
@@ -1612,6 +1617,7 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
             detector = getattr(api, detector_name)
             if detector(symbol) and agent_name in agent_set:
                 system_prompt += builder()
+                matched_sector = detector_name.removeprefix("_is_")
                 break  # first match wins — cascade priority
         else:
             # No full sector injection matched — check for light caveats
@@ -1619,14 +1625,45 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
             caveats = _build_sector_caveats(industry)
             if caveats:
                 system_prompt += caveats
+            # Map common industries to sector skill directories
+            matched_sector = _industry_to_sector_skill(industry)
 
         # Conglomerate check — runs AFTER main cascade (additive, not exclusive)
         # A company can be both BFSI and a conglomerate (e.g. ICICI)
         if api._is_conglomerate(symbol) and agent_name in _ALL_SPECIALIST_AGENTS:
             system_prompt += _build_conglomerate_injection()
+            if not matched_sector:
+                matched_sector = "conglomerate"
 
     # Market-cap persona injection (always, independent of sector)
     if mcap > 0:
         system_prompt += _build_mcap_injection(mcap, agent_name)
 
+    # Sector skill injection (from autoeval loop)
+    if matched_sector:
+        skill_path = Path(__file__).parent / "sector_skills" / matched_sector / f"{agent_name}.md"
+        if skill_path.exists():
+            system_prompt += f"\n\n## Sector-Specific Analysis Guide\n\n{skill_path.read_text()}"
+
     return (system_prompt, instructions)
+
+
+# Map industries without specialized injections to sector skill directories
+_INDUSTRY_SECTOR_MAP: dict[str, str] = {
+    "pharmaceuticals": "pharma", "pharma": "pharma", "drug": "pharma",
+    "auto": "auto", "automobile": "auto", "vehicle": "auto", "two wheeler": "auto",
+    "fmcg": "fmcg", "consumer": "fmcg", "personal care": "fmcg", "food": "fmcg",
+    "chemical": "chemicals", "specialty chemical": "chemicals", "agrochemical": "chemicals",
+    "platform": "platform", "marketplace": "platform", "internet": "platform",
+}
+
+
+def _industry_to_sector_skill(industry: str | None) -> str | None:
+    """Map an industry string to a sector skill directory name."""
+    if not industry:
+        return None
+    industry_lower = industry.lower()
+    for keyword, sector in _INDUSTRY_SECTOR_MAP.items():
+        if keyword in industry_lower:
+            return sector
+    return None

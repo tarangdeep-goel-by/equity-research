@@ -1024,3 +1024,52 @@ def _get_score(symbol: str) -> dict:
             for f in score.factors
         ],
     }
+
+
+@app.command()
+def autoeval(
+    sector: Annotated[str, typer.Option("--sector", "-s", help="Sector-first: eval one sector")] = "",
+    agent: Annotated[str, typer.Option("--agent", "-a", help="Agent-first: eval one agent across all sectors")] = "",
+    agents: Annotated[str, typer.Option("--agents", help="Comma-separated agent names (sector-first mode)")] = "",
+    sectors: Annotated[str, typer.Option("--sectors", help="Comma-separated sectors (agent-first mode)")] = "",
+    skip_run: Annotated[bool, typer.Option("--skip-run", help="Grade existing reports without re-running agents")] = False,
+    cycle: Annotated[int, typer.Option("--cycle", "-c", help="Cycle number for logging")] = 0,
+    progress: Annotated[bool, typer.Option("--progress", "-p", help="Show progress chart instead of running eval")] = False,
+) -> None:
+    """Run autoeval — Gemini grading loop for specialist agents.
+
+    Two modes:
+      Agent-first: run one agent across all sectors (preferred for iterative improvement)
+      Sector-first: run all agents for one sector
+
+    Examples:
+        flowtrack research autoeval -a business                # business agent across all sectors
+        flowtrack research autoeval -a business --sectors bfsi,metals  # specific sectors only
+        flowtrack research autoeval -s bfsi                    # all agents for BFSI sector
+        flowtrack research autoeval --progress                 # show progress chart
+    """
+    if progress:
+        from flowtracker.research.autoeval.progress import main as progress_main
+        progress_main()
+        return
+
+    if not sector and not agent:
+        console.print("[red]Specify --agent (agent-first) or --sector (sector-first)[/]")
+        raise typer.Exit(1)
+
+    import sys
+    args_list = ["--cycle", str(cycle)]
+    if agent:
+        args_list.extend(["--agent", agent])
+        if sectors:
+            args_list.extend(["--sectors", sectors])
+    elif sector:
+        args_list.extend(["--sector", sector])
+        if agents:
+            args_list.extend(["--agents", agents])
+    if skip_run:
+        args_list.append("--skip-run")
+
+    sys.argv = ["evaluate"] + args_list
+    from flowtracker.research.autoeval.evaluate import main as eval_main
+    eval_main()
