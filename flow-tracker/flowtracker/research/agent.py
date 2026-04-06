@@ -24,10 +24,13 @@ from claude_agent_sdk import (
 
 from flowtracker.research.briefing import (
     AgentCost,
+    AgentTrace,
     BriefingEnvelope,
+    PipelineTrace,
     ToolEvidence,
     parse_briefing_from_markdown,
     save_envelope,
+    save_trace,
 )
 from flowtracker.research.tools import (
     BUSINESS_AGENT_TOOLS_V2,
@@ -284,7 +287,7 @@ def generate_business_profile(symbol: str, model: str | None = None) -> Path:
     """
     symbol = symbol.upper()
 
-    envelope = asyncio.run(run_single_agent("business", symbol, model=model))
+    envelope, _trace = asyncio.run(run_single_agent("business", symbol, model=model))
 
     report = envelope.report
     if not report or not report.strip():
@@ -474,8 +477,8 @@ async def _run_specialist(
     model: str | None = None,
     user_prompt: str | None = None,
     effort: str | None = None,
-) -> BriefingEnvelope:
-    """Run a single specialist agent. Returns BriefingEnvelope with report, briefing, evidence, cost."""
+) -> tuple[BriefingEnvelope, AgentTrace]:
+    """Run a single specialist agent. Returns (BriefingEnvelope, AgentTrace)."""
 
     tools = tools if tools is not None else AGENT_TOOLS.get(name, [])
     max_turns = max_turns or AGENT_MAX_TURNS.get(name, 20)
@@ -507,17 +510,21 @@ async def _run_specialist(
         options.allowed_tools = extra_builtins
 
     # Phase 1: Generate report with thinking
+    agent_started = datetime.now(timezone.utc).isoformat()
     start_time = time.time()
     evidence: list[ToolEvidence] = []
     report_text = ""
     text_blocks: list[str] = []  # fallback: collect text from AssistantMessages
+    reasoning_blocks: list[str] = []  # agent thinking before report header
     total_cost = 0.0
     input_tokens = 0
     output_tokens = 0
     agent_model = model
+    agent_status = "success"
 
     # Track tool calls for evidence capture
-    pending_tool_calls: dict[str, dict] = {}  # tool_use_id -> {tool, args}
+    # tool_use_id -> {tool, args, started_at, start_mono}
+    pending_tool_calls: dict[str, dict] = {}
 
     try:
         async for message in query(
@@ -536,22 +543,53 @@ async def _run_specialist(
                     if block_type == "TextBlock":
                         text_blocks.append(block.text)
                     elif isinstance(block, ToolUseBlock):
+                        call_started = datetime.now(timezone.utc).isoformat()
                         pending_tool_calls[block.id] = {
                             "tool": block.name,
                             "args": block.input or {},
+                            "started_at": call_started,
+                            "start_mono": time.monotonic(),
                         }
+                        # Record evidence immediately from ToolUseBlock.
+                        # The Agent SDK processes tool results internally and does NOT
+                        # expose ToolResultBlock through the stream, so we capture
+                        # tool calls here (result_summary/hash stay empty).
+                        evidence.append(ToolEvidence(
+                            tool=block.name,
+                            args=block.input or {},
+                            started_at=call_started,
+                        ))
+                        # Compact args for log readability — show all params, truncate long values
+                        compact = {}
+                        for k, v in (block.input or {}).items():
+                            sv = str(v)
+                            compact[k] = sv if len(sv) <= 80 else sv[:77] + "..."
+                        logger.info(
+                            "[%s] tool_call: %s(%s)",
+                            name, block.name, json.dumps(compact, default=str),
+                        )
                     elif isinstance(block, ToolResultBlock):
+                        # Agent SDK may expose results in future versions.
+                        # When available, enrich the matching evidence entry.
                         tool_id = block.tool_use_id
                         if tool_id in pending_tool_calls:
                             call = pending_tool_calls.pop(tool_id)
                             result_str = str(block.content) if block.content else ""
-                            evidence.append(ToolEvidence(
-                                tool=call["tool"],
-                                args=call["args"],
-                                result_summary=result_str[:500],
-                                result_hash=hashlib.sha256(result_str.encode()).hexdigest(),
-                                is_error=getattr(block, "is_error", False) or False,
-                            ))
+                            call_duration_ms = int((time.monotonic() - call["start_mono"]) * 1000)
+                            is_err = getattr(block, "is_error", False) or False
+                            # Find and enrich the evidence entry we created above
+                            for ev in reversed(evidence):
+                                if ev.tool == call["tool"] and ev.started_at == call["started_at"]:
+                                    ev.result_summary = result_str[:500]
+                                    ev.result_hash = hashlib.sha256(result_str.encode()).hexdigest()
+                                    ev.is_error = is_err
+                                    ev.duration_ms = call_duration_ms
+                                    break
+                            status_icon = "ERR" if is_err else "ok"
+                            logger.info(
+                                "[%s] tool_result: %s → %s %d chars %.1fs",
+                                name, call["tool"], status_icon, len(result_str), call_duration_ms / 1000,
+                            )
             elif isinstance(message, ResultMessage):
                 report_text = message.result or ""
                 total_cost = message.total_cost_usd or 0.0
@@ -574,6 +612,7 @@ async def _run_specialist(
                 name, symbol, type(exc).__name__,
             )
         else:
+            agent_status = "failed"
             logger.error(
                 "Agent '%s' for %s FAILED with no output: %s: %s",
                 name, symbol, type(exc).__name__, exc,
@@ -593,25 +632,37 @@ async def _run_specialist(
         report_text = joined_blocks
 
     if not report_text:
+        agent_status = "empty"
         logger.error("Agent '%s' %s: EMPTY REPORT — no ResultMessage and no TextBlocks captured", name, symbol)
 
-    # Strip agent "thinking out loud" preamble (tool-calling chatter before the report).
-    # The agent produces intermediate text ("I'll analyze...", "Now let me pull...")
-    # before the actual report which starts with a # or --- header.
+    # Capture agent reasoning — the "thinking out loud" preamble before the report.
+    # These TextBlocks contain the agent's tool selection rationale and intermediate analysis.
+    # Saved separately for observability before being stripped from the report.
     if report_text:
         lines = report_text.split("\n")
         for i, line in enumerate(lines):
             stripped = line.strip()
             if stripped.startswith("#") or stripped.startswith("---"):
+                if i > 0:
+                    reasoning_blocks = ["\n".join(lines[:i])]
                 report_text = "\n".join(lines[i:])
                 break
 
     duration = time.time() - start_time
+    agent_finished = datetime.now(timezone.utc).isoformat()
 
     # Phase 2: Extract structured briefing (skip for non-analyst agents like explainer)
     briefing = {}
     if name not in ("explainer",):
         briefing = await _extract_briefing(name, symbol, report_text)
+
+    cost = AgentCost(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_cost_usd=total_cost,
+        duration_seconds=duration,
+        model=agent_model,
+    )
 
     # Build envelope
     envelope = BriefingEnvelope(
@@ -621,20 +672,33 @@ async def _run_specialist(
         report=report_text,
         briefing=briefing,
         evidence=evidence,
-        cost=AgentCost(
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            total_cost_usd=total_cost,
-            duration_seconds=duration,
-            model=agent_model,
-        ),
+        cost=cost,
+    )
+
+    # Build trace
+    trace = AgentTrace(
+        agent=name,
+        symbol=symbol.upper(),
+        started_at=agent_started,
+        finished_at=agent_finished,
+        duration_seconds=duration,
+        status=agent_status,
+        tool_calls=evidence,
+        reasoning=reasoning_blocks,
+        report_chars=len(report_text),
+        cost=cost,
+    )
+
+    logger.info(
+        "[%s] done: %s %d chars, %d tools, %.0fs, $%.2f",
+        name, agent_status, len(report_text), len(evidence), duration, total_cost,
     )
 
     # Save to vault (explainer output is saved by the caller to thesis/ paths)
     if name != "explainer":
         save_envelope(envelope)
 
-    return envelope
+    return envelope, trace
 
 
 async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
@@ -732,7 +796,7 @@ async def run_single_agent(
     symbol: str,
     model: str | None = None,
     effort: str | None = None,
-) -> BriefingEnvelope:
+) -> tuple[BriefingEnvelope, AgentTrace]:
     """Run a single specialist agent. Uses same V2 prompts/tools as run_all_agents."""
     from flowtracker.research.prompts import build_specialist_prompt
 
@@ -856,43 +920,52 @@ async def run_all_agents(
     verify: bool = True,
     verify_model: str | None = None,
     effort: str | None = None,
-) -> dict[str, BriefingEnvelope]:
-    """Run all 8 specialist agents in parallel, optionally verify, return results."""
+) -> tuple[dict[str, BriefingEnvelope], PipelineTrace]:
+    """Run all 8 specialist agents in parallel, optionally verify, return (envelopes, trace)."""
+    from flowtracker.research.briefing import PhaseEvent
     from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
     agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news"]
 
+    pipeline_started = datetime.now(timezone.utc).isoformat()
+    pipeline_start_mono = time.monotonic()
+    trace = PipelineTrace(symbol=symbol, started_at=pipeline_started)
+
     # Pre-fetch baseline context once for all agents
     baseline = _build_baseline_context(symbol)
 
     # Phase 1: Run specialists with concurrency limit and retry
+    specialists_phase = PhaseEvent(phase="specialists", started_at=datetime.now(timezone.utc).isoformat())
     MAX_CONCURRENT = 3  # max agents running simultaneously
     MAX_RETRIES = 1     # retry once on failure
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
-    async def _run_with_limit(name: str, sys_prompt: str, instr: str) -> tuple[str, BriefingEnvelope | Exception]:
+    async def _run_with_limit(name: str, sys_prompt: str, instr: str) -> tuple[str, BriefingEnvelope | Exception, AgentTrace | None]:
         """Run a specialist with concurrency limiting and retry."""
+        last_trace: AgentTrace | None = None
         for attempt in range(1 + MAX_RETRIES):
             async with semaphore:
                 try:
-                    envelope = await _run_specialist(
+                    envelope, agent_trace = await _run_specialist(
                         name=name, symbol=symbol, system_prompt=sys_prompt, model=model,
                         effort=effort,
                         user_prompt=f"{baseline}\n\n{instr}\n\nAnalyze {symbol} for the {name} section of the equity research report.",
                     )
+                    last_trace = agent_trace
                     # Check if agent actually produced content
                     if envelope.report and len(envelope.report.strip()) > 100:
-                        return name, envelope
+                        return name, envelope, agent_trace
                     # Empty report — treat as failure for retry
                     if attempt < MAX_RETRIES:
+                        agent_trace.status = "retried"
                         logger.warning(
                             "Agent '%s' for %s produced empty report (attempt %d/%d) — retrying in 5s",
                             name, symbol, attempt + 1, 1 + MAX_RETRIES,
                         )
                         await asyncio.sleep(5)
                         continue
-                    return name, envelope  # return empty on last attempt
+                    return name, envelope, agent_trace  # return empty on last attempt
                 except Exception as exc:
                     if attempt < MAX_RETRIES:
                         logger.warning(
@@ -905,9 +978,9 @@ async def run_all_agents(
                         "Agent '%s' for %s failed after %d attempts: %s",
                         name, symbol, 1 + MAX_RETRIES, exc,
                     )
-                    return name, exc
+                    return name, exc, last_trace
         # Should not reach here, but just in case
-        return name, Exception(f"Agent {name} exhausted retries")
+        return name, Exception(f"Agent {name} exhausted retries"), last_trace
 
     # Build tasks for all agents that have prompts
     specialist_tasks = []
@@ -921,9 +994,11 @@ async def run_all_agents(
     # but the semaphore ensures only MAX_CONCURRENT run at once
     results = await asyncio.gather(*specialist_tasks)
 
-    # Collect successful results
+    # Collect successful results and traces
     envelopes: dict[str, BriefingEnvelope] = {}
-    for name, result in results:
+    for name, result, agent_trace in results:
+        if agent_trace:
+            trace.agents[name] = agent_trace
         if isinstance(result, Exception):
             print(f"  ⚠ {name} agent failed: {result}")
             envelopes[name] = BriefingEnvelope(
@@ -939,6 +1014,12 @@ async def run_all_agents(
             )
         else:
             envelopes[name] = result
+
+    specialists_phase.finished_at = datetime.now(timezone.utc).isoformat()
+    specialists_phase.duration_seconds = sum(
+        t.duration_seconds for t in trace.agents.values()
+    )
+    trace.phases.append(specialists_phase)
 
     # Phase 1.5: Verification (with concurrency limit)
     if verify and envelopes:
@@ -1014,7 +1095,7 @@ async def run_all_agents(
                         f"Re-fetch the specific data points that were wrong — don't guess."
                     )
                     try:
-                        rerun = await _run_specialist(
+                        rerun, rerun_trace = await _run_specialist(
                             name=name,
                             symbol=symbol,
                             system_prompt=rerun_system + corrections_context,
@@ -1022,6 +1103,8 @@ async def run_all_agents(
                             user_prompt=f"{baseline}\n\n{rerun_instructions}\n\nAnalyze {symbol} for the {name} section of the equity research report.",
                         )
                         envelopes[name] = rerun
+                        rerun_trace.status = "rerun_after_verification"
+                        trace.agents[f"{name}_rerun"] = rerun_trace
                     except Exception as e:
                         print(f"  ⚠ {name} re-run failed — marking as failed: {e}")
                         envelopes[name] = BriefingEnvelope(
@@ -1066,8 +1149,10 @@ async def run_all_agents(
             )
 
     # Phase 1.75: Web research to resolve open questions
+    web_phase = PhaseEvent(phase="web_research", started_at=datetime.now(timezone.utc).isoformat())
     try:
-        web_envelope = await run_web_research_agent(symbol, model)
+        web_envelope, web_trace = await run_web_research_agent(symbol, model)
+        trace.agents["web_research"] = web_trace
         if web_envelope.status == "success":
             envelopes["web_research"] = web_envelope
             print(f"  ✓ web_research: {web_envelope.briefing.get('questions_resolved', 0)} questions resolved")
@@ -1078,8 +1163,10 @@ async def run_all_agents(
     except Exception as exc:
         logger.warning("Web research agent failed for %s: %s", symbol, exc)
         print(f"  ⚠ web_research failed: {exc}")
+    web_phase.finished_at = datetime.now(timezone.utc).isoformat()
+    trace.phases.append(web_phase)
 
-    return envelopes
+    return envelopes, trace
 
 
 async def run_synthesis_agent(
@@ -1087,7 +1174,7 @@ async def run_synthesis_agent(
     model: str | None = None,
     failed_agents: list[str] | None = None,
     effort: str | None = None,
-) -> BriefingEnvelope:
+) -> tuple[BriefingEnvelope, AgentTrace]:
     """Run the synthesis agent on existing briefings."""
     from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2 as SYNTHESIS_AGENT_PROMPT
     from flowtracker.research.briefing import load_all_briefings
@@ -1208,7 +1295,7 @@ async def run_synthesis_agent(
 async def run_web_research_agent(
     symbol: str,
     model: str | None = None,
-) -> BriefingEnvelope:
+) -> tuple[BriefingEnvelope, AgentTrace]:
     """Run the web research agent to resolve open questions from specialist briefings.
 
     Loads existing briefings from vault, collects all open_questions,
@@ -1235,7 +1322,7 @@ async def run_web_research_agent(
 
     if not all_questions:
         logger.info("No open questions found in briefings for %s — skipping web research", symbol)
-        return BriefingEnvelope(
+        empty_env = BriefingEnvelope(
             agent="web_research",
             symbol=symbol,
             status="empty",
@@ -1244,6 +1331,13 @@ async def run_web_research_agent(
                       "questions_received": 0, "questions_resolved": 0,
                       "resolved": [], "unresolved": []},
         )
+        empty_trace = AgentTrace(
+            agent="web_research", symbol=symbol,
+            started_at=datetime.now(timezone.utc).isoformat(),
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            status="skipped",
+        )
+        return empty_env, empty_trace
 
     # Group questions by text to find which agents asked the same thing
     question_map: dict[str, list[str]] = {}
@@ -1288,7 +1382,7 @@ async def run_explainer_agent(
     symbol: str,
     technical_report: str,
     model: str | None = None,
-) -> BriefingEnvelope:
+) -> tuple[BriefingEnvelope, AgentTrace]:
     """Run the explainer agent to add beginner-friendly annotations to a technical report.
 
     Takes the assembled technical markdown and returns an annotated version with
@@ -1347,6 +1441,60 @@ def format_cost_summary(envelopes: dict[str, BriefingEnvelope]) -> str:
     lines.append(
         f"{'TOTAL':<14} {total_in:>8,} / {total_out:<8,} ${total_cost:>6.2f} {total_mins}m {total_secs:02d}s"
     )
+
+    return "\n".join(lines)
+
+
+def format_timeline(trace: PipelineTrace) -> str:
+    """Format a structured pipeline timeline for console display.
+
+    Each line is self-contained and LLM-searchable:
+      MM:SS  agent/phase  event  (detail)
+    """
+    if not trace.started_at:
+        return ""
+
+    lines = ["\n[bold]Pipeline Timeline[/]", "─" * 58]
+
+    # Collect all events with their timestamps for chronological ordering
+    events: list[tuple[str, str]] = []  # (iso_timestamp, display_line)
+
+    # Phase events
+    for phase in trace.phases:
+        events.append((phase.started_at, f"  {phase.phase:<20} started"))
+        if phase.finished_at:
+            dur = phase.duration_seconds
+            events.append((phase.finished_at, f"  {phase.phase:<20} done ({dur:.0f}s)"))
+
+    # Agent events — sorted by start time
+    for name, at in sorted(trace.agents.items(), key=lambda x: x[1].started_at):
+        tools_n = len(at.tool_calls)
+        events.append((at.started_at, f"   → {name:<18} started"))
+        if at.finished_at:
+            status_icon = "✓" if at.status == "success" else "⚠" if at.status == "failed" else "○"
+            detail = f"{at.duration_seconds:.0f}s, {tools_n} tools, ${at.cost.total_cost_usd:.2f}"
+            events.append((at.finished_at, f"   {status_icon} {name:<18} {at.status} ({detail})"))
+
+    # Sort by timestamp and compute relative offset from pipeline start
+    try:
+        t0 = datetime.fromisoformat(trace.started_at)
+    except ValueError:
+        return ""
+    events.sort(key=lambda x: x[0])
+
+    for ts, line in events:
+        try:
+            dt = datetime.fromisoformat(ts)
+            offset = (dt - t0).total_seconds()
+            mm, ss = divmod(int(offset), 60)
+            lines.append(f"{mm:02d}:{ss:02d} {line}")
+        except ValueError:
+            lines.append(f"??:?? {line}")
+
+    # Footer
+    lines.append("─" * 58)
+    total_m, total_s = divmod(int(trace.total_duration_seconds), 60)
+    lines.append(f"Total: {total_m}m {total_s:02d}s | ${trace.total_cost_usd:.2f}")
 
     return "\n".join(lines)
 
@@ -1412,7 +1560,7 @@ async def _ensure_briefings(
             except ImportError:
                 pass
 
-            envelopes = await run_all_agents(symbol, model=model, verify=True, effort=effort)
+            envelopes, _trace = await run_all_agents(symbol, model=model, verify=True, effort=effort)
             result[symbol] = {name: env.briefing for name, env in envelopes.items()}
     return result
 
@@ -1423,7 +1571,7 @@ async def run_comparison_agent(
     skip_fetch: bool = False,
     force: bool = False,
     effort: str | None = None,
-) -> BriefingEnvelope:
+) -> tuple[BriefingEnvelope, AgentTrace]:
     """Run the comparison agent across multiple stocks. Returns BriefingEnvelope."""
     from flowtracker.research.prompts import COMPARISON_AGENT_PROMPT
     from flowtracker.research.tools import (

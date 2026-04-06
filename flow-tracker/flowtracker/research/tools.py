@@ -9,6 +9,24 @@ from claude_agent_sdk import tool
 from flowtracker.research.data_api import ResearchDataAPI
 
 
+def _parse_section(section: str | list) -> str | list:
+    """Normalize section parameter — parse JSON array strings into lists.
+
+    Agents sometimes pass '["snapshot","band"]' as a string instead of a list.
+    The tool schema declares section as str, so the SDK serializes arrays as strings.
+    """
+    if isinstance(section, list):
+        return section
+    if isinstance(section, str) and section.startswith("["):
+        try:
+            parsed = json.loads(section)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return section
+
+
 # --- Core Financials ---
 
 
@@ -1014,7 +1032,7 @@ def _get_fundamentals_section(api, symbol, section, args):
 )
 async def get_fundamentals(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_fundamentals_section(api, symbol, s, args) for s in section}
@@ -1111,7 +1129,7 @@ def _get_quality_scores_section(api, symbol, section, args):
 )
 async def get_quality_scores(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_quality_scores_section(api, symbol, s, args) for s in section}
@@ -1196,7 +1214,7 @@ def _get_ownership_section(api, symbol, section, args):
 )
 async def get_ownership(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_ownership_section(api, symbol, s, args) for s in section}
@@ -1244,7 +1262,7 @@ def _get_valuation_section(api, symbol, section, args):
 )
 async def get_valuation(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_valuation_section(api, symbol, s, args) for s in section}
@@ -1285,7 +1303,7 @@ def _get_fair_value_analysis_section(api, symbol, section, args):
 )
 async def get_fair_value_analysis(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_fair_value_analysis_section(api, symbol, s, args) for s in section}
@@ -1333,7 +1351,7 @@ def _get_peer_sector_section(api, symbol, section, args):
 )
 async def get_peer_sector(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_peer_sector_section(api, symbol, s, args) for s in section}
@@ -1384,7 +1402,7 @@ def _get_estimates_section(api, symbol, section, args):
 )
 async def get_estimates(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_estimates_section(api, symbol, s, args) for s in section}
@@ -1437,7 +1455,7 @@ def _get_market_context_section(api, symbol, section, args):
 )
 async def get_market_context(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_market_context_section(api, symbol, s, args) for s in section}
@@ -1501,7 +1519,7 @@ def _get_company_context_section(api, symbol, section, args):
 )
 async def get_company_context(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_company_context_section(api, symbol, s, args) for s in section}
@@ -1549,7 +1567,7 @@ def _get_events_actions_section(api, symbol, section, args):
 )
 async def get_events_actions(args):
     symbol = args["symbol"]
-    section = args.get("section", "all")
+    section = _parse_section(args.get("section", "all"))
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_events_actions_section(api, symbol, s, args) for s in section}

@@ -21,6 +21,8 @@ class ToolEvidence(BaseModel, extra="ignore"):
     result_summary: str = ""
     result_hash: str = ""  # sha256 of full result JSON
     is_error: bool = False
+    started_at: str = ""  # ISO timestamp when tool was invoked
+    duration_ms: int = 0  # wall-clock milliseconds
 
 
 class AgentCost(BaseModel, extra="ignore"):
@@ -61,6 +63,57 @@ class VerificationResult(BaseModel, extra="ignore"):
     issues: list[dict] = Field(default_factory=list)
     corrections: list[str] = Field(default_factory=list)
     overall_data_quality: str = ""
+
+
+class AgentTrace(BaseModel, extra="ignore"):
+    """Full execution trace for a single agent run."""
+
+    agent: str
+    symbol: str
+    started_at: str
+    finished_at: str = ""
+    duration_seconds: float = 0.0
+    status: str = "success"
+    tool_calls: list[ToolEvidence] = Field(default_factory=list)
+    reasoning: list[str] = Field(default_factory=list)  # pre-report TextBlocks
+    report_chars: int = 0
+    cost: AgentCost = Field(default_factory=AgentCost)
+
+
+class PhaseEvent(BaseModel, extra="ignore"):
+    """Timing for a single pipeline phase."""
+
+    phase: str  # "data_refresh", "concall", "specialists", "verification", etc.
+    started_at: str
+    finished_at: str = ""
+    duration_seconds: float = 0.0
+
+
+class PipelineTrace(BaseModel, extra="ignore"):
+    """Full execution trace for a pipeline run."""
+
+    symbol: str
+    started_at: str
+    finished_at: str = ""
+    total_duration_seconds: float = 0.0
+    phases: list[PhaseEvent] = Field(default_factory=list)
+    agents: dict[str, AgentTrace] = Field(default_factory=dict)
+    total_cost_usd: float = 0.0
+
+
+def save_trace(trace: PipelineTrace) -> Path:
+    """Save a PipelineTrace to vault. Returns the saved file path."""
+    symbol = trace.symbol.upper()
+    traces_dir = _VAULT_BASE / symbol / "traces"
+    traces_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use started_at timestamp for filename (strip colons for filesystem safety)
+    ts = trace.started_at.replace(":", "").replace("-", "")[:15]  # 20260407T002015
+    path = traces_dir / f"{ts}.json"
+    path.write_text(
+        json.dumps(trace.model_dump(), indent=2, default=str), encoding="utf-8"
+    )
+    return path
 
 
 def save_envelope(envelope: BriefingEnvelope) -> dict[str, Path]:

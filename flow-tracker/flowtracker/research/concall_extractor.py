@@ -526,8 +526,11 @@ async def extract_concalls(
 
     Returns the full extraction dict matching concall_extraction_v2.json schema.
     """
+    import time as _time
+    concall_start = _time.time()
     symbol = symbol.upper()
     pdfs = _find_concall_pdfs(symbol, quarters=quarters)
+    logger.info("[concall] %s: started, %d PDFs found", symbol, len(pdfs) if pdfs else 0)
 
     if not pdfs:
         raise FileNotFoundError(
@@ -658,4 +661,6 @@ async def extract_concalls(
     out_path = out_dir / "concall_extraction_v2.json"
     out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 
+    logger.info("[concall] %s: done %.1fs, %d quarters extracted",
+                symbol, _time.time() - concall_start, result.get("quarters_analyzed", 0))
     return result

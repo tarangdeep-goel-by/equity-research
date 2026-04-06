@@ -9,7 +9,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
+
+logger = logging.getLogger(__name__)
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -112,6 +115,8 @@ async def _run_verifier(
     model: str | None = None,
 ) -> VerificationResult:
     """Run verification on a specialist report."""
+    verify_start = time.time()
+    logger.info("[verify] %s %s: started", agent_name, symbol)
     model = model or DEFAULT_VERIFY_MODEL
     tools = _get_verifier_tools(agent_name)
 
@@ -189,20 +194,28 @@ Spot-check 3-5 key claims by re-fetching data. Produce your verification result.
     if not result_text and text_blocks:
         result_text = "\n\n".join(text_blocks)
 
+    duration = time.time() - verify_start
+
     # Parse verification result from JSON
     parsed = parse_briefing_from_markdown(result_text)
     if parsed:
+        verdict = parsed.get("verdict", "pass")
+        checks = parsed.get("spot_checks_performed", 0)
+        issues_n = len(parsed.get("issues", []))
+        logger.info("[verify] %s %s: done %.1fs verdict=%s checks=%d issues=%d",
+                    agent_name, symbol, duration, verdict, checks, issues_n)
         return VerificationResult(
             agent_verified=parsed.get("agent_verified", agent_name),
             symbol=parsed.get("symbol", symbol),
-            verdict=parsed.get("verdict", "pass"),
-            spot_checks_performed=parsed.get("spot_checks_performed", 0),
+            verdict=verdict,
+            spot_checks_performed=checks,
             issues=parsed.get("issues", []),
             corrections=parsed.get("corrections", []),
             overall_data_quality=parsed.get("overall_data_quality", ""),
         )
 
     # Fallback if parsing fails
+    logger.warning("[verify] %s %s: done %.1fs parsing failed — accepting as pass", agent_name, symbol, duration)
     return VerificationResult(
         agent_verified=agent_name,
         symbol=symbol,

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date
 from pathlib import Path
 
 import markdown
+
+logger = logging.getLogger(__name__)
 
 
 _VAULT_BASE = Path.home() / "vault" / "stocks"
@@ -22,8 +25,11 @@ def assemble_final_report(
 
     Returns (markdown_path, html_path).
     """
+    import time as _time
+    asm_start = _time.time()
     symbol = symbol.upper()
     today = date.today().isoformat()
+    logger.info("[assembly] %s: started (%d specialist reports)", symbol, len(specialist_envelopes))
 
     # Extract synthesis sections by splitting on ## headers
     synthesis_sections = _split_by_headers(synthesis_envelope.report)
@@ -116,6 +122,8 @@ def assemble_final_report(
     html_path = _REPORTS_DIR / f"{symbol.lower()}-thesis.html"
     html_path.write_text(html_content, encoding="utf-8")
 
+    logger.info("[assembly] %s: done %.1fs, %d chars md, %d chars html",
+                symbol, _time.time() - asm_start, len(final_md), len(html_content))
     return md_path, html_path
 
 

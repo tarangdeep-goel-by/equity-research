@@ -190,7 +190,10 @@ def refresh_peers(symbol: str, console: Console | None = None) -> dict[str, int]
     Returns summary dict: {peers_found, peers_fetched, peers_cached,
                            peers_skipped, benchmarks_computed}
     """
+    import time as _time
     symbol = symbol.upper()
+    peer_start = _time.time()
+    logger.info("[peer_refresh] %s: started", symbol)
 
     def _log(msg: str) -> None:
         if console:
@@ -301,10 +304,13 @@ def refresh_peers(symbol: str, console: Console | None = None) -> dict[str, int]
         _log("\n[bold]Sector benchmarks[/]")
         benchmarks_computed = _compute_benchmarks(store, symbol, fetched_symbols, console)
 
-    return {
+    result = {
         "peers_found": peers_found,
         "peers_fetched": peers_fetched,
         "peers_cached": peers_cached,
         "peers_skipped": peers_skipped,
         "benchmarks_computed": benchmarks_computed,
     }
+    logger.info("[peer_refresh] %s: done %.1fs, %d peers fetched, %d cached, %d benchmarks",
+                symbol, _time.time() - peer_start, peers_fetched, peers_cached, benchmarks_computed)
+    return result

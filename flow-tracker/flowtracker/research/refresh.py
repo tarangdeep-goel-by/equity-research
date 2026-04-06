@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from datetime import date, timedelta
 
 from rich.console import Console
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_ids_from_html(html: str) -> tuple[str, str]:
@@ -124,6 +127,8 @@ def refresh_for_research(
     Errors in individual fetches are logged but don't stop the process.
     """
     symbol = symbol.upper()
+    refresh_start = time.time()
+    logger.info("[refresh] %s: started (max_age=%dh)", symbol, max_age_hours)
     summary: dict[str, int] = {}
 
     def _log(msg: str) -> None:
@@ -133,10 +138,12 @@ def refresh_for_research(
     def _ok(name: str, count: int) -> None:
         summary[name] = count
         _log(f"  [green]\u2713[/] {name}: {count} records")
+        logger.info("[refresh] %s: %s ok %d records", symbol, name, count)
 
     def _skip(name: str, err: str) -> None:
         summary[name] = 0
         _log(f"  [yellow]\u2717[/] {name}: {err}")
+        logger.warning("[refresh] %s: %s skipped: %s", symbol, name, err)
 
     from flowtracker.store import FlowStore
 
@@ -546,6 +553,9 @@ def refresh_for_research(
     except Exception as e:
         _skip("analytical_snapshot", str(e))
 
+    total = sum(summary.values())
+    logger.info("[refresh] %s: done %.1fs, %d sources, %d total records",
+                symbol, time.time() - refresh_start, len(summary), total)
     return summary
 
 
@@ -555,6 +565,8 @@ def refresh_for_business(symbol: str, console: Console | None = None) -> dict[st
     Much faster than refresh_for_research — ~5 API calls vs ~50.
     """
     symbol = symbol.upper()
+    refresh_start = time.time()
+    logger.info("[refresh_business] %s: started", symbol)
     summary: dict[str, int] = {}
 
     def _log(msg: str) -> None:
@@ -564,10 +576,12 @@ def refresh_for_business(symbol: str, console: Console | None = None) -> dict[st
     def _ok(name: str, count: int) -> None:
         summary[name] = count
         _log(f"  [green]\u2713[/] {name}: {count} records")
+        logger.info("[refresh] %s: %s ok %d records", symbol, name, count)
 
     def _skip(name: str, err: str) -> None:
         summary[name] = 0
         _log(f"  [yellow]\u2717[/] {name}: {err}")
+        logger.warning("[refresh] %s: %s skipped: %s", symbol, name, err)
 
     from flowtracker.store import FlowStore
 
@@ -639,4 +653,7 @@ def refresh_for_business(symbol: str, console: Console | None = None) -> dict[st
         except Exception as e:
             _skip("screener", str(e))
 
+    total = sum(summary.values())
+    logger.info("[refresh_business] %s: done %.1fs, %d sources, %d total records",
+                symbol, time.time() - refresh_start, len(summary), total)
     return summary

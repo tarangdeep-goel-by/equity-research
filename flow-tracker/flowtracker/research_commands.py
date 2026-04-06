@@ -214,7 +214,8 @@ def thesis(
         datefmt="%H:%M:%S",
     )
 
-    from flowtracker.research.agent import format_cost_summary, run_all_agents, run_explainer_agent, run_synthesis_agent
+    from flowtracker.research.agent import format_cost_summary, format_timeline, run_all_agents, run_explainer_agent, run_synthesis_agent
+    from flowtracker.research.briefing import PhaseEvent, PipelineTrace, save_trace
     from flowtracker.research.assembly import assemble_final_report
 
     symbol = symbol.upper()
@@ -224,15 +225,25 @@ def thesis(
         fundamentals(symbol=symbol)
         return
 
+    # --- Pipeline trace ---
+    from datetime import datetime as _dt, timezone as _tz
+    import time as _time
+    pipeline_start = _time.monotonic()
+    trace = PipelineTrace(symbol=symbol, started_at=_dt.now(_tz.utc).isoformat())
+
     # Phase 0: Data refresh
     if not skip_fetch:
         console.print(f"\n[bold]Phase 0: Data Refresh for {symbol}[/]")
+        p0 = PhaseEvent(phase="data_refresh", started_at=_dt.now(_tz.utc).isoformat())
         from flowtracker.research.refresh import refresh_for_research
         refresh_for_research(symbol, console)
 
         console.print("\n[bold]Refreshing peer data...[/]")
         from flowtracker.research.peer_refresh import refresh_peers
         refresh_peers(symbol, console)
+        p0.finished_at = _dt.now(_tz.utc).isoformat()
+        p0.duration_seconds = _time.monotonic() - pipeline_start
+        trace.phases.append(p0)
 
     # Phase 0b: Concall extraction (auto-run if stale or missing)
     from pathlib import Path
@@ -256,6 +267,8 @@ def thesis(
 
     if not extraction_fresh:
         console.print(f"\n[bold]Phase 0b: Concall Pipeline[/]")
+        p0b = PhaseEvent(phase="concall", started_at=_dt.now(_tz.utc).isoformat())
+        p0b_start = _time.monotonic()
 
         # Step 1: Fetch + download filing PDFs from BSE
         if not skip_fetch:
@@ -296,6 +309,10 @@ def thesis(
                 console.print("  [dim]Agents will work without concall data[/]")
         else:
             console.print(f"  [dim]No concall PDFs found for {symbol} after download. Agents will work without concall data.[/]")
+
+        p0b.finished_at = _dt.now(_tz.utc).isoformat()
+        p0b.duration_seconds = _time.monotonic() - p0b_start
+        trace.phases.append(p0b)
     else:
         console.print(f"\n[dim]Concall extraction is fresh (<30 days). Skipping.[/]")
 
@@ -304,13 +321,16 @@ def thesis(
     console.print("Agents: business, financials, ownership, valuation, risk, technical, sector")
     console.print("This may take 3-8 minutes.\n")
 
-    envelopes = asyncio.run(run_all_agents(
+    envelopes, agent_trace = asyncio.run(run_all_agents(
         symbol=symbol,
         model=model,
         verify=not skip_verify,
         verify_model=verify_model,
         effort=effort,
     ))
+    # Merge agent-level trace into pipeline trace
+    trace.phases.extend(agent_trace.phases)
+    trace.agents.update(agent_trace.agents)
 
     if not envelopes:
         console.print("[red]All agents failed. No reports generated.[/]")
@@ -329,20 +349,37 @@ def thesis(
 
     # Phase 2: Synthesis
     console.print(f"\n[bold]Phase 2: Synthesis agent[/]")
-    synthesis = asyncio.run(run_synthesis_agent(symbol, model, effort=effort))
+    p2 = PhaseEvent(phase="synthesis", started_at=_dt.now(_tz.utc).isoformat())
+    p2_start = _time.monotonic()
+    synthesis, synthesis_trace = asyncio.run(run_synthesis_agent(symbol, model, effort=effort))
+    p2.finished_at = _dt.now(_tz.utc).isoformat()
+    p2.duration_seconds = _time.monotonic() - p2_start
+    trace.phases.append(p2)
+    trace.agents["synthesis"] = synthesis_trace
     console.print("[green]✓[/] Synthesis complete")
 
     # Phase 3: Assembly (technical report)
     console.print(f"\n[bold]Phase 3: Assembling technical report[/]")
+    p3 = PhaseEvent(phase="assembly", started_at=_dt.now(_tz.utc).isoformat())
+    p3_start = _time.monotonic()
     md_path, html_path = assemble_final_report(symbol, envelopes, synthesis)
+    p3.finished_at = _dt.now(_tz.utc).isoformat()
+    p3.duration_seconds = _time.monotonic() - p3_start
+    trace.phases.append(p3)
     console.print(f"[green]✓[/] Technical report assembled")
 
     # Phase 4: Explainer (beginner-friendly annotations)
     explainer_envelope = None
     if not technical_only:
         console.print(f"\n[bold]Phase 4: Adding beginner-friendly annotations[/]")
+        p4 = PhaseEvent(phase="explainer", started_at=_dt.now(_tz.utc).isoformat())
+        p4_start = _time.monotonic()
         technical_md = md_path.read_text(encoding="utf-8")
-        explainer_envelope = asyncio.run(run_explainer_agent(symbol, technical_md, model))
+        explainer_envelope, explainer_trace = asyncio.run(run_explainer_agent(symbol, technical_md, model))
+        p4.finished_at = _dt.now(_tz.utc).isoformat()
+        p4.duration_seconds = _time.monotonic() - p4_start
+        trace.phases.append(p4)
+        trace.agents["explainer"] = explainer_trace
 
         if explainer_envelope.report and len(explainer_envelope.report) > len(technical_md) * 0.8:
             friendly_md = explainer_envelope.report
@@ -380,11 +417,25 @@ def thesis(
         else:
             console.print(f"[yellow]⚠[/] Explainer output too short — using technical version")
 
+    # Finalize trace
+    trace.finished_at = _dt.now(_tz.utc).isoformat()
+    trace.total_duration_seconds = _time.monotonic() - pipeline_start
+    trace.total_cost_usd = sum(env.cost.total_cost_usd for env in envelopes.values())
+    trace.total_cost_usd += synthesis.cost.total_cost_usd
+    if explainer_envelope:
+        trace.total_cost_usd += explainer_envelope.cost.total_cost_usd
+
     # Cost summary
     all_envelopes = {**envelopes, "synthesis": synthesis}
     if explainer_envelope:
         all_envelopes["explainer"] = explainer_envelope
     console.print(format_cost_summary(all_envelopes))
+
+    # Pipeline timeline
+    console.print(format_timeline(trace))
+
+    # Save trace
+    trace_path = save_trace(trace)
 
     # Output paths
     console.print(f"\n[bold]Output:[/]")
@@ -392,6 +443,7 @@ def thesis(
     console.print(f"  HTML:     {html_path}")
     console.print(f"  Reports:  ~/vault/stocks/{symbol}/reports/")
     console.print(f"  Briefings: ~/vault/stocks/{symbol}/briefings/")
+    console.print(f"  Trace:    {trace_path}")
 
     # Open HTML in browser
     webbrowser.open(f"file://{html_path}")
@@ -411,8 +463,15 @@ def explain(
         uv run flowtrack research explain -s GROWW
         uv run flowtrack research explain -f ~/reports/custom-report.md
     """
+    import logging
     import webbrowser
     from pathlib import Path
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     from flowtracker.research.agent import format_cost_summary, run_explainer_agent
     from flowtracker.research.assembly import _render_html
@@ -448,8 +507,17 @@ def explain(
     technical_md = input_path.read_text(encoding="utf-8")
     console.print(f"Input: {len(technical_md):,} chars")
 
+    from datetime import datetime as _dt, timezone as _tz
+    import time as _time
+    from flowtracker.research.agent import format_timeline
+    from flowtracker.research.briefing import PipelineTrace, save_trace
+
+    pipeline_start = _time.monotonic()
+    trace = PipelineTrace(symbol=symbol, started_at=_dt.now(_tz.utc).isoformat())
+
     console.print(f"\n[bold]Running explainer agent for {symbol}...[/]")
-    envelope = asyncio.run(run_explainer_agent(symbol, technical_md, model))
+    envelope, explainer_trace = asyncio.run(run_explainer_agent(symbol, technical_md, model))
+    trace.agents["explainer"] = explainer_trace
 
     if not envelope.report or len(envelope.report) < len(technical_md) * 0.8:
         console.print(f"[red]Explainer output too short ({len(envelope.report or '')} chars). Aborting.[/]")
@@ -470,10 +538,17 @@ def explain(
     html_path = reports_dir / f"{symbol.lower()}-thesis-friendly.html"
     html_path.write_text(friendly_html, encoding="utf-8")
 
+    trace.finished_at = _dt.now(_tz.utc).isoformat()
+    trace.total_duration_seconds = _time.monotonic() - pipeline_start
+    trace.total_cost_usd = envelope.cost.total_cost_usd
     console.print(format_cost_summary({"explainer": envelope}))
+    console.print(format_timeline(trace))
+    trace_path = save_trace(trace)
+
     console.print(f"\n[bold]Output:[/]")
     console.print(f"  Friendly MD:   {friendly_md_path}")
     console.print(f"  Friendly HTML: {html_path}")
+    console.print(f"  Trace:         {trace_path}")
 
     webbrowser.open(f"file://{html_path}")
 
@@ -692,7 +767,14 @@ def compare(
     effort: Annotated[str | None, typer.Option("--effort", help="Override effort level: low|medium|high|max")] = None,
 ) -> None:
     """Compare 2-5 stocks side-by-side with AI-generated comparative analysis."""
+    import logging
     import webbrowser
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     if len(symbols) < 2:
         console.print("[red]Need at least 2 symbols to compare[/red]")
@@ -701,24 +783,40 @@ def compare(
         console.print("[red]Maximum 5 symbols for comparison[/red]")
         raise typer.Exit(1)
 
+    from datetime import datetime as _dt, timezone as _tz
+    import time as _time
+    from flowtracker.research.agent import format_timeline
+    from flowtracker.research.briefing import PipelineTrace, save_trace
+
     symbols = [s.upper() for s in symbols]
     console.print(f"[bold]Comparing: {' vs '.join(symbols)}[/bold]")
 
+    pipeline_start = _time.monotonic()
+    trace = PipelineTrace(symbol="_vs_".join(symbols), started_at=_dt.now(_tz.utc).isoformat())
+
     from flowtracker.research.agent import run_comparison_agent
 
-    envelope = asyncio.run(run_comparison_agent(
+    envelope, comp_trace = asyncio.run(run_comparison_agent(
         symbols=symbols,
         model=model,
         skip_fetch=skip_fetch,
         force=force,
         effort=effort,
     ))
+    trace.agents["comparison"] = comp_trace
 
     from flowtracker.research.assembly import assemble_comparison_report
 
     html_path, md_path = assemble_comparison_report(symbols, envelope)
 
+    trace.finished_at = _dt.now(_tz.utc).isoformat()
+    trace.total_duration_seconds = _time.monotonic() - pipeline_start
+    trace.total_cost_usd = envelope.cost.total_cost_usd
+    console.print(format_timeline(trace))
+    trace_path = save_trace(trace)
+
     console.print(f"\n[green]Report saved:[/green] {html_path}")
+    console.print(f"[dim]Trace: {trace_path}[/]")
 
     webbrowser.open(f"file://{html_path}")
 
@@ -748,6 +846,13 @@ def run_agent(
       flowtrack research run synthesis -s HDFCBANK         # just re-synthesize from existing briefings
       flowtrack research run business,risk,synthesis -s HDFCBANK --assemble  # re-run two + synthesize + assemble HTML
     """
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
     symbol = symbol.upper()
     agent_list = [a.strip().lower() for a in agents.split(",")]
 
@@ -771,9 +876,20 @@ def run_agent(
         if reusing:
             console.print(f"[dim]Will reuse: {', '.join(sorted(reusing))}[/]")
 
+    # --- Pipeline trace ---
+    from datetime import datetime as _dt, timezone as _tz
+    import time as _time
+    from flowtracker.research.agent import format_timeline
+    from flowtracker.research.briefing import PhaseEvent, PipelineTrace, save_trace
+
+    pipeline_start = _time.monotonic()
+    trace = PipelineTrace(symbol=symbol, started_at=_dt.now(_tz.utc).isoformat())
+
     # Data refresh (only if running specialists, not for synthesis-only)
     if specialist_agents and not skip_fetch:
         console.print(f"\n[bold]Refreshing data for {symbol}...[/]")
+        p0 = PhaseEvent(phase="data_refresh", started_at=_dt.now(_tz.utc).isoformat())
+        p0_start = _time.monotonic()
         needs_full = any(a != "business" for a in specialist_agents)
         if needs_full:
             from flowtracker.research.refresh import refresh_for_research
@@ -787,6 +903,9 @@ def run_agent(
         from flowtracker.research.peer_refresh import refresh_peers
         console.print(f"\n[bold]Refreshing peer data...[/]")
         refresh_peers(symbol, console)
+        p0.finished_at = _dt.now(_tz.utc).isoformat()
+        p0.duration_seconds = _time.monotonic() - p0_start
+        trace.phases.append(p0)
 
     # Run specialist agents
     total_cost = 0.0
@@ -795,7 +914,8 @@ def run_agent(
 
         try:
             from flowtracker.research.agent import run_single_agent
-            envelope = asyncio.run(run_single_agent(agent, symbol, model=model, effort=effort))
+            envelope, agent_trace = asyncio.run(run_single_agent(agent, symbol, model=model, effort=effort))
+            trace.agents[agent] = agent_trace
         except Exception as e:
             console.print(f"[red]{agent} agent error: {e}[/]")
             continue
@@ -811,7 +931,8 @@ def run_agent(
         console.print(f"\n[bold]Running web research agent for {symbol}...[/]")
         try:
             from flowtracker.research.agent import run_web_research_agent
-            wr_envelope = asyncio.run(run_web_research_agent(symbol, model=model))
+            wr_envelope, wr_trace = asyncio.run(run_web_research_agent(symbol, model=model))
+            trace.agents["web_research"] = wr_trace
             cost = wr_envelope.cost
             total_cost += cost.total_cost_usd
             resolved = wr_envelope.briefing.get("questions_resolved", 0)
@@ -827,7 +948,8 @@ def run_agent(
         console.print(f"\n[bold]Running synthesis agent for {symbol}...[/]")
         try:
             from flowtracker.research.agent import run_synthesis_agent
-            synthesis = asyncio.run(run_synthesis_agent(symbol, model, effort=effort))
+            synthesis, syn_trace = asyncio.run(run_synthesis_agent(symbol, model, effort=effort))
+            trace.agents["synthesis"] = syn_trace
             total_cost += synthesis.cost.total_cost_usd
             console.print(f"  [green]✓[/] synthesis: {len(synthesis.report):,} chars, ${synthesis.cost.total_cost_usd:.2f}")
         except Exception as e:
@@ -861,9 +983,17 @@ def run_agent(
         except Exception as e:
             console.print(f"[red]Assembly error: {e}[/]")
 
+    # Finalize trace
+    trace.finished_at = _dt.now(_tz.utc).isoformat()
+    trace.total_duration_seconds = _time.monotonic() - pipeline_start
+    trace.total_cost_usd = total_cost
+    console.print(format_timeline(trace))
+    trace_path = save_trace(trace)
+
     console.print(f"\n[bold]Total cost: ${total_cost:.2f}[/]")
     console.print(f"[dim]Reports: ~/vault/stocks/{symbol}/reports/[/]")
     console.print(f"[dim]Briefings: ~/vault/stocks/{symbol}/briefings/[/]")
+    console.print(f"[dim]Trace: {trace_path}[/]")
 
 
 @app.command()
