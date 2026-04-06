@@ -364,9 +364,76 @@ class ResearchDataAPI:
         return _clean([r.model_dump() for r in rows])
 
     def get_mf_holding_changes(self, symbol: str) -> list[dict]:
-        """MF holdings for this stock (latest month). Use for ownership analysis."""
-        rows = self._store.get_mf_stock_holdings(symbol)
-        return _clean([r.model_dump() for r in rows])
+        """MF scheme-level month-over-month changes: which schemes added/trimmed this stock."""
+        # Get current month holdings
+        current = self._store.get_mf_stock_holdings(symbol)
+        if not current:
+            return []
+
+        # Find the current month from the data
+        months = sorted(set(r.month for r in current if hasattr(r, "month")))
+        if not months:
+            return _clean([r.model_dump() for r in current])
+
+        curr_month = months[-1]
+        # Compute previous month
+        y, m = int(curr_month[:4]), int(curr_month[5:7])
+        prev_month = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
+
+        # Build lookup by scheme for previous month
+        prev_rows = self._store._conn.execute(
+            "SELECT * FROM mf_scheme_holdings "
+            "WHERE UPPER(stock_name) LIKE ? AND month = ? "
+            "ORDER BY market_value_cr DESC",
+            (f"%{symbol}%", prev_month),
+        ).fetchall()
+        prev_by_scheme = {r["scheme_name"]: r for r in prev_rows}
+
+        changes = []
+        for r in current:
+            d = r.model_dump() if hasattr(r, "model_dump") else r
+            scheme = d.get("scheme_name", "")
+            prev = prev_by_scheme.get(scheme)
+
+            curr_val = d.get("market_value_cr") or 0
+            prev_val = (prev["market_value_cr"] if prev else 0) or 0
+            curr_qty = d.get("quantity") or 0
+            prev_qty = (prev["quantity"] if prev else 0) or 0
+
+            if prev:
+                change_type = (
+                    "increased" if curr_val > prev_val
+                    else "decreased" if curr_val < prev_val
+                    else "unchanged"
+                )
+                del prev_by_scheme[scheme]  # Mark as matched
+            else:
+                change_type = "new_entry"
+
+            d["change_type"] = change_type
+            d["prev_value_cr"] = round(prev_val, 2) if prev_val else None
+            d["prev_quantity"] = prev_qty or None
+            d["value_change_cr"] = round(curr_val - prev_val, 2) if prev_val else None
+            changes.append(d)
+
+        # Add schemes that exited (in prev but not in current)
+        for scheme, prev in prev_by_scheme.items():
+            changes.append({
+                "scheme_name": scheme,
+                "amc": prev["amc"],
+                "stock_name": prev["stock_name"],
+                "quantity": 0,
+                "market_value_cr": 0,
+                "pct_of_nav": 0,
+                "change_type": "exited",
+                "prev_value_cr": round(prev["market_value_cr"] or 0, 2),
+                "prev_quantity": prev["quantity"],
+                "value_change_cr": -round(prev["market_value_cr"] or 0, 2),
+            })
+
+        # Sort by absolute value change descending
+        changes.sort(key=lambda x: abs(x.get("value_change_cr") or 0), reverse=True)
+        return _clean(changes)
 
     # --- Market Signals ---
 
