@@ -1436,8 +1436,20 @@ async def get_market_context(args):
         if isinstance(section, list):
             data = {s: _get_market_context_section(api, symbol, s, args) for s in section}
         elif section == "all":
+            # Compute ADTV (avg daily traded value in ₹ Cr) from bhavcopy turnover
+            stock_data = api._store.get_stock_delivery(symbol, days=30)
+            turnovers = [r.turnover for r in stock_data if r.turnover and r.turnover > 0]
+            adtv_cr = round(sum(turnovers) / len(turnovers) / 1e7, 1) if turnovers else None  # turnover is in ₹, convert to Cr
+
             data = {
                 "delivery": api.get_delivery_trend(symbol, args.get("days", 30)),
+                "adtv_cr": adtv_cr,
+                "adtv_signal": (
+                    "severe_liquidity_risk" if adtv_cr is not None and adtv_cr < 5
+                    else "moderate_liquidity_risk" if adtv_cr is not None and adtv_cr < 20
+                    else "adequate" if adtv_cr is not None
+                    else None
+                ),
                 "macro": api.get_macro_snapshot(),
                 "fii_dii_streak": api.get_fii_dii_streak(),
                 "fii_dii_flows": api.get_fii_dii_flows(args.get("days", 30)),
