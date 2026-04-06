@@ -852,6 +852,56 @@ CREATE TABLE IF NOT EXISTS analytical_snapshot (
     perf_outperformer INTEGER,
     perf_sector_index TEXT,
 
+    -- Forensic Checks (Batch 1)
+    forensic_cfo_ebitda_5y REAL,
+    forensic_cfo_ebitda_signal TEXT,
+    forensic_dep_volatility REAL,
+    forensic_dep_signal TEXT,
+    forensic_cash_yield_pct REAL,
+    forensic_cash_yield_signal TEXT,
+    forensic_cwip_3y_avg REAL,
+    forensic_cwip_signal TEXT,
+
+    -- Improvement Metrics (Batch 1)
+    improvement_greatness_pct REAL,
+    improvement_greatness_class TEXT,
+    improvement_capex_prod_ratio REAL,
+
+    -- Capital Discipline (Batch 1)
+    capital_roce_reinvest_signal TEXT,
+    capital_sustainable_growth_3y REAL,
+    capital_equity_dilution_pct REAL,
+    capital_equity_dilution_signal TEXT,
+
+    -- Incremental ROCE (Batch 2)
+    incremental_roce_3y REAL,
+    incremental_roce_3y_signal TEXT,
+    incremental_roce_5y REAL,
+
+    -- Altman Z-Score (Batch 2)
+    altman_zscore REAL,
+    altman_zone TEXT,
+
+    -- Working Capital (Batch 2)
+    wc_ccc_direction TEXT,
+    wc_signal TEXT,
+
+    -- Operating Leverage (Batch 2)
+    dol_avg_3y REAL,
+    dol_signal TEXT,
+
+    -- FCF Yield (Batch 2)
+    fcf_yield_pct REAL,
+    fcf_yield_signal TEXT,
+    fcf_pat_ratio REAL,
+
+    -- Tax Rate Analysis (Batch 2)
+    tax_avg_3y_etr REAL,
+    tax_signal TEXT,
+
+    -- Receivables Quality (Batch 2)
+    recv_quality_signal TEXT,
+
     -- WACC Parameters
     wacc REAL,
     ke REAL,
@@ -912,16 +962,43 @@ class FlowStore:
         self._migrate_analytical_snapshot()
 
     def _migrate_analytical_snapshot(self) -> None:
-        """Add WACC columns to analytical_snapshot if they don't exist."""
+        """Add new columns to analytical_snapshot if they don't exist."""
         existing = {
             row[1] for row in
             self._conn.execute("PRAGMA table_info(analytical_snapshot)").fetchall()
         }
         new_cols = [
+            # WACC (original migration)
             ("wacc", "REAL"), ("ke", "REAL"), ("kd_pretax", "REAL"),
             ("beta_blume", "REAL"), ("beta_raw", "REAL"),
             ("beta_r_squared", "REAL"), ("terminal_growth", "REAL"),
             ("wacc_flags", "TEXT"),
+            # Forensic Checks (Batch 1)
+            ("forensic_cfo_ebitda_5y", "REAL"), ("forensic_cfo_ebitda_signal", "TEXT"),
+            ("forensic_dep_volatility", "REAL"), ("forensic_dep_signal", "TEXT"),
+            ("forensic_cash_yield_pct", "REAL"), ("forensic_cash_yield_signal", "TEXT"),
+            ("forensic_cwip_3y_avg", "REAL"), ("forensic_cwip_signal", "TEXT"),
+            # Improvement Metrics (Batch 1)
+            ("improvement_greatness_pct", "REAL"), ("improvement_greatness_class", "TEXT"),
+            ("improvement_capex_prod_ratio", "REAL"),
+            # Capital Discipline (Batch 1)
+            ("capital_roce_reinvest_signal", "TEXT"), ("capital_sustainable_growth_3y", "REAL"),
+            ("capital_equity_dilution_pct", "REAL"), ("capital_equity_dilution_signal", "TEXT"),
+            # Incremental ROCE (Batch 2)
+            ("incremental_roce_3y", "REAL"), ("incremental_roce_3y_signal", "TEXT"),
+            ("incremental_roce_5y", "REAL"),
+            # Altman Z-Score (Batch 2)
+            ("altman_zscore", "REAL"), ("altman_zone", "TEXT"),
+            # Working Capital (Batch 2)
+            ("wc_ccc_direction", "TEXT"), ("wc_signal", "TEXT"),
+            # Operating Leverage (Batch 2)
+            ("dol_avg_3y", "REAL"), ("dol_signal", "TEXT"),
+            # FCF Yield (Batch 2)
+            ("fcf_yield_pct", "REAL"), ("fcf_yield_signal", "TEXT"), ("fcf_pat_ratio", "REAL"),
+            # Tax Rate (Batch 2)
+            ("tax_avg_3y_etr", "REAL"), ("tax_signal", "TEXT"),
+            # Receivables Quality (Batch 2)
+            ("recv_quality_signal", "TEXT"),
         ]
         for col, typ in new_cols:
             if col not in existing:

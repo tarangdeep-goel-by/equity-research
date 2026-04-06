@@ -1,6 +1,6 @@
 """Pre-compute analytical snapshots for all Nifty index stocks.
 
-Runs all 9 analytical metrics for each stock and stores results in
+Runs all 19 analytical metrics for each stock and stores results in
 the analytical_snapshot table. Designed for weekly cron execution
 after data refresh.
 
@@ -199,7 +199,104 @@ def compute_stock(api, engine, symbol: str, index_cache: dict | None, skip_perf:
         elif err:
             errors["price_performance"] = err
 
-    # 10. WACC parameters
+    # 10. Forensic Checks (Batch 1)
+    fc, err = _safe_compute(api.get_forensic_checks, symbol)
+    if fc and not fc.get("skipped"):
+        row["forensic_cfo_ebitda_5y"] = fc.get("cfo_ebitda_5y_avg")
+        row["forensic_cfo_ebitda_signal"] = fc.get("cfo_ebitda_signal")
+        row["forensic_dep_volatility"] = fc.get("depreciation_volatility")
+        row["forensic_dep_signal"] = fc.get("depreciation_signal")
+        row["forensic_cash_yield_pct"] = fc.get("cash_yield_latest_pct")
+        row["forensic_cash_yield_signal"] = fc.get("cash_yield_signal")
+        row["forensic_cwip_3y_avg"] = fc.get("cwip_3y_avg")
+        row["forensic_cwip_signal"] = fc.get("cwip_signal")
+    elif err:
+        errors["forensic_checks"] = err
+
+    # 11. Improvement Metrics (Batch 1)
+    im, err = _safe_compute(api.get_improvement_metrics, symbol)
+    if im and not im.get("error"):
+        g = im.get("greatness") or {}
+        row["improvement_greatness_pct"] = g.get("score_pct")
+        row["improvement_greatness_class"] = g.get("classification")
+        cp = im.get("capex_productivity") or {}
+        row["improvement_capex_prod_ratio"] = cp.get("ratio")
+    elif err:
+        errors["improvement_metrics"] = err
+
+    # 12. Capital Discipline (Batch 1)
+    cd, err = _safe_compute(api.get_capital_discipline, symbol)
+    if cd and not cd.get("skipped"):
+        rr = cd.get("roce_reinvestment") or {}
+        row["capital_roce_reinvest_signal"] = rr.get("latest_signal")
+        row["capital_sustainable_growth_3y"] = rr.get("avg_sustainable_growth_3y")
+        ed = cd.get("equity_dilution") or {}
+        row["capital_equity_dilution_pct"] = ed.get("cagr_3y_pct")
+        row["capital_equity_dilution_signal"] = ed.get("signal")
+    elif err:
+        errors["capital_discipline"] = err
+
+    # 13. Incremental ROCE (Batch 2)
+    ir, err = _safe_compute(api.get_incremental_roce, symbol)
+    if ir and not ir.get("skipped"):
+        r3 = ir.get("incremental_roce_3y") or {}
+        row["incremental_roce_3y"] = r3.get("pct")
+        row["incremental_roce_3y_signal"] = r3.get("signal")
+        r5 = ir.get("incremental_roce_5y") or {}
+        row["incremental_roce_5y"] = r5.get("pct")
+    elif err:
+        errors["incremental_roce"] = err
+
+    # 14. Altman Z-Score (Batch 2)
+    az, err = _safe_compute(api.get_altman_zscore, symbol)
+    if az and not az.get("skipped"):
+        row["altman_zscore"] = az.get("latest_z_score")
+        row["altman_zone"] = az.get("latest_zone")
+    elif err:
+        errors["altman_zscore"] = err
+
+    # 15. Working Capital Deterioration (Batch 2)
+    wc, err = _safe_compute(api.get_working_capital_deterioration, symbol)
+    if wc and not wc.get("skipped"):
+        ccc = wc.get("ccc_trend") or {}
+        row["wc_ccc_direction"] = ccc.get("direction")
+        row["wc_signal"] = wc.get("signal")
+    elif err:
+        errors["working_capital"] = err
+
+    # 16. Operating Leverage (Batch 2)
+    ol, err = _safe_compute(api.get_operating_leverage, symbol)
+    if ol and not ol.get("error"):
+        row["dol_avg_3y"] = ol.get("avg_3y_dol")
+        row["dol_signal"] = ol.get("signal")
+    elif err:
+        errors["operating_leverage"] = err
+
+    # 17. FCF Yield (Batch 2)
+    fy, err = _safe_compute(api.get_fcf_yield, symbol)
+    if fy and not fy.get("error"):
+        row["fcf_yield_pct"] = fy.get("fcf_yield_pct")
+        row["fcf_yield_signal"] = fy.get("signal")
+        row["fcf_pat_ratio"] = fy.get("fcf_pat_ratio")
+    elif err:
+        errors["fcf_yield"] = err
+
+    # 18. Tax Rate Analysis (Batch 2)
+    tr, err = _safe_compute(api.get_tax_rate_analysis, symbol)
+    if tr and not tr.get("error"):
+        row["tax_avg_3y_etr"] = tr.get("avg_3y_etr")
+        row["tax_signal"] = tr.get("signal")
+    elif err:
+        errors["tax_rate"] = err
+
+    # 19. Receivables Quality (Batch 2)
+    rq, err = _safe_compute(api.get_receivables_quality, symbol)
+    if rq and not rq.get("skipped"):
+        row["recv_quality_signal"] = rq.get("signal")
+    elif err:
+        errors["receivables_quality"] = err
+
+    # 20. WACC parameters
     try:
         wacc_data = api.get_wacc_params(symbol)
         if "wacc" in wacc_data:
