@@ -2367,6 +2367,502 @@ class ResearchDataAPI:
             "bs_loss_flags": bs_loss_flags,
         })
 
+    # ------------------------------------------------------------------
+    # Batch-2 quality metrics (7 methods)
+    # ------------------------------------------------------------------
+
+    def get_incremental_roce(self, symbol: str) -> dict:
+        """Incremental ROCE: return on newly deployed capital (3Y and 5Y windows)."""
+        if self._is_bfsi(symbol) or self._is_insurance(symbol):
+            return {"skipped": True, "reason": "Incremental ROCE not applicable to BFSI/Insurance."}
+
+        annuals = self.get_annual_financials(symbol, years=6)
+        if not annuals or len(annuals) < 4:
+            return {"error": f"Need at least 4 years of data, got {len(annuals)}"}
+
+        # Pre-compute EBIT and CE per year
+        ebit_list: list[float] = []
+        ce_list: list[float] = []
+        for a in annuals:
+            ebit_list.append(a.get("operating_profit") or 0)
+            ce_list.append(
+                (a.get("equity_capital") or 0)
+                + (a.get("reserves") or 0)
+                + (a.get("borrowings") or 0)
+            )
+
+        result: dict = {}
+        for window in [3, 5]:
+            if len(annuals) < window + 1:
+                continue
+            delta_ebit = ebit_list[0] - ebit_list[window]
+            delta_ce = ce_list[0] - ce_list[window]
+
+            entry: dict = {
+                "delta_ebit_cr": round(delta_ebit, 2),
+                "delta_ce_cr": round(delta_ce, 2),
+            }
+            if delta_ce <= 0:
+                entry["signal"] = "buyback_or_shrinkage"
+            else:
+                pct = round(delta_ebit / delta_ce * 100, 1)
+                entry["pct"] = pct
+                if pct > 15:
+                    entry["signal"] = "value_creating"
+                elif pct >= 10:
+                    entry["signal"] = "moderate"
+                else:
+                    entry["signal"] = "value_destroying"
+
+            result[f"incremental_roce_{window}y"] = entry
+
+        result["caveat"] = (
+            "Capital employed = equity + reserves + borrowings"
+            " (other_liabilities excluded as it conflates current and non-current)"
+        )
+        return _clean(result)
+
+    def get_altman_zscore(self, symbol: str) -> dict:
+        """Altman Z-Score (Emerging Market variant) for distress prediction."""
+        if self._is_bfsi(symbol) or self._is_insurance(symbol):
+            return {"skipped": True, "reason": "Altman Z-Score not applicable to BFSI/Insurance."}
+
+        annuals = self.get_annual_financials(symbol, years=3)
+        if not annuals:
+            return {"error": f"No annual financial data for {symbol}"}
+
+        years: list[dict] = []
+        for a in annuals:
+            ta = a.get("total_assets") or 0
+            if ta <= 0:
+                continue
+
+            wc = (
+                (a.get("cash_and_bank") or 0)
+                + (a.get("receivables") or 0)
+                + (a.get("inventory") or 0)
+                - (a.get("other_liabilities") or 0)
+            )
+            re = a.get("reserves") or 0
+            ebit = a.get("operating_profit") or 0
+            bv_equity = (a.get("equity_capital") or 0) + (a.get("reserves") or 0)
+            tl = (a.get("borrowings") or 0) + (a.get("other_liabilities") or 0)
+
+            last_term = bv_equity / tl if tl > 0 else 10.0
+
+            z = (
+                3.25
+                + 6.56 * (wc / ta)
+                + 3.26 * (re / ta)
+                + 6.72 * (ebit / ta)
+                + 1.05 * last_term
+            )
+
+            if z > 2.6:
+                zone = "safe"
+            elif z >= 1.1:
+                zone = "gray"
+            else:
+                zone = "distress"
+
+            years.append({
+                "fiscal_year_end": a.get("fiscal_year_end"),
+                "z_score": round(z, 2),
+                "zone": zone,
+                "components": {
+                    "wc_ta": round(wc / ta, 3),
+                    "re_ta": round(re / ta, 3),
+                    "ebit_ta": round(ebit / ta, 3),
+                    "bve_tl": round(last_term, 3),
+                },
+            })
+
+        if not years:
+            return {"error": "Could not compute Z-Score (total_assets <= 0)"}
+
+        return _clean({
+            "years": years,
+            "latest_z_score": years[0]["z_score"],
+            "latest_zone": years[0]["zone"],
+            "caveat": "other_liabilities used as current liabilities proxy; inventory=0 for service companies",
+        })
+
+    def get_working_capital_deterioration(self, symbol: str) -> dict:
+        """Working capital trend: CCC direction, receivables/inventory vs revenue growth."""
+        if self._is_bfsi(symbol) or self._is_insurance(symbol):
+            return {"skipped": True, "reason": "Working capital analysis not applicable to BFSI/Insurance."}
+
+        ratios = self.get_screener_ratios(symbol, years=5)
+        annuals = self.get_annual_financials(symbol, years=4)
+        if not annuals or len(annuals) < 2:
+            return {"error": f"Need at least 2 years of data, got {len(annuals) if annuals else 0}"}
+
+        # --- CCC trend ---
+        ccc_years: list[dict] = []
+        for r in (ratios or []):
+            ccc = r.get("cash_conversion_cycle")
+            if ccc is not None:
+                ccc_years.append({
+                    "fiscal_year_end": r.get("fiscal_year_end"),
+                    "ccc_days": ccc,
+                })
+
+        ccc_direction = "stable"
+        if len(ccc_years) >= 2:
+            latest_ccc = ccc_years[0]["ccc_days"]
+            oldest_ccc = ccc_years[-1]["ccc_days"]
+            diff = latest_ccc - oldest_ccc
+            if diff < -5:
+                ccc_direction = "improving"
+            elif diff > 5:
+                ccc_direction = "deteriorating"
+
+        # --- Receivables / Revenue and Inventory / Revenue ratios ---
+        recv_ratio_years: list[dict] = []
+        inv_ratio_years: list[dict] = []
+        has_inventory = False
+        for a in annuals:
+            rev = a.get("revenue") or 0
+            recv = a.get("receivables")
+            inv = a.get("inventory")
+            fy = a.get("fiscal_year_end")
+
+            if rev > 0 and recv is not None:
+                recv_ratio_years.append({
+                    "fiscal_year_end": fy,
+                    "recv_pct": round(recv / rev * 100, 1),
+                })
+            if inv is not None:
+                has_inventory = True
+                if rev > 0:
+                    inv_ratio_years.append({
+                        "fiscal_year_end": fy,
+                        "inv_pct": round(inv / rev * 100, 1),
+                    })
+
+        # --- 3Y CAGRs ---
+        recv_cagr = None
+        rev_cagr = None
+        inv_cagr = None
+        if len(annuals) >= 4:
+            recv_0 = annuals[0].get("receivables")
+            recv_3 = annuals[3].get("receivables")
+            rev_0 = annuals[0].get("revenue") or 0
+            rev_3 = annuals[3].get("revenue") or 0
+            inv_0 = annuals[0].get("inventory")
+            inv_3 = annuals[3].get("inventory")
+
+            if recv_0 and recv_0 > 0 and recv_3 and recv_3 > 0:
+                recv_cagr = round(((recv_0 / recv_3) ** (1 / 3) - 1) * 100, 1)
+            if rev_0 > 0 and rev_3 > 0:
+                rev_cagr = round(((rev_0 / rev_3) ** (1 / 3) - 1) * 100, 1)
+            if inv_0 and inv_0 > 0 and inv_3 and inv_3 > 0:
+                inv_cagr = round(((inv_0 / inv_3) ** (1 / 3) - 1) * 100, 1)
+
+        # --- Flags ---
+        flags: list[str] = []
+        if recv_cagr is not None and rev_cagr is not None and recv_cagr > 0:
+            if rev_cagr > 0 and recv_cagr > 1.5 * rev_cagr:
+                flags.append("channel_stuffing_risk")
+        if inv_cagr is not None and rev_cagr is not None and inv_cagr > 0:
+            if rev_cagr > 0 and inv_cagr > 1.5 * rev_cagr:
+                flags.append("inventory_buildup_risk")
+
+        signal = "clean"
+        if len(flags) >= 2:
+            signal = "concern"
+        elif len(flags) == 1:
+            signal = "warning"
+        if ccc_direction == "deteriorating":
+            signal = signal + "_deteriorating" if signal != "clean" else "deteriorating"
+
+        inv_result = None
+        if has_inventory:
+            inv_result = {"years": inv_ratio_years, "inv_3y_cagr_pct": inv_cagr}
+
+        return _clean({
+            "ccc_trend": {"years": ccc_years, "direction": ccc_direction},
+            "receivable_ratio": {
+                "years": recv_ratio_years,
+                "recv_3y_cagr_pct": recv_cagr,
+                "rev_3y_cagr_pct": rev_cagr,
+            },
+            "inventory_ratio": inv_result,
+            "flags": flags,
+            "signal": signal,
+        })
+
+    def get_operating_leverage(self, symbol: str) -> dict:
+        """Degree of operating leverage (DOL): earnings sensitivity to revenue changes."""
+        annuals = self.get_annual_financials(symbol, years=5)
+        if not annuals or len(annuals) < 2:
+            return {"error": f"Need at least 2 years of data, got {len(annuals) if annuals else 0}"}
+
+        years: list[dict] = []
+        for i in range(len(annuals) - 1):
+            rev_t = annuals[i].get("revenue") or 0
+            rev_t1 = annuals[i + 1].get("revenue") or 0
+            ebit_t = annuals[i].get("operating_profit") or 0
+            ebit_t1 = annuals[i + 1].get("operating_profit") or 0
+
+            if abs(rev_t1) < 1 or abs(ebit_t1) < 1:
+                continue
+            # Skip if base EBIT is negative — % change formula gives inverted sign
+            if ebit_t1 < 0:
+                continue
+
+            rev_change_pct = (rev_t - rev_t1) / rev_t1
+            ebit_change_pct = (ebit_t - ebit_t1) / ebit_t1
+
+            if abs(rev_change_pct) < 0.01:
+                continue
+
+            dol = ebit_change_pct / rev_change_pct
+            dol = max(-10, min(10, dol))
+
+            years.append({
+                "fiscal_year_end": annuals[i].get("fiscal_year_end"),
+                "rev_change_pct": round(rev_change_pct * 100, 1),
+                "ebit_change_pct": round(ebit_change_pct * 100, 1),
+                "dol": round(dol, 2),
+            })
+
+        if not years:
+            return {"error": "Insufficient data to compute operating leverage"}
+
+        # 3Y avg from first 3 valid pairs
+        avg_dol_values = [y["dol"] for y in years[:3]]
+        avg_3y_dol = round(statistics.mean(avg_dol_values), 2) if avg_dol_values else None
+
+        signal = "moderate"
+        if avg_3y_dol is not None:
+            abs_dol = abs(avg_3y_dol)
+            if abs_dol > 2.5:
+                signal = "high_leverage"
+            elif abs_dol >= 1.5:
+                signal = "moderate"
+            else:
+                signal = "low"
+
+        return _clean({
+            "years": years,
+            "avg_3y_dol": avg_3y_dol,
+            "signal": signal,
+        })
+
+    def get_fcf_yield(self, symbol: str) -> dict:
+        """Free cash flow yield vs enterprise value, compared to risk-free rate."""
+        annuals = self.get_annual_financials(symbol, years=2)
+        if not annuals or len(annuals) < 2:
+            return {"error": f"Need at least 2 years of data, got {len(annuals) if annuals else 0}"}
+
+        valuation = self.get_valuation_snapshot(symbol)
+        ev = valuation.get("enterprise_value")
+        if not ev or ev <= 0:
+            return {"error": "Enterprise value not available or <= 0"}
+
+        t, t1 = annuals[0], annuals[1]
+
+        nb_t = t.get("net_block") or 0
+        nb_t1 = t1.get("net_block") or 0
+        cwip_t = t.get("cwip") or 0
+        cwip_t1 = t1.get("cwip") or 0
+        depreciation = t.get("depreciation") or 0
+        cfo = t.get("cfo") or 0
+        net_income = t.get("net_income") or 0
+
+        capex = (nb_t - nb_t1) + (cwip_t - cwip_t1) + depreciation
+        fcf = cfo - capex
+
+        fcf_yield_pct = round(fcf / ev * 100, 1)
+        fcf_pat_ratio = round(fcf / net_income, 2) if net_income and net_income > 0 else None
+
+        risk_free_ref = 7.0
+        if fcf_yield_pct > 14:
+            signal = "deep_value"
+        elif fcf_yield_pct > 7:
+            signal = "attractive"
+        elif fcf_yield_pct > 0:
+            signal = "growth_priced"
+        else:
+            signal = "hope_trade"
+
+        return _clean({
+            "fcf_cr": round(fcf, 2),
+            "capex_cr": round(capex, 2),
+            "cfo_cr": round(cfo, 2),
+            "ev_cr": round(ev, 2),
+            "fcf_yield_pct": fcf_yield_pct,
+            "fcf_pat_ratio": fcf_pat_ratio,
+            "risk_free_ref_pct": risk_free_ref,
+            "signal": signal,
+        })
+
+    def get_tax_rate_analysis(self, symbol: str) -> dict:
+        """Effective tax rate trend analysis with anomaly detection."""
+        annuals = self.get_annual_financials(symbol, years=6)
+        if not annuals:
+            return {"error": f"No annual financial data for {symbol}"}
+
+        years: list[dict] = []
+        etr_values: list[float] = []
+        for a in annuals:
+            pbt = a.get("profit_before_tax") or 0
+            tax_val = a.get("tax") or 0
+            fy = a.get("fiscal_year_end")
+
+            entry: dict = {
+                "fiscal_year_end": fy,
+                "pbt_cr": round(pbt, 2),
+                "tax_cr": round(tax_val, 2),
+            }
+            if pbt <= 0:
+                entry["etr_pct"] = None
+                entry["note"] = "negative_pbt"
+            else:
+                etr = round(tax_val / pbt * 100, 1)
+                entry["etr_pct"] = etr
+                etr_values.append(etr)
+
+            years.append(entry)
+
+        # Averages
+        valid_3y = [v for v in etr_values[:3] if v is not None]
+        valid_5y = [v for v in etr_values[:5] if v is not None]
+        avg_3y_etr = round(statistics.mean(valid_3y), 1) if valid_3y else None
+        avg_5y_etr = round(statistics.mean(valid_5y), 1) if valid_5y else None
+
+        # Flags
+        flags: list[dict] = []
+
+        # YoY drop > 5pp
+        for i in range(len(years) - 1):
+            curr_etr = years[i].get("etr_pct")
+            prev_etr = years[i + 1].get("etr_pct")
+            if curr_etr is not None and prev_etr is not None:
+                drop = prev_etr - curr_etr
+                if drop > 5:
+                    flags.append({
+                        "year": years[i].get("fiscal_year_end"),
+                        "flag": "tax_anomaly",
+                        "drop_pp": round(drop, 1),
+                    })
+
+        # Below statutory
+        if avg_3y_etr is not None and avg_3y_etr < 20.0:
+            flags.append({
+                "flag": "below_statutory",
+                "avg_3y": avg_3y_etr,
+                "statutory_ref": 25.17,
+            })
+
+        # Headwind — monotonically increasing over latest 3 years
+        recent_3_etr = [y.get("etr_pct") for y in years[:3]]
+        if (
+            len(recent_3_etr) == 3
+            and all(v is not None for v in recent_3_etr)
+            and recent_3_etr[0] > recent_3_etr[1] > recent_3_etr[2]
+        ):
+            flags.append({"flag": "headwind"})
+
+        # Signal
+        signal = "normal"
+        has_anomaly = any(f.get("flag") == "tax_anomaly" for f in flags)
+        has_below = any(f.get("flag") == "below_statutory" for f in flags)
+        has_headwind = any(f.get("flag") == "headwind" for f in flags)
+        if has_anomaly:
+            signal = "anomaly"
+        elif has_below:
+            signal = "below_statutory"
+        elif has_headwind:
+            signal = "headwind"
+
+        return _clean({
+            "years": years,
+            "avg_3y_etr": avg_3y_etr,
+            "avg_5y_etr": avg_5y_etr,
+            "statutory_rate_ref": 25.17,
+            "flags": flags,
+            "signal": signal,
+        })
+
+    def get_receivables_quality(self, symbol: str) -> dict:
+        """Receivables quality: revenue recognition risk detection."""
+        if self._is_bfsi(symbol) or self._is_insurance(symbol):
+            return {"skipped": True, "reason": "Receivables quality not applicable to BFSI/Insurance."}
+
+        annuals = self.get_annual_financials(symbol, years=5)
+        ratios = self.get_screener_ratios(symbol, years=5)
+        if not annuals or len(annuals) < 2:
+            return {"error": f"Need at least 2 years of data, got {len(annuals) if annuals else 0}"}
+
+        # Receivables / Revenue ratio per year
+        recv_ratio_trend: list[dict] = []
+        for a in annuals:
+            rev = a.get("revenue") or 0
+            recv = a.get("receivables")
+            fy = a.get("fiscal_year_end")
+            if rev > 0 and recv is not None:
+                recv_ratio_trend.append({
+                    "fiscal_year_end": fy,
+                    "recv_pct_of_rev": round(recv / rev * 100, 1),
+                })
+
+        # 3Y CAGRs
+        recv_cagr = None
+        rev_cagr = None
+        if len(annuals) >= 4:
+            recv_0 = annuals[0].get("receivables")
+            recv_3 = annuals[3].get("receivables")
+            rev_0 = annuals[0].get("revenue") or 0
+            rev_3 = annuals[3].get("revenue") or 0
+
+            if recv_0 and recv_0 > 0 and recv_3 and recv_3 > 0:
+                recv_cagr = round(((recv_0 / recv_3) ** (1 / 3) - 1) * 100, 1)
+            if rev_0 > 0 and rev_3 > 0:
+                rev_cagr = round(((rev_0 / rev_3) ** (1 / 3) - 1) * 100, 1)
+
+        # Debtor days from screener_ratios
+        debtor_days_info: dict = {}
+        if ratios and len(ratios) >= 1:
+            latest_dd = ratios[0].get("debtor_days")
+            oldest_dd = None
+            if len(ratios) >= 4:
+                oldest_dd = ratios[3].get("debtor_days")
+            elif len(ratios) >= 2:
+                oldest_dd = ratios[-1].get("debtor_days")
+
+            debtor_days_info["latest"] = latest_dd
+            debtor_days_info["3y_ago"] = oldest_dd
+            if latest_dd is not None and oldest_dd is not None and oldest_dd > 0:
+                debtor_days_info["change_pct"] = round(
+                    (latest_dd - oldest_dd) / oldest_dd * 100, 1
+                )
+
+        # Flags
+        flags: list[str] = []
+        if recv_cagr is not None and rev_cagr is not None and recv_cagr > 0:
+            if rev_cagr > 0 and recv_cagr > 1.5 * rev_cagr:
+                flags.append("revenue_quality_risk")
+        dd_change = debtor_days_info.get("change_pct")
+        if dd_change is not None and dd_change > 20:
+            flags.append("debtor_days_deterioration")
+
+        signal = "clean"
+        if len(flags) >= 2:
+            signal = "concern"
+        elif len(flags) == 1:
+            signal = "warning"
+
+        return _clean({
+            "receivable_ratio_trend": recv_ratio_trend,
+            "recv_3y_cagr_pct": recv_cagr,
+            "rev_3y_cagr_pct": rev_cagr,
+            "debtor_days": debtor_days_info or None,
+            "flags": flags,
+            "signal": signal,
+        })
+
     def get_piotroski_score(self, symbol: str) -> dict:
         """Piotroski F-Score (0-9): profitability, leverage, operating efficiency."""
         annuals = self.get_annual_financials(symbol, years=2)
@@ -3725,6 +4221,9 @@ class ResearchDataAPI:
         result["dupont"] = self.get_dupont_decomposition(symbol)
         result["common_size"] = self.get_common_size_pl(symbol)
         result["improvement_metrics"] = self.get_improvement_metrics(symbol)
+        result["operating_leverage"] = self.get_operating_leverage(symbol)
+        result["fcf_yield"] = self.get_fcf_yield(symbol)
+        result["tax_rate_analysis"] = self.get_tax_rate_analysis(symbol)
 
         _skip_financial = {
             "skipped": True,
@@ -3737,6 +4236,10 @@ class ResearchDataAPI:
             result["earnings_quality"] = _skip_financial
             result["beneish"] = _skip_financial
             result["capex_cycle"] = _skip_financial
+            result["incremental_roce"] = _skip_financial
+            result["altman_zscore"] = _skip_financial
+            result["working_capital"] = _skip_financial
+            result["receivables_quality"] = _skip_financial
         elif bfsi:
             result["bfsi"] = self.get_bfsi_metrics(symbol)
             result["earnings_quality"] = _skip_financial
@@ -3745,6 +4248,10 @@ class ResearchDataAPI:
                 "skipped": True,
                 "reason": "BFSI has no CWIP/capex cycle",
             }
+            result["incremental_roce"] = _skip_financial
+            result["altman_zscore"] = _skip_financial
+            result["working_capital"] = _skip_financial
+            result["receivables_quality"] = _skip_financial
         else:
             result["earnings_quality"] = self.get_earnings_quality(symbol)
             result["beneish"] = self.get_beneish_score(symbol)
@@ -3752,6 +4259,10 @@ class ResearchDataAPI:
             result["forensic_checks"] = self.get_forensic_checks(symbol)
             result["capital_discipline"] = self.get_capital_discipline(symbol)
             result["bfsi"] = {"skipped": True, "reason": "non-BFSI company"}
+            result["incremental_roce"] = self.get_incremental_roce(symbol)
+            result["altman_zscore"] = self.get_altman_zscore(symbol)
+            result["working_capital"] = self.get_working_capital_deterioration(symbol)
+            result["receivables_quality"] = self.get_receivables_quality(symbol)
 
         # Additive sector metrics — included alongside standard metrics
         result["metals"] = self.get_metals_metrics(symbol)

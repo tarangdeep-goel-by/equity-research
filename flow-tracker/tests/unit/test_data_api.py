@@ -448,6 +448,160 @@ class TestCapitalDiscipline:
 
 
 # ---------------------------------------------------------------------------
+# Batch 2: Incremental ROCE, Z-Score, WC, DOL, FCF Yield, Tax, Receivables
+# ---------------------------------------------------------------------------
+
+class TestIncrementalRoce:
+    def test_returns_structure(self, api: ResearchDataAPI):
+        data = api.get_incremental_roce("INFY")
+        assert isinstance(data, dict)
+        assert "incremental_roce_3y" in data or "error" in data
+
+    def test_has_caveat(self, api: ResearchDataAPI):
+        data = api.get_incremental_roce("INFY")
+        if "caveat" in data:
+            assert "Capital employed" in data["caveat"]
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_incremental_roce("NONEXIST")
+        assert "error" in data
+
+
+class TestAltmanZscore:
+    def test_returns_zscore(self, api: ResearchDataAPI):
+        data = api.get_altman_zscore("INFY")
+        assert isinstance(data, dict)
+        assert "latest_z_score" in data or "error" in data
+
+    def test_zone_classification(self, api: ResearchDataAPI):
+        data = api.get_altman_zscore("INFY")
+        if "latest_zone" in data:
+            assert data["latest_zone"] in ("safe", "gray", "distress")
+
+    def test_years_list(self, api: ResearchDataAPI):
+        data = api.get_altman_zscore("INFY")
+        if "years" in data:
+            assert isinstance(data["years"], list)
+            year = data["years"][0]
+            assert "z_score" in year
+            assert "zone" in year
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_altman_zscore("NONEXIST")
+        assert "error" in data
+
+
+class TestWorkingCapitalDeterioration:
+    def test_returns_structure(self, api: ResearchDataAPI):
+        data = api.get_working_capital_deterioration("INFY")
+        assert isinstance(data, dict)
+
+    def test_has_ccc_trend(self, api: ResearchDataAPI):
+        data = api.get_working_capital_deterioration("INFY")
+        if "ccc_trend" in data:
+            assert "direction" in data["ccc_trend"]
+            assert data["ccc_trend"]["direction"] in ("improving", "stable", "deteriorating")
+
+    def test_flags_list(self, api: ResearchDataAPI):
+        data = api.get_working_capital_deterioration("INFY")
+        if "flags" in data:
+            assert isinstance(data["flags"], list)
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_working_capital_deterioration("NONEXIST")
+        assert "error" in data
+
+
+class TestOperatingLeverage:
+    def test_works_for_all_sectors(self, api: ResearchDataAPI):
+        """DOL should work for both SBIN and INFY (no BFSI skip)."""
+        for sym in ("SBIN", "INFY"):
+            data = api.get_operating_leverage(sym)
+            assert isinstance(data, dict)
+            assert "years" in data or "error" in data
+
+    def test_dol_clipped(self, api: ResearchDataAPI):
+        data = api.get_operating_leverage("INFY")
+        if "years" in data:
+            for y in data["years"]:
+                if "dol" in y:
+                    assert -10 <= y["dol"] <= 10
+
+    def test_signal_values(self, api: ResearchDataAPI):
+        data = api.get_operating_leverage("INFY")
+        if "signal" in data:
+            assert data["signal"] in ("high_leverage", "moderate", "low")
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_operating_leverage("NONEXIST")
+        assert "error" in data
+
+
+class TestFcfYield:
+    def test_returns_yield(self, api: ResearchDataAPI):
+        data = api.get_fcf_yield("INFY")
+        assert isinstance(data, dict)
+
+    def test_signal_values(self, api: ResearchDataAPI):
+        data = api.get_fcf_yield("INFY")
+        if "signal" in data:
+            assert data["signal"] in ("deep_value", "attractive", "growth_priced", "hope_trade")
+
+    def test_risk_free_ref(self, api: ResearchDataAPI):
+        data = api.get_fcf_yield("INFY")
+        if "risk_free_ref_pct" in data:
+            assert data["risk_free_ref_pct"] == 7.0
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_fcf_yield("NONEXIST")
+        assert "error" in data or data == {}
+
+
+class TestTaxRateAnalysis:
+    def test_returns_etr_trend(self, api: ResearchDataAPI):
+        data = api.get_tax_rate_analysis("INFY")
+        assert isinstance(data, dict)
+        assert "years" in data or "error" in data
+
+    def test_statutory_ref(self, api: ResearchDataAPI):
+        data = api.get_tax_rate_analysis("INFY")
+        if "statutory_rate_ref" in data:
+            assert data["statutory_rate_ref"] == 25.17
+
+    def test_works_for_bfsi(self, api: ResearchDataAPI):
+        """Tax rate analysis should NOT be skipped for BFSI."""
+        data = api.get_tax_rate_analysis("SBIN")
+        assert "skipped" not in data
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_tax_rate_analysis("NONEXIST")
+        assert "error" in data
+
+
+class TestReceivablesQuality:
+    def test_returns_structure(self, api: ResearchDataAPI):
+        data = api.get_receivables_quality("INFY")
+        assert isinstance(data, dict)
+
+    def test_signal_values(self, api: ResearchDataAPI):
+        data = api.get_receivables_quality("INFY")
+        if "signal" in data:
+            assert data["signal"] in ("clean", "warning", "concern")
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_receivables_quality("NONEXIST")
+        assert "error" in data
+
+    def test_batch2_serializable(self, api: ResearchDataAPI):
+        """All Batch 2 methods should be JSON-serializable."""
+        import json
+        for method in ("get_incremental_roce", "get_altman_zscore", "get_working_capital_deterioration",
+                       "get_operating_leverage", "get_fcf_yield", "get_tax_rate_analysis", "get_receivables_quality"):
+            data = getattr(api, method)("INFY")
+            json.dumps(data)  # Should not raise
+
+
+# ---------------------------------------------------------------------------
 # _clean applied
 # ---------------------------------------------------------------------------
 

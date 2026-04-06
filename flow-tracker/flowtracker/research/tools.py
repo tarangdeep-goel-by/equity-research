@@ -1083,15 +1083,33 @@ def _get_quality_scores_section(api, symbol, section, args):
         return api.get_improvement_metrics(symbol)
     elif section == "capital_discipline":
         return api.get_capital_discipline(symbol)
+    elif section == "incremental_roce":
+        return api.get_incremental_roce(symbol)
+    elif section == "altman_zscore":
+        return api.get_altman_zscore(symbol)
+    elif section == "working_capital":
+        return api.get_working_capital_deterioration(symbol)
+    elif section == "operating_leverage":
+        return api.get_operating_leverage(symbol)
+    elif section == "fcf_yield":
+        return api.get_fcf_yield(symbol)
+    elif section == "tax_rate_analysis":
+        return api.get_tax_rate_analysis(symbol)
+    elif section == "receivables_quality":
+        return api.get_receivables_quality(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_quality_scores",
-    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | 'forensic_checks' | 'improvement_metrics' | 'capital_discipline' | ['section1', 'section2']. "
-    "BFSI routing: 'all' auto-skips non-applicable sections. 'subsidiary' returns consolidated-standalone diff for SOTP. "
-    "'forensic_checks' = CFO/EBITDA, depreciation volatility, cash yield, CWIP parking. 'improvement_metrics' = ROCE/ROE trajectory, greatness score. 'capital_discipline' = ROCE×reinvestment, equity dilution, RM cost cycle.",
+    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | "
+    "'forensic_checks' | 'improvement_metrics' | 'capital_discipline' | "
+    "'incremental_roce' | 'altman_zscore' | 'working_capital' | 'operating_leverage' | 'fcf_yield' | 'tax_rate_analysis' | 'receivables_quality' | "
+    "'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | ['section1', 'section2']. "
+    "BFSI routing: 'all' auto-skips non-applicable. "
+    "'incremental_roce' = marginal return on new capital. 'altman_zscore' = EM distress predictor. 'working_capital' = CCC trend + channel stuffing flags. "
+    "'operating_leverage' = DOL earnings sensitivity. 'fcf_yield' = FCF/EV vs risk-free. 'tax_rate_analysis' = ETR anomalies. 'receivables_quality' = revenue recognition risk.",
     {"symbol": str, "section": str},
 )
 async def get_quality_scores(args):
@@ -1115,6 +1133,13 @@ async def get_quality_scores(args):
                     "forensic_checks": skipped,
                     "improvement_metrics": api.get_improvement_metrics(symbol),
                     "capital_discipline": skipped,
+                    "incremental_roce": skipped,
+                    "altman_zscore": skipped,
+                    "working_capital": skipped,
+                    "operating_leverage": api.get_operating_leverage(symbol),
+                    "fcf_yield": api.get_fcf_yield(symbol),
+                    "tax_rate_analysis": api.get_tax_rate_analysis(symbol),
+                    "receivables_quality": skipped,
                 }
             else:
                 data = {
@@ -1128,6 +1153,13 @@ async def get_quality_scores(args):
                     "forensic_checks": api.get_forensic_checks(symbol),
                     "improvement_metrics": api.get_improvement_metrics(symbol),
                     "capital_discipline": api.get_capital_discipline(symbol),
+                    "incremental_roce": api.get_incremental_roce(symbol),
+                    "altman_zscore": api.get_altman_zscore(symbol),
+                    "working_capital": api.get_working_capital_deterioration(symbol),
+                    "operating_leverage": api.get_operating_leverage(symbol),
+                    "fcf_yield": api.get_fcf_yield(symbol),
+                    "tax_rate_analysis": api.get_tax_rate_analysis(symbol),
+                    "receivables_quality": api.get_receivables_quality(symbol),
                 }
         else:
             data = _get_quality_scores_section(api, symbol, section, args)
