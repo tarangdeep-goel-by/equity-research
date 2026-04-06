@@ -435,6 +435,71 @@ class ResearchDataAPI:
         changes.sort(key=lambda x: abs(x.get("value_change_cr") or 0), reverse=True)
         return _clean(changes)
 
+    def get_mf_conviction(self, symbol: str) -> dict:
+        """MF conviction breadth: how many schemes/AMCs hold and are adding this stock."""
+        current = self._store.get_mf_stock_holdings(symbol)
+        if not current:
+            return {"available": False, "reason": "No MF holdings data"}
+
+        # Current month stats
+        schemes: set[str] = set()
+        amcs: set[str] = set()
+        total_value = 0.0
+        for r in current:
+            d = r.model_dump() if hasattr(r, "model_dump") else r
+            schemes.add(d.get("scheme_name", ""))
+            amcs.add(d.get("amc", ""))
+            total_value += d.get("market_value_cr") or 0
+
+        # Get previous month for trend
+        months = sorted(set(
+            (r.month if hasattr(r, "month") else r.get("month", ""))
+            for r in current
+        ))
+        curr_month = months[-1] if months else ""
+
+        prev_count = 0
+        if curr_month:
+            y, m = int(curr_month[:4]), int(curr_month[5:7])
+            prev_month = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
+            prev_rows = self._store._conn.execute(
+                "SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
+                "WHERE UPPER(stock_name) LIKE ? AND month = ?",
+                (f"%{symbol}%", prev_month),
+            ).fetchone()
+            prev_count = prev_rows[0] if prev_rows else 0
+
+        scheme_count = len(schemes)
+        trend = "adding" if scheme_count > prev_count else "trimming" if scheme_count < prev_count else "stable"
+
+        # Top schemes by value
+        sorted_holdings = sorted(
+            current,
+            key=lambda r: (r.market_value_cr if hasattr(r, "market_value_cr") else r.get("market_value_cr") or 0),
+            reverse=True,
+        )
+        top_schemes = []
+        for r in sorted_holdings[:10]:
+            d = r.model_dump() if hasattr(r, "model_dump") else r
+            top_schemes.append({
+                "scheme": d.get("scheme_name", ""),
+                "amc": d.get("amc", ""),
+                "value_cr": round(d.get("market_value_cr") or 0, 2),
+                "pct_of_nav": d.get("pct_of_nav"),
+            })
+
+        return {
+            "available": True,
+            "month": curr_month,
+            "schemes_holding": scheme_count,
+            "amcs_holding": len(amcs),
+            "total_mf_value_cr": round(total_value, 2),
+            "prev_month_schemes": prev_count,
+            "scheme_trend": trend,
+            "scheme_change": scheme_count - prev_count,
+            "top_schemes": top_schemes,
+        }
+
     # --- Market Signals ---
 
     def get_delivery_trend(self, symbol: str, days: int = 30) -> list[dict]:
@@ -458,6 +523,157 @@ class ResearchDataAPI:
         # Fallback: bhavcopy daily data (5-30 days typically)
         rows = self._store.get_stock_delivery(symbol, days=days)
         return _clean([{"date": r.date, "delivery_pct": r.delivery_pct} for r in rows if r.delivery_pct])
+
+    def get_delivery_analysis(self, symbol: str, days: int = 90) -> dict:
+        """Multi-week delivery analysis: trend, acceleration, volume-delivery divergence."""
+        rows = self._store.get_stock_delivery(symbol, days=days)
+        if not rows:
+            return {"available": False, "reason": "No delivery data"}
+
+        # Convert to dicts with value extraction
+        data = []
+        for r in rows:
+            d = r.model_dump() if hasattr(r, "model_dump") else r
+            dp = d.get("delivery_pct")
+            vol = d.get("volume") or 0
+            close = d.get("close") or 0
+            if dp is not None:
+                data.append({"date": d.get("date", ""), "delivery_pct": dp, "volume": vol, "close": close})
+
+        if len(data) < 5:
+            return {"available": False, "reason": "Insufficient delivery data"}
+
+        # Sort oldest first for trend calc
+        data.sort(key=lambda x: x["date"])
+
+        deliveries = [d["delivery_pct"] for d in data]
+        volumes = [d["volume"] for d in data]
+
+        # Weekly averages (last 4 weeks vs prior 4 weeks)
+        recent_4w = deliveries[-20:] if len(deliveries) >= 20 else deliveries[-len(deliveries) // 2:]
+        prior_4w = deliveries[-40:-20] if len(deliveries) >= 40 else deliveries[:len(deliveries) // 2]
+
+        avg_recent = statistics.mean(recent_4w) if recent_4w else 0
+        avg_prior = statistics.mean(prior_4w) if prior_4w else 0
+        avg_overall = statistics.mean(deliveries)
+
+        # Trend direction
+        diff = avg_recent - avg_prior
+        if diff > 3:
+            trend = "rising"
+        elif diff < -3:
+            trend = "falling"
+        else:
+            trend = "stable"
+
+        # Volume-delivery divergence: high vol + low delivery = speculative
+        recent_vol = statistics.mean(volumes[-20:]) if len(volumes) >= 20 else statistics.mean(volumes)
+        prior_vol = statistics.mean(volumes[:-20]) if len(volumes) > 20 else recent_vol
+        vol_rising = recent_vol > prior_vol * 1.2  # 20% higher
+        delivery_falling = avg_recent < avg_prior - 3
+
+        divergence = "none"
+        if vol_rising and delivery_falling:
+            divergence = "speculative_churn"  # high vol, low delivery
+        elif not vol_rising and avg_recent > 60:
+            divergence = "quiet_accumulation"  # low vol, high delivery
+
+        return {
+            "available": True,
+            "days_analyzed": len(data),
+            "avg_delivery_pct": round(avg_overall, 1),
+            "recent_4w_avg": round(avg_recent, 1),
+            "prior_4w_avg": round(avg_prior, 1),
+            "trend": trend,
+            "acceleration_pp": round(diff, 1),
+            "volume_delivery_divergence": divergence,
+            "latest": {
+                "date": data[-1]["date"],
+                "delivery_pct": data[-1]["delivery_pct"],
+                "volume": data[-1]["volume"],
+            },
+        }
+
+    def get_institutional_consensus(self, symbol: str) -> dict:
+        """Cross-table institutional signal: delivery + MF + insider combined."""
+        signals: dict = {}
+
+        # 1. Delivery signal
+        delivery = self.get_delivery_analysis(symbol, days=60)
+        if delivery.get("available"):
+            avg = delivery.get("avg_delivery_pct", 0)
+            trend = delivery.get("trend", "stable")
+            if avg > 55 and trend == "rising":
+                signals["delivery"] = "strong_accumulation"
+            elif avg > 45:
+                signals["delivery"] = "moderate_accumulation"
+            elif avg < 30 and trend == "falling":
+                signals["delivery"] = "distribution"
+            else:
+                signals["delivery"] = "neutral"
+            signals["delivery_detail"] = {
+                "avg_pct": delivery.get("avg_delivery_pct"),
+                "trend": trend,
+                "divergence": delivery.get("volume_delivery_divergence"),
+            }
+
+        # 2. MF signal
+        mf = self.get_mf_conviction(symbol)
+        if mf.get("available"):
+            scheme_count = mf.get("schemes_holding", 0)
+            scheme_trend = mf.get("scheme_trend", "stable")
+            if scheme_count >= 8 and scheme_trend == "adding":
+                signals["mf"] = "strong_conviction"
+            elif scheme_count >= 5:
+                signals["mf"] = "moderate_conviction"
+            elif scheme_count <= 2:
+                signals["mf"] = "low_conviction"
+            else:
+                signals["mf"] = "neutral"
+            signals["mf_detail"] = {
+                "schemes": scheme_count,
+                "amcs": mf.get("amcs_holding"),
+                "trend": scheme_trend,
+                "value_cr": mf.get("total_mf_value_cr"),
+            }
+
+        # 3. Insider signal (last 90 days)
+        insider = self.get_insider_transactions(symbol, days=90)
+        if insider:
+            buys = sum(1 for t in insider if t.get("transaction_type", "").lower() in ("buy", "acquisition"))
+            sells = sum(1 for t in insider if t.get("transaction_type", "").lower() in ("sell", "disposal"))
+            if buys > sells and buys >= 2:
+                signals["insider"] = "net_buying"
+            elif sells > buys and sells >= 2:
+                signals["insider"] = "net_selling"
+            else:
+                signals["insider"] = "neutral"
+            signals["insider_detail"] = {"buys": buys, "sells": sells, "total": len(insider)}
+
+        # Composite
+        signal_scores = {
+            "strong_accumulation": 2, "strong_conviction": 2, "net_buying": 2,
+            "moderate_accumulation": 1, "moderate_conviction": 1,
+            "neutral": 0,
+            "low_conviction": -1, "distribution": -2, "net_selling": -1,
+        }
+
+        score = sum(signal_scores.get(v, 0) for k, v in signals.items() if not k.endswith("_detail"))
+        if score >= 4:
+            composite = "strong_bullish"
+        elif score >= 2:
+            composite = "moderately_bullish"
+        elif score <= -2:
+            composite = "bearish"
+        elif score < 0:
+            composite = "moderately_bearish"
+        else:
+            composite = "neutral"
+
+        signals["composite"] = composite
+        signals["composite_score"] = score
+
+        return signals
 
     def get_promoter_pledge(self, symbol: str) -> list[dict]:
         """Quarterly promoter pledge % history with margin-call analysis."""
@@ -685,6 +901,37 @@ class ResearchDataAPI:
         """Daily FII/DII net flows for recent period."""
         rows = self._store.get_flows(days=days)
         return _clean([r.model_dump() for r in rows])
+
+    def get_commodity_snapshot(self) -> dict:
+        """Current commodity prices with 1M/3M/1Y changes."""
+        result = {}
+        for commodity in ("GOLD", "GOLD_INR", "SILVER", "SILVER_INR"):
+            prices = self._store.get_commodity_prices(commodity, days=400)
+            if not prices:
+                continue
+
+            data = [(p.date, p.price) for p in prices if p.price]
+            if not data:
+                continue
+
+            data.sort(key=lambda x: x[0])
+            latest = data[-1][1]
+
+            def _change(days_ago: int, _data=data, _latest=latest) -> float | None:
+                target_idx = max(0, len(_data) - days_ago)
+                if target_idx < len(_data) and _data[target_idx][1]:
+                    return round((_latest - _data[target_idx][1]) / _data[target_idx][1] * 100, 1)
+                return None
+
+            result[commodity.lower()] = {
+                "price": latest,
+                "date": data[-1][0],
+                "change_1m_pct": _change(22),
+                "change_3m_pct": _change(66),
+                "change_1y_pct": _change(252),
+            }
+
+        return result if result else {"available": False, "reason": "No commodity data"}
 
     # --- Filings ---
 
@@ -1518,6 +1765,82 @@ class ResearchDataAPI:
     def get_corporate_actions(self, symbol: str) -> list[dict]:
         """All corporate actions (bonus, split, dividend, spinoff, buyback) for a stock."""
         return _clean(self._store.get_corporate_actions(symbol))
+
+    def get_dividend_policy(self, symbol: str) -> dict:
+        """Dividend policy analysis: payout trend, consistency, yield trajectory."""
+        actions = self._store.get_corporate_actions(symbol)
+        if not actions:
+            return {"available": False, "reason": "No corporate actions data"}
+
+        # Filter dividends — store returns list[dict]
+        dividends = []
+        for d in actions:
+            if d.get("action_type") == "dividend" and d.get("dividend_amount"):
+                dividends.append(d)
+
+        if not dividends:
+            return {"available": False, "reason": "No dividend history"}
+
+        dividends.sort(key=lambda x: x.get("ex_date", ""))
+
+        # Annual aggregation
+        annual: dict[str, float] = {}
+        for d in dividends:
+            year = d["ex_date"][:4] if d.get("ex_date") else None
+            if year:
+                annual[year] = annual.get(year, 0) + (d.get("dividend_amount") or 0)
+
+        # Get EPS for payout ratio
+        financials = self._store.get_annual_financials(symbol, limit=10)
+        eps_by_year: dict[str, float] = {}
+        for f in financials:
+            fd = f.model_dump() if hasattr(f, "model_dump") else f
+            fye = fd.get("fiscal_year_end", "")
+            eps = fd.get("eps")
+            if fye and eps:
+                eps_by_year[fye[:4]] = eps
+
+        # Build annual policy
+        years = sorted(annual.keys())
+        policy = []
+        for yr in years:
+            div = annual[yr]
+            eps = eps_by_year.get(yr)
+            payout = round(div / eps * 100, 1) if eps and eps > 0 else None
+            policy.append({
+                "year": yr,
+                "total_dividend": round(div, 2),
+                "eps": eps,
+                "payout_ratio_pct": payout,
+            })
+
+        # Consistency: how many of last 5 years had dividends?
+        recent_5 = [p for p in policy if int(p["year"]) >= int(years[-1]) - 4] if years else []
+        consistency = len(recent_5)
+
+        # Trend: growing, stable, or declining?
+        payouts = [p["payout_ratio_pct"] for p in policy[-5:] if p["payout_ratio_pct"] is not None]
+        if len(payouts) >= 3:
+            first_half = statistics.mean(payouts[:len(payouts) // 2])
+            second_half = statistics.mean(payouts[len(payouts) // 2:])
+            if second_half > first_half + 5:
+                payout_trend = "increasing"
+            elif second_half < first_half - 5:
+                payout_trend = "decreasing"
+            else:
+                payout_trend = "stable"
+        else:
+            payout_trend = "insufficient_data"
+
+        return {
+            "available": True,
+            "years_of_history": len(policy),
+            "consistency_last_5y": f"{consistency}/5",
+            "payout_trend": payout_trend,
+            "annual_policy": policy,
+            "latest_dividend": dividends[-1].get("dividend_amount"),
+            "latest_ex_date": dividends[-1].get("ex_date"),
+        }
 
     def get_adjustment_factor(self, symbol: str, as_of_date: str | None = None) -> dict:
         """Cumulative share adjustment factor for a stock.

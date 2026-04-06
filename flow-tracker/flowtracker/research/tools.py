@@ -1186,13 +1186,15 @@ def _get_ownership_section(api, symbol, section, args):
         return api.get_shareholder_detail(symbol, args.get("classification"))
     elif section == "promoter_pledge":
         return api.get_promoter_pledge(symbol)
+    elif section == "mf_conviction":
+        return api.get_mf_conviction(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_ownership",
-    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | ['section1', 'section2']",
+    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | ['section1', 'section2']",
     {"symbol": str, "section": str, "quarters": int, "days": int, "classification": str},
 )
 async def get_ownership(args):
@@ -1211,6 +1213,7 @@ async def get_ownership(args):
                 "mf_changes": api.get_mf_holding_changes(symbol),
                 "shareholder_detail": api.get_shareholder_detail(symbol, args.get("classification")),
                 "promoter_pledge": api.get_promoter_pledge(symbol),
+                "mf_conviction": api.get_mf_conviction(symbol),
             }
         else:
             data = _get_ownership_section(api, symbol, section, args)
@@ -1420,13 +1423,19 @@ def _get_market_context_section(api, symbol, section, args):
         return api.get_technical_indicators(symbol)
     elif section == "price_performance":
         return api.get_price_performance(symbol)
+    elif section == "delivery_analysis":
+        return api.get_delivery_analysis(symbol, args.get("days", 90))
+    elif section == "commodities":
+        return api.get_commodity_snapshot()
+    elif section == "institutional_consensus":
+        return api.get_institutional_consensus(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_market_context",
-    "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | ['section1', 'section2']",
+    "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']",
     {"symbol": str, "section": str, "days": int},
 )
 async def get_market_context(args):
@@ -1455,6 +1464,9 @@ async def get_market_context(args):
                 "fii_dii_flows": api.get_fii_dii_flows(args.get("days", 30)),
                 "technicals": api.get_technical_indicators(symbol),
                 "price_performance": api.get_price_performance(symbol),
+                "delivery_analysis": api.get_delivery_analysis(symbol, args.get("days", 90)),
+                "commodities": api.get_commodity_snapshot(),
+                "institutional_consensus": api.get_institutional_consensus(symbol),
             }
         else:
             data = _get_market_context_section(api, symbol, section, args)
@@ -1527,13 +1539,15 @@ def _get_events_actions_section(api, symbol, section, args):
         return api.get_upcoming_catalysts(symbol, args.get("days", 90))
     elif section == "material_events":
         return api.get_material_events(symbol, args.get("days", 365))
+    elif section == "dividend_policy":
+        return api.get_dividend_policy(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_events_actions",
-    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | ['section1', 'section2']",
+    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']",
     {"symbol": str, "section": str, "years": int, "quarters": int, "days": int},
 )
 async def get_events_actions(args):
@@ -1550,6 +1564,7 @@ async def get_events_actions(args):
                 "adjusted_eps": api.get_adjusted_eps(symbol, args.get("quarters", 12)),
                 "catalysts": api.get_upcoming_catalysts(symbol, args.get("days", 90)),
                 "material_events": api.get_material_events(symbol, args.get("days", 365)),
+                "dividend_policy": api.get_dividend_policy(symbol),
             }
         else:
             data = _get_events_actions_section(api, symbol, section, args)

@@ -248,7 +248,7 @@ OWNERSHIP_INSTRUCTIONS_V2 = """
 ## Workflow
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data.
 1. **Snapshot**: Call `get_analytical_profile` for composite score and price performance context.
-2. **Ownership data**: Call `get_ownership` for shareholding pattern, quarterly changes, shareholder detail, MF holdings, MF holding changes, insider transactions, bulk/block deals, and promoter pledge.
+2. **Ownership data**: Call `get_ownership` for shareholding pattern, quarterly changes, shareholder detail, MF holdings, MF holding changes, MF conviction breadth, insider transactions, bulk/block deals, and promoter pledge.
 3. **Market signals**: Call `get_market_context` for delivery trend, FII/DII flows, and FII/DII streak to separate stock-specific from market-wide moves.
 4. **Sector context**: Call `get_peer_sector` with `section="benchmarks"` for sector percentile rankings (is this stock's PE, ROCE, market cap high or low vs sector peers?).
 5. **Forward view**: Call `get_estimates` for consensus context to help interpret institutional positioning.
@@ -324,7 +324,7 @@ VALUATION_INSTRUCTIONS_V2 = """
 6. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF uses the stock's dynamic WACC (from step 4) instead of a flat rate — mention the actual discount rate used. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
 7. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
 8. **Peer context**: Call `get_peer_sector` for valuation matrix, peer metrics, peer growth, and sector benchmarks.
-9. **Catalysts**: Call `get_events_actions` with section=['catalysts', 'material_events', 'dividends'] for catalyst timeline, material corporate events, and dividend history.
+9. **Catalysts**: Call `get_events_actions` with section=['catalysts', 'material_events', 'dividends', 'dividend_policy'] for catalyst timeline, material events, dividend history, and dividend policy analysis (payout trend, consistency).
 10. **Visualize**: Call `render_chart` for PE band and PBV charts.
 
 ## Report Sections
@@ -399,7 +399,7 @@ RISK_INSTRUCTIONS_V2 = """
 2. **Financial risk**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'quarterly_balance_sheet', 'rate_sensitivity', 'cost_structure', 'working_capital'] for debt trajectory, interest coverage, cash position, rate sensitivity, cost inflation signals, and working capital stress.
 3. **Forensic checks**: Call `get_quality_scores` with section=['beneish', 'earnings_quality', 'piotroski', 'forensic_checks', 'common_size', 'altman_zscore', 'working_capital', 'receivables_quality'] for forensic and distress analysis in one call.
 4. **Governance signals**: Call `get_ownership` with section=['promoter_pledge', 'insider', 'bulk_block'] for governance data in one call.
-5. **Market & macro**: Call `get_market_context` for macro snapshot, FII/DII flows and streak, delivery trend.
+5. **Market & macro**: Call `get_market_context` with section=['macro', 'fii_dii_flows', 'fii_dii_streak', 'delivery', 'delivery_analysis'] for macro, flows, delivery trend, and delivery acceleration analysis. Volume-delivery divergence flags speculative churn or quiet accumulation.
 6. **Corporate context**: Call `get_company_context` for recent filings and company documents.
 7. **Upcoming triggers**: Call `get_events_actions` with section=['catalysts', 'material_events'] for upcoming catalysts and material corporate events. `material_events` surfaces credit rating changes, auditor resignations, order wins, acquisitions, management changes, and fund raises — check for governance red flags.
 
@@ -461,7 +461,7 @@ TECHNICAL_INSTRUCTIONS_V2 = """
 ## Workflow
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data.
 1. **Snapshot**: Call `get_analytical_profile` for price performance and composite score.
-2. **Market signals**: Call `get_market_context` for technical indicators, delivery trend, bulk/block deals, FII/DII flows and streak, and price performance.
+2. **Market signals**: Call `get_market_context` with section=['technicals', 'delivery', 'delivery_analysis', 'fii_dii_flows', 'fii_dii_streak', 'price_performance'] for technical indicators, delivery trend, delivery acceleration analysis, FII/DII flows and streak, and price performance.
 3. **Valuation anchor**: Call `get_valuation` for valuation snapshot (PE, beta, 52-week range) and price chart data.
 4. **Sector context**: Call `get_peer_sector` for sector benchmarks to anchor relative performance.
 5. **Earnings signal**: Call `get_estimates` with section=['momentum', 'revisions'] for estimate revision direction — rising estimates + rising delivery = genuine accumulation.
