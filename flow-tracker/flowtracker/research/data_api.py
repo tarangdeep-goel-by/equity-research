@@ -626,6 +626,83 @@ class ResearchDataAPI:
         rows = self._store.get_filings(symbol, limit=limit)
         return _clean([r.model_dump() for r in rows])
 
+    def get_material_events(self, symbol: str, days: int = 365) -> dict:
+        """Classify corporate filings into material event categories.
+
+        Surfaces high-signal filings: credit ratings, order wins, auditor changes,
+        acquisitions, fund raises, management changes. Filters out routine noise.
+        """
+        from datetime import datetime, timedelta
+
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        rows = self._store.get_filings(symbol, limit=200)
+
+        EVENT_CATEGORIES = {
+            "Credit Rating": "credit_rating",
+            "Award of Order / Receipt of Order": "order_win",
+            "Acquisition": "acquisition",
+            "Resignation of Statutory Auditors": "auditor_resignation",
+            "Appointment of Statutory Auditor/s": "auditor_change",
+            "Change in Management": "management_change",
+            "Change in Directorate": "management_change",
+            "Change in Management Control": "management_change",
+            "Resignation of Director": "management_change",
+            "Resignation of Chairman": "management_change",
+            "Resignation of Chief Financial Officer (CFO)": "management_change",
+            "Resignation of Company Secretary / Compliance Officer": "management_change",
+            "Raising of Funds": "fund_raise",
+            "Qualified Institutional Placement": "fund_raise",
+            "Bonds / Right issue": "fund_raise",
+            "Issue of Securities": "fund_raise",
+            "Buy back": "buyback",
+            "Scheme of Arrangement": "restructuring",
+            "Restructuring": "restructuring",
+            "Diversification / Disinvestment": "restructuring",
+            "Financial Results": "results",
+            "Outcome of Board Meeting": "board_outcome",
+            "Press Release / Media Release": "press_release",
+            "Strikes /Lockouts / Disturbances": "operational_disruption",
+        }
+
+        HIGH_SIGNAL = {
+            "credit_rating", "order_win", "auditor_resignation", "auditor_change",
+            "acquisition", "fund_raise", "buyback", "restructuring",
+            "operational_disruption", "management_change",
+        }
+
+        events = []
+        for r in rows:
+            d = r.model_dump() if hasattr(r, "model_dump") else r
+            filing_date = d.get("filing_date", "")
+            if filing_date < cutoff:
+                continue
+
+            subcat = d.get("subcategory", "")
+            event_type = EVENT_CATEGORIES.get(subcat)
+            if not event_type:
+                continue
+
+            events.append({
+                "date": filing_date,
+                "event_type": event_type,
+                "headline": d.get("headline", ""),
+                "subcategory": subcat,
+                "high_signal": event_type in HIGH_SIGNAL,
+            })
+
+        events.sort(key=lambda e: (e["date"], not e["high_signal"]), reverse=True)
+
+        type_counts: dict[str, int] = {}
+        for e in events:
+            type_counts[e["event_type"]] = type_counts.get(e["event_type"], 0) + 1
+
+        return {
+            "events": events,
+            "summary": type_counts,
+            "total": len(events),
+            "high_signal_count": sum(1 for e in events if e["high_signal"]),
+        }
+
     # --- Screener APIs (new tables from Phase 2) ---
 
     def get_chart_data(self, symbol: str, chart_type: str) -> list[dict]:

@@ -1468,13 +1468,15 @@ def _get_events_actions_section(api, symbol, section, args):
         return api.get_adjusted_eps(symbol, args.get("quarters", 12))
     elif section == "catalysts":
         return api.get_upcoming_catalysts(symbol, args.get("days", 90))
+    elif section == "material_events":
+        return api.get_material_events(symbol, args.get("days", 365))
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_events_actions",
-    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | ['section1', 'section2']",
+    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | ['section1', 'section2']",
     {"symbol": str, "section": str, "years": int, "quarters": int, "days": int},
 )
 async def get_events_actions(args):
@@ -1490,6 +1492,7 @@ async def get_events_actions(args):
                 "corporate_actions": api.get_corporate_actions(symbol),
                 "adjusted_eps": api.get_adjusted_eps(symbol, args.get("quarters", 12)),
                 "catalysts": api.get_upcoming_catalysts(symbol, args.get("days", 90)),
+                "material_events": api.get_material_events(symbol, args.get("days", 365)),
             }
         else:
             data = _get_events_actions_section(api, symbol, section, args)

@@ -92,13 +92,14 @@ BUSINESS_INSTRUCTIONS_V2 = """
 1. **Snapshot**: Call `get_analytical_profile` for the pre-computed analytical snapshot. Reference these metrics throughout.
 2. **Business context**: Call `get_company_context` for company info, profile, concall insights, and business profile. If business profile is stale (>90 days) or missing, use WebSearch/WebFetch to research.
 3. **Financial backing**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'cost_structure'] to get all financial data in one call.
-4. **Competitive context**: Call `get_peer_sector` for peer comparison, peer metrics, peer growth, and sector benchmarks.
-5. **Forward view**: Call `get_estimates` for analyst consensus, estimate momentum, earnings surprises, and events calendar.
-6. **Save**: Call `save_business_profile` to persist the profile for future runs.
+4. **Subsidiary check**: If the company has listed subsidiaries or is a conglomerate, call `get_quality_scores` with section='subsidiary' to quantify subsidiary contribution (consolidated minus standalone = subsidiary P&L).
+5. **Competitive context**: Call `get_peer_sector` for peer comparison, peer metrics, peer growth, and sector benchmarks.
+6. **Forward view**: Call `get_estimates` for analyst consensus, estimate momentum, earnings surprises, and events calendar.
+7. **Save**: Call `save_business_profile` to persist the profile for future runs.
 
 ## Report Sections
 1. **The Business** — Walk through an actual transaction from the customer's perspective. Include a mermaid flowchart showing value/money flow.
-2. **The Money Machine** — Revenue = Lever A × Lever B. Put actual numbers on each lever. Show revenue mix, growth decomposition, unit economics. Use `cost_structure` trends to explain margin trajectory — is material cost rising (input inflation)? Employee cost falling (operating leverage)?
+2. **The Money Machine** — Revenue = Lever A × Lever B. Put actual numbers on each lever. Show revenue mix, growth decomposition, unit economics. Use `cost_structure` trends to explain margin trajectory — is material cost rising (input inflation)? Employee cost falling (operating leverage)? If subsidiary data is available, show what % of profit comes from subsidiaries vs parent.
 3. **Financial Fingerprint** — Revenue/profit trend table (5-10Y), margin story, capital efficiency (ROCE trend), balance sheet health, analyst view, earnings track record.
 4. **Peer Benchmarking** — Peer comparison table with narrative explaining why differences matter. Valuation gap analysis.
 5. **Why It Wins/Loses** — Moat analysis as thought experiment. Classify moat: None/Narrow/Wide using Morningstar framework (switching costs, network effects, intangibles, cost advantage, efficient scale). Name the one threat that matters most.
@@ -163,7 +164,7 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data. **If `is_sme: true` is present, this stock reports half-yearly — adapt your analysis: use "6 half-yearly periods" instead of "12 quarters" for trend tables, and note the lower reporting frequency as a data limitation.**
 1. **Snapshot**: Call `get_analytical_profile` for composite score, DuPont, earnings quality, capex cycle, common-size P&L.
 2. **Core financials**: Call `get_fundamentals` with section=['quarterly_results', 'annual_financials', 'ratios', 'cost_structure', 'balance_sheet_detail', 'cash_flow_quality', 'working_capital', 'growth_rates', 'capital_allocation', 'cagr_table'] to get all financial data in one call.
-3. **Quality scores**: Call `get_quality_scores` with section=['dupont', 'earnings_quality', 'piotroski', 'beneish'] to get all quality data in one call.
+3. **Quality scores**: Call `get_quality_scores` with section=['dupont', 'earnings_quality', 'piotroski', 'beneish', 'subsidiary'] to get all quality data in one call. `subsidiary` returns consolidated-minus-standalone P&L — shows how much profit comes from subsidiaries.
 4. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 5. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
 6. **Visualizations**: Call `render_chart` for PE history, price, sales/margin, and cashflow charts.
@@ -172,7 +173,7 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 1. **Earnings & Growth** — 12Q quarterly table (Revenue, OP, NP, OPM%, YoY growth) + 10Y annual table. Highlight inflection points, seasonality. Include peer growth comparison with sector percentiles.
 2. **Margin Analysis** — OPM/NPM trajectory over 10Y. Use `cost_structure` to explain margin drivers: which cost line is moving? Is material cost trending up (input pressure) or down (deflation/efficiency)? Employee cost direction signals operating leverage. Include quarterly trend table for key cost components.
 3. **Business Quality (DuPont)** — Break ROE into margin × turnover × leverage. Show 10Y trend. Identify the PRIMARY driver. Flag leverage-driven ROE.
-4. **Balance Sheet & Cash Flow** — Use `balance_sheet_detail` for borrowing structure (long vs short term, lease liabilities) and asset composition (fixed assets, receivables, inventory, cash). Use `cash_flow_quality` to decompose operating CF: what's driving it? Are receivables consuming cash? Is inventory building? Use `working_capital` for receivables/inventory/payables as % of revenue (rising % = deteriorating cycle). FCF trajectory. Capital allocation from `get_fundamentals` section='capital_allocation'.
+4. **Balance Sheet & Cash Flow** — Use `balance_sheet_detail` for borrowing structure (long vs short term, lease liabilities) and asset composition (fixed assets, receivables, inventory, cash). Use `cash_flow_quality` to decompose operating CF: what's driving it? Are receivables consuming cash? Is inventory building? Use `working_capital` for receivables/inventory/payables as % of revenue (rising % = deteriorating cycle). FCF trajectory. Capital allocation from `get_fundamentals` section='capital_allocation'. If subsidiary data is available, note what % of consolidated revenue and profit comes from subsidiaries — this affects SOTP valuation.
 5. **Growth Trajectory** — Use `get_fundamentals` section='cagr_table' for pre-computed 1Y/3Y/5Y/10Y CAGRs (Revenue, EBITDA, NI, EPS, FCF) and growth trajectory classification. Do not compute CAGRs yourself.
 
 ## Structured Briefing
@@ -367,7 +368,7 @@ RISK_INSTRUCTIONS_V2 = """
 4. **Governance signals**: Call `get_ownership` with section=['promoter_pledge', 'insider', 'bulk_block'] for governance data in one call.
 5. **Market & macro**: Call `get_market_context` for macro snapshot, FII/DII flows and streak, delivery trend.
 6. **Corporate context**: Call `get_company_context` for recent filings and company documents.
-7. **Upcoming triggers**: Call `get_events_actions` for events calendar that could crystallize risks.
+7. **Upcoming triggers**: Call `get_events_actions` with section=['catalysts', 'material_events'] for upcoming catalysts and material corporate events. `material_events` surfaces credit rating changes, auditor resignations, order wins, acquisitions, management changes, and fund raises — check for governance red flags.
 
 ## Report Sections
 1. **Risk Dashboard** — Composite score 8-factor table with traffic light signals (Green 70-100, Yellow 40-69, Red 0-39). Overall assessment with sector percentile.
@@ -556,7 +557,7 @@ NEWS_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
 2. **News fetch**: Call `get_stock_news` with default 90 days to get all recent articles.
 3. **Triage**: Scan headlines. Identify the 3-5 highest-impact events that need full article reads.
 4. **Deep reads**: Call `WebFetch` on the most important article URLs. Extract key facts, quotes, and implications.
-5. **Corporate actions**: Call `get_events_actions` for confirmed corporate actions (dividends, splits, bonus, buybacks). Add to timeline.
+5. **Corporate actions**: Call `get_events_actions` with section=['corporate_actions', 'material_events'] for confirmed actions and material filing events (credit ratings, order wins, auditor changes, acquisitions). Merge material events into your timeline — these are BSE-confirmed facts, higher reliability than news articles.
 6. **Categorize & assess**: Build the chronological event timeline. Categorize each event. Assess impact.
 
 ## Report Sections
