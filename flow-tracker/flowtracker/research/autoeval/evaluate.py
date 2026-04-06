@@ -599,6 +599,40 @@ async def async_main_agent(args: argparse.Namespace) -> None:
     print(f"{'='*70}")
 
 
+def _setup_run_log() -> Path:
+    """Set up tee-style logging — stdout/stderr go to both console and run log file."""
+    import io
+
+    log_dir = Path(__file__).parent / "run_logs"
+    log_dir.mkdir(exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    log_path = log_dir / f"{ts}.log"
+
+    class TeeWriter(io.TextIOBase):
+        """Write to both the original stream and a log file."""
+
+        def __init__(self, original: object, log_file: object) -> None:
+            self._original = original
+            self._log_file = log_file
+
+        def write(self, s: str) -> int:
+            self._original.write(s)
+            self._log_file.write(s)
+            self._log_file.flush()
+            return len(s)
+
+        def flush(self) -> None:
+            self._original.flush()
+            self._log_file.flush()
+
+    log_file = open(log_path, "w")  # noqa: SIM115
+    sys.stdout = TeeWriter(sys.__stdout__, log_file)  # type: ignore[assignment]
+    sys.stderr = TeeWriter(sys.__stderr__, log_file)  # type: ignore[assignment]
+
+    print(f"Run log: {log_path}")
+    return log_path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AutoEval — Gemini eval harness")
 
@@ -610,6 +644,8 @@ def main() -> None:
     parser.add_argument("--skip-run", action="store_true", help="Skip agent runs, grade existing reports only")
     parser.add_argument("--cycle", type=int, default=0, help="Cycle number for results.tsv logging")
     args = parser.parse_args()
+
+    _setup_run_log()
 
     if args.agent:
         asyncio.run(async_main_agent(args))
