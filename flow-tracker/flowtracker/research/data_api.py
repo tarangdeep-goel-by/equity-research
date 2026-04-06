@@ -313,9 +313,46 @@ class ResearchDataAPI:
     def get_valuation_snapshot(self, symbol: str) -> dict:
         """Latest valuation snapshot (50+ fields: price, PE, PB, EV/EBITDA, margins, etc.)."""
         hist = self._store.get_valuation_history(symbol, days=7)
-        if hist:
-            return _clean(hist[-1].model_dump())
-        return {}
+        if not hist:
+            return {}
+        snap = _clean(hist[-1].model_dump())
+        # Pre-compute derived values so agents don't do unit math
+        price = snap.get("price") or 0
+        float_shares = snap.get("float_shares") or 0
+        shares = snap.get("shares_outstanding") or 0
+        mcap = snap.get("market_cap") or 0  # already in crores
+        if float_shares and price:
+            snap["free_float_mcap_cr"] = round(float_shares * price / 1e7, 2)
+        if float_shares and shares:
+            snap["free_float_pct"] = round(float_shares / shares * 100, 2)
+        if snap.get("avg_volume") and price:
+            snap["avg_daily_turnover_cr"] = round(snap["avg_volume"] * price / 1e7, 2)
+        if shares:
+            snap["shares_outstanding_lakh"] = round(shares / 1e5, 2)
+        total_cash = snap.get("total_cash") or 0
+        total_debt = snap.get("total_debt") or 0
+        snap["net_cash_cr"] = round(total_cash - total_debt, 2)
+        bvps = snap.get("book_value_per_share") or 0
+        if bvps and shares:
+            snap["total_book_value_cr"] = round(bvps * shares / 1e7, 2)
+        rps = snap.get("revenue_per_share") or 0
+        if rps and shares:
+            snap["ttm_revenue_cr"] = round(rps * shares / 1e7, 2)
+        # EPS derived from PE (single source of truth — prevents cross-agent PE disagreement)
+        pe = snap.get("pe_trailing")
+        if pe and price and pe > 0:
+            snap["eps_ttm"] = round(price / pe, 2)
+        pe_fwd = snap.get("pe_forward")
+        if pe_fwd and price and pe_fwd > 0:
+            snap["eps_forward"] = round(price / pe_fwd, 2)
+        # Price vs 52-week range
+        high = snap.get("fifty_two_week_high") or 0
+        low = snap.get("fifty_two_week_low") or 0
+        if high and price:
+            snap["pct_below_52w_high"] = round((1 - price / high) * 100, 2)
+        if low and price:
+            snap["pct_above_52w_low"] = round((price / low - 1) * 100, 2)
+        return snap
 
     def get_valuation_band(self, symbol: str, metric: str = "pe_trailing", days: int = 2500) -> dict:
         """P/E (or other metric) percentile band over historical period."""
@@ -1939,7 +1976,16 @@ class ResearchDataAPI:
         pe_band = pe_band_raw if pe_band_raw.get("median_val") else None
         pe_multiples = compute_dynamic_pe(pe_band)
 
-        return build_projections(annual, adjustment_factor=factor, pe_multiples=pe_multiples)
+        # Use current post-bonus shares from valuation snapshot (not stale Screener num_shares)
+        valuation = self.get_valuation_snapshot(symbol)
+        current_shares = valuation.get("shares_outstanding", 0)
+
+        return build_projections(
+            annual,
+            adjustment_factor=factor,
+            pe_multiples=pe_multiples,
+            shares_override=current_shares or None,
+        )
 
     def get_wacc_params(self, symbol: str) -> dict:
         """Dynamic WACC: beta, cost of equity, cost of debt, terminal growth, PE multiples."""
@@ -1948,9 +1994,22 @@ class ResearchDataAPI:
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
         flags: list[str] = []
 
-        # --- Stock prices (from bhavcopy daily_stock_data) ---
+        # --- Stock prices (bhavcopy preferred, Screener chart fallback) ---
         stock_rows = self._store.get_stock_delivery(symbol, days=800)
         stock_prices = [{"date": r.date, "close": r.close} for r in stock_rows if r.close]
+        # Beta needs 53+ weeks; fall back to Screener chart prices if bhavcopy is thin
+        if len(stock_prices) < 260:  # ~1yr of trading days
+            chart_data = self._store.get_chart_data(symbol, "price")
+            for metric_data in chart_data:
+                if metric_data.get("metric") == "Price":
+                    chart_prices = [
+                        {"date": pt["date"], "close": pt["value"]}
+                        for pt in metric_data.get("values", [])
+                        if pt.get("value")
+                    ]
+                    if len(chart_prices) > len(stock_prices):
+                        stock_prices = chart_prices
+                    break
         if not stock_prices:
             flags.append("no_stock_prices")
 

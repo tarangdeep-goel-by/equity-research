@@ -656,7 +656,7 @@ async def get_concall_insights(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
-render_chart = tool(
+@tool(
     "render_chart",
     "Generate a PNG chart and return the file path for embedding in your report. "
     "Use the embed_markdown value directly in your report to show the chart. "
@@ -692,9 +692,6 @@ render_chart = tool(
     "Returns: {path, embed_markdown}.",
     {"symbol": str, "chart_type": str},
 )
-
-
-@render_chart
 async def render_chart(args):
     from flowtracker.research.charts import render_chart as _render
     result = _render(args["symbol"], args["chart_type"])
@@ -1012,8 +1009,8 @@ def _get_fundamentals_section(api, symbol, section, args):
 
 @tool(
     "get_fundamentals",
-    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']",
-    {"symbol": str, "section": str, "quarters": int, "years": int, "sub_section": str},
+    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']. Optional: quarters (default 12), years (default 10), sub_section.",
+    {"symbol": str, "section": str},
 )
 async def get_fundamentals(args):
     symbol = args["symbol"]
@@ -1194,8 +1191,8 @@ def _get_ownership_section(api, symbol, section, args):
 
 @tool(
     "get_ownership",
-    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | ['section1', 'section2']",
-    {"symbol": str, "section": str, "quarters": int, "days": int, "classification": str},
+    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | ['section1', 'section2']. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).",
+    {"symbol": str, "section": str},
 )
 async def get_ownership(args):
     symbol = args["symbol"]
@@ -1242,8 +1239,8 @@ def _get_valuation_section(api, symbol, section, args):
 
 @tool(
     "get_valuation",
-    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']",
-    {"symbol": str, "section": str, "metric": str, "days": int, "years": int},
+    "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']. Optional: metric (for band, default 'pe_trailing'), days (default 2500), years (default 10).",
+    {"symbol": str, "section": str},
 )
 async def get_valuation(args):
     symbol = args["symbol"]
@@ -1331,8 +1328,8 @@ def _get_peer_sector_section(api, symbol, section, args):
 
 @tool(
     "get_peer_sector",
-    "Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | ['section1', 'section2']",
-    {"symbol": str, "section": str, "metric": str},
+    "Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | ['section1', 'section2']. Optional: metric (for specific valuation metric).",
+    {"symbol": str, "section": str},
 )
 async def get_peer_sector(args):
     symbol = args["symbol"]
@@ -1435,8 +1432,8 @@ def _get_market_context_section(api, symbol, section, args):
 
 @tool(
     "get_market_context",
-    "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']",
-    {"symbol": str, "section": str, "days": int},
+    "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']. Optional: days (default 90).",
+    {"symbol": str, "section": str},
 )
 async def get_market_context(args):
     symbol = args["symbol"]
@@ -1547,8 +1544,8 @@ def _get_events_actions_section(api, symbol, section, args):
 
 @tool(
     "get_events_actions",
-    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']",
-    {"symbol": str, "section": str, "years": int, "quarters": int, "days": int},
+    "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']. Optional: years (default 10), quarters (default 12), days (default 90).",
+    {"symbol": str, "section": str},
 )
 async def get_events_actions(args):
     symbol = args["symbol"]
@@ -1591,6 +1588,93 @@ async def get_stock_news(args):
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
 
 
+# --- Financial Calculator ---
+
+
+@tool(
+    "calculate",
+    "Financial calculator — use this for ALL math instead of computing in your head. "
+    "Operations (pass operation + a + b): "
+    "'shares_to_value_cr': a=shares (raw count), b=price (₹) → value in ₹ Cr. "
+    "'per_share_to_total_cr': a=per_share_value (₹), b=shares (raw count) → total in ₹ Cr. "
+    "'total_cr_to_per_share': a=total_cr (₹ Cr), b=shares (raw count) → per share (₹). "
+    "'pe_from_price_eps': a=price (₹), b=eps (₹) → PE ratio. "
+    "'eps_from_pat_shares': a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹). "
+    "'fair_value': a=pe_multiple, b=eps (₹) → fair value per share (₹). "
+    "'growth_rate': a=old value, b=new value → growth %. "
+    "'mcap_cr': a=price (₹), b=shares (raw count) → market cap in ₹ Cr. "
+    "'margin_of_safety': a=fair_value (₹), b=current_price (₹) → MoS %. "
+    "'annualize_quarterly': a=quarterly_value → annualized (×4). "
+    "'pct_of': a=part, b=whole → percentage. "
+    "'ratio': a=numerator, b=denominator → ratio. "
+    "'expr': a=arithmetic expression as string (e.g. '(623 * 0.25) / 114.4') → result. "
+    "Returns the result + the full calculation string so you can verify and cite it. "
+    "ALWAYS use this tool for any multiplication, division, or unit conversion. Never compute in your head.",
+    {"operation": str, "a": float, "b": float},
+)
+async def calculate(args):
+    import math
+    op = args["operation"]
+    a = args.get("a", 0) or 0
+    b = args.get("b", 0) or 0
+
+    try:
+        if op == "shares_to_value_cr":
+            result = {"value_cr": round(a * b / 1e7, 2), "unit": "₹ Cr",
+                      "calculation": f"{a:,.0f} shares × ₹{b:,.2f} ÷ 1,00,00,000 = ₹{a * b / 1e7:,.2f} Cr"}
+        elif op == "per_share_to_total_cr":
+            result = {"total_cr": round(a * b / 1e7, 2), "unit": "₹ Cr",
+                      "calculation": f"₹{a:,.2f}/share × {b:,.0f} shares ÷ 1,00,00,000 = ₹{a * b / 1e7:,.2f} Cr"}
+        elif op == "total_cr_to_per_share":
+            result = {"per_share": round(a * 1e7 / b, 2) if b else 0, "unit": "₹",
+                      "calculation": f"₹{a:,.2f} Cr × 1,00,00,000 ÷ {b:,.0f} shares = ₹{a * 1e7 / b:,.2f}" if b else "division by zero"}
+        elif op == "pe_from_price_eps":
+            result = {"pe": round(a / b, 2) if b else 0, "unit": "x",
+                      "calculation": f"₹{a:,.2f} ÷ ₹{b:,.2f} = {a / b:,.2f}x" if b else "division by zero"}
+        elif op == "eps_from_pat_shares":
+            result = {"eps": round(a * 1e7 / b, 2) if b else 0, "unit": "₹",
+                      "calculation": f"₹{a:,.2f} Cr × 1,00,00,000 ÷ {b:,.0f} shares = ₹{a * 1e7 / b:,.2f}" if b else "division by zero"}
+        elif op == "fair_value":
+            result = {"fair_value": round(a * b, 2), "unit": "₹",
+                      "calculation": f"{a:,.1f}x PE × ₹{b:,.2f} EPS = ₹{a * b:,.2f}"}
+        elif op == "growth_rate":
+            result = {"growth_pct": round((b - a) / a * 100, 2) if a else 0, "unit": "%",
+                      "calculation": f"({b:,.2f} - {a:,.2f}) ÷ {a:,.2f} × 100 = {(b - a) / a * 100:,.2f}%" if a else "division by zero"}
+        elif op == "cagr":
+            # a = start value, b = end value, need years via expression
+            result = {"note": "Use 'expr' for CAGR: ((end/start)^(1/years)-1)*100"}
+        elif op == "mcap_cr":
+            result = {"mcap_cr": round(a * b / 1e7, 2), "unit": "₹ Cr",
+                      "calculation": f"₹{a:,.2f} × {b:,.0f} shares ÷ 1,00,00,000 = ₹{a * b / 1e7:,.2f} Cr"}
+        elif op == "margin_of_safety":
+            result = {"mos_pct": round((a - b) / a * 100, 2) if a else 0, "unit": "%",
+                      "calculation": f"(₹{a:,.2f} - ₹{b:,.2f}) ÷ ₹{a:,.2f} × 100 = {(a - b) / a * 100:,.2f}%" if a else "division by zero"}
+        elif op == "annualize_quarterly":
+            result = {"annualized": round(a * 4, 2), "unit": "same as input",
+                      "calculation": f"{a:,.2f} × 4 = {a * 4:,.2f}"}
+        elif op == "pct_of":
+            result = {"pct": round(a / b * 100, 2) if b else 0, "unit": "%",
+                      "calculation": f"{a:,.2f} ÷ {b:,.2f} × 100 = {a / b * 100:,.2f}%" if b else "division by zero"}
+        elif op == "ratio":
+            result = {"ratio": round(a / b, 4) if b else 0, "unit": "x",
+                      "calculation": f"{a:,.2f} ÷ {b:,.2f} = {a / b:,.4f}x" if b else "division by zero"}
+        elif op == "expr":
+            # Safe arithmetic eval — only allow numbers and basic operators
+            expr_str = str(args.get("a", "0"))
+            allowed = set("0123456789.+-*/() eE")
+            if all(c in allowed for c in str(expr_str)):
+                val = eval(str(expr_str))  # noqa: S307
+                result = {"result": round(float(val), 4), "expression": str(expr_str)}
+            else:
+                result = {"error": "Only arithmetic expressions allowed (numbers, +, -, *, /, parentheses)"}
+        else:
+            result = {"error": f"Unknown operation: {op}. See tool description for available operations."}
+    except Exception as e:
+        result = {"error": str(e)}
+
+    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+
+
 # --- Tool Registry ---
 
 # V2 macro-tools (10 consolidated) + 6 standalone = 16 agent-facing tools
@@ -1599,7 +1683,7 @@ RESEARCH_TOOLS_V2 = [
     get_fair_value_analysis, get_peer_sector, get_estimates,
     get_market_context, get_company_context, get_events_actions,
     get_analytical_profile, render_chart, get_composite_score,
-    screen_stocks, save_business_profile, get_chart_data,
+    screen_stocks, save_business_profile, get_chart_data, calculate,
 ]
 
 # Individual tools kept for CLI `flowtrack research data <tool_name>` and monolith agent
@@ -1665,45 +1749,45 @@ RESEARCH_TOOLS = [
 BUSINESS_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_fundamentals,
     get_peer_sector, get_events_actions,
-    get_valuation, get_chart_data, save_business_profile, render_chart,
+    get_valuation, get_chart_data, save_business_profile, render_chart, calculate,
 ]
 
 FINANCIAL_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_fundamentals,
     get_quality_scores, get_valuation, get_peer_sector,
     get_estimates, get_events_actions, get_fair_value_analysis,
-    get_chart_data, render_chart,
+    get_chart_data, render_chart, calculate,
 ]
 
 OWNERSHIP_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_ownership, get_market_context,
     get_peer_sector, get_company_context, get_estimates,
-    get_fundamentals, render_chart,
+    get_fundamentals, render_chart, calculate,
 ]
 
 VALUATION_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_valuation, get_fair_value_analysis,
     get_estimates, get_peer_sector, get_events_actions,
     get_company_context, get_quality_scores, get_market_context,
-    get_chart_data, render_chart,
+    get_chart_data, render_chart, calculate,
 ]
 
 RISK_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_composite_score, get_fundamentals,
     get_quality_scores, get_ownership, get_market_context,
     get_peer_sector, get_company_context, get_events_actions,
-    get_estimates, render_chart,
+    get_estimates, render_chart, calculate,
 ]
 
 TECHNICAL_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_market_context, get_valuation,
-    get_ownership, get_peer_sector, get_chart_data, render_chart,
+    get_ownership, get_peer_sector, get_chart_data, render_chart, calculate,
 ]
 
 SECTOR_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_peer_sector,
     get_market_context, get_fundamentals, get_estimates,
-    get_valuation, get_chart_data, render_chart,
+    get_valuation, get_chart_data, render_chart, calculate,
 ]
 
 NEWS_AGENT_TOOLS_V2 = [

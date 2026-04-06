@@ -80,6 +80,9 @@ class FMPClient:
                 return resp
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
+                # 403 = not covered / auth issue — no point retrying
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 403:
+                    break
                 if attempt < max_retries:
                     wait = (2 ** attempt) + random.uniform(0, 1)
                     logger.warning(

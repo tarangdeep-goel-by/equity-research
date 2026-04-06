@@ -347,6 +347,20 @@ def refresh_for_research(
         except Exception as e:
             _skip("estimates", str(e))
 
+        # Corporate actions (dividends, splits, bonuses) from yfinance
+        try:
+            from flowtracker.filing_client import FilingClient
+
+            with FilingClient() as fc:
+                actions = fc.get_corporate_actions(symbol)
+                if actions:
+                    store.upsert_corporate_actions(actions)
+                    _ok("corporate_actions", len(actions))
+                else:
+                    _skip("corporate_actions", "no data")
+        except Exception as e:
+            _skip("corporate_actions", str(e))
+
         # --- 3. NSE data ---
         _log("\n[bold]NSE[/]")
         try:
@@ -505,6 +519,35 @@ def refresh_for_research(
             _skip("fmp", "no API key — create ~/.config/flowtracker/fmp.env")
         except Exception as e:
             _skip("fmp", str(e))
+
+    # --- 7. Analytical snapshot (compute on-demand for this stock) ---
+    try:
+        existing = store.get_analytical_snapshot(symbol)
+        if not existing or existing.get("computed_date", "") < date.today().isoformat():
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+            from flowtracker.research.data_api import ResearchDataAPI
+            from flowtracker.screener_engine import ScreenerEngine
+            with ResearchDataAPI() as api:
+                engine = ScreenerEngine(store)
+                from importlib import import_module
+                # Import compute_stock from scripts
+                spec_path = Path(__file__).resolve().parent.parent.parent / "scripts" / "compute-analytics.py"
+                if spec_path.exists():
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location("compute_analytics", spec_path)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    row = mod.compute_stock(api, engine, symbol, None, skip_perf=True)
+                    store.upsert_analytical_snapshot(row)
+                    _ok("analytical_snapshot", 1)
+                else:
+                    _skip("analytical_snapshot", "compute-analytics.py not found")
+        else:
+            _ok("analytical_snapshot", 1)
+    except Exception as e:
+        _skip("analytical_snapshot", str(e))
 
     return summary
 

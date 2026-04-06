@@ -92,6 +92,7 @@ class ScreenerClient:
             timeout=httpx.Timeout(connect=15, read=45, write=10, pool=10),
             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"},
         )
+        self._is_consolidated: bool = True  # Set by fetch_company_page
         self._login()
 
     def _login(self) -> None:
@@ -154,12 +155,21 @@ class ScreenerClient:
         return match.group(1)
 
     def fetch_company_page(self, symbol: str) -> str:
-        """Fetch Screener.in company page HTML (consolidated preferred)."""
+        """Fetch Screener.in company page HTML (consolidated preferred).
+
+        Tries consolidated first. If the page returns 200 but has no financial
+        data (standalone-only companies), falls back to the standalone page.
+        """
         for suffix in ["/consolidated/", "/"]:
             url = f"{_SCREENER_BASE}/company/{symbol}{suffix}"
             try:
                 resp = self._request_with_retry("GET", url)
                 if resp.status_code == 200:
+                    # Consolidated page can return 200 but have empty table skeletons
+                    # for standalone-only companies. data-date-key indicates real data.
+                    if suffix == "/consolidated/" and "data-date-key" not in resp.text:
+                        continue
+                    self._is_consolidated = suffix == "/consolidated/"
                     self._last_html = resp.text
                     return resp.text
             except (httpx.HTTPStatusError, httpx.TransportError):
@@ -1269,7 +1279,8 @@ class ScreenerClient:
         q = queries.get(chart_type)
         if not q:
             return {"datasets": []}
-        url = f"{_SCREENER_BASE}/api/company/{company_id}/chart/?q={q}&days={days}&consolidated=true"
+        cons = "&consolidated=true" if self._is_consolidated else ""
+        url = f"{_SCREENER_BASE}/api/company/{company_id}/chart/?q={q}&days={days}{cons}"
         resp = self._request_with_retry("GET", url)
         return resp.json()
 
@@ -1341,7 +1352,9 @@ class ScreenerClient:
         parent: e.g., 'Sales', 'Expenses', 'Borrowings'
         """
         url = f"{_SCREENER_BASE}/api/company/{company_id}/schedules/"
-        params = {"parent": parent, "section": section, "consolidated": ""}
+        params: dict[str, str] = {"parent": parent, "section": section}
+        if self._is_consolidated:
+            params["consolidated"] = ""
         resp = self._request_with_retry("GET", url, params=params)
         data = resp.json()
         return data if isinstance(data, dict) else {}
