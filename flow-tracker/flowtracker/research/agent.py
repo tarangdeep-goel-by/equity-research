@@ -481,6 +481,7 @@ async def _run_specialist(
     """Run a single specialist agent. Returns (BriefingEnvelope, AgentTrace)."""
 
     tools = tools if tools is not None else AGENT_TOOLS.get(name, [])
+    tool_names = [getattr(t, "__name__", str(t)) for t in tools] if tools else []
     max_turns = max_turns or AGENT_MAX_TURNS.get(name, 20)
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
     model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
@@ -683,15 +684,23 @@ async def _run_specialist(
         finished_at=agent_finished,
         duration_seconds=duration,
         status=agent_status,
+        tools_available=tool_names,
         tool_calls=evidence,
         reasoning=reasoning_blocks,
         report_chars=len(report_text),
         cost=cost,
     )
 
+    # Log unused tools for pipeline optimization
+    called_tools = {e.tool.split("__")[-1] for e in evidence}  # strip mcp__agent__ prefix
+    available_set = set(tool_names)
+    unused = available_set - called_tools
+    if unused:
+        logger.info("[%s] unused_tools: %s", name, ", ".join(sorted(unused)))
+
     logger.info(
-        "[%s] done: %s %d chars, %d tools, %.0fs, $%.2f",
-        name, agent_status, len(report_text), len(evidence), duration, total_cost,
+        "[%s] done: %s %d chars, %d calls, %d/%d tools used, %.0fs, $%.2f",
+        name, agent_status, len(report_text), len(evidence), len(called_tools), len(available_set), duration, total_cost,
     )
 
     # Save to vault (explainer output is saved by the caller to thesis/ paths)

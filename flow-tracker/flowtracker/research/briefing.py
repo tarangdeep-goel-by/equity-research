@@ -74,6 +74,7 @@ class AgentTrace(BaseModel, extra="ignore"):
     finished_at: str = ""
     duration_seconds: float = 0.0
     status: str = "success"
+    tools_available: list[str] = Field(default_factory=list)  # registered MCP tool names
     tool_calls: list[ToolEvidence] = Field(default_factory=list)
     reasoning: list[str] = Field(default_factory=list)  # pre-report TextBlocks
     report_chars: int = 0
