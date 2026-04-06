@@ -96,6 +96,13 @@ Classify each issue into exactly one of these categories:
 - **COMPUTATION**: Mathematical calculation the LLM did incorrectly (e.g., wrong CAGR formula, flipped margin of safety)
 - **NOT_OUR_PROBLEM**: Inherent LLM limitation (e.g., minor hallucination, inconsistent phrasing)
 
+The report may include an **Agent Execution Log** at the end showing which tools were called,
+any tool errors, token usage, and duration. Use this to improve your classification:
+- If the report is missing analysis AND the agent never called the relevant tool → PROMPT_FIX (add tool call to workflow)
+- If the agent called a tool but it returned an error or empty data → DATA_FIX (pipeline issue)
+- If the agent ran out of turns/budget → note this, it's a config issue
+- If the agent called the right tools but misinterpreted the data → PROMPT_FIX (add interpretation rules)
+
 You MUST respond with valid JSON matching this exact structure:
 {{
   "grade": "<letter grade A+ through F>",
@@ -151,7 +158,56 @@ def read_report(agent: str, stock: str) -> str:
     return report_path.read_text()
 
 
-async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: str) -> AgentEvalResult:
+def read_agent_evidence(agent: str, stock: str) -> str:
+    """Read the agent's tool evidence log and format as context for the evaluator.
+
+    Returns a human-readable summary of tool calls, errors, cost, and turns used.
+    This helps the evaluator distinguish PROMPT_FIX from DATA_FIX issues.
+    """
+    evidence_path = Path.home() / "vault" / "stocks" / stock / "evidence" / f"{agent}.json"
+    briefing_path = Path.home() / "vault" / "stocks" / stock / "briefings" / f"{agent}.json"
+
+    sections = []
+
+    # Tool call evidence
+    if evidence_path.exists():
+        try:
+            evidence = json.loads(evidence_path.read_text())
+            tools_called = [e["tool"] for e in evidence]
+            errors = [e for e in evidence if e.get("is_error")]
+            sections.append(f"Tools called ({len(evidence)} total): {', '.join(tools_called)}")
+            if errors:
+                sections.append(f"Tool errors ({len(errors)}):")
+                for e in errors:
+                    sections.append(f"  - {e['tool']}({e.get('args',{})}) → ERROR: {e.get('result_summary','')[:200]}")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Briefing metadata (cost, duration, status)
+    if briefing_path.exists():
+        try:
+            briefing = json.loads(briefing_path.read_text())
+            cost = briefing.get("cost", {})
+            if cost:
+                sections.append(
+                    f"Cost: ${cost.get('total_cost_usd', 0):.2f}, "
+                    f"tokens: {cost.get('input_tokens', 0)}in/{cost.get('output_tokens', 0)}out, "
+                    f"duration: {cost.get('duration_seconds', 0):.0f}s, "
+                    f"model: {cost.get('model', 'unknown')}"
+                )
+            status = briefing.get("status", "unknown")
+            if status != "success":
+                sections.append(f"Agent status: {status} — {briefing.get('failure_reason', '')}")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    if not sections:
+        return ""
+
+    return "## Agent Execution Log\n" + "\n".join(sections)
+
+
+async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: str, evidence_context: str = "") -> AgentEvalResult:
     """Send report to Gemini for grading. Returns structured eval result."""
     try:
         from google import genai
@@ -182,6 +238,8 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
     )
 
     user_prompt = f"Grade this {agent} agent report for {stock} ({sector_type}):\n\n{report_md}"
+    if evidence_context:
+        user_prompt += f"\n\n---\n\n{evidence_context}"
 
     # Truncate very long reports to stay within limits
     if len(user_prompt) > 100_000:
@@ -363,9 +421,14 @@ async def _eval_sector(agent: str, sector_name: str, sector_cfg: dict,
         )
     print(f"  Report: {len(report_md)} chars")
 
-    # Step 3: Grade with Gemini
+    # Step 3: Load agent execution evidence
+    evidence = read_agent_evidence(agent, stock)
+    if evidence:
+        print(f"  Evidence log loaded ({evidence.count(chr(10))} lines)")
+
+    # Step 4: Grade with Gemini (report + evidence)
     print(f"  Grading with Gemini...")
-    eval_result = await eval_with_gemini(agent, stock, sector_type, report_md)
+    eval_result = await eval_with_gemini(agent, stock, sector_type, report_md, evidence)
     eval_result.run_duration_s = run_duration
     eval_result.run_skipped = run_skipped
     eval_result.report_length = len(report_md)
