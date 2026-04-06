@@ -11,7 +11,9 @@ You are an autonomous prompt optimization agent. Your job is to iteratively impr
 1. Read this file completely
 2. Read `eval_matrix.yaml` to understand the test matrix
 3. Read `resources.md` for accumulated learnings from prior runs
-4. Read `results.tsv` for experiment history (skip agent/sector pairs already at A-+)
+4. Read `changelog.md` for the detailed history of every experiment (what changed, what resulted)
+5. Read `results.tsv` for experiment history (skip agent/sector pairs already at A-+)
+6. Check `eval_history/` for full Gemini eval responses from prior runs
 5. Check current git branch — if not on `autoeval/*`, create one:
    ```
    git checkout -b autoeval/$(date +%Y%m%d-%H%M)
@@ -23,6 +25,7 @@ You are an autonomous prompt optimization agent. Your job is to iteratively impr
 - **NEVER modify `eval_matrix.yaml`** — the test matrix is fixed.
 - **NEVER touch anything outside the agent layer** — no store.py, data_api.py, clients, infra.
 - **ALWAYS update `resources.md`** after each experiment with what you learned.
+- **ALWAYS update `changelog.md`** with the structured entry for every experiment (kept or reverted).
 - **ALWAYS commit before running eval** — so you can revert cleanly on failure.
 - **ONE issue per edit** — never batch multiple fixes. Attribution must be clear.
 
@@ -39,6 +42,7 @@ The orchestrator can edit the full agent prompt and tool surface. But be mindful
 | `tools.py` — `AGENT_TOOLS_V2[{agent}]` | Add/remove tools from agent's registry | Agent needs access to a tool it doesn't have |
 | `agent.py` — `AGENT_MAX_TURNS`, `DEFAULT_EFFORT` | Tune iteration/cost limits per agent | Agent running out of turns or budget |
 | `resources.md` | Accumulated learnings | Always |
+| `changelog.md` | Structured experiment log (change → grade → kept/reverted) | After every experiment |
 
 ### Decision Framework: Sector Skill vs Core Prompt
 

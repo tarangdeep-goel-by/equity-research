@@ -382,8 +382,21 @@ def _extract_json(text: str) -> dict | None:
 
 
 def write_last_run(result: LastRunResult) -> None:
-    """Write last_run.json with full eval details."""
-    out_path = Path(__file__).parent / "last_run.json"
+    """Write last_run.json (latest) and archive a timestamped copy.
+
+    last_run.json is the working file the orchestrator reads.
+    eval_history/{timestamp}_{sector}.json is the permanent archive.
+    """
+    base = Path(__file__).parent
+
+    # Archive — never overwritten
+    history_dir = base / "eval_history"
+    history_dir.mkdir(exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    sector_tag = result.sector.replace("/", "_")
+    archive_path = history_dir / f"{ts}_{sector_tag}.json"
+
+    out_path = base / "last_run.json"
     # Convert dataclasses to dicts
     data = {
         "sector": result.sector,
@@ -395,8 +408,11 @@ def write_last_run(result: LastRunResult) -> None:
             name: asdict(r) for name, r in result.results.items()
         },
     }
-    out_path.write_text(json.dumps(data, indent=2, default=str))
+    payload = json.dumps(data, indent=2, default=str)
+    out_path.write_text(payload)
+    archive_path.write_text(payload)
     print(f"\nWrote: {out_path}")
+    print(f"Archived: {archive_path}")
 
 
 def append_results_tsv(results: dict[str, AgentEvalResult], sector: str, cycle: int = 0) -> None:
