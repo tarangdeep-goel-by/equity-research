@@ -1077,14 +1077,21 @@ def _get_quality_scores_section(api, symbol, section, args):
         return api.get_sector_health_metrics(symbol)
     elif section == "risk_flags":
         return api.get_risk_flags(symbol)
+    elif section == "forensic_checks":
+        return api.get_forensic_checks(symbol)
+    elif section == "improvement_metrics":
+        return api.get_improvement_metrics(symbol)
+    elif section == "capital_discipline":
+        return api.get_capital_discipline(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_quality_scores",
-    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | ['section1', 'section2']. "
-    "BFSI routing: 'all' auto-skips non-applicable sections. 'subsidiary' returns consolidated-standalone diff for SOTP analysis.",
+    "Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | 'forensic_checks' | 'improvement_metrics' | 'capital_discipline' | ['section1', 'section2']. "
+    "BFSI routing: 'all' auto-skips non-applicable sections. 'subsidiary' returns consolidated-standalone diff for SOTP. "
+    "'forensic_checks' = CFO/EBITDA, depreciation volatility, cash yield, CWIP parking. 'improvement_metrics' = ROCE/ROE trajectory, greatness score. 'capital_discipline' = ROCE×reinvestment, equity dilution, RM cost cycle.",
     {"symbol": str, "section": str},
 )
 async def get_quality_scores(args):
@@ -1105,6 +1112,9 @@ async def get_quality_scores(args):
                     "common_size": api.get_common_size_pl(symbol),
                     "capex_cycle": skipped,
                     "bfsi": api.get_bfsi_metrics(symbol),
+                    "forensic_checks": skipped,
+                    "improvement_metrics": api.get_improvement_metrics(symbol),
+                    "capital_discipline": skipped,
                 }
             else:
                 data = {
@@ -1115,6 +1125,9 @@ async def get_quality_scores(args):
                     "common_size": api.get_common_size_pl(symbol),
                     "capex_cycle": api.get_capex_cycle(symbol),
                     "bfsi": {"skipped": "not applicable for non-BFSI"},
+                    "forensic_checks": api.get_forensic_checks(symbol),
+                    "improvement_metrics": api.get_improvement_metrics(symbol),
+                    "capital_discipline": api.get_capital_discipline(symbol),
                 }
         else:
             data = _get_quality_scores_section(api, symbol, section, args)

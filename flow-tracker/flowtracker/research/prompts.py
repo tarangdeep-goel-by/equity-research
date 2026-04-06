@@ -84,6 +84,10 @@ Explain what a company does, how it makes money, and why it might (or might not)
 - Use mermaid diagrams for business model flow and revenue breakdown.
 - **Customer/channel concentration:** For infrastructure plays (exchanges, depositories, platforms, RTAs), always identify the top 3-5 customers/channels by volume and their % contribution. "73% retail market share" is incomplete without "driven by Zerodha (X%), Groww (Y%), Angel One (Z%) — if any one exits, impact is..."
 - **Subsidiary quantification:** When a subsidiary is mentioned (e.g., CVL, insurance arm, AMC), always quantify its market share, revenue contribution, and standalone value. "KYC via CVL" is incomplete without "CVL commands ~X% of KRA market — a data monopoly within the duopoly."
+- **Moat Pricing Test** — Apply this thought experiment: "Could a competitor offer this product/service at 1/3rd the price and still not take share?" If yes = wide moat (brand/switching costs/network effects). If no = narrow or no moat. State your answer explicitly.
+- **Lethargy Score** — Assess management dynamism on 3 dimensions: (a) Is the company deepening existing moats (investing in brand, distribution, tech)? (b) Is it experimenting with adjacent revenue streams? (c) Is it attempting to disrupt its own business model before competitors do? Score: Active (3/3), Moderate (2/3), Lethargic (0-1/3).
+- **Volume vs Price decomposition** — Decompose revenue growth into volume growth + realization/price growth. Pure price-driven growth without volume = demand destruction risk. For FMCG/consumer, always separate volume from price/mix. For B2B/infra, separate order count from average order value. If volume data is unavailable from structured tools, pose as open question: "What is the volume vs price/mix split in recent revenue growth?"
+- **Succession & Management Continuity** — Assess: (a) Is execution decentralized or CEO-dependent? (b) What is CXO tenure — have key leaders been there 5+ years? (c) Any recent C-suite departures (CFO/CEO/COO in last 3 years)? (d) Is the board truly independent or a rubber stamp? If information is unavailable from tools, pose as open questions.
 """
 
 BUSINESS_INSTRUCTIONS_V2 = """
@@ -157,6 +161,8 @@ Decode a company's numbers — earnings trajectory, margin mechanics, quality of
 - Extreme ratios need explanations, not just labels. If CFO/PAT > 2x, explain the mechanism (depreciation, deferred tax, impairments). If payout > 100%, explain the funding source. Any ratio far outside normal range demands a "why."
 - Cross-check FCF: if `cagr_table` FCF growth differs from what you compute from `capital_allocation` (CFO minus capex), flag the discrepancy and explain which definition each source uses.
 - When standalone quarterly data differs materially from consolidated annual data (revenue scale, borrowings, margins), explain the gap — subsidiaries, intercompany transactions, or consolidation adjustments.
+- **Capital Allocation Cycle (Ambit 6-Step)** — Trace the full cycle: (1) Incremental Capex → (2) Conversion to Sales Growth → (3) Pricing Discipline (PBIT margin maintained?) → (4) Capital Employed Turnover → (5) Balance Sheet Discipline (D/E stable, no dilution) → (6) Cash Generation (CFO growing). A "great" company executes all 6 steps. Identify WHERE the chain breaks — that's the key insight.
+- **Balance Sheet Loss Recognition** — Check if reserves decreased YoY without corresponding dividend payments. Companies sometimes write off losses directly against reserves or adjust goodwill instead of recognizing them in P&L. If reserves fell and dividends don't explain it, flag: "Potential loss write-off through balance sheet."
 """
 
 FINANCIAL_INSTRUCTIONS_V2 = """
@@ -164,7 +170,7 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data. **If `is_sme: true` is present, this stock reports half-yearly — adapt your analysis: use "6 half-yearly periods" instead of "12 quarters" for trend tables, and note the lower reporting frequency as a data limitation.**
 1. **Snapshot**: Call `get_analytical_profile` for composite score, DuPont, earnings quality, capex cycle, common-size P&L.
 2. **Core financials**: Call `get_fundamentals` with section=['quarterly_results', 'annual_financials', 'ratios', 'cost_structure', 'balance_sheet_detail', 'cash_flow_quality', 'working_capital', 'growth_rates', 'capital_allocation', 'cagr_table'] to get all financial data in one call.
-3. **Quality scores**: Call `get_quality_scores` with section=['dupont', 'earnings_quality', 'piotroski', 'beneish', 'subsidiary'] to get all quality data in one call. `subsidiary` returns consolidated-minus-standalone P&L — shows how much profit comes from subsidiaries.
+3. **Quality scores**: Call `get_quality_scores` with section=['dupont', 'earnings_quality', 'piotroski', 'beneish', 'subsidiary', 'improvement_metrics', 'capital_discipline'] to get all quality data in one call. `subsidiary` returns consolidated-minus-standalone P&L. `improvement_metrics` gives ROCE/ROE trajectory, greatness score (Ambit framework). `capital_discipline` gives ROCE×reinvestment rate, equity dilution, RM cost cycle.
 4. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 5. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
 6. **Visualizations**: Call `render_chart` for PE history, price, sales/margin, and cashflow charts.
@@ -287,6 +293,8 @@ Answer the most important question in investing: Is this stock cheap or expensiv
 - **Valuation signal calibration:** The tool's `signal` (DEEP_VALUE/UNDERVALUED/etc) is based on price vs own historical PE band — it's a RELATIVE signal. When citing it, always qualify with absolute context. If PE > 30x and signal is DEEP_VALUE, write: "DEEP VALUE relative to own 5Y history (current PE below historical bear band), but trading at Xx absolute PE — better described as Relative Value / GARP rather than absolute deep value." Never use DEEP_VALUE unqualified for a stock above 30x PE.
 - If BFSI mode is active and key metrics (CASA ratio, GNPA/NNPA, Credit-Deposit ratio, Capital Adequacy) are unavailable from tools, explicitly state the data gap: "Data Gap: [metric] unavailable from structured data — verify from latest quarterly investor presentation before investing."
 - For conglomerates with listed subsidiaries (e.g., ICICI→ICICI Pru Life/Lombard/Securities, Bajaj→Bajaj Finance/Finserv, Tata→TCS/Titan/Tata Motors), use Sum-of-the-Parts (SOTP): value core business on standalone metrics + add per-share value of listed subsidiaries with 20-25% holding company discount. For companies with separately valuable subsidiaries (banks with AMC/insurance/securities arms, industrial conglomerates with listed subs), you MUST acknowledge SOTP as a relevant framework. If subsidiary AUM/profit data is available from concall insights or known from company disclosures, attempt a rough SOTP using peer multiples (e.g., "AMC subsidiary manages ~₹X Cr AUM; listed AMCs trade at 5-10% of equity AUM, implying ₹Y-Z Cr value"). If data is insufficient, explicitly state: "SOTP analysis is warranted for this conglomerate but subsidiary-level financials are not available from current tools. The market price may not fully reflect subsidiary value." Never silently skip SOTP for a conglomerate.
+- **EPS Revision Reliability by Market-Cap** — Kotak research shows small-cap consensus EPS estimates get cut ~25% on average vs ~3% for large-caps. Apply a skepticism discount to forward EPS: large-cap (>₹50,000 Cr) = no haircut, mid-cap (₹15,000–₹50,000 Cr) = haircut 10-15%, small-cap (<₹15,000 Cr) = haircut 20-25%. State the haircut explicitly when plugging into valuation models.
+- **Valuation vs Own History** — Classify: Attractive (trading below 5Y average on 2+ of PE/PB/EV-EBITDA), Moderate (below on 1), Rich (above on all 3). This complements the absolute percentile band.
 """
 
 VALUATION_INSTRUCTIONS_V2 = """
@@ -357,6 +365,11 @@ Identify, quantify, and rank every material risk facing this company — financi
 - **Auditor Resignations:** If the statutory auditor resigned mid-term in the last 24 months, this is a MAJOR red flag — flag prominently in the Governance section. If auditor data is not available from tools, pose as an open question: "Has the statutory auditor resigned or been replaced mid-term recently?"
 - Use precise, calibrated language for risks. Distinguish between: **Structural risks** (permanent competitive disadvantage, regulatory obsolescence), **Cyclical risks** (commodity price swings, interest rate cycles), **Execution/timing risks** (delivery delays, Q4 revenue concentration, lumpy order recognition). Do NOT use vague terms like "operationally fragile" or "risky." Instead: "exposed to execution lumpiness — 44% of annual revenue books in Q4, creating binary earnings risk."
 - Always check and flag: (1) single-customer concentration (>50% revenue from one buyer), (2) import dependency for critical inputs (engines, APIs, chips, raw materials), (3) geopolitical risk to supply chain (export licenses, sanctions, trade policy). These apply across sectors — defence (engine licenses), pharma (API imports), auto (EV components), electronics (chips). If the data doesn't reveal these, pose them as open questions.
+- **Political Connectivity Red Flag** — Flag companies where >50% of revenue depends on government/PSU contracts AND the company has no visible technology, efficiency, or cost moat. Political moats are fragile — regime changes, policy shifts, or anti-corruption drives can destroy them overnight. Ambit's research shows politically-connected firms seldom outperform over 10 years. If government revenue share is unavailable from tools, pose as open question: "What percentage of revenue comes from government/PSU contracts?"
+- **Auditor Fee Anomaly** — If auditor remuneration is growing significantly faster than revenue (e.g., 30% vs 10%), it signals increasing accounting complexity — a red flag. If auditor fee data is unavailable, pose as open question: "Is the statutory auditor's remuneration growing faster than revenue?"
+- **Related Party Advances** — Rising advances/loans to promoter entities or related parties is a cash pilferage signal. Track YoY trend. If data unavailable, pose as open question: "Are advances to related parties increasing as % of total assets?"
+- **Miscellaneous Expense Check** — If "other expenses" (from common-size P&L) exceeds 15% of total expenses, flag for investigation — large unclassified expense buckets can hide illegitimate costs. Cross-reference with `get_quality_scores` common_size data.
+- **CXO Churn** — High turnover in C-suite (2+ departures of CFO/CEO/COO/CTO in 3 years) = management instability red flag. If data unavailable, pose as open question: "Have any key CXOs (CFO, CEO, COO) departed in the last 3 years?"
 """
 
 RISK_INSTRUCTIONS_V2 = """
@@ -364,7 +377,7 @@ RISK_INSTRUCTIONS_V2 = """
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data.
 1. **Snapshot + Score**: Call `get_analytical_profile` and `get_composite_score` for the 8-factor risk/quality rating.
 2. **Financial risk**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'quarterly_balance_sheet', 'rate_sensitivity'] for debt trajectory, interest coverage, cash position, and rate sensitivity.
-3. **Forensic checks**: Call `get_quality_scores` with section=['beneish', 'earnings_quality', 'piotroski'] for forensic analysis in one call.
+3. **Forensic checks**: Call `get_quality_scores` with section=['beneish', 'earnings_quality', 'piotroski', 'forensic_checks', 'common_size'] for forensic analysis in one call. `forensic_checks` gives CFO/EBITDA persistence, depreciation rate volatility, cash yield sanity check, CWIP parking risk. `common_size` gives expense breakdown as % of revenue for miscellaneous expense checks.
 4. **Governance signals**: Call `get_ownership` with section=['promoter_pledge', 'insider', 'bulk_block'] for governance data in one call.
 5. **Market & macro**: Call `get_market_context` for macro snapshot, FII/DII flows and streak, delivery trend.
 6. **Corporate context**: Call `get_company_context` for recent filings and company documents.
@@ -480,6 +493,8 @@ Analyze the industry-level dynamics for a given stock's sector — market size, 
 - Flows tell the real story — FII/DII sector-level data is the strongest leading indicator of re-rating/de-rating.
 - Quantify the opportunity — "₹5.2L Cr TAM growing at 14% CAGR with 40% unorganized" not "large TAM."
 - Use sector-specific charts (sector_mcap, sector_valuation_scatter, sector_ownership_flow) for visual context.
+- **Market-Cap Tier Analysis** — When comparing growth within a sector, segment by market-cap tier: Top-100 (large-cap), 101-250 (mid-cap), 251-500 (small-cap). Kotak research shows small-caps consistently lag large-caps on earnings delivery. If the target company is small-cap, contextualize its growth vs the large-cap leaders — are small-caps genuinely growing faster or just promising more?
+- **EBITDA Margin Reversion** — BSE-500 ex-BFSI EBITDA margins mean-revert to 16-17% over market cycles. If this company's sector is running >5 percentage points above this equilibrium, flag margin compression risk. If below, note potential for mean reversion upward. **Exception:** Structurally high-margin sectors (IT Services, FMCG, Pharma) should be anchored to their own 10-year historical averages, not the broader BSE-500 — these sectors sustainably operate at 20-25%+ EBITDA margins due to asset-light models or brand premiums.
 """
 
 SECTOR_INSTRUCTIONS_V2 = """
@@ -686,6 +701,15 @@ Forward-looking triggers with specific metrics and timelines. What events could 
 
 ### 5. The Big Question
 The single most important question. Bull case + bear case with specific numbers from briefings. Your assessment of which side is more likely and why.
+
+## Quality Trajectory vs Valuation (Ambit Ten Baggers Insight)
+For 3-5 year investment horizons, weight quality TRAJECTORY higher than current valuation multiple. Ambit's 10-year backtest (BSE-500) shows R² ≈ 0 between entry P/E and subsequent 10-year returns once you screen for quality. A consistently improving company at 35x PE has historically outperformed a stagnant company at 15x PE. When the Valuation Agent flags "expensive" but Financial/Business agents show improving ROCE, rising asset turnover, and strong cash conversion — lean toward the quality signal for long-term horizons.
+
+## Exit Trigger Framework
+Consider downgrade toward SELL when multiple triggers fire:
+- **Marcellus triggers:** (a) Management/board composition changes post-acquisition, (b) Volume growth decelerates in core categories for 2+ quarters, (c) Market share loss in key products, (d) CXO churn accelerates (2+ departures in 3 years).
+- **Ambit triggers:** Greatness score deterioration — specifically: (a) Pricing discipline lost (PBIT margins declining 2+ years), (b) Balance sheet discipline broken (D/E rising + equity dilution), (c) Return ratios (ROCE/ROE) declining for 2+ consecutive years.
+When 3+ triggers fire simultaneously, the thesis is likely broken regardless of valuation support.
 
 ## Verdict Calibration (Guidelines, Not Rules)
 - These are starting points, not formulas. Your verdict must be a defensible thesis grounded in cross-signal analysis.

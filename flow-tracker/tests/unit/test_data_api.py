@@ -300,6 +300,157 @@ class TestFairValue:
 # _clean applied
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Forensic Checks
+# ---------------------------------------------------------------------------
+
+class TestForensicChecks:
+    def test_returns_data_for_sbin(self, api: ResearchDataAPI):
+        """SBIN not tagged as BFSI in test fixture (no industry data) — returns data."""
+        data = api.get_forensic_checks("SBIN")
+        assert isinstance(data, dict)
+        assert "years" in data
+
+    def test_non_bfsi_returns_structure(self, api: ResearchDataAPI):
+        data = api.get_forensic_checks("INFY")
+        assert isinstance(data, dict)
+        assert "years" in data
+        assert "cfo_ebitda_5y_avg" in data
+        assert "cfo_ebitda_signal" in data
+        assert "depreciation_volatility" in data
+        assert "depreciation_signal" in data
+        assert data["depreciation_signal"] in ("stable", "moderate", "volatile")
+        assert data["cfo_ebitda_signal"] in ("clean", "moderate", "warning")
+
+    def test_per_year_metrics(self, api: ResearchDataAPI):
+        data = api.get_forensic_checks("INFY")
+        year = data["years"][0]
+        assert "fiscal_year_end" in year
+        assert "cfo_ebitda" in year
+        assert "depreciation_rate" in year
+        assert "cwip_ratio" in year
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_forensic_checks("NONEXIST")
+        assert "error" in data
+
+    def test_cash_yield_signal(self, api: ResearchDataAPI):
+        data = api.get_forensic_checks("INFY")
+        assert data.get("cash_yield_signal") in ("normal", "suspicious", "low")
+
+    def test_cwip_signal(self, api: ResearchDataAPI):
+        data = api.get_forensic_checks("INFY")
+        assert data.get("cwip_signal") in ("normal", "elevated", "parking_risk")
+
+
+# ---------------------------------------------------------------------------
+# Improvement Metrics
+# ---------------------------------------------------------------------------
+
+class TestImprovementMetrics:
+    def test_returns_structure(self, api: ResearchDataAPI):
+        data = api.get_improvement_metrics("INFY")
+        assert isinstance(data, dict)
+        assert "data_years" in data
+        assert data["data_years"] == 5
+
+    def test_bfsi_not_skipped(self, api: ResearchDataAPI):
+        """Improvement metrics apply to all sectors including BFSI."""
+        data = api.get_improvement_metrics("SBIN")
+        assert "skipped" not in data
+        assert "data_years" in data
+
+    def test_insufficient_data_no_trajectories(self, api: ResearchDataAPI):
+        """With only 5 years, trajectories require 6+ so should be absent."""
+        data = api.get_improvement_metrics("INFY")
+        # 5 years fixture → trajectories may be empty
+        if data["data_years"] < 6:
+            assert data.get("trajectories") is None or data.get("trajectories") == {}
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_improvement_metrics("NONEXIST")
+        assert "error" in data
+
+    def test_with_10_years(self, api: ResearchDataAPI, populated_store: "FlowStore"):
+        """With 10 years of data, trajectories and greatness should be populated."""
+        from tests.fixtures.factories import make_annual_financials, make_screener_ratios
+        # Insert 10 years for INFY
+        populated_store.upsert_annual_financials(make_annual_financials("INFY", n=10))
+        populated_store.upsert_screener_ratios(make_screener_ratios("INFY", n=10))
+        data = api.get_improvement_metrics("INFY")
+        assert data["data_years"] == 10
+        assert data.get("trajectories") is not None
+        # ROE is computed from annuals directly — should always have 6+ values
+        assert "roe" in data["trajectories"]
+        assert "improvement" in data["trajectories"]["roe"]
+        assert "consistency" in data["trajectories"]["roe"]
+        # ROCE may not have 6 matching FYs due to fixture alignment — check if present
+        if "roce" in data["trajectories"]:
+            assert "improvement" in data["trajectories"]["roce"]
+        # Greatness
+        assert data.get("greatness") is not None
+        assert data["greatness"]["classification"] in ("great", "good", "mediocre")
+        assert 0 <= data["greatness"]["score_pct"] <= 100
+        # Capex productivity
+        assert data.get("capex_productivity") is not None
+        assert "gross_block_cagr_pct" in data["capex_productivity"]
+        assert "sales_cagr_pct" in data["capex_productivity"]
+
+
+# ---------------------------------------------------------------------------
+# Capital Discipline
+# ---------------------------------------------------------------------------
+
+class TestCapitalDiscipline:
+    def test_returns_data_for_sbin(self, api: ResearchDataAPI):
+        """SBIN not tagged as BFSI in test fixture (no industry data) — returns data."""
+        data = api.get_capital_discipline("SBIN")
+        assert isinstance(data, dict)
+        assert "roce_reinvestment" in data
+
+    def test_non_bfsi_returns_structure(self, api: ResearchDataAPI):
+        data = api.get_capital_discipline("INFY")
+        assert isinstance(data, dict)
+        assert "roce_reinvestment" in data
+        assert "equity_dilution" in data
+
+    def test_roce_reinvestment_years(self, api: ResearchDataAPI):
+        data = api.get_capital_discipline("INFY")
+        rr = data["roce_reinvestment"]
+        assert "years" in rr
+        assert "latest_signal" in rr
+        assert rr["latest_signal"] in ("compounder", "cash_cow", "growth_trap", "challenged")
+        year = rr["years"][0]
+        assert "fiscal_year_end" in year
+
+    def test_equity_dilution(self, api: ResearchDataAPI):
+        data = api.get_capital_discipline("INFY")
+        ed = data["equity_dilution"]
+        assert "shares_latest_cr" in ed
+        assert "signal" in ed
+        assert ed["signal"] in ("dilutive", "moderate", "stable", "buyback")
+
+    def test_rm_cost_empty_when_no_data(self, api: ResearchDataAPI):
+        """Fixture has raw_material_cost=None → rm_cost_cycle should be absent."""
+        data = api.get_capital_discipline("INFY")
+        # rm_cost_cycle should be None or absent since raw_material_cost is None in fixture
+        assert data.get("rm_cost_cycle") is None
+
+    def test_unknown_symbol(self, api: ResearchDataAPI):
+        data = api.get_capital_discipline("NONEXIST")
+        assert "error" in data
+
+    def test_serializable(self, api: ResearchDataAPI):
+        import json
+        for method in ("get_forensic_checks", "get_improvement_metrics", "get_capital_discipline"):
+            data = getattr(api, method)("INFY")
+            json.dumps(data)  # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# _clean applied
+# ---------------------------------------------------------------------------
+
 class TestClean:
     def test_no_none_values_in_quarterly(self, api: ResearchDataAPI):
         """_clean should convert None to JSON-friendly values (or strip them)."""

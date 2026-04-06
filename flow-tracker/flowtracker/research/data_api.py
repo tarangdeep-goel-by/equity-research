@@ -1948,6 +1948,425 @@ class ResearchDataAPI:
             "signal": signal,
         })
 
+    def get_forensic_checks(self, symbol: str) -> dict:
+        """Forensic accounting checks: CFO/EBITDA persistence, depreciation volatility, cash yield, CWIP parking."""
+        if self._is_bfsi(symbol) or self._is_insurance(symbol):
+            return {"skipped": True, "reason": "Forensic accounting checks not applicable to BFSI/Insurance."}
+
+        annuals = self.get_annual_financials(symbol, years=10)
+        if not annuals:
+            return {"error": f"No annual financial data for {symbol}"}
+
+        years = []
+        for a in annuals:
+            ni = a.get("net_income") or 0
+            tax = a.get("tax") or 0
+            interest = a.get("interest") or 0
+            depreciation = a.get("depreciation") or 0
+            other_inc = a.get("other_income") or 0
+            cfo = a.get("cfo")
+            net_block = a.get("net_block") or 0
+            cwip_val = a.get("cwip") or 0
+            cash_bank = a.get("cash_and_bank") or 0
+            investments = a.get("investments") or 0
+
+            ebitda = ni + tax + interest + depreciation - other_inc
+            total_fixed = net_block + cwip_val  # total net fixed assets (not gross block)
+            liquid_assets = cash_bank + investments
+
+            entry: dict = {"fiscal_year_end": a.get("fiscal_year_end")}
+
+            # CFO/EBITDA
+            if ebitda > 0 and cfo is not None:
+                entry["cfo_ebitda"] = round(cfo / ebitda, 3)
+
+            # Depreciation rate — denominator excludes CWIP (not yet depreciable)
+            if net_block > 0:
+                entry["depreciation_rate"] = round(depreciation / net_block, 4)
+
+            # Cash yield — uses other_income as proxy for interest income
+            # (other_income may include sub dividends/forex; interpret with caution)
+            if liquid_assets > 0:
+                entry["cash_yield_pct"] = round(other_inc / liquid_assets * 100, 1)
+
+            # CWIP ratio — CWIP as % of total fixed assets
+            if total_fixed > 0:
+                entry["cwip_ratio"] = round(cwip_val / total_fixed, 3)
+
+            years.append(entry)
+
+        # --- CFO/EBITDA signal (aggregate, not averaged — avoids outlier skew) ---
+        recent_5 = annuals[:5]
+        sum_cfo_5y = sum((a.get("cfo") or 0) for a in recent_5 if a.get("cfo") is not None)
+        sum_ebitda_5y = sum(
+            (a.get("net_income") or 0) + (a.get("tax") or 0) + (a.get("interest") or 0)
+            + (a.get("depreciation") or 0) - (a.get("other_income") or 0)
+            for a in recent_5
+        )
+        cfo_ebitda_5y_avg = round(sum_cfo_5y / sum_ebitda_5y, 3) if sum_ebitda_5y > 0 else None
+
+        cfo_ebitda_signal = "moderate"
+        if cfo_ebitda_5y_avg is not None:
+            if cfo_ebitda_5y_avg > 0.8:
+                cfo_ebitda_signal = "clean"
+            elif cfo_ebitda_5y_avg < 0.5:
+                cfo_ebitda_signal = "warning"
+
+        # --- Depreciation volatility ---
+        dep_rates = [y["depreciation_rate"] for y in years if "depreciation_rate" in y]
+        dep_vol = statistics.stdev(dep_rates) if len(dep_rates) >= 2 else 0
+        dep_vol = round(dep_vol, 4)
+        if dep_vol < 0.02:
+            dep_signal = "stable"
+        elif dep_vol <= 0.05:
+            dep_signal = "moderate"
+        else:
+            dep_signal = "volatile"
+
+        # --- Cash yield signal ---
+        cash_yield_latest = years[0].get("cash_yield_pct") if years else None
+        cash_yield_signal = "normal"
+        if cash_yield_latest is not None:
+            latest_liquid = (annuals[0].get("cash_and_bank") or 0) + (annuals[0].get("investments") or 0)
+            if cash_yield_latest < 3 and latest_liquid > 100:
+                cash_yield_signal = "suspicious"
+            elif cash_yield_latest < 5:
+                cash_yield_signal = "low"
+
+        # --- CWIP signal ---
+        cwip_vals = [y["cwip_ratio"] for y in years[:3] if "cwip_ratio" in y]
+        cwip_3y_avg = round(sum(cwip_vals) / len(cwip_vals), 3) if cwip_vals else None
+
+        cwip_signal = "normal"
+        if cwip_3y_avg is not None:
+            if cwip_3y_avg > 0.30:
+                cwip_signal = "parking_risk"
+            elif cwip_3y_avg > 0.15:
+                cwip_signal = "elevated"
+
+        return _clean({
+            "years": years,
+            "cfo_ebitda_5y_avg": cfo_ebitda_5y_avg,
+            "cfo_ebitda_signal": cfo_ebitda_signal,
+            "depreciation_volatility": dep_vol,
+            "depreciation_signal": dep_signal,
+            "cash_yield_latest_pct": cash_yield_latest,
+            "cash_yield_signal": cash_yield_signal,
+            "cwip_3y_avg": cwip_3y_avg,
+            "cwip_signal": cwip_signal,
+        })
+
+    def get_improvement_metrics(self, symbol: str) -> dict:
+        """Improvement trajectory and greatness score (Ambit Ten Baggers framework)."""
+        annuals = self.get_annual_financials(symbol, years=10)
+        if not annuals:
+            return {"error": f"No annual financial data for {symbol}"}
+
+        ratios = self.get_screener_ratios(symbol, years=10)
+        # Build ROCE lookup by fiscal_year_end
+        roce_map: dict[str, float] = {}
+        for r in ratios:
+            fy = r.get("fiscal_year_end", "")
+            if r.get("roce_pct") is not None:
+                roce_map[fy] = r["roce_pct"]
+
+        # Step 1 — Per-year ratios
+        per_year: list[dict] = []
+        for a in annuals:
+            fy = a.get("fiscal_year_end", "")
+            ni = a.get("net_income") or 0
+            equity = (a.get("equity_capital") or 0) + (a.get("reserves") or 0)
+            revenue = a.get("revenue") or 0
+            total_assets = a.get("total_assets") or 0
+            cash_bank = a.get("cash_and_bank") or 0
+            investments = a.get("investments") or 0
+            borrowings = a.get("borrowings") or 0
+            net_block = a.get("net_block") or 0
+            cwip_val = a.get("cwip") or 0
+            op_profit = a.get("operating_profit") or 0
+            cfo = a.get("cfo") or 0
+
+            entry: dict = {"fiscal_year_end": fy}
+            if equity > 0:
+                entry["roe"] = round(ni / equity * 100, 1)
+            if fy in roce_map:
+                entry["roce"] = roce_map[fy]
+            if total_assets > 0:
+                entry["asset_turnover"] = round(revenue / total_assets, 3)
+                entry["cash_ratio"] = round((cash_bank + investments) / total_assets, 3)
+            if equity > 0:
+                entry["debt_equity"] = round(borrowings / equity, 3)
+            entry["total_fixed_assets"] = round(net_block + cwip_val, 2)
+            if revenue > 0:
+                entry["pbit_margin"] = round(op_profit / revenue * 100, 1)
+            entry["cfo"] = round(cfo, 2)
+            entry["net_income"] = round(ni, 2)
+            entry["revenue"] = round(revenue, 2)
+
+            per_year.append(entry)
+
+        data_years = len(per_year)
+
+        # Step 2 — Improvement trajectories (need 6+ years)
+        trajectories: dict = {}
+        if data_years >= 6:
+            metric_keys = ["roce", "roe", "asset_turnover", "cash_ratio", "pbit_margin", "debt_equity"]
+            for mk in metric_keys:
+                vals = [y.get(mk) for y in per_year[:6] if mk in y]
+                if len(vals) >= 6:
+                    latest_3y = vals[:3]
+                    prior_3y = vals[3:6]
+                    latest_avg = round(sum(latest_3y) / 3, 3)
+                    prior_avg = round(sum(prior_3y) / 3, 3)
+                    # For D/E, declining is improvement
+                    if mk == "debt_equity":
+                        improvement = round(prior_avg - latest_avg, 3)
+                    else:
+                        improvement = round(latest_avg - prior_avg, 3)
+                    sd = statistics.stdev(vals) if len(vals) >= 2 else 0
+                    consistency = round(improvement / sd, 3) if sd > 0 else 0
+                    trajectories[mk] = {
+                        "latest_3y_avg": latest_avg,
+                        "prior_3y_avg": prior_avg,
+                        "improvement": improvement,
+                        "consistency": consistency,
+                    }
+
+        # Step 3 — Capex productivity
+        capex_prod: dict = {}
+        if data_years >= 6:
+            gb_latest = per_year[0].get("total_fixed_assets") or 0
+            gb_5y = per_year[5].get("total_fixed_assets") or 0
+            rev_latest = per_year[0].get("revenue") or 0
+            rev_5y = per_year[5].get("revenue") or 0
+
+            if gb_5y > 0 and gb_latest > 0:
+                gb_cagr = (gb_latest / gb_5y) ** (1 / 5) - 1
+                capex_prod["gross_block_cagr_pct"] = round(gb_cagr * 100, 1)
+            else:
+                gb_cagr = 0
+            if rev_5y > 0 and rev_latest > 0:
+                s_cagr = (rev_latest / rev_5y) ** (1 / 5) - 1
+                capex_prod["sales_cagr_pct"] = round(s_cagr * 100, 1)
+            else:
+                s_cagr = 0
+
+            if gb_cagr > 0:
+                ratio = round(s_cagr / gb_cagr, 3)
+                capex_prod["ratio"] = ratio
+                if ratio > 0.8:
+                    capex_prod["signal"] = "productive"
+                elif ratio >= 0.5:
+                    capex_prod["signal"] = "moderate"
+                else:
+                    capex_prod["signal"] = "value_destruction"
+
+        # Step 4 — Greatness classification
+        greatness: dict = {}
+        if data_years >= 6 and trajectories:
+            dims: dict[str, int] = {}
+
+            # 1. Investments — fixed asset CAGR > 0
+            if capex_prod.get("gross_block_cagr_pct") is not None and capex_prod["gross_block_cagr_pct"] > 0:
+                dims["investments"] = 1
+            else:
+                dims["investments"] = 0
+
+            # 2. Conversion to Sales — asset_turnover improvement > 0 AND sales_cagr > 0
+            at_traj = trajectories.get("asset_turnover", {})
+            dims["conversion_to_sales"] = 1 if at_traj.get("improvement", 0) > 0 and capex_prod.get("sales_cagr_pct", 0) > 0 else 0
+
+            # 3. Pricing Discipline — pbit_margin improvement > 0 AND consistency > 0
+            pm_traj = trajectories.get("pbit_margin", {})
+            dims["pricing_discipline"] = 1 if pm_traj.get("improvement", 0) > 0 and pm_traj.get("consistency", 0) > 0 else 0
+
+            # 4. Balance Sheet Discipline — debt_equity improvement > 0 AND cash_ratio improvement > 0
+            de_traj = trajectories.get("debt_equity", {})
+            cr_traj = trajectories.get("cash_ratio", {})
+            dims["balance_sheet_discipline"] = 1 if de_traj.get("improvement", 0) > 0 and cr_traj.get("improvement", 0) > 0 else 0
+
+            # 5. Cash Generation — CFO improved AND net_income improved
+            if data_years >= 6:
+                cfo_latest_3y = [y.get("cfo", 0) for y in per_year[:3]]
+                cfo_prior_3y = [y.get("cfo", 0) for y in per_year[3:6]]
+                ni_latest_3y = [y.get("net_income", 0) for y in per_year[:3]]
+                ni_prior_3y = [y.get("net_income", 0) for y in per_year[3:6]]
+                cfo_improved = sum(cfo_latest_3y) / 3 > sum(cfo_prior_3y) / 3
+                ni_improved = sum(ni_latest_3y) / 3 > sum(ni_prior_3y) / 3
+                dims["cash_generation"] = 1 if cfo_improved and ni_improved else 0
+            else:
+                dims["cash_generation"] = 0
+
+            # 6. Return Ratio Improvement — ROCE improvement > 0 AND ROE improvement > 0
+            roce_traj = trajectories.get("roce", {})
+            roe_traj = trajectories.get("roe", {})
+            dims["return_ratio_improvement"] = 1 if roce_traj.get("improvement", 0) > 0 and roe_traj.get("improvement", 0) > 0 else 0
+
+            score_pct = round(sum(dims.values()) / 6 * 100, 1)
+            if score_pct > 67:
+                classification = "great"
+            elif score_pct >= 50:
+                classification = "good"
+            else:
+                classification = "mediocre"
+
+            greatness = {
+                "dimensions": dims,
+                "score_pct": score_pct,
+                "classification": classification,
+            }
+
+        return _clean({
+            "trajectories": trajectories or None,
+            "capex_productivity": capex_prod or None,
+            "greatness": greatness or None,
+            "data_years": data_years,
+        })
+
+    def get_capital_discipline(self, symbol: str) -> dict:
+        """Capital discipline: ROCE x reinvestment, equity dilution, RM cost cycle, BS loss detection."""
+        if self._is_bfsi(symbol) or self._is_insurance(symbol):
+            return {"skipped": True, "reason": "Capital discipline metrics not applicable to BFSI/Insurance."}
+
+        annuals = self.get_annual_financials(symbol, years=10)
+        if not annuals:
+            return {"error": f"No annual financial data for {symbol}"}
+
+        ratios = self.get_screener_ratios(symbol, years=10)
+        roce_map: dict[str, float] = {}
+        for r in ratios:
+            fy = r.get("fiscal_year_end", "")
+            if r.get("roce_pct") is not None:
+                roce_map[fy] = r["roce_pct"]
+
+        # --- 1. ROCE x Reinvestment Rate ---
+        roce_reinvest_years: list[dict] = []
+        for i, a in enumerate(annuals):
+            if i + 1 >= len(annuals):
+                break  # need adjacent year for capex delta
+            prev = annuals[i + 1]
+            fy = a.get("fiscal_year_end", "")
+            cfo = a.get("cfo") or 0
+            depreciation = a.get("depreciation") or 0
+            nb_t = a.get("net_block") or 0
+            nb_t1 = prev.get("net_block") or 0
+            cwip_t = a.get("cwip") or 0
+            cwip_t1 = prev.get("cwip") or 0
+
+            capex = (nb_t - nb_t1) + (cwip_t - cwip_t1) + depreciation
+            roce_val = roce_map.get(fy)
+
+            entry: dict = {"fiscal_year_end": fy}
+            if roce_val is not None:
+                entry["roce_pct"] = roce_val
+            if cfo > 0:
+                reinvest_rate = round(capex / cfo * 100, 1)
+                entry["reinvestment_rate_pct"] = reinvest_rate
+                if roce_val is not None:
+                    entry["sustainable_growth_pct"] = round(roce_val * reinvest_rate / 100, 1)
+
+            roce_reinvest_years.append(entry)
+
+        # Latest signal
+        latest_signal = "challenged"
+        if roce_reinvest_years:
+            lr = roce_reinvest_years[0]
+            r_val = lr.get("roce_pct", 0)
+            ri_val = lr.get("reinvestment_rate_pct", 0)
+            if r_val > 15 and ri_val > 50:
+                latest_signal = "compounder"
+            elif r_val > 15 and ri_val <= 50:
+                latest_signal = "cash_cow"
+            elif r_val <= 15 and ri_val > 50:
+                latest_signal = "growth_trap"
+
+        # Avg sustainable growth (3Y)
+        sg_vals = [y["sustainable_growth_pct"] for y in roce_reinvest_years[:3] if "sustainable_growth_pct" in y]
+        avg_sg_3y = round(sum(sg_vals) / len(sg_vals), 1) if sg_vals else None
+
+        # --- 2. Equity dilution ---
+        equity_dilution: dict = {}
+        shares_vals = [(a.get("num_shares") or 0) for a in annuals]
+        if shares_vals and shares_vals[0] > 0:
+            shares_latest = shares_vals[0]
+            equity_dilution["shares_latest_cr"] = round(shares_latest, 2)
+
+            # 3Y ago
+            idx_3y = min(3, len(shares_vals) - 1)
+            shares_3y = shares_vals[idx_3y] if shares_vals[idx_3y] > 0 else None
+            if shares_3y and idx_3y > 0:
+                equity_dilution["shares_3y_ago_cr"] = round(shares_3y, 2)
+                cagr = (shares_latest / shares_3y) ** (1 / idx_3y) - 1
+                cagr_pct = round(cagr * 100, 1)
+                equity_dilution["cagr_3y_pct"] = cagr_pct
+                if cagr_pct > 5:
+                    equity_dilution["signal"] = "dilutive"
+                elif cagr_pct > 2:
+                    equity_dilution["signal"] = "moderate"
+                elif cagr_pct >= 0:
+                    equity_dilution["signal"] = "stable"
+                else:
+                    equity_dilution["signal"] = "buyback"
+
+        # --- 3. RM cost/sales cycle ---
+        rm_years: list[dict] = []
+        for a in annuals:
+            rm = a.get("raw_material_cost") or 0
+            rev = a.get("revenue") or 0
+            if rev > 0 and rm > 0:
+                rm_years.append({
+                    "fiscal_year_end": a.get("fiscal_year_end"),
+                    "rm_pct": round(rm / rev * 100, 1),
+                })
+
+        rm_cycle: dict = {}
+        if rm_years:
+            all_rm_pcts = [y["rm_pct"] for y in rm_years]
+            lt_avg = round(sum(all_rm_pcts) / len(all_rm_pcts), 1)
+            latest_pct = rm_years[0]["rm_pct"]
+            deviation = round(latest_pct - lt_avg, 1)
+            rm_cycle = {
+                "years": rm_years,
+                "lt_avg_pct": lt_avg,
+                "latest_pct": latest_pct,
+                "deviation_pp": deviation,
+            }
+            if abs(deviation) < 2:
+                rm_cycle["signal"] = "equilibrium"
+            elif deviation < -2:
+                rm_cycle["signal"] = "margin_tailwind"
+            else:
+                rm_cycle["signal"] = "margin_pressure"
+
+        # --- 4. Balance sheet loss detection ---
+        bs_loss_flags: list[dict] = []
+        for i in range(len(annuals) - 1):
+            curr = annuals[i]
+            prev = annuals[i + 1]
+            res_curr = curr.get("reserves") or 0
+            res_prev = prev.get("reserves") or 0
+            div_amt = curr.get("dividend_amount") or 0
+
+            reserves_change = res_curr - res_prev  # negative = decrease
+            if reserves_change < 0 and abs(reserves_change) > (div_amt * 1.5 + 50):
+                bs_loss_flags.append({
+                    "fiscal_year_end": curr.get("fiscal_year_end"),
+                    "reserves_change_cr": round(reserves_change, 2),
+                    "dividends_cr": round(div_amt, 2),
+                    "flag": "potential_loss_writeoff",
+                })
+
+        return _clean({
+            "roce_reinvestment": {
+                "years": roce_reinvest_years,
+                "latest_signal": latest_signal,
+                "avg_sustainable_growth_3y": avg_sg_3y,
+            } if roce_reinvest_years else None,
+            "equity_dilution": equity_dilution or None,
+            "rm_cost_cycle": rm_cycle or None,
+            "bs_loss_flags": bs_loss_flags,
+        })
+
     def get_piotroski_score(self, symbol: str) -> dict:
         """Piotroski F-Score (0-9): profitability, leverage, operating efficiency."""
         annuals = self.get_annual_financials(symbol, years=2)
@@ -3305,6 +3724,7 @@ class ResearchDataAPI:
         result["piotroski"] = self.get_piotroski_score(symbol)
         result["dupont"] = self.get_dupont_decomposition(symbol)
         result["common_size"] = self.get_common_size_pl(symbol)
+        result["improvement_metrics"] = self.get_improvement_metrics(symbol)
 
         _skip_financial = {
             "skipped": True,
@@ -3329,6 +3749,8 @@ class ResearchDataAPI:
             result["earnings_quality"] = self.get_earnings_quality(symbol)
             result["beneish"] = self.get_beneish_score(symbol)
             result["capex_cycle"] = self.get_capex_cycle(symbol)
+            result["forensic_checks"] = self.get_forensic_checks(symbol)
+            result["capital_discipline"] = self.get_capital_discipline(symbol)
             result["bfsi"] = {"skipped": True, "reason": "non-BFSI company"}
 
         # Additive sector metrics — included alongside standard metrics
