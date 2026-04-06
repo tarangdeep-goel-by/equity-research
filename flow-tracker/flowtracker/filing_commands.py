@@ -194,9 +194,20 @@ def extract_concalls_cmd(
     import asyncio
 
     from flowtracker.research.concall_extractor import extract_concalls
+    from flowtracker.research.data_api import ResearchDataAPI
+
+    # Look up industry for sector-specific KPI extraction
+    industry = None
+    try:
+        with ResearchDataAPI() as api:
+            industry = api._get_industry(symbol.upper())
+            if industry == "Unknown":
+                industry = None
+    except Exception:
+        pass
 
     result = asyncio.run(
-        extract_concalls(symbol.upper(), quarters, model or "claude-sonnet-4-20250514")
+        extract_concalls(symbol.upper(), quarters, model or "claude-sonnet-4-20250514", industry=industry)
     )
 
     console.print(f"[green]\u2713[/] Extracted {result['quarters_analyzed']} quarters for {symbol.upper()}")

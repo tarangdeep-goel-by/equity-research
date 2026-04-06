@@ -280,7 +280,16 @@ def thesis(
             console.print("  Extracting concall insights (this costs ~$0.20-0.40)...")
             try:
                 from flowtracker.research.concall_extractor import extract_concalls
-                result = asyncio.run(extract_concalls(symbol, quarters=4))
+                from flowtracker.research.data_api import ResearchDataAPI
+                _industry = None
+                try:
+                    with ResearchDataAPI() as _api:
+                        _industry = _api._get_industry(symbol)
+                        if _industry == "Unknown":
+                            _industry = None
+                except Exception:
+                    pass
+                result = asyncio.run(extract_concalls(symbol, quarters=4, industry=_industry))
                 console.print(f"  [green]✓[/] Extracted {result.get('quarters_analyzed', 0)} quarters")
             except Exception as e:
                 console.print(f"  [yellow]⚠[/] Concall extraction failed: {e}")

@@ -209,7 +209,9 @@ def _read_pdf_text(pdf_path: Path) -> str:
 # --- Claude Agent SDK call ---
 
 
-CONCALL_EXTRACTION_PROMPT = """You are a financial data extraction specialist. You will receive the FULL text of a quarterly earnings concall transcript (and optionally an investor presentation) for an Indian-listed company.
+CONCALL_EXTRACTION_PROMPT = """**OUTPUT FORMAT: Return ONLY a single valid JSON object. No prose, no markdown fences, no explanation before or after. Start your response with `{` and end with `}`.**
+
+You are a financial data extraction specialist. You will receive the FULL text of a quarterly earnings concall transcript (and optionally an investor presentation) for an Indian-listed company.
 
 **CRITICAL: This is NOT a summary exercise. Extract ALL content, context, and data points.** We want the full richness of the concall preserved in structured form. Every number mentioned, every question asked, every answer given. The goal is that someone reading your extraction should get 90%+ of the information value of reading the full transcript.
 
@@ -335,6 +337,7 @@ Rules:
 - If a field isn't mentioned, set it to null — don't omit the field and don't guess
 - All monetary values in Indian crores (₹ Cr)
 - If the transcript is from an investor presentation rather than a concall, adapt the structure — focus on the data presented
+- **CRITICAL FORMAT RULE**: Your ENTIRE response must be valid JSON. Do not write any text before or after the JSON object. Do not wrap in markdown code fences. Start with { and end with }. If you include ANY text outside the JSON, the extraction will fail.
 """
 
 CROSS_QUARTER_PROMPT = """You are a financial analyst reviewing multiple quarters of concall extractions for the same company. Your job is to find the NARRATIVE ARC — how the story has evolved quarter to quarter.
@@ -413,12 +416,23 @@ async def _call_claude(
 
 def _extract_json(text: str) -> dict:
     """Extract JSON from a Claude response that may contain markdown code fences."""
-    # Try extracting from ```json ... ``` block first
+    text = text.strip()
+    # Try direct JSON parse first (most likely with strict format)
+    if text.startswith("{"):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    # Try extracting from ```json ... ``` block
     m = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
     if m:
         return json.loads(m.group(1).strip())
-    # Try parsing the whole text as JSON
-    return json.loads(text.strip())
+    # Try finding first { to last }
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        return json.loads(text[start:end + 1])
+    raise json.JSONDecodeError("No JSON found", text, 0)
 
 
 async def _recover_json_from_prose(
@@ -462,6 +476,37 @@ async def _recover_json_from_prose(
 def _quarter_label_from_path(pdf_path: Path) -> str:
     """Extract quarter label like 'FY26-Q3' from the directory name."""
     return pdf_path.parent.name  # e.g. "FY26-Q3"
+
+
+def _build_partial_extraction(response: str, quarter_label: str, docs_read: list[str]) -> dict:
+    """Build a partial extraction from a prose response by extracting any numbers/metrics mentioned."""
+    extraction: dict = {
+        "label": quarter_label,
+        "fy_quarter": quarter_label,
+        "extraction_status": "partial",
+        "extraction_error": "Primary JSON parse failed, recovery failed — partial data preserved",
+        "raw_response": response[:4000],
+        "documents_read": docs_read,
+    }
+
+    # Try to extract any numbers mentioned in the prose
+    key_numbers: dict[str, str] = {}
+    import re as _re
+    for m in _re.finditer(
+        r'(?:revenue|profit|ebitda|nim|casa|npa|growth|margin|arpu|subscribers?|stores?|users?|volume)'
+        r'[^\u20b9\d]*?[\u20b9]?\s*([\d,]+\.?\d*)\s*(%|crore|cr|lakh|bps|mn|billion)?',
+        response, _re.IGNORECASE,
+    ):
+        context_start = max(0, m.start() - 40)
+        context = response[context_start:m.end()].strip()
+        key = _re.sub(r'[^a-z_]', '', context[:30].lower().replace(' ', '_'))
+        if key and m.group(1):
+            key_numbers[key] = m.group(1) + (m.group(2) or "")
+
+    if key_numbers:
+        extraction["key_numbers_mentioned"] = key_numbers
+
+    return extraction
 
 
 # --- Main extraction pipeline ---
@@ -516,9 +561,13 @@ async def extract_concalls(
         user_prompt = (
             f"Company: {symbol}\nQuarter: {quarter_label}\n"
             f"Documents provided: {', '.join(docs_read)}\n"
-            + (f"\n{sector_hint}\n\n" if sector_hint else "\n")
-            + "\n".join(user_parts)
         )
+        if sector_hint:
+            user_prompt += f"\n{sector_hint}\n"
+            user_prompt += "Use the EXACT canonical field names listed above in your operational_metrics. If a KPI is not mentioned in the transcript, include it with value: null.\n\n"
+        else:
+            user_prompt += "\n"
+        user_prompt += "\n".join(user_parts)
 
         response = await _call_claude(
             CONCALL_EXTRACTION_PROMPT, user_prompt, model,
@@ -527,6 +576,7 @@ async def extract_concalls(
 
         try:
             extraction = _extract_json(response)
+            extraction["extraction_status"] = "complete"
         except (json.JSONDecodeError, ValueError):
             # Primary extraction returned prose — try recovery with cheap model
             if len(response.strip()) > 200:
@@ -538,28 +588,40 @@ async def extract_concalls(
                     extraction = await _recover_json_from_prose(
                         response, quarter_label, symbol, model,
                     )
+                    extraction["extraction_status"] = "recovered"
                 except (json.JSONDecodeError, ValueError, Exception) as exc:
                     logger.warning(
                         "JSON recovery also failed for %s %s: %s",
                         symbol, quarter_label, exc,
                     )
-                    extraction = {
-                        "label": quarter_label,
-                        "fy_quarter": quarter_label,
-                        "extraction_error": "Failed to parse JSON — recovery also failed",
-                        "raw_response": response[:2000],
-                    }
+                    extraction = _build_partial_extraction(
+                        response, quarter_label, docs_read,
+                    )
             else:
                 extraction = {
                     "label": quarter_label,
                     "fy_quarter": quarter_label,
-                    "extraction_error": "Failed to parse JSON from Claude response",
+                    "extraction_status": "failed",
+                    "extraction_error": "Empty or very short response from Claude",
                     "raw_response": response[:2000],
                 }
 
         # Ensure consistent fields
         extraction.setdefault("fy_quarter", quarter_label)
         extraction.setdefault("documents_read", docs_read)
+
+        # A5: Validate canonical KPIs if sector is known
+        if industry and extraction.get("extraction_status") in ("complete", "recovered"):
+            from flowtracker.research.sector_kpis import get_kpis_for_industry
+            canonical = get_kpis_for_industry(industry)
+            if canonical:
+                ops = extraction.get("operational_metrics", {})
+                for kpi in canonical:
+                    key = kpi["key"]
+                    if key not in ops:
+                        ops[key] = {"value": None, "reason": "not_mentioned_in_concall"}
+                extraction["operational_metrics"] = ops
+
         quarter_results.append(extraction)
 
     # --- Cross-quarter narrative ---
@@ -584,7 +646,7 @@ async def extract_concalls(
     result = {
         "symbol": symbol,
         "quarters_analyzed": len(quarter_results),
-        "sector": "",
+        "sector": industry or "",
         "extraction_date": date.today().isoformat(),
         "quarters": quarter_results,
         "cross_quarter_narrative": cross_narrative,
