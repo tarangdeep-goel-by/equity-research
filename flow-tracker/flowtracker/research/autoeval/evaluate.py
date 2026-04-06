@@ -159,47 +159,95 @@ def read_report(agent: str, stock: str) -> str:
 
 
 def read_agent_evidence(agent: str, stock: str) -> str:
-    """Read the agent's tool evidence log and format as context for the evaluator.
+    """Read the agent's execution trace and format as context for the evaluator.
 
-    Returns a human-readable summary of tool calls, errors, cost, and turns used.
-    This helps the evaluator distinguish PROMPT_FIX from DATA_FIX issues.
+    Loads from the AgentTrace (preferred, includes tools_available + unused tools)
+    or falls back to legacy evidence JSON. Returns a human-readable summary that
+    helps the evaluator distinguish PROMPT_FIX from DATA_FIX issues.
     """
-    evidence_path = Path.home() / "vault" / "stocks" / stock / "evidence" / f"{agent}.json"
-    briefing_path = Path.home() / "vault" / "stocks" / stock / "briefings" / f"{agent}.json"
-
+    vault_base = Path.home() / "vault" / "stocks" / stock
     sections = []
 
-    # Tool call evidence
-    if evidence_path.exists():
-        try:
-            evidence = json.loads(evidence_path.read_text())
-            tools_called = [e["tool"] for e in evidence]
-            errors = [e for e in evidence if e.get("is_error")]
-            sections.append(f"Tools called ({len(evidence)} total): {', '.join(tools_called)}")
-            if errors:
-                sections.append(f"Tool errors ({len(errors)}):")
-                for e in errors:
-                    sections.append(f"  - {e['tool']}({e.get('args',{})}) → ERROR: {e.get('result_summary','')[:200]}")
-        except (json.JSONDecodeError, KeyError):
-            pass
+    # Try AgentTrace first (from pipeline traces — newest file)
+    traces_dir = vault_base / "traces"
+    trace_loaded = False
+    if traces_dir.exists():
+        trace_files = sorted(traces_dir.glob("*.json"), reverse=True)
+        for tf in trace_files[:3]:  # check last 3 traces
+            try:
+                pipeline = json.loads(tf.read_text())
+                agent_trace = pipeline.get("agents", {}).get(agent)
+                if not agent_trace:
+                    continue
 
-    # Briefing metadata (cost, duration, status)
-    if briefing_path.exists():
-        try:
-            briefing = json.loads(briefing_path.read_text())
-            cost = briefing.get("cost", {})
-            if cost:
-                sections.append(
-                    f"Cost: ${cost.get('total_cost_usd', 0):.2f}, "
-                    f"tokens: {cost.get('input_tokens', 0)}in/{cost.get('output_tokens', 0)}out, "
-                    f"duration: {cost.get('duration_seconds', 0):.0f}s, "
-                    f"model: {cost.get('model', 'unknown')}"
-                )
-            status = briefing.get("status", "unknown")
-            if status != "success":
-                sections.append(f"Agent status: {status} — {briefing.get('failure_reason', '')}")
-        except (json.JSONDecodeError, KeyError):
-            pass
+                # Tools available vs called
+                available = set(agent_trace.get("tools_available", []))
+                calls = agent_trace.get("tool_calls", [])
+                called = set(c["tool"] for c in calls)
+                unused = sorted(available - called)
+                errors = [c for c in calls if c.get("is_error")]
+
+                sections.append(f"Tools available ({len(available)}): {', '.join(sorted(available))}")
+                sections.append(f"Tools called ({len(calls)} calls): {', '.join(sorted(called))}")
+                if unused:
+                    sections.append(f"Tools NEVER called: {', '.join(unused)}")
+                if errors:
+                    sections.append(f"Tool errors ({len(errors)}):")
+                    for e in errors:
+                        sections.append(f"  - {e['tool']}({e.get('args',{})}) → ERROR: {e.get('result_summary','')[:200]}")
+
+                # Cost and status
+                cost = agent_trace.get("cost", {})
+                if cost:
+                    sections.append(
+                        f"Cost: ${cost.get('total_cost_usd', 0):.2f}, "
+                        f"tokens: {cost.get('input_tokens', 0)}in/{cost.get('output_tokens', 0)}out, "
+                        f"duration: {agent_trace.get('duration_seconds', 0):.0f}s, "
+                        f"model: {cost.get('model', 'unknown')}"
+                    )
+                status = agent_trace.get("status", "unknown")
+                if status != "success":
+                    sections.append(f"Agent status: {status}")
+
+                trace_loaded = True
+                break
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+    # Fallback to legacy evidence + briefing files
+    if not trace_loaded:
+        evidence_path = vault_base / "evidence" / f"{agent}.json"
+        briefing_path = vault_base / "briefings" / f"{agent}.json"
+
+        if evidence_path.exists():
+            try:
+                evidence = json.loads(evidence_path.read_text())
+                tools_called = [e["tool"] for e in evidence]
+                errors = [e for e in evidence if e.get("is_error")]
+                sections.append(f"Tools called ({len(evidence)} total): {', '.join(tools_called)}")
+                if errors:
+                    sections.append(f"Tool errors ({len(errors)}):")
+                    for e in errors:
+                        sections.append(f"  - {e['tool']}({e.get('args',{})}) → ERROR: {e.get('result_summary','')[:200]}")
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        if briefing_path.exists():
+            try:
+                briefing = json.loads(briefing_path.read_text())
+                cost = briefing.get("cost", {})
+                if cost:
+                    sections.append(
+                        f"Cost: ${cost.get('total_cost_usd', 0):.2f}, "
+                        f"tokens: {cost.get('input_tokens', 0)}in/{cost.get('output_tokens', 0)}out, "
+                        f"duration: {cost.get('duration_seconds', 0):.0f}s, "
+                        f"model: {cost.get('model', 'unknown')}"
+                    )
+                status = briefing.get("status", "unknown")
+                if status != "success":
+                    sections.append(f"Agent status: {status} — {briefing.get('failure_reason', '')}")
+            except (json.JSONDecodeError, KeyError):
+                pass
 
     if not sections:
         return ""
