@@ -296,16 +296,25 @@ def refresh_for_research(
                     except Exception as e:
                         _skip("shareholders", str(e))
 
-                # Schedules (profit-loss: Sales + Expenses)
+                # Schedules (all sections: quarters, profit-loss, balance-sheet, cash-flow)
                 if company_id:
-                    for parent in ("Sales", "Expenses"):
-                        try:
-                            data = sc.fetch_schedules(company_id, "profit-loss", parent)
-                            count = store.upsert_schedules(symbol, "profit-loss", parent, data)
-                            _ok(f"schedules_{parent.lower()}", count)
-                            time.sleep(1)
-                        except Exception as e:
-                            _skip(f"schedules_{parent.lower()}", str(e))
+                    _schedule_sections = {
+                        "quarters": ["Sales", "Expenses", "Other Income", "Net Profit"],
+                        "profit-loss": ["Sales", "Expenses", "Other Income", "Net Profit"],
+                        "balance-sheet": ["Borrowings", "Other Liabilities", "Fixed Assets", "Other Assets"],
+                        "cash-flow": ["Cash from Operating Activity", "Cash from Investing Activity", "Cash from Financing Activity"],
+                    }
+                    for sec, parents in _schedule_sections.items():
+                        sec_count = 0
+                        for parent in parents:
+                            try:
+                                data = sc.fetch_schedules(company_id, sec, parent)
+                                sec_count += store.upsert_schedules(symbol, sec, parent, data)
+                                time.sleep(1)
+                            except Exception as e:
+                                _skip(f"schedules_{sec}_{parent.lower()}", str(e))
+                        if sec_count:
+                            _ok(f"schedules_{sec}", sec_count)
 
         except Exception as e:
             _skip("screener", str(e))
@@ -567,15 +576,25 @@ def refresh_for_business(symbol: str, console: Console | None = None) -> dict[st
                     except Exception as e:
                         _skip("peers", str(e))
 
-                # Expense breakdown (cost structure insight)
+                # Schedules (all sections for peer context)
                 if company_id:
-                    for parent in ("Sales", "Expenses"):
-                        try:
-                            data = sc.fetch_schedules(company_id, "profit-loss", parent)
-                            count = store.upsert_schedules(symbol, "profit-loss", parent, data)
-                            _ok(f"schedules_{parent.lower()}", count)
-                        except Exception as e:
-                            _skip(f"schedules_{parent.lower()}", str(e))
+                    _schedule_sections = {
+                        "quarters": ["Sales", "Expenses", "Other Income", "Net Profit"],
+                        "profit-loss": ["Sales", "Expenses", "Other Income", "Net Profit"],
+                        "balance-sheet": ["Borrowings", "Other Liabilities", "Fixed Assets", "Other Assets"],
+                        "cash-flow": ["Cash from Operating Activity", "Cash from Investing Activity", "Cash from Financing Activity"],
+                    }
+                    for sec, parents in _schedule_sections.items():
+                        sec_count = 0
+                        for parent in parents:
+                            try:
+                                data = sc.fetch_schedules(company_id, sec, parent)
+                                sec_count += store.upsert_schedules(symbol, sec, parent, data)
+                                time.sleep(1)
+                            except Exception as e:
+                                _skip(f"schedules_{sec}_{parent.lower()}", str(e))
+                        if sec_count:
+                            _ok(f"schedules_{sec}", sec_count)
 
         except Exception as e:
             _skip("screener", str(e))

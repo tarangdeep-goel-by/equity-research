@@ -372,7 +372,7 @@ async def get_shareholder_detail(args):
 
 @tool(
     "get_expense_breakdown",
-    "Get schedule sub-item breakdowns (e.g., Expenses -> Employee Cost, Raw Material). section: 'profit-loss', 'balance-sheet'.",
+    "Get raw schedule sub-item breakdowns from financial_schedules table (e.g., Expenses -> Employee Cost, Raw Material). section: 'profit-loss', 'balance-sheet', 'quarters', 'cash-flow'. For structured/analyzed views, use get_fundamentals with section: 'cost_structure', 'balance_sheet_detail', 'cash_flow_quality', or 'working_capital'.",
     {"symbol": str, "section": str},
 )
 async def get_expense_breakdown(args):
@@ -998,13 +998,21 @@ def _get_fundamentals_section(api, symbol, section, args):
         return api.get_rate_sensitivity(symbol)
     elif section == "cagr_table":
         return api.get_growth_cagr_table(symbol)
+    elif section == "cost_structure":
+        return api.get_cost_structure(symbol)
+    elif section == "balance_sheet_detail":
+        return api.get_balance_sheet_detail(symbol)
+    elif section == "cash_flow_quality":
+        return api.get_cash_flow_quality(symbol)
+    elif section == "working_capital":
+        return api.get_working_capital_cycle(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_fundamentals",
-    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | ['section1', 'section2']",
+    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']",
     {"symbol": str, "section": str, "quarters": int, "years": int, "sub_section": str},
 )
 async def get_fundamentals(args):
@@ -1025,6 +1033,10 @@ async def get_fundamentals(args):
                 "capital_allocation": api.get_capital_allocation(symbol, args.get("years", 5)),
                 "rate_sensitivity": api.get_rate_sensitivity(symbol),
                 "cagr_table": api.get_growth_cagr_table(symbol),
+                "cost_structure": api.get_cost_structure(symbol),
+                "balance_sheet_detail": api.get_balance_sheet_detail(symbol),
+                "cash_flow_quality": api.get_cash_flow_quality(symbol),
+                "working_capital": api.get_working_capital_cycle(symbol),
             }
         else:
             data = _get_fundamentals_section(api, symbol, section, args)

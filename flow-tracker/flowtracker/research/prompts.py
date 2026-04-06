@@ -91,14 +91,14 @@ BUSINESS_INSTRUCTIONS_V2 = """
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data.
 1. **Snapshot**: Call `get_analytical_profile` for the pre-computed analytical snapshot. Reference these metrics throughout.
 2. **Business context**: Call `get_company_context` for company info, profile, concall insights, and business profile. If business profile is stale (>90 days) or missing, use WebSearch/WebFetch to research.
-3. **Financial backing**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'expense_breakdown'] to get all financial data in one call.
+3. **Financial backing**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'cost_structure'] to get all financial data in one call.
 4. **Competitive context**: Call `get_peer_sector` for peer comparison, peer metrics, peer growth, and sector benchmarks.
 5. **Forward view**: Call `get_estimates` for analyst consensus, estimate momentum, earnings surprises, and events calendar.
 6. **Save**: Call `save_business_profile` to persist the profile for future runs.
 
 ## Report Sections
 1. **The Business** — Walk through an actual transaction from the customer's perspective. Include a mermaid flowchart showing value/money flow.
-2. **The Money Machine** — Revenue = Lever A × Lever B. Put actual numbers on each lever. Show revenue mix, growth decomposition, unit economics.
+2. **The Money Machine** — Revenue = Lever A × Lever B. Put actual numbers on each lever. Show revenue mix, growth decomposition, unit economics. Use `cost_structure` trends to explain margin trajectory — is material cost rising (input inflation)? Employee cost falling (operating leverage)?
 3. **Financial Fingerprint** — Revenue/profit trend table (5-10Y), margin story, capital efficiency (ROCE trend), balance sheet health, analyst view, earnings track record.
 4. **Peer Benchmarking** — Peer comparison table with narrative explaining why differences matter. Valuation gap analysis.
 5. **Why It Wins/Loses** — Moat analysis as thought experiment. Classify moat: None/Narrow/Wide using Morningstar framework (switching costs, network effects, intangibles, cost advantage, efficient scale). Name the one threat that matters most.
@@ -162,7 +162,7 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 ## Workflow
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Do NOT re-fetch this baseline data with tools — focus tool calls on deep/historical data. **If `is_sme: true` is present, this stock reports half-yearly — adapt your analysis: use "6 half-yearly periods" instead of "12 quarters" for trend tables, and note the lower reporting frequency as a data limitation.**
 1. **Snapshot**: Call `get_analytical_profile` for composite score, DuPont, earnings quality, capex cycle, common-size P&L.
-2. **Core financials**: Call `get_fundamentals` with section=['quarterly_results', 'annual_financials', 'ratios', 'expense_breakdown', 'growth_rates', 'capital_allocation', 'cagr_table'] to get all financial data in one call.
+2. **Core financials**: Call `get_fundamentals` with section=['quarterly_results', 'annual_financials', 'ratios', 'cost_structure', 'balance_sheet_detail', 'cash_flow_quality', 'working_capital', 'growth_rates', 'capital_allocation', 'cagr_table'] to get all financial data in one call.
 3. **Quality scores**: Call `get_quality_scores` with section=['dupont', 'earnings_quality', 'piotroski', 'beneish'] to get all quality data in one call.
 4. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 5. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
@@ -170,9 +170,9 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 
 ## Report Sections
 1. **Earnings & Growth** — 12Q quarterly table (Revenue, OP, NP, OPM%, YoY growth) + 10Y annual table. Highlight inflection points, seasonality. Include peer growth comparison with sector percentiles.
-2. **Margin Analysis** — OPM/NPM trajectory over 10Y. Explain operating leverage using this company's expense breakdown numbers. Peer margin comparison.
+2. **Margin Analysis** — OPM/NPM trajectory over 10Y. Use `cost_structure` to explain margin drivers: which cost line is moving? Is material cost trending up (input pressure) or down (deflation/efficiency)? Employee cost direction signals operating leverage. Include quarterly trend table for key cost components.
 3. **Business Quality (DuPont)** — Break ROE into margin × turnover × leverage. Show 10Y trend. Identify the PRIMARY driver. Flag leverage-driven ROE.
-4. **Balance Sheet & Cash Flow** — Debt, cash, receivables, inventory trends. CFO vs Net Income ratio. FCF trajectory. Capital allocation from `get_fundamentals` section='capital_allocation' (pre-computed: cumulative CFO, capex, dividends, payout trend, cash as % of market cap).
+4. **Balance Sheet & Cash Flow** — Use `balance_sheet_detail` for borrowing structure (long vs short term, lease liabilities) and asset composition (fixed assets, receivables, inventory, cash). Use `cash_flow_quality` to decompose operating CF: what's driving it? Are receivables consuming cash? Is inventory building? Use `working_capital` for receivables/inventory/payables as % of revenue (rising % = deteriorating cycle). FCF trajectory. Capital allocation from `get_fundamentals` section='capital_allocation'.
 5. **Growth Trajectory** — Use `get_fundamentals` section='cagr_table' for pre-computed 1Y/3Y/5Y/10Y CAGRs (Revenue, EBITDA, NI, EPS, FCF) and growth trajectory classification. Do not compute CAGRs yourself.
 
 ## Structured Briefing

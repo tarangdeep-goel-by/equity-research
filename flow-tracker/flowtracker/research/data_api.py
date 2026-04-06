@@ -643,8 +643,170 @@ class ResearchDataAPI:
         return self._store.get_shareholder_details(symbol, classification)
 
     def get_expense_breakdown(self, symbol: str, section: str = "profit-loss") -> list[dict]:
-        """Schedule sub-item breakdowns (e.g., Expenses → Employee Cost, Raw Material)."""
+        """Schedule sub-item breakdowns (e.g., Expenses → Employee Cost, Raw Material).
+
+        Raw access to financial_schedules table. For structured/analyzed views,
+        use get_cost_structure, get_balance_sheet_detail, get_cash_flow_quality.
+        """
         return self._store.get_schedules(symbol, section)
+
+    # --- Structured Schedule Analysis ---
+
+    @staticmethod
+    def _normalize_sub_item(name: str) -> str:
+        """Convert Screener sub-item names to snake_case keys.
+
+        'Material Cost %' → 'material_cost_pct'
+        'Long term Borrowings' → 'long_term_borrowings'
+        'Trade receivables' → 'trade_receivables'
+        """
+        s = name.strip().lower()
+        has_pct = s.endswith("%") or "%" in s
+        # Strip trailing % and special chars
+        s = re.sub(r"[%]+$", "", s).strip()
+        s = re.sub(r"[^a-z0-9\s]", "", s)
+        # Collapse whitespace to underscore
+        s = re.sub(r"\s+", "_", s).strip("_")
+        if has_pct and not s.endswith("_pct"):
+            s += "_pct"
+        return s
+
+    @staticmethod
+    def _group_schedules(
+        rows: list[dict], section: str | None = None
+    ) -> dict[str, dict[str, list[dict]]]:
+        """Group raw schedule rows into {parent_item: {sub_item_normalized: [{period, value}]}}.
+
+        Optionally filter by section.
+        """
+        result: dict[str, dict[str, list[dict]]] = {}
+        for r in rows:
+            if section and r.get("section") != section:
+                continue
+            parent = r.get("parent_item", "")
+            sub = r.get("sub_item", "")
+            if not sub:
+                continue
+            key = ResearchDataAPI._normalize_sub_item(sub)
+            if not key:
+                continue
+            result.setdefault(parent, {}).setdefault(key, []).append(
+                {"period": r.get("period", ""), "value": r.get("value")}
+            )
+        return result
+
+    def get_cost_structure(self, symbol: str) -> dict:
+        """Quarterly + annual expense breakdowns with trend direction."""
+        quarterly_rows = self._store.get_schedules(symbol, "quarters")
+        annual_rows = self._store.get_schedules(symbol, "profit-loss")
+
+        q_grouped = self._group_schedules(quarterly_rows)
+        a_grouped = self._group_schedules(annual_rows)
+
+        quarterly = q_grouped.get("Expenses", {})
+        annual = a_grouped.get("Expenses", {})
+
+        # Compute trends: last 4 quarters avg vs prior 4 quarters avg
+        trends: dict[str, str] = {}
+        for key, points in quarterly.items():
+            vals = [p["value"] for p in points if p.get("value") is not None]
+            if len(vals) >= 8:
+                recent = statistics.mean(vals[-4:])
+                prior = statistics.mean(vals[-8:-4])
+                diff = recent - prior
+                if diff > 2:
+                    trends[f"{key}_direction"] = "rising"
+                elif diff < -2:
+                    trends[f"{key}_direction"] = "falling"
+                else:
+                    trends[f"{key}_direction"] = "stable"
+            elif len(vals) >= 4:
+                trends[f"{key}_direction"] = "insufficient_history"
+
+        return _clean({
+            "quarterly": quarterly,
+            "annual": annual,
+            "trends": trends,
+        })
+
+    def get_balance_sheet_detail(self, symbol: str) -> dict:
+        """Decomposed balance sheet from schedule data."""
+        rows = self._store.get_schedules(symbol, "balance-sheet")
+        grouped = self._group_schedules(rows)
+
+        return _clean({
+            "borrowings": grouped.get("Borrowings", {}),
+            "assets": {
+                **grouped.get("Fixed Assets", {}),
+                **grouped.get("Other Assets", {}),
+            },
+            "liabilities": grouped.get("Other Liabilities", {}),
+        })
+
+    def get_cash_flow_quality(self, symbol: str) -> dict:
+        """Cash flow decomposition showing quality of operating CF."""
+        rows = self._store.get_schedules(symbol, "cash-flow")
+        grouped = self._group_schedules(rows)
+
+        return _clean({
+            "operating": grouped.get("Cash from Operating Activity", {}),
+            "investing": grouped.get("Cash from Investing Activity", {}),
+            "financing": grouped.get("Cash from Financing Activity", {}),
+        })
+
+    def get_working_capital_cycle(self, symbol: str) -> dict:
+        """Working capital components + as % of revenue."""
+        bs_rows = self._store.get_schedules(symbol, "balance-sheet")
+        grouped = self._group_schedules(bs_rows)
+
+        other_assets = grouped.get("Other Assets", {})
+        other_liabs = grouped.get("Other Liabilities", {})
+
+        components = {
+            "trade_receivables": other_assets.get("trade_receivables", []),
+            "inventories": other_assets.get("inventories", []),
+            "trade_payables": other_liabs.get("trade_payables", []),
+        }
+
+        # Get annual revenue for % computation
+        # AnnualFinancials uses fiscal_year_end ("2025-03-31") but schedule
+        # periods are "Mar 2025" — convert to match.
+        annual = self._store.get_annual_financials(symbol, limit=20)
+        rev_by_period: dict[str, float] = {}
+        for row in annual:
+            d = row.model_dump() if hasattr(row, "model_dump") else row
+            fye = d.get("fiscal_year_end", "")
+            rev = d.get("revenue")
+            if fye and rev:
+                try:
+                    dt = datetime.strptime(fye, "%Y-%m-%d")
+                    period_key = dt.strftime("%b %Y")  # "Mar 2025"
+                    rev_by_period[period_key] = float(rev)
+                except (ValueError, TypeError):
+                    pass
+
+        as_pct: dict[str, list[dict]] = {}
+        for comp_name, points in components.items():
+            pct_key = comp_name.replace("trade_", "") + "_pct"
+            if comp_name == "inventories":
+                pct_key = "inventory_pct"
+            pct_list = []
+            for p in points:
+                period = p.get("period", "")
+                val = p.get("value")
+                rev = rev_by_period.get(period)
+                if val is not None and rev and rev > 0:
+                    pct_list.append({
+                        "period": period,
+                        "value": round(val / rev * 100, 1),
+                    })
+            if pct_list:
+                as_pct[pct_key] = pct_list
+
+        return _clean({
+            "components": components,
+            "as_pct_of_revenue": as_pct,
+        })
 
     # --- FMP Data ---
 
