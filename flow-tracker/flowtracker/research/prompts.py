@@ -116,8 +116,7 @@ BUSINESS_INSTRUCTIONS_V2 = """
 5. **Catalysts**: Call `get_events_actions` with section='catalysts' for near-term triggers that could validate or invalidate the thesis.
 6. **Subsidiary check**: If the company has listed subsidiaries or is a conglomerate, call `get_quality_scores` with section='subsidiary' to quantify subsidiary contribution (consolidated minus standalone = subsidiary P&L).
 7. **Competitive context**: Call `get_peer_sector` for peer comparison, peer metrics, peer growth, and sector benchmarks.
-8. **Forward view**: Call `get_estimates` for analyst consensus, estimate momentum, earnings surprises, and events calendar.
-9. **Save**: Call `save_business_profile` to persist the profile for future runs.
+8. **Save**: Call `save_business_profile` to persist the profile for future runs.
 
 ## Report Sections
 1. **The Business** — Walk through an actual transaction from the customer's perspective. Include a mermaid flowchart showing value/money flow.

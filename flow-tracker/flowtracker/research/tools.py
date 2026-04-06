@@ -37,11 +37,11 @@ async def get_annual_financials(args):
 
 
 @tool(
-    "get_screener_ratios",
+    "get_efficiency_ratios",
     "Get efficiency ratios: debtor days, inventory days, cash conversion cycle, working capital days, ROCE%. Up to 10 years.",
     {"symbol": str, "years": int},
 )
-async def get_screener_ratios(args):
+async def get_efficiency_ratios(args):
     with ResearchDataAPI() as api:
         data = api.get_screener_ratios(args["symbol"], args.get("years", 10))
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
@@ -1606,7 +1606,7 @@ RESEARCH_TOOLS_V2 = [
 RESEARCH_TOOLS = [
     get_quarterly_results,
     get_annual_financials,
-    get_screener_ratios,
+    get_efficiency_ratios,
     get_quarterly_balance_sheet,
     get_quarterly_cash_flow,
     get_valuation_snapshot,
@@ -1664,7 +1664,7 @@ RESEARCH_TOOLS = [
 
 BUSINESS_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_fundamentals,
-    get_peer_sector, get_estimates, get_events_actions,
+    get_peer_sector, get_events_actions,
     get_valuation, get_chart_data, save_business_profile, render_chart,
 ]
 
