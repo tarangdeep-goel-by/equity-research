@@ -47,7 +47,7 @@ th.r,td.r{text-align:right}tr:hover{background:rgba(255,255,255,0.03)}.up{color:
 <div class="stat-grid">
 <div class="stat"><div class="stat-value">₹{{ "{:,.1f}".format(price) }}</div><div class="stat-label">CMP (Current Market Price)</div></div>
 <div class="stat"><div class="stat-value" style="color:var(--green)">{{ "%.1f"|format(pe_trailing or 0) }}x</div><div class="stat-label">P/E{% if pe_percentile is not none %} — {% if pe_percentile == 0 %}All-Time Low{% else %}{{ "%.0f"|format(pe_percentile) }}th %ile{% endif %}{% endif %}</div></div>
-<div class="stat"><div class="stat-value {% if v.earnings_growth and v.earnings_growth > 0 %}up{% else %}down{% endif %}">{{ "%.1f"|format((v.earnings_growth or 0) * 100) }}%</div><div class="stat-label">Earnings Growth (last 12 months)</div></div>
+<div class="stat"><div class="stat-value {% if v.earnings_growth and v.earnings_growth > 0 %}up{% else %}down{% endif %}">{{ "%.1f"|format(v.earnings_growth or 0) }}%</div><div class="stat-label">Earnings Growth (last 12 months)</div></div>
 <div class="stat"><div class="stat-value">{{ "%.2f"|format(v.beta or 0) }}</div><div class="stat-label">Beta (low = less volatile)</div></div>
 <div class="stat"><div class="stat-value up">{{ roce }}%</div><div class="stat-label">ROCE (latest FY)</div></div>
 <div class="stat"><div class="stat-value up">+{{ upside_pct }}%</div><div class="stat-label">Analyst Upside ({{ num_analysts }} analysts)</div></div>
@@ -124,28 +124,28 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 <thead><tr><th>Metric</th><th class="r">10Y</th><th class="r">5Y</th><th class="r">3Y</th><th class="r">TTM</th></tr></thead>
 <tbody>
 <tr><td>Sales Growth</td>
-<td class="r">{% if growth_rates.sales_10y is not none %}<span class="{% if growth_rates.sales_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_10y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.sales_5y is not none %}<span class="{% if growth_rates.sales_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_5y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.sales_3y is not none %}<span class="{% if growth_rates.sales_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_3y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.sales_ttm is not none %}<span class="{% if growth_rates.sales_ttm > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_ttm * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.sales_10y is not none %}<span class="{% if growth_rates.sales_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_10y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.sales_5y is not none %}<span class="{% if growth_rates.sales_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_5y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.sales_3y is not none %}<span class="{% if growth_rates.sales_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_3y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.sales_ttm is not none %}<span class="{% if growth_rates.sales_ttm > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.sales_ttm) }}%</span>{% else %}—{% endif %}</td>
 </tr>
 <tr><td>Profit Growth</td>
-<td class="r">{% if growth_rates.profit_10y is not none %}<span class="{% if growth_rates.profit_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_10y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.profit_5y is not none %}<span class="{% if growth_rates.profit_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_5y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.profit_3y is not none %}<span class="{% if growth_rates.profit_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_3y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.profit_ttm is not none %}<span class="{% if growth_rates.profit_ttm > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_ttm * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.profit_10y is not none %}<span class="{% if growth_rates.profit_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_10y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.profit_5y is not none %}<span class="{% if growth_rates.profit_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_5y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.profit_3y is not none %}<span class="{% if growth_rates.profit_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_3y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.profit_ttm is not none %}<span class="{% if growth_rates.profit_ttm > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.profit_ttm) }}%</span>{% else %}—{% endif %}</td>
 </tr>
 <tr><td>Stock Price CAGR</td>
-<td class="r">{% if growth_rates.price_10y is not none %}<span class="{% if growth_rates.price_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_10y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.price_5y is not none %}<span class="{% if growth_rates.price_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_5y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.price_3y is not none %}<span class="{% if growth_rates.price_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_3y * 100) }}%</span>{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.price_1y is not none %}<span class="{% if growth_rates.price_1y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_1y * 100) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.price_10y is not none %}<span class="{% if growth_rates.price_10y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_10y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.price_5y is not none %}<span class="{% if growth_rates.price_5y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_5y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.price_3y is not none %}<span class="{% if growth_rates.price_3y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_3y) }}%</span>{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.price_1y is not none %}<span class="{% if growth_rates.price_1y > 0 %}up{% else %}down{% endif %}">{{ "%.0f"|format(growth_rates.price_1y) }}%</span>{% else %}—{% endif %}</td>
 </tr>
 <tr><td>Avg ROE</td>
-<td class="r">{% if growth_rates.roe_10y is not none %}{{ "%.0f"|format(growth_rates.roe_10y * 100) }}%{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.roe_5y is not none %}{{ "%.0f"|format(growth_rates.roe_5y * 100) }}%{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.roe_3y is not none %}{{ "%.0f"|format(growth_rates.roe_3y * 100) }}%{% else %}—{% endif %}</td>
-<td class="r">{% if growth_rates.roe_last is not none and growth_rates.roe_last is defined %}{{ "%.0f"|format(growth_rates.roe_last * 100) }}%{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.roe_10y is not none %}{{ "%.0f"|format(growth_rates.roe_10y) }}%{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.roe_5y is not none %}{{ "%.0f"|format(growth_rates.roe_5y) }}%{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.roe_3y is not none %}{{ "%.0f"|format(growth_rates.roe_3y) }}%{% else %}—{% endif %}</td>
+<td class="r">{% if growth_rates.roe_last is not none and growth_rates.roe_last is defined %}{{ "%.0f"|format(growth_rates.roe_last) }}%{% else %}—{% endif %}</td>
 </tr>
 </tbody>
 </table>
@@ -186,16 +186,16 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 <h2>Profitability</h2>
 <p class="note">These answer: "How good is this business?"</p>
 <table>
-<tr><td>Gross Margin</td><td class="r">{{ "%.1f"|format((v.gross_margin or 0) * 100) }}%</td></tr>
-<tr><td>Operating Margin</td><td class="r">{{ "%.1f"|format((v.operating_margin or 0) * 100) }}%</td></tr>
-<tr><td>Net Margin</td><td class="r">{{ "%.1f"|format((v.net_margin or 0) * 100) }}%</td></tr>
-<tr><td>Revenue Growth</td><td class="r {% if v.revenue_growth and v.revenue_growth > 0 %}up{% endif %}">+{{ "%.1f"|format((v.revenue_growth or 0) * 100) }}%</td></tr>
-<tr><td>Earnings Growth</td><td class="r {% if v.earnings_growth and v.earnings_growth > 0 %}up{% endif %}">+{{ "%.1f"|format((v.earnings_growth or 0) * 100) }}%</td></tr>
+<tr><td>Gross Margin</td><td class="r">{{ "%.1f"|format(v.gross_margin or 0) }}%</td></tr>
+<tr><td>Operating Margin</td><td class="r">{{ "%.1f"|format(v.operating_margin or 0) }}%</td></tr>
+<tr><td>Net Margin</td><td class="r">{{ "%.1f"|format(v.net_margin or 0) }}%</td></tr>
+<tr><td>Revenue Growth</td><td class="r {% if v.revenue_growth and v.revenue_growth > 0 %}up{% endif %}">+{{ "%.1f"|format(v.revenue_growth or 0) }}%</td></tr>
+<tr><td>Earnings Growth</td><td class="r {% if v.earnings_growth and v.earnings_growth > 0 %}up{% endif %}">+{{ "%.1f"|format(v.earnings_growth or 0) }}%</td></tr>
 <tr><td>ROCE (latest FY)</td><td class="r up">{{ roce }}%</td></tr>
 </table>
 <div class="explain">
 <strong>Margins as a waterfall:</strong><br>
-₹100 Revenue → ₹{{ "%.0f"|format((v.gross_margin or 0) * 100) }} Gross Profit ({{ "%.1f"|format((v.gross_margin or 0) * 100) }}%) → ₹{{ "%.0f"|format((v.operating_margin or 0) * 100) }} Operating Profit ({{ "%.1f"|format((v.operating_margin or 0) * 100) }}%) → ₹{{ "%.0f"|format((v.net_margin or 0) * 100) }} Net Profit ({{ "%.1f"|format((v.net_margin or 0) * 100) }}%)
+₹100 Revenue → ₹{{ "%.0f"|format(v.gross_margin or 0) }} Gross Profit ({{ "%.1f"|format(v.gross_margin or 0) }}%) → ₹{{ "%.0f"|format(v.operating_margin or 0) }} Operating Profit ({{ "%.1f"|format(v.operating_margin or 0) }}%) → ₹{{ "%.0f"|format(v.net_margin or 0) }} Net Profit ({{ "%.1f"|format(v.net_margin or 0) }}%)
 </div>
 </div>
 
@@ -244,7 +244,7 @@ P/E of {{ "%.1f"|format(pe_trailing) }}x is at the {{ "%.0f"|format(pe_percentil
 <tr><td>Target Mean</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_mean or 0) }}</td><td>Target Median</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_median or 0) }}</td></tr>
 <tr><td>Target High</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_high or 0) }}</td><td>Target Low</td><td class="r">₹{{ "{:,.0f}".format(consensus.target_low or 0) }}</td></tr>
 <tr><td>Forward P/E</td><td class="r">{{ "%.1f"|format(consensus.forward_pe or 0) }}x</td><td>Forward EPS</td><td class="r">₹{{ "%.1f"|format(consensus.forward_eps or 0) }}</td></tr>
-<tr><td>Upside to Mean</td><td class="r up">+{{ upside_pct }}%</td><td>Earnings Growth</td><td class="r up">{{ "%.1f"|format((v.earnings_growth or 0) * 100) }}%</td></tr>
+<tr><td>Upside to Mean</td><td class="r up">+{{ upside_pct }}%</td><td>Earnings Growth</td><td class="r up">{{ "%.1f"|format(v.earnings_growth or 0) }}%</td></tr>
 </table>
 {% set fwd_eps = consensus.forward_eps or eps_annual %}
 <h3 style="margin-top:1rem;font-size:0.9rem;color:var(--dim)">Scenario Analysis — What Could the Stock Be Worth?</h3>
@@ -286,7 +286,7 @@ Full Quarterly Results — {{ quarterly_full|length }} Quarters (click to expand
 {% for label, key, fmt in [('Sales', 'revenue', ',.0f'), ('Expenses', 'expenses', ',.0f'), ('Op Profit', 'operating_income', ',.0f'), ('OPM %', 'operating_margin', None), ('Other Income', 'other_income', ',.1f'), ('Interest', 'interest', ',.1f'), ('Depreciation', 'depreciation', ',.1f'), ('PBT', 'profit_before_tax', ',.1f'), ('Tax %', 'tax_pct', None), ('Net Income', 'net_income', ',.0f'), ('EPS', 'eps', ',.1f')] %}
 <tr><td><strong>{{ label }}</strong></td>
 {% for q in quarterly_full %}
-<td class="r">{% if key == 'operating_margin' %}{% if q[key] is not none %}{{ "%.1f"|format(q[key] * 100) }}%{% else %}—{% endif %}{% elif key == 'tax_pct' %}{% if q[key] is not none %}{{ "%.0f"|format(q[key]) }}%{% else %}—{% endif %}{% elif q[key] is not none %}{{ ("{:" + fmt + "}").format(q[key]) }}{% else %}—{% endif %}</td>
+<td class="r">{% if key == 'operating_margin' %}{% if q[key] is not none %}{{ "%.1f"|format(q[key]) }}%{% else %}—{% endif %}{% elif key == 'tax_pct' %}{% if q[key] is not none %}{{ "%.0f"|format(q[key]) }}%{% else %}—{% endif %}{% elif q[key] is not none %}{{ ("{:" + fmt + "}").format(q[key]) }}{% else %}—{% endif %}</td>
 {% endfor %}
 </tr>
 {% endfor %}

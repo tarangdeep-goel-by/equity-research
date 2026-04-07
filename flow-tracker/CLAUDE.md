@@ -240,6 +240,7 @@ Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-sou
 - **Symbols are uppercase** — normalized with `.upper()` at the command layer.
 - **yfinance symbols** — converted via `nse_symbol()`: `RELIANCE` → `RELIANCE.NS`.
 - **Unit standard (P-3B)**: All monetary aggregates stored in **crores** (₹1 Cr = 10M) — converted at ingestion, never in compute code. Per-share values (price, EPS, BVPS) in **rupees**. Counts (shares, volume) are **raw**. Use `×1e7` only for Cr→Rs per-share conversions. See `store.py` docstring for full spec.
+- **Percentage standard (P-3B.2)**: All margins (OPM, NPM, GPM), returns (ROE, ROA, ROCE), growth rates, and yields stored as **percentage form** (25.0 = 25%). Ratios (PE, PB, D/E, current_ratio, beta) stay as raw ratios. Converted at ingestion in client files via `_to_pct()`.
 - **Screener.in is source of truth** for P/E history (TTM), growth rates, quarterly/annual financials. yfinance provides live valuation snapshots and analyst consensus.
 - **Research tools read SQLite, never fetch directly.** The `refresh_for_research()` function handles all live fetching before the agent runs.
 - **Thesis tracker files** live at `~/vault/stocks/{SYMBOL}/thesis-tracker.md` with YAML frontmatter conditions.

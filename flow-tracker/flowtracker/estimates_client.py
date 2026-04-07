@@ -27,6 +27,7 @@ class EstimatesClient:
                 logger.warning("No data for %s", symbol)
                 return None
 
+            _eg = info.get("earningsGrowth")
             return ConsensusEstimate(
                 symbol=symbol,
                 date=date.today().isoformat(),
@@ -39,7 +40,7 @@ class EstimatesClient:
                 recommendation_score=info.get("recommendationMean"),
                 forward_pe=info.get("forwardPE"),
                 forward_eps=info.get("forwardEps"),
-                earnings_growth=info.get("earningsGrowth"),
+                earnings_growth=_eg * 100 if _eg is not None else None,
                 current_price=info.get("currentPrice") or info.get("regularMarketPrice"),
             )
         except Exception as e:

@@ -380,7 +380,7 @@ class ScreenerEngine:
         if est.num_analysts and est.num_analysts >= 10:
             score += 5  # Well-covered stock
 
-        if est.earnings_growth and est.earnings_growth > 0.2:
+        if est.earnings_growth and est.earnings_growth > 20:
             score += 10
         elif est.earnings_growth and est.earnings_growth < 0:
             score -= 10
@@ -389,7 +389,7 @@ class ScreenerEngine:
         if est.num_analysts:
             detail += f" ({est.num_analysts} analysts)"
         if est.earnings_growth:
-            detail += f" EG {est.earnings_growth*100:+.0f}%"
+            detail += f" EG {est.earnings_growth:+.0f}%"
 
         return FactorScore(
             factor="estimates", score=_clamp(score),

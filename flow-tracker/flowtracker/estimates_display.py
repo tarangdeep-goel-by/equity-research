@@ -51,7 +51,7 @@ def display_estimates_stock(
         lines.append(f"Forward P/E: {est.forward_pe:.1f}")
     if est.earnings_growth:
         eg_color = "green" if est.earnings_growth >= 0 else "red"
-        lines.append(f"Earnings Growth: [{eg_color}]{est.earnings_growth*100:+.1f}%[/{eg_color}]")
+        lines.append(f"Earnings Growth: [{eg_color}]{est.earnings_growth:+.1f}%[/{eg_color}]")
 
     console.print(Panel(
         "\n".join(lines),

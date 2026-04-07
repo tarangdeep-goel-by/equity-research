@@ -187,7 +187,7 @@ def collect_fundamentals_data(symbol: str) -> dict:
         "revenues": [q["revenue"] for q in qr_reversed],
         "net_incomes": [q["net_income"] for q in qr_reversed],
         "opms": [
-            round(q["operating_margin"] * 100, 1) if q.get("operating_margin") else None
+            round(q["operating_margin"], 1) if q.get("operating_margin") else None
             for q in qr_reversed
         ],
     }

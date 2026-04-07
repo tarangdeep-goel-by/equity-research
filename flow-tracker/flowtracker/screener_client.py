@@ -295,15 +295,15 @@ class ScreenerClient:
             if operating_income is not None and depreciation is not None:
                 ebitda = operating_income + depreciation
 
-            # Use Screener's OPM% directly (as fraction)
+            # Use Screener's OPM% directly (already percentage, e.g. 30 means 30%)
             opm_raw = opm_vals[i] if i < len(opm_vals) else None
-            operating_margin = opm_raw / 100 if opm_raw is not None else None
+            operating_margin = opm_raw
             if operating_margin is None and operating_income is not None and revenue and revenue != 0:
-                operating_margin = operating_income / revenue
+                operating_margin = round(operating_income / revenue * 100, 4)
 
             net_margin = None
             if net_income is not None and revenue and revenue != 0:
-                net_margin = net_income / revenue
+                net_margin = round(net_income / revenue * 100, 4)
 
             results.append(
                 QuarterlyResult(
@@ -845,7 +845,7 @@ class ScreenerClient:
 
             # OPM from Screener (already percentage, e.g. 30 means 30%)
             opm_raw = _val(opm_vals)
-            operating_margin = opm_raw / 100 if opm_raw is not None else None
+            operating_margin = opm_raw
 
             # EBITDA = operating_income + depreciation
             ebitda = None
@@ -855,7 +855,7 @@ class ScreenerClient:
             # Net margin
             net_margin = None
             if net_income is not None and revenue and revenue != 0:
-                net_margin = net_income / revenue
+                net_margin = round(net_income / revenue * 100, 4)
 
             results.append(QuarterlyResult(
                 symbol=symbol,

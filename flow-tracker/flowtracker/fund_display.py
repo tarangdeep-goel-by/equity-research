@@ -59,42 +59,42 @@ def display_live_snapshot(snap: LiveSnapshot) -> None:
     # Row 1
     table.add_row(
         "P/E (TTM)", _fmt_ratio(snap.pe_trailing),
-        "Gross Margin", _fmt_pct(snap.gross_margin, multiply=True),
+        "Gross Margin", _fmt_pct(snap.gross_margin),
         "D/E", _fmt_ratio(snap.debt_to_equity),
     )
     # Row 2
     table.add_row(
         "P/E (Fwd)", _fmt_ratio(snap.pe_forward),
-        "OPM", _fmt_pct(snap.operating_margin, multiply=True),
+        "OPM", _fmt_pct(snap.operating_margin),
         "Current", _fmt_ratio(snap.current_ratio),
     )
     # Row 3
     table.add_row(
         "P/B", _fmt_ratio(snap.pb_ratio),
-        "NPM", _fmt_pct(snap.net_margin, multiply=True),
+        "NPM", _fmt_pct(snap.net_margin),
         "FCF", _fmt_cr(snap.free_cash_flow),
     )
     # Row 4
     table.add_row(
         "EV/EBITDA", _fmt_ratio(snap.ev_ebitda),
-        "ROE", _fmt_pct(snap.roe, multiply=True),
+        "ROE", _fmt_pct(snap.roe),
         "", "",
     )
     # Row 5
     table.add_row(
-        "Div Yield", _fmt_pct(snap.dividend_yield, multiply=True),
-        "ROA", _fmt_pct(snap.roa, multiply=True),
+        "Div Yield", _fmt_pct(snap.dividend_yield),
+        "ROA", _fmt_pct(snap.roa),
         "", "",
     )
 
     # Growth row
     growth_text = ""
     if snap.revenue_growth is not None:
-        growth_text += f"Revenue {_color_change(snap.revenue_growth * 100)} YoY"
+        growth_text += f"Revenue {_color_change(snap.revenue_growth)} YoY"
     if snap.earnings_growth is not None:
         if growth_text:
             growth_text += "  |  "
-        growth_text += f"Earnings {_color_change(snap.earnings_growth * 100)} YoY"
+        growth_text += f"Earnings {_color_change(snap.earnings_growth)} YoY"
 
     # Header line
     price_str = f"₹{snap.price:,.2f}" if snap.price else "—"
@@ -143,16 +143,8 @@ def display_quarterly_history(results: list[QuarterlyResult], symbol: str) -> No
         rev_str = f"{r.revenue:,.0f}" if r.revenue else "—"
         ni_str = f"{r.net_income:,.0f}" if r.net_income else "—"
         eps_str = f"{r.eps:.2f}" if r.eps else "—"
-        opm_str = (
-            _fmt_pct(r.operating_margin, multiply=True)
-            if r.operating_margin and r.operating_margin < 1
-            else _fmt_pct(r.operating_margin)
-        )
-        npm_str = (
-            _fmt_pct(r.net_margin, multiply=True)
-            if r.net_margin and r.net_margin < 1
-            else _fmt_pct(r.net_margin)
-        )
+        opm_str = _fmt_pct(r.operating_margin)
+        npm_str = _fmt_pct(r.net_margin)
 
         table.add_row(qtr_label, rev_str, ni_str, eps_str, opm_str, npm_str)
 
@@ -182,11 +174,11 @@ def display_peer_comparison(
         ("P/E", lambda s: _fmt_ratio(s.pe_trailing)),
         ("EV/EBITDA", lambda s: _fmt_ratio(s.ev_ebitda)),
         ("P/B", lambda s: _fmt_ratio(s.pb_ratio)),
-        ("ROE", lambda s: _fmt_pct(s.roe, multiply=True)),
-        ("OPM", lambda s: _fmt_pct(s.operating_margin, multiply=True)),
-        ("NPM", lambda s: _fmt_pct(s.net_margin, multiply=True)),
+        ("ROE", lambda s: _fmt_pct(s.roe)),
+        ("OPM", lambda s: _fmt_pct(s.operating_margin)),
+        ("NPM", lambda s: _fmt_pct(s.net_margin)),
         ("D/E", lambda s: _fmt_ratio(s.debt_to_equity)),
-        ("Rev Grw", lambda s: _fmt_pct(s.revenue_growth, multiply=True) if s.revenue_growth else "—"),
+        ("Rev Grw", lambda s: _fmt_pct(s.revenue_growth) if s.revenue_growth else "—"),
     ]
 
     for label, fmt_fn in metrics:

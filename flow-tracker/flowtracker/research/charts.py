@@ -489,7 +489,10 @@ def render_dupont_chart(symbol: str, dupont_data: list[dict] | dict) -> str:
         r = d.get("roe_dupont", d.get("roe", None))
         if yr and m is not None:
             years.append(_fy_label(yr))
-            # DuPont values may be decimals (0.39 = 39%) — normalize to percentage
+            # Screener DuPont data: computed from raw financials, always decimal (e.g. 0.35).
+            # FMP DuPont data: net_profit_margin stored as percentage (35.0) but roe_dupont
+            # is computed with /100 in data_api.py, so it arrives as decimal too.
+            # The < 1 heuristic correctly handles both paths.
             m_val = float(m)
             r_val = float(r) if r else 0
             if m_val < 1:

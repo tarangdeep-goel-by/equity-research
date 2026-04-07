@@ -1352,7 +1352,8 @@ class ResearchDataAPI:
             decomp = []
             for m in metrics:
                 if m.net_profit_margin_dupont is not None and m.asset_turnover is not None and m.equity_multiplier is not None:
-                    roe = m.net_profit_margin_dupont * m.asset_turnover * m.equity_multiplier
+                    # net_profit_margin_dupont stored as percentage (P-3B.2), convert to decimal for multiplication
+                    roe = (m.net_profit_margin_dupont / 100) * m.asset_turnover * m.equity_multiplier
                     decomp.append({
                         "date": m.date,
                         "net_profit_margin": round(m.net_profit_margin_dupont, 4),

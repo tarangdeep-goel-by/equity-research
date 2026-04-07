@@ -26,19 +26,18 @@ def _fmt(val: float | None, fmt: str = ",.2f", suffix: str = "") -> str:
 
 
 def _pct(val: float | None) -> str:
-    """Format as percentage (input is ratio, e.g. 0.15 -> 15.0%)."""
+    """Format as percentage (input already in pct form, e.g. 15.0 -> +15.0%)."""
     if val is None:
         return "--"
-    return f"{val * 100:+.1f}%"
+    return f"{val:+.1f}%"
 
 
 def _color_pct(val: float | None) -> str:
-    """Format percentage with color."""
+    """Format percentage with color (input already in pct form)."""
     if val is None:
         return "--"
-    pct_val = val * 100
-    color = "green" if pct_val >= 0 else "red"
-    return f"[{color}]{pct_val:+.1f}%[/{color}]"
+    color = "green" if val >= 0 else "red"
+    return f"[{color}]{val:+.1f}%[/{color}]"
 
 
 def display_fmp_fetch_result(summary: dict) -> None:
@@ -195,11 +194,11 @@ def display_key_metrics(metrics: list[FMPKeyMetrics]) -> None:
             _fmt(m.pe_ratio, ".1f"),
             _fmt(m.pb_ratio, ".1f"),
             _fmt(m.ev_to_ebitda, ".1f"),
-            f"{m.roe:.1%}" if m.roe is not None else "--",
-            f"{m.roic:.1%}" if m.roic is not None else "--",
+            f"{m.roe:.1f}%" if m.roe is not None else "--",
+            f"{m.roic:.1f}%" if m.roic is not None else "--",
             _fmt(m.debt_to_equity, ".2f"),
-            f"{m.dividend_yield:.1%}" if m.dividend_yield is not None else "--",
-            f"{m.free_cash_flow_yield:.1%}" if m.free_cash_flow_yield is not None else "--",
+            f"{m.dividend_yield:.1f}%" if m.dividend_yield is not None else "--",
+            f"{m.free_cash_flow_yield:.1f}%" if m.free_cash_flow_yield is not None else "--",
         )
 
     console.print(table)
@@ -209,7 +208,7 @@ def display_key_metrics(metrics: list[FMPKeyMetrics]) -> None:
     if latest.net_profit_margin_dupont is not None or latest.asset_turnover is not None:
         lines: list[str] = []
         lines.append("DuPont Decomposition (latest):")
-        npm_str = f"{latest.net_profit_margin_dupont:.1%}" if latest.net_profit_margin_dupont is not None else "--"
+        npm_str = f"{latest.net_profit_margin_dupont:.1f}%" if latest.net_profit_margin_dupont is not None else "--"
         lines.append(f"  Net Profit Margin: {npm_str}")
         lines.append(f"  Asset Turnover: {_fmt(latest.asset_turnover, '.2f')}")
         lines.append(f"  Equity Multiplier: {_fmt(latest.equity_multiplier, '.2f')}")
@@ -219,7 +218,7 @@ def display_key_metrics(metrics: list[FMPKeyMetrics]) -> None:
             and latest.equity_multiplier is not None
         ):
             implied_roe = latest.net_profit_margin_dupont * latest.asset_turnover * latest.equity_multiplier
-            lines.append(f"  Implied ROE: {implied_roe:.1%}")
+            lines.append(f"  Implied ROE: {implied_roe:.1f}%")
         console.print(Panel("\n".join(lines), border_style="dim"))
 
 

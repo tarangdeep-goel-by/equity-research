@@ -4,7 +4,8 @@ Unit standard (P-3B):
     Monetary aggregates: CRORES (₹1 Cr = 10M). Converted at ingestion, never in compute code.
     Per-share values:    RUPEES (price, EPS, BVPS, DPS). Use ×1e7 to convert Cr→Rs per-share.
     Counts:              RAW (shares_outstanding, volume, quantity).
-    Percentages/ratios:  AS-IS (PE, ROE, margins, growth rates, pct_of_nav).
+    Percentages:         PERCENTAGE (25.0 = 25%). Margins, returns (ROE/ROA/ROCE), growth, yields.
+    Ratios:              AS-IS (PE, PB, D/E, current_ratio, beta).
 """
 
 from __future__ import annotations
@@ -59,10 +60,22 @@ _VALIDATION_RULES: dict[str, dict[str, tuple[float, float]]] = {
         "operating_cash_flow": (-200_000, 300_000),
         "price": (1, 200_000),              # ₹1 to ₹2L per share
         "pe_trailing": (-500, 2000),
+        # P-3B.2: Percentage fields (stored as 25.0 = 25%)
+        "operating_margin": (-100, 100),
+        "net_margin": (-100, 100),
+        "gross_margin": (-50, 100),
+        "roe": (-200, 200),
+        "roa": (-100, 100),
+        "revenue_growth": (-100, 500),
+        "earnings_growth": (-500, 1000),
+        "dividend_yield": (0, 50),
     },
     "quarterly_results": {
         "revenue": (0.1, 400_000),          # quarterly — max ~4L Cr
         "net_income": (-30_000, 200_000),
+        # P-3B.2: Percentage fields
+        "operating_margin": (-100, 100),
+        "net_margin": (-100, 100),
     },
     "insider_transactions": {
         "value": (0, 10_000),               # max ~₹10K Cr single trade

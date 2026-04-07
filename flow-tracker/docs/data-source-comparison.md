@@ -80,6 +80,7 @@ These rules prevent conflicting data:
 | Earnings surprises | yfinance | -- | Only source for actual vs estimate |
 | Shareholding pattern | NSE | Screener | NSE is primary regulatory source; Screener's shareholders API supplements with name-level detail |
 | Live price | yfinance | -- | Real-time; Screener chart has daily granularity |
+| Percentage format | All sources | -- | P-3B.2: stored as PERCENTAGE (25.0 = 25%). Converted at ingestion. |
 
 ## Data Flow
 

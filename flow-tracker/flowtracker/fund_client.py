@@ -43,6 +43,11 @@ def _to_cr(val: float | None) -> float | None:
     return val / 1e7 if val is not None else None
 
 
+def _to_pct(val: float | None) -> float | None:
+    """Convert decimal ratio (0.25) to percentage (25.0)."""
+    return val * 100 if val is not None else None
+
+
 class FundClient:
     """yfinance client for fundamentals data."""
 
@@ -93,16 +98,16 @@ class FundClient:
             pb_ratio=info.get("priceToBook"),
             ev_ebitda=info.get("enterpriseToEbitda"),
             dividend_yield=info.get("dividendYield"),
-            roe=info.get("returnOnEquity"),
-            roa=info.get("returnOnAssets"),
-            gross_margin=info.get("grossMargins"),
-            operating_margin=info.get("operatingMargins"),
-            net_margin=info.get("profitMargins"),
+            roe=_to_pct(info.get("returnOnEquity")),
+            roa=_to_pct(info.get("returnOnAssets")),
+            gross_margin=_to_pct(info.get("grossMargins")),
+            operating_margin=_to_pct(info.get("operatingMargins")),
+            net_margin=_to_pct(info.get("profitMargins")),
             debt_to_equity=_div100(info.get("debtToEquity")),
             current_ratio=info.get("currentRatio"),
             free_cash_flow=info.get("freeCashflow"),
-            revenue_growth=info.get("revenueGrowth"),
-            earnings_growth=info.get("earningsGrowth"),
+            revenue_growth=_to_pct(info.get("revenueGrowth")),
+            earnings_growth=_to_pct(info.get("earningsGrowth")),
         )
 
     # -- Stored (fetched -> persisted) --
@@ -170,15 +175,15 @@ class FundClient:
             ps_ratio=info.get("priceToSalesTrailing12Months"),
             peg_ratio=info.get("pegRatio"),
             # Profitability
-            gross_margin=info.get("grossMargins"),
-            operating_margin=info.get("operatingMargins"),
-            net_margin=info.get("profitMargins"),
-            roe=info.get("returnOnEquity"),
-            roa=info.get("returnOnAssets"),
+            gross_margin=_to_pct(info.get("grossMargins")),
+            operating_margin=_to_pct(info.get("operatingMargins")),
+            net_margin=_to_pct(info.get("profitMargins")),
+            roe=_to_pct(info.get("returnOnEquity")),
+            roa=_to_pct(info.get("returnOnAssets")),
             # Growth
-            revenue_growth=info.get("revenueGrowth"),
-            earnings_growth=info.get("earningsGrowth"),
-            earnings_quarterly_growth=info.get("earningsQuarterlyGrowth"),
+            revenue_growth=_to_pct(info.get("revenueGrowth")),
+            earnings_growth=_to_pct(info.get("earningsGrowth")),
+            earnings_quarterly_growth=_to_pct(info.get("earningsQuarterlyGrowth")),
             # Yield
             dividend_yield=info.get("dividendYield"),
             # Balance sheet

@@ -55,6 +55,11 @@ def _to_cr(val: float | None) -> float | None:
     return val / 1e7 if val is not None else None
 
 
+def _to_pct(val: float | None) -> float | None:
+    """Convert decimal ratio (0.25) to percentage (25.0)."""
+    return val * 100 if val is not None else None
+
+
 class FMPClient:
     """Client for Financial Modeling Prep API."""
 
@@ -232,16 +237,16 @@ class FMPClient:
                 ev_to_ebitda=_safe_float(d.get("enterpriseValueOverEBITDA")),
                 ev_to_operating_cash_flow=_safe_float(d.get("evToOperatingCashFlow")),
                 ev_to_free_cash_flow=_safe_float(d.get("evToFreeCashFlow")),
-                earnings_yield=_safe_float(d.get("earningsYield")),
-                free_cash_flow_yield=_safe_float(d.get("freeCashFlowYield")),
+                earnings_yield=_to_pct(_safe_float(d.get("earningsYield"))),
+                free_cash_flow_yield=_to_pct(_safe_float(d.get("freeCashFlowYield"))),
                 debt_to_equity=debt_to_equity,
-                debt_to_assets=_safe_float(d.get("debtToAssets")),
-                dividend_yield=_safe_float(d.get("dividendYield")),
-                payout_ratio=_safe_float(d.get("payoutRatio")),
-                roe=_safe_float(d.get("roe")),
-                roa=_safe_float(d.get("returnOnTangibleAssets")),
-                roic=_safe_float(d.get("roic")),
-                net_profit_margin_dupont=_safe_float(d.get("netProfitMargin")),
+                debt_to_assets=_to_pct(_safe_float(d.get("debtToAssets"))),
+                dividend_yield=_to_pct(_safe_float(d.get("dividendYield"))),
+                payout_ratio=_to_pct(_safe_float(d.get("payoutRatio"))),
+                roe=_to_pct(_safe_float(d.get("roe"))),
+                roa=_to_pct(_safe_float(d.get("returnOnTangibleAssets"))),
+                roic=_to_pct(_safe_float(d.get("roic"))),
+                net_profit_margin_dupont=_to_pct(_safe_float(d.get("netProfitMargin"))),
                 asset_turnover=_safe_float(d.get("assetTurnover")),
                 equity_multiplier=equity_multiplier,
             ))
@@ -258,24 +263,24 @@ class FMPClient:
             results.append(FMPFinancialGrowth(
                 symbol=symbol,
                 date=d.get("date", ""),
-                revenue_growth=_safe_float(d.get("revenueGrowth")),
-                gross_profit_growth=_safe_float(d.get("grossProfitGrowth")),
-                ebitda_growth=_safe_float(d.get("ebitdagrowth")),
-                operating_income_growth=_safe_float(d.get("operatingIncomeGrowth")),
-                net_income_growth=_safe_float(d.get("netIncomeGrowth")),
-                eps_growth=_safe_float(d.get("epsgrowth")),
-                eps_diluted_growth=_safe_float(d.get("epsdilutedGrowth")),
-                dividends_per_share_growth=_safe_float(d.get("dividendsperShareGrowth")),
-                operating_cash_flow_growth=_safe_float(d.get("operatingCashFlowGrowth")),
-                free_cash_flow_growth=_safe_float(d.get("freeCashFlowGrowth")),
-                asset_growth=_safe_float(d.get("assetGrowth")),
-                debt_growth=_safe_float(d.get("debtGrowth")),
-                book_value_per_share_growth=_safe_float(d.get("bookValueperShareGrowth")),
-                revenue_growth_3y=_safe_float(d.get("threeYRevenueGrowthPerShare")),
-                revenue_growth_5y=_safe_float(d.get("fiveYRevenueGrowthPerShare")),
-                revenue_growth_10y=_safe_float(d.get("tenYRevenueGrowthPerShare")),
-                net_income_growth_3y=_safe_float(d.get("threeYNetIncomeGrowthPerShare")),
-                net_income_growth_5y=_safe_float(d.get("fiveYNetIncomeGrowthPerShare")),
+                revenue_growth=_to_pct(_safe_float(d.get("revenueGrowth"))),
+                gross_profit_growth=_to_pct(_safe_float(d.get("grossProfitGrowth"))),
+                ebitda_growth=_to_pct(_safe_float(d.get("ebitdagrowth"))),
+                operating_income_growth=_to_pct(_safe_float(d.get("operatingIncomeGrowth"))),
+                net_income_growth=_to_pct(_safe_float(d.get("netIncomeGrowth"))),
+                eps_growth=_to_pct(_safe_float(d.get("epsgrowth"))),
+                eps_diluted_growth=_to_pct(_safe_float(d.get("epsdilutedGrowth"))),
+                dividends_per_share_growth=_to_pct(_safe_float(d.get("dividendsperShareGrowth"))),
+                operating_cash_flow_growth=_to_pct(_safe_float(d.get("operatingCashFlowGrowth"))),
+                free_cash_flow_growth=_to_pct(_safe_float(d.get("freeCashFlowGrowth"))),
+                asset_growth=_to_pct(_safe_float(d.get("assetGrowth"))),
+                debt_growth=_to_pct(_safe_float(d.get("debtGrowth"))),
+                book_value_per_share_growth=_to_pct(_safe_float(d.get("bookValueperShareGrowth"))),
+                revenue_growth_3y=_to_pct(_safe_float(d.get("threeYRevenueGrowthPerShare"))),
+                revenue_growth_5y=_to_pct(_safe_float(d.get("fiveYRevenueGrowthPerShare"))),
+                revenue_growth_10y=_to_pct(_safe_float(d.get("tenYRevenueGrowthPerShare"))),
+                net_income_growth_3y=_to_pct(_safe_float(d.get("threeYNetIncomeGrowthPerShare"))),
+                net_income_growth_5y=_to_pct(_safe_float(d.get("fiveYNetIncomeGrowthPerShare"))),
             ))
         return results
 
