@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-07T12:56:34.357344+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "chemicals": {
+      "agent": "business",
+      "stock": "PIDILITIND",
+      "sector": "Specialty chemicals",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Brilliant deconstruction of the moat (the carpenter's reputation risk) and excellent decomposition of recent PAT growth, proving it was RM-driven rather than volume-driven."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Contradicts its own 'misclassification arbitrage' thesis by using specialty chemical multiples for its bear case de-rating scenario instead of consumer/paints multiples."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 86,
+          "rationale": "Lacks segment-level unit economics (profitability of B2B vs B2C) and provides only a surface-level evaluation of management quality and historical capital allocation."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "The 'Investor's Checklist' and the framing of the upcoming Q4 volume growth catalyst make this highly actionable for a PM."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Correctly applies FMCG/Consumer frameworks (brand pull, distribution) to the B2C segment and chemical/industrial frameworks (spec lock-in, RM pass-through) to the B2B segment."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Meticulous citation of tools, clear flagging of data discrepancies (share count), and honest admission of missing concall data."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Big Question - Bear Case",
+          "issue": "Bear case assumes de-rating to specialty chemical multiples (40-45x) despite the report's core thesis that Pidilite is a consumer company.",
+          "suggestion": "Instruct the agent to align bear/bull case valuation multiples with the peer group it explicitly identified as correct (e.g., Asian Paints/Berger)."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Money Machine",
+          "issue": "Missing segment-level profitability (EBIT margins for Consumer & Bazaar vs B2B).",
+          "suggestion": "Prompt the agent to extract and analyze segment-level margins, not just revenue mix, to determine if B2B/Industrial growth is margin-dilutive to the core business."
+        }
+      ],
+      "strengths": [
+        "The 'Kishan Lal' transaction chain perfectly captures the qualitative essence of the moat and asymmetric risk for the end-user.",
+        "Excellent decomposition of recent PAT growth, correctly identifying that the margin recovery cycle is spent and volume is the necessary next driver."
+      ],
+      "summary": "This is an institutional-quality business breakdown that brilliantly captures the qualitative essence of Pidilite's moat and the quantitative reality of its recent margin-driven earnings growth. The primary gaps are the lack of segment-level unit economics and a slight logical contradiction in applying chemical multiples to a bear case after arguing it should be valued as a consumer company. Overall, a highly actionable and insightful read.",
+      "report_length": 31315,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.89560758299194,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Brilliant deconstruction of the moat (the carpenter's reputation risk) and excellent decomposition of recent PAT growth, proving it was RM-driven rather than volume-driven.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Contradicts its own 'misclassification arbitrage' thesis by using specialty chemical multiples for its bear case de-rating scenario instead of consumer/paints multiples.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 86,\n      \"rationale\": \"Lacks segment-level unit economics (profitability of B2B vs B2C) and provides only a surface-level evaluation of management quality and historical capital allocation.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"The 'Investor's Checklist' and the framing of the upcoming Q4 volume growth catalyst make this highly actionable for a PM.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Correctly applies FMCG/Consumer frameworks (brand pull, distribution) to the B2C segment and chemical/industrial frameworks (spec lock-in, RM pass-through) to the B2B segment.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Meticulous citation of tools, clear flagging of data discrepancies (share count), and honest admission of missing concall data.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Big Question - Bear Case\",\n      \"issue\": \"Bear case assumes de-rating to specialty chemical multiples (40-45x) despite the report's core thesis that Pidilite is a consumer company.\",\n      \"suggestion\": \"Instruct the agent to align bear/bull case valuation multiples with the peer group it explicitly identified as correct (e.g., Asian Paints/Berger).\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Money Machine\",\n      \"issue\": \"Missing segment-level profitability (EBIT margins for Consumer & Bazaar vs B2B).\",\n      \"suggestion\": \"Prompt the agent to extract and analyze segment-level margins, not just revenue mix, to determine if B2B/Industrial growth is margin-dilutive to the core business.\"\n    }\n  ],\n  \"strengths\": [\n    \"The 'Kishan Lal' transaction chain perfectly captures the qualitative essence of the moat and asymmetric risk for the end-user.\",\n    \"Excellent decomposition of recent PAT growth, correctly identifying that the margin recovery cycle is spent and volume is the necessary next driver.\"\n  ],\n  \"summary\": \"This is an institutional-quality business breakdown that brilliantly captures the qualitative essence of Pidilite's moat and the quantitative reality of its recent margin-driven earnings growth. The primary gaps are the lack of segment-level unit economics and a slight logical"
+    }
+  }
+}

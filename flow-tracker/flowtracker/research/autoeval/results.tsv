@@ -14,3 +14,11 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-07T08:41:37Z	1	business	OLAELEC	auto	A-	92	23729	455.6	559.6	1	This is a highly insightful, institutional-quality teardown of a broken growth story, effectively li
 2026-04-07T08:48:14Z	1	business	POLICYBZR	insurance	A	93	37944	0.0	651.2	1	This is an institutional-grade report that correctly diagnoses PB Fintech's operating leverage infle
 2026-04-07T09:58:08Z	1	business	HINDUNILVR	fmcg	A-	91	75307	0.0	32.9	2	This is a highly sophisticated, institutional-grade report that correctly identifies HUL's core valu
+2026-04-07T10:34:12Z	1	business	GODREJPROP	real_estate	ERR	0	31853	0.0	109.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-07T10:35:23Z	1	business	GODREJPROP	real_estate	A-	91	31853	0.0	47.6	2	This is a highly sophisticated report that perfectly captures the nuances of Indian real estate acco
+2026-04-07T10:36:17Z	1	business	BHARTIARTL	telecom	A-	91	27219	640.8	25.4	2	A highly insightful and well-structured report that perfectly captures the economic engine of a tele
+2026-04-07T10:49:18Z	1	business	NTPC	regulated_power	A-	92	52611	0.0	25.6	2	This is an outstanding, institutional-quality breakdown of a complex regulated utility business mode
+2026-04-07T10:49:25Z	1	business	SUNPHARMA	pharma	A-	91	33842	0.0	26.8	3	A highly insightful and well-written report that perfectly captures the qualitative narrative of Sun
+2026-04-07T12:55:58Z	1	business	GROWW	broker	ERR	0	49776	0.0	65.4	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-07T12:56:34Z	1	business	PIDILITIND	chemicals	A-	91	31315	0.0	41.9	2	This is an institutional-quality business breakdown that brilliantly captures the qualitative essenc
+2026-04-07T12:59:12Z	1	business	GROWW	broker	A-	92	49776	0.0	147.4	2	This is a highly sophisticated, institutional-quality business report that brilliantly navigates com

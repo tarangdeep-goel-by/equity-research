@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-07T10:35:23.474985+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "real_estate": {
+      "agent": "business",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Superb breakdown of the ROCE paradox and the 'Other Income' dependency. Connects accounting quirks directly to business reality and explains the 'why' behind the numbers."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Highly consistent narrative overall. However, placing 'Net Profit' as a line item in the 'Cost Structure' table is structurally clunky, especially right after explaining that EBIT is negative."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Excellent macro and accounting coverage, but lacks a strict per-sqft unit economic build-up (Realization vs. Land Share vs. Construction Cost) which is standard for RE business models."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Provides clear bull/bear frameworks and identifies the exact missing metrics (pre-sales run rate, other income composition) needed to make a final investment decision."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of Real Estate nuances. Explicitly rejects PE/EPS, focuses on P/B, NAV, JDA vs Outright models, and completion-based accounting."
+        },
+        "data_sourcing": {
+          "grade": "B+",
+          "numeric": 86,
+          "rationale": "The agent anchors the entire report on an 'estimated ~\u20b928,800 Cr' pre-sales figure but explicitly states it lacks concall data, failing to cite where this critical estimate came from."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Money Machine / Cost Structure",
+          "issue": "Missing per-square-foot unit economics breakdown.",
+          "suggestion": "Instruct the agent to build a standard RE unit economic model for developers (e.g., Blended Realization/sqft - Land Share/Cost - Construction Cost - Overheads = Project Margin) to better illustrate the JDA model's profitability."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Business / The Money Machine",
+          "issue": "Uncited critical operational metric (\u20b928,800 Cr pre-sales estimate).",
+          "suggestion": "If the agent derives or pulls an estimate for a critical operational metric not found in standard financials, it must explicitly cite the source (e.g., news context tool) or show the estimation math."
+        }
+      ],
+      "strengths": [
+        "Masterful handling of real estate accounting distortions, specifically explaining the ROCE paradox and completion-based revenue lags.",
+        "Excellent breakdown of the JDA business model and a highly accurate assessment of why the Godrej brand acts as a narrow moat in a trust-deficit sector."
+      ],
+      "summary": "This is a highly sophisticated report that perfectly captures the nuances of Indian real estate accounting and Godrej's specific JDA model. The primary gaps are the lack of a per-square-foot unit economic breakdown and an uncited pre-sales estimate, but the analytical frameworks applied are institutional grade.",
+      "report_length": 31853,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 47.58786600001622,
+      "run_skipped": true,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Superb breakdown of the ROCE paradox and the 'Other Income' dependency. Connects accounting quirks directly to business reality and explains the 'why' behind the numbers.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Highly consistent narrative overall. However, placing 'Net Profit' as a line item in the 'Cost Structure' table is structurally clunky, especially right after explaining that EBIT is negative.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Excellent macro and accounting coverage, but lacks a strict per-sqft unit economic build-up (Realization vs. Land Share vs. Construction Cost) which is standard for RE business models.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Provides clear bull/bear frameworks and identifies the exact missing metrics (pre-sales run rate, other income composition) needed to make a final investment decision.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of Real Estate nuances. Explicitly rejects PE/EPS, focuses on P/B, NAV, JDA vs Outright models, and completion-based accounting.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B+\",\n      \"numeric\": 86,\n      \"rationale\": \"The agent anchors the entire report on an 'estimated ~\u20b928,800 Cr' pre-sales figure but explicitly states it lacks concall data, failing to cite where this critical estimate came from.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Money Machine / Cost Structure\",\n      \"issue\": \"Missing per-square-foot unit economics breakdown.\",\n      \"suggestion\": \"Instruct the agent to build a standard RE unit economic model for developers (e.g., Blended Realization/sqft - Land Share/Cost - Construction Cost - Overheads = Project Margin) to better illustrate the JDA model's profitability.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Business / The Money Machine\",\n      \"issue\": \"Uncited critical operational metric (\u20b928,800 Cr pre-sales estimate).\",\n      \"suggestion\": \"If the agent derives or pulls an estimate for a critical operational metric not found in standard financials, it must explicitly cite the source (e.g., news context tool) or show the estimation math.\"\n    }\n  ],\n  \"strengths\": [\n    \"Masterful handling of real estate accounting distortions, specifically explaining the ROCE paradox and completion-based revenue lags.\",\n    \"Excellent breakdown of the JDA business model and a highly accurate assessment of why the Godrej brand acts as a narrow moat in a trust-deficit sector.\"\n  ],\n  \"summary\": \"This is a highly sophisticated report that perfectly captures the nuances of Indian real estate accounting and Godrej's spe"
+    }
+  }
+}

@@ -185,20 +185,43 @@ def load_matrix() -> dict:
 
 
 def run_agent(agent: str, stock: str) -> tuple[float, bool]:
-    """Run a specialist agent via CLI. Returns (duration_seconds, success)."""
+    """Run a specialist agent via CLI. Returns (duration_seconds, success).
+
+    Streams stderr (tool call logs) live via line-by-line reading while
+    capturing stdout. Uses Popen instead of run() for real-time output.
+    """
     cwd = Path(__file__).resolve().parents[3]  # flow-tracker/
     start = time.monotonic()
-    result = subprocess.run(
+    proc = subprocess.Popen(
         ["uv", "run", "flowtrack", "research", "run", agent, "-s", stock],
         cwd=cwd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=900,  # 15 min max per agent
     )
+    # Stream stderr live (tool call logs) while process runs
+    try:
+        while proc.poll() is None:
+            line = proc.stderr.readline()
+            if line:
+                print(f"  {line.rstrip()}", file=sys.stderr)
+            # Check timeout
+            if time.monotonic() - start > 900:
+                proc.kill()
+                proc.wait()
+                raise subprocess.TimeoutExpired(cmd="agent", timeout=900)
+        # Drain remaining stderr
+        for line in proc.stderr:
+            print(f"  {line.rstrip()}", file=sys.stderr)
+    except subprocess.TimeoutExpired:
+        duration = time.monotonic() - start
+        print(f"  [WARN] Agent {agent} timed out for {stock} after {duration:.0f}s", file=sys.stderr)
+        return duration, False
+
     duration = time.monotonic() - start
-    success = result.returncode == 0
+    success = proc.returncode == 0
     if not success:
-        print(f"  [WARN] Agent {agent} failed for {stock}: {result.stderr[:200]}", file=sys.stderr)
+        print(f"  [WARN] Agent {agent} failed for {stock} (exit {proc.returncode})", file=sys.stderr)
     return duration, success
 
 
