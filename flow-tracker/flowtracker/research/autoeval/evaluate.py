@@ -338,7 +338,7 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                thinking_config=types.ThinkingConfig(thinking_budget=65_536),
+                thinking_config=types.ThinkingConfig(thinking_budget=65_535),
                 temperature=0.1,  # near-deterministic grading
             ),
         )
