@@ -1,0 +1,22 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/run_logs/20260407T052843_eval.log
+AutoEval (agent-first): agent=business sectors=['metals']
+Target: grade_numeric >= 90
+
+--- business / VEDL (metals) ---
+  Report: 33621 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A+ (96) [PASS]
+Appended 2 fixes to fix_tracker.md (IDs 11-12)
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260407T052909_all_for_business.json
+
+======================================================================
+AGENT SUMMARY: business
+======================================================================
+  metals              VEDL          A+  (96)  [PASS]  prompt_fixes:1
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

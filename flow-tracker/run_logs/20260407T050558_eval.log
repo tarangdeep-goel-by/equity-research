@@ -1,0 +1,22 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/run_logs/20260407T050558_eval.log
+AutoEval (agent-first): agent=business sectors=['bfsi']
+Target: grade_numeric >= 90
+
+--- business / SBIN (bfsi) ---
+  Report: 30571 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A (95) [PASS]
+Appended 2 fixes to fix_tracker.md (IDs 7-8)
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260407T050624_all_for_business.json
+
+======================================================================
+AGENT SUMMARY: business
+======================================================================
+  bfsi                SBIN          A   (95)  [PASS]  prompt_fixes:2
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

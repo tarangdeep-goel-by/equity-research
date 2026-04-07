@@ -1,0 +1,48 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/run_logs/20260407T052924_run_ETERNAL.log
+
+Refreshing data for ETERNAL...
+
+Screener.in (business data only)
+  ✓ company_profile: 1 records
+  ✓ company_documents: 47 records
+  ✓ peers: 8 records
+  ✓ schedules_quarters: 117 records
+  ✓ schedules_profit-loss: 102 records
+  ✓ schedules_balance-sheet: 205 records
+  ✓ schedules_cash-flow: 126 records
+Refresh complete: 606 records across 7 sources
+
+Refreshing peer data...
+
+Peer refresh for ETERNAL — 8 peers in DB
+  ? Median: 12 Co. — could not resolve symbol, skipping
+  Resolved 7/8 peer symbols
+  ✓ ETERNAL — cached
+  ✓ SWIGGY — cached
+  ✓ NYKAA — cached
+  ✓ MEESHO — cached
+  ✓ URBANCO — cached
+  ✓ FIRSTCRY — cached
+  ✓ CARTRADE — cached
+
+  Fetched: 0 | Cached: 7 | Skipped: 0
+
+Sector benchmarks
+  ✓ sector_benchmarks: 6 metrics computed
+
+Running business agent for ETERNAL...
+  ✓ business: 38,541 chars, $0.65, 9m 14s
+
+Pipeline Timeline
+──────────────────────────────────────────────────────────
+00:00   data_refresh         started
+00:16   data_refresh         done (17s)
+00:18    → business           started
+09:33    ✓ business           success (555s, 13 tools, $0.65)
+──────────────────────────────────────────────────────────
+Total: 9m 33s | $0.65
+
+Total cost: $0.65
+Reports: ~/vault/stocks/ETERNAL/reports/
+Briefings: ~/vault/stocks/ETERNAL/briefings/
+Trace: /Users/tarang/vault/stocks/ETERNAL/traces/20260407T052924.json

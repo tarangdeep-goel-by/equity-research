@@ -1,0 +1,49 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/run_logs/20260407T050703_run_TCS.log
+
+Refreshing data for TCS...
+
+Screener.in (business data only)
+  ✓ company_profile: 1 records
+  ✓ company_documents: 74 records
+  ✓ peers: 8 records
+  ✓ schedules_quarters: 130 records
+  ✓ schedules_profit-loss: 156 records
+  ✓ schedules_balance-sheet: 300 records
+  ✓ schedules_cash-flow: 288 records
+Refresh complete: 957 records across 7 sources
+
+Refreshing peer data...
+
+Peer refresh for TCS — 9 peers in DB
+  ? Median: 66 Co. — could not resolve symbol, skipping
+  ? Median: 68 Co. — could not resolve symbol, skipping
+  Resolved 7/9 peer symbols
+  ✓ TCS — cached
+  ✓ INFY — cached
+  ✓ HCLTECH — cached
+  ✓ WIPRO — cached
+  ✓ TECHM — cached
+  ✓ LTM — cached
+  ✓ PERSISTENT — cached
+
+  Fetched: 0 | Cached: 7 | Skipped: 0
+
+Sector benchmarks
+  ✓ sector_benchmarks: 6 metrics computed
+
+Running business agent for TCS...
+  ✓ business: 40,736 chars, $0.72, 11m 10s
+
+Pipeline Timeline
+──────────────────────────────────────────────────────────
+00:00   data_refresh         started
+00:16   data_refresh         done (16s)
+00:17    → business           started
+11:28    ✓ business           success (670s, 14 tools, $0.72)
+──────────────────────────────────────────────────────────
+Total: 11m 28s | $0.72
+
+Total cost: $0.72
+Reports: ~/vault/stocks/TCS/reports/
+Briefings: ~/vault/stocks/TCS/briefings/
+Trace: /Users/tarang/vault/stocks/TCS/traces/20260407T050703.json

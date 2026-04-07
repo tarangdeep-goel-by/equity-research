@@ -1,0 +1,22 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/run_logs/20260407T053912_eval.log
+AutoEval (agent-first): agent=business sectors=['platform']
+Target: grade_numeric >= 90
+
+--- business / ETERNAL (platform) ---
+  Report: 38541 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A (95) [PASS]
+Appended 3 fixes to fix_tracker.md (IDs 13-15)
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260407T053945_all_for_business.json
+
+======================================================================
+AGENT SUMMARY: business
+======================================================================
+  platform            ETERNAL       A   (95)  [PASS]  prompt_fixes:2
+======================================================================
+passing:1  failing:0  total:1
+======================================================================
