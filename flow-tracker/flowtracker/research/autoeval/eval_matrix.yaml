@@ -32,9 +32,9 @@ sectors:
     why: "Cyclical, commodity-linked, high pledge promoter, Cairn demerger"
 
   platform:
-    stock: INDIAMART
-    type: B2B platform
-    why: "Platform economics, subscriber metrics, no debt, cash-rich"
+    stock: ETERNAL
+    type: Quick commerce/food delivery
+    why: "Loss-making platform, unit economics, path to profitability, GMV metrics"
 
   conglomerate:
     stock: ADANIENT
@@ -62,19 +62,19 @@ sectors:
     why: "Regulated ROE, capacity addition, fuel cost passthrough, green pivot"
 
   insurance:
-    stock: SBILIFE
-    type: Life insurance
-    why: "VNB margin, persistency ratio, embedded value, bancassurance channel"
+    stock: POLICYBZR
+    type: Insurtech platform
+    why: "Insurance distribution, LTV/CAC metrics, digital-first, loss-making"
 
   broker:
-    stock: ANGELONE
-    type: Discount broker
-    why: "SEBI regulation risk, ARPU, client additions, F&O restrictions"
+    stock: GROWW
+    type: Fintech broker
+    why: "New-age broker, SEBI regulation risk, rapid growth, recently listed"
 
   auto:
-    stock: MARUTI
-    type: Auto OEM
-    why: "Volume-driven, EV transition, dealer channel, export mix"
+    stock: OLAELEC
+    type: EV manufacturer
+    why: "EV pure play, manufacturing ramp, cash burn, capacity utilization"
 
   chemicals:
     stock: PIDILITIND
