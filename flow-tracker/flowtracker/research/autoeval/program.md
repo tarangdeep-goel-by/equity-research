@@ -10,11 +10,10 @@ You are an autonomous prompt optimization agent. Your job is to iteratively impr
 
 1. Read this file completely
 2. Read `eval_matrix.yaml` to understand the test matrix
-3. Read `resources.md` for accumulated learnings from prior runs
-4. Read `changelog.md` for the detailed history of every experiment (what changed, what resulted)
-5. Read `results.tsv` for experiment history (skip agent/sector pairs already at A-+)
-6. Check `eval_history/` for full Gemini eval responses from prior runs
-5. Check current git branch — if not on `autoeval/*`, create one:
+3. Read `changelog.md` for experiment history, pending fixes, and accumulated learnings
+4. Read `results.tsv` for raw grade data (skip agent/sector pairs already at A-+)
+5. Check `eval_history/` for full Gemini eval responses from prior runs
+6. Check current git branch — if not on `autoeval/*`, create one:
    ```
    git checkout -b autoeval/$(date +%Y%m%d-%H%M)
    ```
@@ -24,8 +23,7 @@ You are an autonomous prompt optimization agent. Your job is to iteratively impr
 - **NEVER modify `evaluate.py`** — the eval harness is sacred. Changing the judge is cheating.
 - **NEVER modify `eval_matrix.yaml`** — the test matrix is fixed.
 - **NEVER touch anything outside the agent layer** — no store.py, data_api.py, clients, infra.
-- **ALWAYS update `resources.md`** after each experiment with what you learned.
-- **ALWAYS update `changelog.md`** with the structured entry for every experiment (kept or reverted).
+- **ALWAYS update `changelog.md`** after each experiment — add experiment entry, update fix statuses, and log learnings.
 - **ALWAYS commit before running eval** — so you can revert cleanly on failure.
 - **ONE issue per edit** — never batch multiple fixes. Attribution must be clear.
 
@@ -41,9 +39,7 @@ The orchestrator can edit the full agent prompt and tool surface. But be mindful
 | `prompts.py` — `SHARED_PREAMBLE_V2` | Universal rules for all agents | Fix applies to ALL agents, ALL sectors — use sparingly |
 | `tools.py` — `AGENT_TOOLS_V2[{agent}]` | Add/remove tools from agent's registry | Agent needs access to a tool it doesn't have |
 | `agent.py` — `AGENT_MAX_TURNS`, `DEFAULT_EFFORT` | Tune iteration/cost limits per agent | Agent running out of turns or budget |
-| `resources.md` | Accumulated learnings | Always |
-| `changelog.md` | Structured experiment log (change → grade → kept/reverted) | After every experiment |
-| `fix_tracker.md` | All Gemini-recommended fixes across all evals with status | Auto-appended by evaluate.py; update status after applying/skipping |
+| `changelog.md` | Experiment log + pending fixes + learnings (single source of truth) | After every experiment |
 
 ### Decision Framework: Sector Skill vs Core Prompt
 
@@ -105,8 +101,9 @@ while grade < A- AND cycle <= 3:
     Read last_run.json → find PROMPT_FIX issues for this agent/sector
     If no PROMPT_FIX issues → mark as blocked (DATA_FIX or NOT_OUR_PROBLEM), skip to next sector
     
-    # 2. Read current sector skill (if exists)
+    # 2. Read current state
     Read sector_skills/{sector}/{agent}.md (may not exist yet)
+    Read changelog.md → check if similar fixes were tried before
     
     # 3. Apply fix — choose the right target
     Decide: is this sector-specific or general? (see Decision Framework above)
@@ -136,21 +133,21 @@ while grade < A- AND cycle <= 3:
     
     # 7. Check result
     if new_grade >= A-:
-        Log success → move to next sector (PHASE 0)
+        Log success in changelog.md → move to next sector (PHASE 0)
     elif new_grade < previous_grade:
         REVERT: git checkout HEAD~1 -- sector_skills/{sector}/{agent}.md
         git commit -m "autoeval: revert {agent}/{sector} — grade regressed"
-        Update resources.md with what failed and why
+        Update changelog.md Learnings with what failed and why
     else:
         # Grade didn't improve but didn't regress — try a different fix next cycle
-        Update resources.md with what was tried
+        Update changelog.md Learnings with what was tried
     
     cycle++
 
 # After 3 cycles
 if still below A-:
     Log: "{agent}/{sector} stuck below A- after 3 cycles — moving on"
-    Note in resources.md
+    Note in changelog.md Learnings
     Move to next sector (PHASE 0)
 ```
 
@@ -158,7 +155,7 @@ if still below A-:
 
 When all sectors pass A- for the current agent:
 1. Log: "AGENT {agent} COMPLETE — all sectors at A-+"
-2. Update resources.md with summary of what was learned for this agent
+2. Update changelog.md Learnings with summary of what was learned for this agent
 3. Go to PHASE 0 and pick the next agent
 
 ## Revert Protocol
@@ -170,7 +167,7 @@ git checkout HEAD~1 -- sector_skills/{sector}/{agent}.md
 git commit -m "autoeval: revert {agent}/{sector} — grade regressed"
 ```
 
-Update `resources.md` with what was tried and why it failed — learnings persist even from discards.
+Update `changelog.md` Learnings with what was tried and why it failed — learnings persist even from discards.
 
 ## Sector Skill File Format
 

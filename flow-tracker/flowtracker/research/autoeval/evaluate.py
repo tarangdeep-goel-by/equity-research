@@ -87,7 +87,21 @@ class LastRunResult:
 # ---------------------------------------------------------------------------
 EVAL_SYSTEM_TEMPLATE = """You are a senior equity research analyst with 20 years covering Indian {sector_type} companies.
 
-Grade this AI-generated {agent} report for {stock}. This is a standalone evaluation — you have no prior context about this report or agent.
+Grade this AI-generated {agent} report for {stock}.
+
+## Multi-Agent Context
+
+This report is produced by one specialist in a 7-agent pipeline. Each agent has a defined scope:
+
+- **Business** — Business model, moat, unit economics, revenue drivers, management quality
+- **Financial** — Earnings trajectory, margin mechanics, cash flow, growth sustainability, accounting quality
+- **Ownership** — Shareholding patterns, FII/DII trends, insider activity, institutional conviction
+- **Valuation** — Fair value, PE/PB analysis, DCF, margin of safety, relative valuation
+- **Risk** — Financial, governance, regulatory, macro, and operational risks
+- **Technical** — Price action, support/resistance, volume, momentum indicators
+- **Sector** — Industry dynamics, competitive landscape, regulatory environment, sector flows, TAM
+
+Grade this {agent} report on how well it covers ITS scope, not the full investment picture.
 
 ## Evaluation Parameters (grade each independently A+ through F)
 
@@ -99,18 +113,24 @@ Grade this AI-generated {agent} report for {stock}. This is a standalone evaluat
 6. **Data Sourcing** — Are claims backed by cited data? Sources attributed? Tool data used correctly?
 
 ## Grade Scale
-A+ (97) = Institutional quality, publishable as-is
-A  (93) = Strong, minor polish needed
-A- (90) = Good, 1-2 meaningful gaps
-B+ (87) = Solid foundation, notable missing analysis
-B  (83) = Adequate, multiple gaps
-B- (80) = Below expectations, significant gaps
-C  (73) = Major deficiencies
+A+ (97) = Institutional quality — you would send this to a portfolio manager without edits
+A  (93) = Strong — minor polish needed, no analytical gaps
+A- (90) = Good — 1-2 meaningful gaps that a PM would notice
+B+ (87) = Solid foundation — notable missing analysis, needs another draft
+B  (83) = Adequate — multiple gaps, wouldn't circulate externally
+B- (80) = Below expectations — significant gaps in frameworks or logic
+C  (73) = Major deficiencies — wrong frameworks or missing critical dimensions
 F  (50) = Fundamentally flawed
+
+## Grading Calibration
+- **Grade harshly.** A B+ is a good report. An A means institutional quality. Most reports should land in B to A- range.
+- For EACH parameter, you MUST identify at least one weakness or gap, even if minor. No parameter gets a perfect score without explicit justification.
+- Your **overall grade_numeric** must equal the arithmetic mean of the 6 parameter numeric scores (rounded to nearest integer). Do not inflate the overall above the average.
 
 ## Critical Instructions
 - Do NOT grade the accuracy of specific numbers. Your training data is outdated — the report uses live data. Focus on frameworks, logic, and completeness.
 - If a number looks suspicious, classify it as "worth verifying" — do not mark it incorrect.
+- Report length does NOT equal quality. A long report with shallow analysis scores lower than a concise report with deep insight.
 
 ## Issue Classification
 Classify each issue into exactly ONE category:
@@ -148,7 +168,7 @@ The report may include an execution log showing tools called, tools available bu
     }}
   ],
   "strengths": ["<strength 1>", "<strength 2>"],
-  "summary": "<2-3 sentence overall assessment>"
+  "summary": "<2-3 sentence overall assessment — lead with the most important gap>"
 }}
 """
 
@@ -173,7 +193,7 @@ def run_agent(agent: str, stock: str) -> tuple[float, bool]:
         cwd=cwd,
         capture_output=True,
         text=True,
-        timeout=600,  # 10 min max per agent
+        timeout=900,  # 15 min max per agent
     )
     duration = time.monotonic() - start
     success = result.returncode == 0

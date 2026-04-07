@@ -1,0 +1,42 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260407T081332.log
+AutoEval (agent-first): agent=business sectors=['insurance']
+Target: grade_numeric >= 90
+
+--- business / POLICYBZR (insurance) ---
+  Running agent...
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/evaluate.py", line 770, in <module>
+    main()
+  File "/Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/evaluate.py", line 761, in main
+    asyncio.run(async_main_agent(args))
+  File "/Users/tarang/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/Users/tarang/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/tarang/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/evaluate.py", line 677, in async_main_agent
+    result = await _eval_sector(agent, sector_name, sector_cfg, target_numeric, args.skip_run, args.cycle)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/evaluate.py", line 575, in _eval_sector
+    run_duration, success = run_agent(agent, stock)
+                            ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/evaluate.py", line 177, in run_agent
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/tarang/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/tarang/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/tarang/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/Users/tarang/.local/share/uv/python/cpython-3.12.11-macos-aarch64-none/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['uv', 'run', 'flowtrack', 'research', 'run', 'business', '-s', 'POLICYBZR']' timed out after 600 seconds

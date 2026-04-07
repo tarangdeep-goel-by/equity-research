@@ -44,7 +44,7 @@ uv run flowtrack research autoeval --progress
 2. **Grade with Gemini:** `uv run flowtrack research autoeval -a business --sectors bfsi --skip-run`
    - Sends full report + agent execution log (tools called, tools available, errors) to Gemini
    - Returns per-parameter grades + classified issues (PROMPT_FIX / DATA_FIX / COMPUTATION / NOT_OUR_PROBLEM)
-3. **Review fixes:** Check `fix_tracker.md` for accumulated recommendations
+3. **Review fixes:** Check `changelog.md` Pending Fixes section for accumulated recommendations
 4. **Decide scope:** Is the fix sector-specific → `sector_skills/{sector}/business.md`, or general → `prompts.py`
 5. **Apply fix, commit, re-run, re-grade** — verify no regression
 
@@ -116,9 +116,7 @@ sector_skills/
 | `program.md` | Claude Code operating manual for autonomous loop |
 | `progress.py` | ASCII progress chart |
 | `results.tsv` | Grades per eval (append-only) |
-| `fix_tracker.md` | All Gemini-recommended fixes with status tracking |
-| `changelog.md` | Structured experiment log |
-| `resources.md` | Accumulated learnings |
+| `changelog.md` | Experiment log + pending fixes + learnings (single source of truth) |
 | `symbols.tsv` | 522-symbol reference with mcap/PE/PB/industry |
 | `eval_history/` | Archived full Gemini responses (never overwritten) |
 | `run_logs/` | Console output from every eval run |

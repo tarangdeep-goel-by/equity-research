@@ -124,7 +124,8 @@ BUSINESS_INSTRUCTIONS_V2 = """
 5. **Catalysts**: Call `get_events_actions` with section='catalysts' for near-term triggers that could validate or invalidate the thesis.
 6. **Subsidiary check**: If the company has listed subsidiaries or is a conglomerate, call `get_quality_scores` with section='subsidiary' to quantify subsidiary contribution (consolidated minus standalone = subsidiary P&L).
 7. **Competitive context**: Call `get_peer_sector` for peer comparison, peer metrics, peer growth, and sector benchmarks.
-8. **Save**: Call `save_business_profile` to persist the profile for future runs.
+8. **Visualize**: Call `render_chart` for `revenue_profit` (10yr revenue & profit bars), `expense_pie` (cost structure breakdown), and `margin_trend` (OPM & NPM lines). Embed the returned markdown in the relevant report sections.
+9. **Save**: Call `save_business_profile` to persist the profile for future runs.
 
 ## Report Sections
 1. **The Business** — Walk through an actual transaction from the customer's perspective. Include a mermaid flowchart showing value/money flow.
@@ -199,7 +200,7 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 3. **Quality deep-dive**: Call `get_quality_scores` with section=['dupont', 'subsidiary'] for full 10Y DuPont decomposition and subsidiary P&L split. Note: F-Score, M-Score, earnings quality, forensic checks, capex cycle, and other quality signals are already in `get_analytical_profile` from step 1 — use those directly, do NOT re-fetch.
 4. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 5. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
-6. **Visualizations**: Call `render_chart` for PE history, price, sales/margin, and cashflow charts.
+6. **Visualizations**: Call `render_chart` once each for `quarterly` (12-quarter revenue & profit), `margin_trend` (10yr OPM & NPM), `roce_trend` (10yr ROCE bars), `dupont` (DuPont decomposition), and `cashflow` (10yr operating & free cash flow). Do NOT call the same chart_type twice.
 
 ## Report Sections
 1. **Earnings & Growth** — 12Q quarterly table (Revenue, OP, NP, OPM%, YoY growth) + 10Y annual table. Highlight inflection points, seasonality. Include peer growth comparison with sector percentiles.
@@ -263,6 +264,7 @@ OWNERSHIP_INSTRUCTIONS_V2 = """
 3. **Market signals**: Call `get_market_context` for delivery trend, FII/DII flows, and FII/DII streak to separate stock-specific from market-wide moves.
 4. **Sector context**: Call `get_peer_sector` with `section="benchmarks"` for sector percentile rankings (is this stock's PE, ROCE, market cap high or low vs sector peers?).
 5. **Forward view**: Call `get_estimates` for consensus context to help interpret institutional positioning.
+6. **Visualize**: Call `render_chart` for `shareholding` (12-quarter ownership trend lines) and `delivery` (delivery % + volume bars, 90 days). Embed the returned markdown in the relevant report sections.
 
 ## Report Sections
 1. **Ownership Structure** — Current breakdown (promoter, FII, DII, public) with mermaid pie chart. Sector context for percentages. Top holders by name.
@@ -335,7 +337,7 @@ VALUATION_INSTRUCTIONS_V2 = """
 6. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
 7. **Peer context**: Call `get_peer_sector` with section=['benchmarks', 'valuation_matrix', 'peer_metrics', 'peer_growth']. **Use `sector_median` and `percentile` from the benchmarks response for all sector comparisons.** Never compute your own median from a peer list — the pre-computed benchmarks are authoritative.
 8. **Catalysts**: Call `get_events_actions` with section=['catalysts', 'material_events', 'dividends', 'dividend_policy'] for catalyst timeline, material events, dividend history, and dividend policy analysis (payout trend, consistency).
-9. **Visualize**: Call `render_chart` for PE band and PBV charts.
+9. **Visualize**: Call `render_chart` for `pe` (PE ratio history), `fair_value_range` (bear/base/bull vs current price), and `dividend_history` (payout ratio & DPS over time). Embed the returned markdown in the relevant report sections.
 
 ## Report Sections
 1. **Valuation Snapshot** — Current PE, PB, EV/EBITDA with historical percentile band (Min–25th–Median–75th–Max) and sector percentile context from `get_peer_sector(section='benchmarks')`. Define each multiple on first use.
@@ -413,6 +415,7 @@ RISK_INSTRUCTIONS_V2 = """
 5. **Market & macro**: Call `get_market_context` with section=['macro', 'fii_dii_flows', 'fii_dii_streak', 'delivery', 'delivery_analysis'] for macro, flows, delivery trend, and delivery acceleration analysis. Volume-delivery divergence flags speculative churn or quiet accumulation.
 6. **Corporate context**: Call `get_company_context` for recent filings and company documents.
 7. **Upcoming triggers**: Call `get_events_actions` with section=['catalysts', 'material_events'] for upcoming catalysts and material corporate events. `material_events` surfaces credit rating changes, auditor resignations, order wins, acquisitions, management changes, and fund raises — check for governance red flags.
+8. **Visualize**: Call `render_chart` for `composite_radar` (8-factor quality score spider chart) and `cashflow` (10yr operating & free cash flow bars). Embed the returned markdown in the relevant report sections.
 
 ## Report Sections
 1. **Risk Dashboard** — Composite score 8-factor table with traffic light signals (Green 70-100, Yellow 40-69, Red 0-39). Overall assessment with sector percentile.

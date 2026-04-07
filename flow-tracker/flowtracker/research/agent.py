@@ -113,13 +113,13 @@ AGENT_MAX_TURNS: dict[str, int] = {
 }
 
 AGENT_MAX_BUDGET: dict[str, float] = {
-    "business": 1.00,
-    "financials": 0.75,
-    "ownership": 0.60,
-    "valuation": 0.60,
-    "risk": 0.60,
-    "technical": 0.60,
-    "sector": 0.50,
+    "business": 1.50,
+    "financials": 1.00,
+    "ownership": 0.75,
+    "valuation": 0.75,
+    "risk": 0.75,
+    "technical": 0.75,
+    "sector": 0.60,
     "news": 0.50,
     "web_research": 0.50,
 }
@@ -135,8 +135,6 @@ _DISALLOWED_BUILTINS = [
 # Additional Claude Code built-ins that specific agents ARE allowed to use.
 # These get added to allowed_tools (whitelist) on top of MCP tools.
 AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
-    "business": ["WebSearch", "WebFetch"],  # needs web research for industry context
-    "sector": ["WebSearch", "WebFetch"],  # needs web research for sector dynamics
     "news": ["WebFetch"],  # needs web fetch to read full articles
     "web_research": ["WebSearch", "WebFetch"],
 }

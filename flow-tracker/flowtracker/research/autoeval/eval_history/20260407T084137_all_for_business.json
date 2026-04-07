@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-07T08:41:37.576364+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "auto": {
+      "agent": "business",
+      "stock": "OLAELEC",
+      "sector": "EV manufacturer",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent linkage of D2C operational demands to the revenue collapse and the fixed-cost trap. However, it could have explored Ather's specific competitive advantages (product vs distribution) driving its relative outperformance to deepen the competitive analysis."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong logical flow from business model vulnerabilities to financial outcomes and cash runway. A minor gap is the assumption that Q4/Q1 cash burn might improve due to lower capex, which lacks historical substantiation in the text."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Thorough coverage of unit economics, balance sheet, and moats. The notable gap is the complete failure to use the available charting tool to visualize the dramatic revenue decline or peer comparisons, which would have significantly enhanced readability."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides a clear bull/bear framework and a highly practical, trackable investor checklist. The bull case, however, relies on a massive revenue recovery without detailing the specific product or market catalysts required to achieve it."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Correctly applies auto/EV frameworks (ASP, BOM, D2C vs dealer network). It would have been stronger if the peer table included EV/Sales multiples, given PE is N/A for early-stage, loss-making EV players like Ola and Ather."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Transparently cites sources and integrates qualitative context well. The reliance on manual calculations due to tool failures introduces error risk, though the math holds up here."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Entire Report",
+          "issue": "Agent had the `render_chart` tool available but did not use it to visualize critical trends like the revenue collapse or peer comparisons.",
+          "suggestion": "Update system prompt to mandate the use of `render_chart` for key financial trends and peer benchmarking when the tool is available."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Data Sources / Financials",
+          "issue": "`calculate` and `get_fundamentals` (quarterly_results) tools failed with 'Stream closed' errors, forcing the agent to do manual calculations.",
+          "suggestion": "Investigate and fix the backend stream stability for the calculate and fundamentals tools."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "End of report",
+          "issue": "`save_business_profile` failed with a 'Stream closed' error.",
+          "suggestion": "Fix the vault/storage API connection to ensure profiles are saved successfully."
+        }
+      ],
+      "strengths": [
+        "Brilliant framing of the 'fixed-cost trap'\u2014showing how improving gross margins are being swallowed by fixed employee and interest costs on a declining revenue base.",
+        "The Ather vs. Ola valuation comparison is an exceptional piece of market insight, perfectly illustrating how the market prices execution and growth over sheer capacity.",
+        "The 'Pivotal Question' perfectly isolates the core investment debate (execution vs. structural share loss)."
+      ],
+      "summary": "This is a highly insightful, institutional-quality teardown of a broken growth story, effectively linking operational execution failures to financial deterioration. The primary gap is the lack of visual aids (charts) to illustrate the dramatic revenue collapse and peer divergence, but the analytical narrative is exactly what a PM needs to read.",
+      "report_length": 23729,
+      "run_duration_s": 455.5567891660612,
+      "eval_duration_s": 559.5743638339918,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent linkage of D2C operational demands to the revenue collapse and the fixed-cost trap. However, it could have explored Ather's specific competitive advantages (product vs distribution) driving its relative outperformance to deepen the competitive analysis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong logical flow from business model vulnerabilities to financial outcomes and cash runway. A minor gap is the assumption that Q4/Q1 cash burn might improve due to lower capex, which lacks historical substantiation in the text.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Thorough coverage of unit economics, balance sheet, and moats. The notable gap is the complete failure to use the available charting tool to visualize the dramatic revenue decline or peer comparisons, which would have significantly enhanced readability.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides a clear bull/bear framework and a highly practical, trackable investor checklist. The bull case, however, relies on a massive revenue recovery without detailing the specific product or market catalysts required to achieve it.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Correctly applies auto/EV frameworks (ASP, BOM, D2C vs dealer network). It would have been stronger if the peer table included EV/Sales multiples, given PE is N/A for early-stage, loss-making EV players like Ola and Ather.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Transparently cites sources and integrates qualitative context well. The reliance on manual calculations due to tool failures introduces error risk, though the math holds up here.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Entire Report\",\n      \"issue\": \"Agent had the `render_chart` tool available but did not use it to visualize critical trends like the revenue collapse or peer comparisons.\",\n      \"suggestion\": \"Update system prompt to mandate the use of `render_chart` for key financial trends and peer benchmarking when the tool is available.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Data Sources / Financials\",\n      \"issue\": \"`calculate` and `get_fundamentals` (quarterly_results) tools failed with 'Stream closed' errors, forcing the agent to do manual calculations.\",\n      \"suggestion\": \"Investigate and fix the backend stream stability for the calculate and fundamentals tools.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"End of report\",\n      \"issue\": \"`save_business_profile` failed with a 'Stream closed' error.\",\n      \"suggestion\": \"Fix the vault/storage API c"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260407T082441.log
+AutoEval (agent-first): agent=business sectors=['auto']
+Target: grade_numeric >= 90
+
+--- business / OLAELEC (auto) ---
+  Running agent...
+  Agent completed in 455.6s (success=True)
+  Report: 23729 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A- (92) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260407T084137_all_for_business.json
+
+======================================================================
+AGENT SUMMARY: business
+======================================================================
+  auto                OLAELEC       A-  (92)  [PASS]  prompt_fixes:1
+======================================================================
+passing:1  failing:0  total:1
+======================================================================
