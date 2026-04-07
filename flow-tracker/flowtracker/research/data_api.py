@@ -1632,6 +1632,33 @@ class ResearchDataAPI:
             "peer_count": len(peer_data),
         }
 
+    def get_company_snapshot(self, symbol: str) -> dict:
+        """Unified company fundamentals from snapshot cache."""
+        snap = self._store.get_company_snapshot(symbol)
+        return _clean(snap) if snap else {}
+
+    def get_yahoo_peer_comparison(self, symbol: str) -> dict:
+        """Yahoo-recommended peers with company snapshots.
+
+        Returns subject snapshot + list of peer snapshots with similarity scores.
+        Uses company_snapshot table for instant lookups (no HTTP calls).
+        """
+        subject = self._store.get_company_snapshot(symbol) or {"symbol": symbol}
+        peer_links = self._store.get_peer_links(symbol)
+        peer_symbols = [p["peer_symbol"] for p in peer_links]
+        peer_snapshots = self._store.get_company_snapshots(peer_symbols) if peer_symbols else []
+
+        score_map = {p["peer_symbol"]: p["score"] for p in peer_links}
+        for snap in peer_snapshots:
+            snap["yahoo_score"] = score_map.get(snap["symbol"])
+
+        return {
+            "subject": _clean(subject),
+            "peers": _clean(peer_snapshots),
+            "peer_count": len(peer_snapshots),
+            "source": "yahoo_recommendations",
+        }
+
     def get_concall_insights(self, symbol: str) -> dict:
         """Get pre-extracted concall insights from the vault.
 

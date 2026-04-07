@@ -204,6 +204,39 @@ class FundClient:
             shares_outstanding=info.get("sharesOutstanding"),
         )
 
+    def fetch_yahoo_peers(self, symbol: str) -> list[dict]:
+        """Fetch Yahoo Finance recommended similar stocks.
+
+        Returns list of dicts: [{peer_symbol: str, score: float}, ...].
+        Score: lower = more similar (0-1 range typical).
+        Returns empty list on failure (404, timeout, parse error).
+        """
+        import httpx
+
+        yf_sym = nse_symbol(symbol)
+        url = f"https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/{yf_sym}"
+        try:
+            resp = httpx.get(url, timeout=10.0, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            data = resp.json()
+
+            results = data.get("finance", {}).get("result", [])
+            if not results:
+                return []
+
+            recommended = results[0].get("recommendedSymbols", [])
+            peers = []
+            for item in recommended:
+                raw_sym = item.get("symbol", "")
+                score = item.get("score", 0)
+                # Strip exchange suffix (.NS, .BO)
+                peer_sym = raw_sym.replace(".NS", "").replace(".BO", "")
+                if peer_sym:
+                    peers.append({"peer_symbol": peer_sym, "score": score})
+            return peers
+        except Exception:
+            return []
+
     def fetch_quarterly_bs_cf(self, symbol: str) -> dict:
         """Fetch quarterly balance sheet and cash flow from yfinance.
         Returns {'balance_sheet': [list of quarter dicts], 'cash_flow': [list of quarter dicts]}

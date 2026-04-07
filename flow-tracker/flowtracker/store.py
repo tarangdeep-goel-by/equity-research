@@ -950,6 +950,51 @@ CREATE TABLE IF NOT EXISTS listed_subsidiaries (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(parent_symbol, sub_symbol)
 );
+
+CREATE TABLE IF NOT EXISTS company_snapshot (
+    symbol TEXT PRIMARY KEY,
+    name TEXT,
+    industry TEXT,
+    cmp REAL,
+    market_cap REAL,
+    pe_trailing REAL,
+    pe_forward REAL,
+    pb REAL,
+    ev_ebitda REAL,
+    peg REAL,
+    div_yield REAL,
+    operating_margin REAL,
+    net_margin REAL,
+    roe REAL,
+    roa REAL,
+    roce REAL,
+    roic REAL,
+    fcf_yield REAL,
+    revenue_growth REAL,
+    earnings_growth REAL,
+    sales_qtr REAL,
+    qtr_sales_var REAL,
+    np_qtr REAL,
+    qtr_profit_var REAL,
+    beta REAL,
+    debt_to_equity REAL,
+    current_ratio REAL,
+    high_52w REAL,
+    low_52w REAL,
+    promoter_holding REAL,
+    promoter_pledge REAL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    screener_updated_at TEXT,
+    yfinance_updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS peer_links (
+    symbol TEXT NOT NULL,
+    peer_symbol TEXT NOT NULL,
+    score REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, peer_symbol)
+);
 """
 
 
@@ -2977,6 +3022,113 @@ class FlowStore:
         rows = self._conn.execute(
             "SELECT * FROM peer_comparison WHERE symbol = ? ORDER BY market_cap DESC",
             (symbol,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- Company snapshot --
+
+    def upsert_snapshot_screener(self, symbol: str, data: dict) -> int:
+        """Write Screener-owned columns to company_snapshot. Never touches yfinance columns."""
+        self._conn.execute(
+            """INSERT INTO company_snapshot (symbol, name, industry, cmp, market_cap, pe_trailing, roce,
+                sales_qtr, qtr_sales_var, np_qtr, qtr_profit_var, screener_updated_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            ON CONFLICT(symbol) DO UPDATE SET
+                name=excluded.name, industry=excluded.industry, cmp=excluded.cmp,
+                market_cap=excluded.market_cap, pe_trailing=excluded.pe_trailing, roce=excluded.roce,
+                sales_qtr=excluded.sales_qtr, qtr_sales_var=excluded.qtr_sales_var,
+                np_qtr=excluded.np_qtr, qtr_profit_var=excluded.qtr_profit_var,
+                screener_updated_at=datetime('now'), updated_at=datetime('now')""",
+            (symbol.upper(), data.get("name"), data.get("industry"), data.get("cmp"),
+             data.get("market_cap"), data.get("pe_trailing"), data.get("roce"),
+             data.get("sales_qtr"), data.get("qtr_sales_var"), data.get("np_qtr"),
+             data.get("qtr_profit_var")),
+        )
+        self._conn.commit()
+        return 1
+
+    def upsert_snapshot_yfinance(self, symbol: str, data: dict) -> int:
+        """Write yfinance-owned columns to company_snapshot. Never touches Screener columns."""
+        self._conn.execute(
+            """INSERT INTO company_snapshot (symbol, pe_forward, pb, ev_ebitda, peg, div_yield,
+                operating_margin, net_margin, roe, roa, revenue_growth, earnings_growth,
+                beta, debt_to_equity, current_ratio, high_52w, low_52w, yfinance_updated_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            ON CONFLICT(symbol) DO UPDATE SET
+                pe_forward=excluded.pe_forward, pb=excluded.pb, ev_ebitda=excluded.ev_ebitda,
+                peg=excluded.peg, div_yield=excluded.div_yield,
+                operating_margin=excluded.operating_margin, net_margin=excluded.net_margin,
+                roe=excluded.roe, roa=excluded.roa,
+                revenue_growth=excluded.revenue_growth, earnings_growth=excluded.earnings_growth,
+                beta=excluded.beta, debt_to_equity=excluded.debt_to_equity,
+                current_ratio=excluded.current_ratio, high_52w=excluded.high_52w, low_52w=excluded.low_52w,
+                yfinance_updated_at=datetime('now'), updated_at=datetime('now')""",
+            (symbol.upper(), data.get("pe_forward"), data.get("pb"), data.get("ev_ebitda"),
+             data.get("peg"), data.get("div_yield"), data.get("operating_margin"),
+             data.get("net_margin"), data.get("roe"), data.get("roa"),
+             data.get("revenue_growth"), data.get("earnings_growth"), data.get("beta"),
+             data.get("debt_to_equity"), data.get("current_ratio"),
+             data.get("high_52w"), data.get("low_52w")),
+        )
+        self._conn.commit()
+        return 1
+
+    def upsert_snapshot_ownership(self, symbol: str, data: dict) -> int:
+        """Write ownership columns to company_snapshot."""
+        self._conn.execute(
+            """INSERT INTO company_snapshot (symbol, promoter_holding, promoter_pledge, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(symbol) DO UPDATE SET
+                promoter_holding=excluded.promoter_holding, promoter_pledge=excluded.promoter_pledge,
+                updated_at=datetime('now')""",
+            (symbol.upper(), data.get("promoter_holding"), data.get("promoter_pledge")),
+        )
+        self._conn.commit()
+        return 1
+
+    def get_company_snapshot(self, symbol: str) -> dict | None:
+        """Get company snapshot for a single symbol."""
+        row = self._conn.execute(
+            "SELECT * FROM company_snapshot WHERE symbol = ?",
+            (symbol.upper(),),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_company_snapshots(self, symbols: list[str]) -> list[dict]:
+        """Get snapshots for multiple symbols. Returns only those that exist."""
+        if not symbols:
+            return []
+        placeholders = ",".join("?" * len(symbols))
+        rows = self._conn.execute(
+            f"SELECT * FROM company_snapshot WHERE symbol IN ({placeholders}) ORDER BY symbol",  # noqa: S608
+            [s.upper() for s in symbols],
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- Peer links --
+
+    def upsert_peer_links(self, symbol: str, peers: list[dict]) -> int:
+        """Replace all Yahoo peer links for a symbol."""
+        symbol = symbol.upper()
+        self._conn.execute("DELETE FROM peer_links WHERE symbol = ?", (symbol,))
+        count = 0
+        for p in peers:
+            peer_sym = p.get("peer_symbol", "").upper()
+            if not peer_sym or peer_sym == symbol:
+                continue
+            self._conn.execute(
+                "INSERT INTO peer_links (symbol, peer_symbol, score) VALUES (?, ?, ?)",
+                (symbol, peer_sym, p.get("score")),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_peer_links(self, symbol: str) -> list[dict]:
+        """Get Yahoo-recommended peers ordered by similarity score (lower = more similar)."""
+        rows = self._conn.execute(
+            "SELECT * FROM peer_links WHERE symbol = ? ORDER BY score ASC",
+            (symbol.upper(),),
         ).fetchall()
         return [dict(r) for r in rows]
 

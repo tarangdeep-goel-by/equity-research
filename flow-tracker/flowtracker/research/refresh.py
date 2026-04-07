@@ -527,7 +527,31 @@ def refresh_for_research(
         except Exception as e:
             _skip("fmp", str(e))
 
-    # --- 7. Analytical snapshot (compute on-demand for this stock) ---
+        # --- 7. Company Snapshot (cache) ---
+        _log("\n[bold]Company Snapshot[/]")
+        try:
+            from flowtracker.research.snapshot_builder import build_company_snapshot
+            if build_company_snapshot(symbol, store):
+                _ok("company_snapshot", 1)
+            else:
+                _skip("company_snapshot", "no data to snapshot")
+        except Exception as e:
+            _skip("company_snapshot", str(e))
+
+        # --- 8. Yahoo Peers ---
+        try:
+            from flowtracker.fund_client import FundClient as _FC
+            _fc = _FC()
+            yahoo_peers = _fc.fetch_yahoo_peers(symbol)
+            if yahoo_peers:
+                count = store.upsert_peer_links(symbol, yahoo_peers)
+                _ok("yahoo_peers", count)
+            else:
+                _skip("yahoo_peers", "no recommendations")
+        except Exception as e:
+            _skip("yahoo_peers", str(e))
+
+    # --- 9. Analytical snapshot (compute on-demand for this stock) ---
     try:
         existing = store.get_analytical_snapshot(symbol)
         if not existing or existing.get("computed_date", "") < date.today().isoformat():

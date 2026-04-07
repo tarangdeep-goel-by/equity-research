@@ -228,6 +228,15 @@ def refresh_peers(symbol: str, console: Console | None = None) -> dict[str, int]
             else:
                 _log(f"  [dim]? {peer.get('peer_name', '?')} — could not resolve symbol, skipping[/]")
 
+        # Merge Yahoo-recommended peers from peer_links table
+        yahoo_peers = store.get_peer_links(symbol)
+        existing_syms = {s for _, s in resolved}
+        for yp in yahoo_peers:
+            ys = yp["peer_symbol"]
+            if ys and ys != symbol and ys not in existing_syms:
+                resolved.append((ys, ys))
+                existing_syms.add(ys)
+
         _log(f"  Resolved {len(resolved)}/{peers_found} peer symbols")
 
         # --- Fetch data per peer ---
@@ -246,8 +255,18 @@ def refresh_peers(symbol: str, console: Console | None = None) -> dict[str, int]
         peers_cached = 0
         peers_skipped = 0
         fetched_symbols: list[str] = []
+        cutoff_str = (date.today() - timedelta(days=7)).isoformat()
 
         for peer_name, peer_sym in resolved:
+            # Check company_snapshot cache first (flywheel)
+            snapshot = store.get_company_snapshot(peer_sym)
+            if snapshot and snapshot.get("yfinance_updated_at"):
+                yf_ts = snapshot["yfinance_updated_at"][:10]
+                if yf_ts >= cutoff_str:
+                    peers_cached += 1
+                    fetched_symbols.append(peer_sym)
+                    continue
+
             # Peers already have Screener data (pe, market_cap, roce) from peer_comparison.
             # We only need yfinance valuation_snapshot for additional metrics.
             val_cached = _has_fresh_valuation(conn, peer_sym, days=7)
@@ -266,6 +285,12 @@ def refresh_peers(symbol: str, console: Console | None = None) -> dict[str, int]
                     snap = fc.fetch_valuation_snapshot(peer_sym)
                     if snap:
                         store.upsert_valuation_snapshot(snap)
+                        # Build company_snapshot for this peer (flywheel)
+                        try:
+                            from flowtracker.research.snapshot_builder import build_company_snapshot
+                            build_company_snapshot(peer_sym, store)
+                        except Exception:
+                            pass
                 except Exception as e:
                     logger.warning("yfinance snapshot for %s: %s", peer_sym, e)
 
