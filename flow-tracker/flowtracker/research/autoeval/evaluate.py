@@ -47,12 +47,20 @@ class EvalIssue:
 
 
 @dataclass
+class ParameterGrade:
+    grade: str
+    numeric: int
+    rationale: str
+
+
+@dataclass
 class AgentEvalResult:
     agent: str
     stock: str
     sector: str
     grade: str
     grade_numeric: int
+    parameters: dict[str, ParameterGrade] = field(default_factory=dict)
     issues: list[EvalIssue] = field(default_factory=list)
     strengths: list[str] = field(default_factory=list)
     summary: str = ""
@@ -77,42 +85,66 @@ class LastRunResult:
 # ---------------------------------------------------------------------------
 # Eval system prompt (the immutable rubric)
 # ---------------------------------------------------------------------------
-EVAL_SYSTEM_TEMPLATE = """You are a senior equity research analyst with 20 years covering Indian {sector_type} companies. Grade this AI-generated {agent} report for {stock}.
+EVAL_SYSTEM_TEMPLATE = """You are a senior equity research analyst with 20 years covering Indian {sector_type} companies.
 
-Evaluation Criteria:
-1. **Analytical Depth** — Does it go beyond surface-level observation? Are the right analytical frameworks applied for this sector?
-2. **Logical Consistency** — Do conclusions follow from the data presented? Are there contradictions?
-3. **Completeness** — What important dimensions should have been covered but weren't? For this sector type, are the sector-specific metrics and frameworks present?
-4. **Actionability** — Does the analysis lead to clear, evidence-backed conclusions?
+Grade this AI-generated {agent} report for {stock}. This is a standalone evaluation — you have no prior context about this report or agent.
 
-CRITICAL INSTRUCTIONS:
-- Do NOT grade the accuracy of specific numbers (revenue, margins, shareholding percentages, stock prices). Your training data is outdated — the report uses live data that is more current than yours. Focus on whether the right frameworks are applied.
-- If a number looks suspicious to you, classify it as "worth verifying" rather than marking it as incorrect.
-- Focus on analytical depth, logical consistency, completeness of coverage, and whether the right sector-specific frameworks are applied.
+## Evaluation Parameters (grade each independently A+ through F)
 
-Classify each issue into exactly one of these categories:
-- **PROMPT_FIX**: Agent behavior or reasoning issue that can be fixed by editing the agent's instructions (e.g., missing framework, wrong approach, skipped analysis)
-- **DATA_FIX**: Missing or broken data in the pipeline (e.g., tool returned empty data, metric not available)
-- **COMPUTATION**: Mathematical calculation the LLM did incorrectly (e.g., wrong CAGR formula, flipped margin of safety)
-- **NOT_OUR_PROBLEM**: Inherent LLM limitation (e.g., minor hallucination, inconsistent phrasing)
+1. **Analytical Depth** — Goes beyond surface-level observation? Explains WHY, not just WHAT? Connects data to investability?
+2. **Logical Consistency** — Conclusions follow from data? No contradictions? Assumptions stated?
+3. **Completeness** — All important dimensions covered? Sector-specific metrics and frameworks present? No major gaps?
+4. **Actionability** — Clear, evidence-backed conclusions? Bull/bear framework? Identifiable catalysts and risks?
+5. **Sector Framework** — Are the RIGHT analytical frameworks applied for THIS sector type? (e.g., BFSI needs NIM/CASA/CD ratio/credit costs; metals needs EV/EBITDA/cycle positioning; platform needs unit economics/GMV)
+6. **Data Sourcing** — Are claims backed by cited data? Sources attributed? Tool data used correctly?
 
-The report may include an **Agent Execution Log** at the end showing which tools were called,
-any tool errors, token usage, and duration. Use this to improve your classification:
-- If the report is missing analysis AND the agent never called the relevant tool → PROMPT_FIX (add tool call to workflow)
-- If the agent called a tool but it returned an error or empty data → DATA_FIX (pipeline issue)
-- If the agent ran out of turns/budget → note this, it's a config issue
-- If the agent called the right tools but misinterpreted the data → PROMPT_FIX (add interpretation rules)
+## Grade Scale
+A+ (97) = Institutional quality, publishable as-is
+A  (93) = Strong, minor polish needed
+A- (90) = Good, 1-2 meaningful gaps
+B+ (87) = Solid foundation, notable missing analysis
+B  (83) = Adequate, multiple gaps
+B- (80) = Below expectations, significant gaps
+C  (73) = Major deficiencies
+F  (50) = Fundamentally flawed
 
-You MUST respond with valid JSON matching this exact structure:
+## Critical Instructions
+- Do NOT grade the accuracy of specific numbers. Your training data is outdated — the report uses live data. Focus on frameworks, logic, and completeness.
+- If a number looks suspicious, classify it as "worth verifying" — do not mark it incorrect.
+
+## Issue Classification
+Classify each issue into exactly ONE category:
+- **PROMPT_FIX**: Agent behavior fixable by editing instructions (missing framework, wrong approach, skipped analysis, didn't call a tool it should have)
+- **DATA_FIX**: Missing or broken data in the pipeline (tool returned empty/error, metric not available)
+- **COMPUTATION**: Mathematical calculation error (wrong formula, unit conversion error)
+- **NOT_OUR_PROBLEM**: Inherent LLM limitation (minor hallucination, inconsistent phrasing)
+
+## Agent Execution Log
+The report may include an execution log showing tools called, tools available but not called, errors, and cost. Use this to sharpen your classification:
+- Missing analysis + agent never called the relevant tool → PROMPT_FIX
+- Agent called a tool but it returned error/empty → DATA_FIX
+- Agent called the right tools but misinterpreted data → PROMPT_FIX
+
+## Response Format (strict JSON)
 {{
-  "grade": "<letter grade A+ through F>",
-  "grade_numeric": <integer 50-97>,
+  "parameters": {{
+    "analytical_depth": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
+    "logical_consistency": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
+    "completeness": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
+    "actionability": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
+    "sector_framework": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
+    "data_sourcing": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}}
+  }},
+  "overall": {{
+    "grade": "<A+..F>",
+    "grade_numeric": <50-97>
+  }},
   "issues": [
     {{
       "type": "<PROMPT_FIX|DATA_FIX|COMPUTATION|NOT_OUR_PROBLEM>",
       "section": "<which section of the report>",
-      "issue": "<specific description of the problem>",
-      "suggestion": "<concrete fix suggestion>"
+      "issue": "<specific description>",
+      "suggestion": "<concrete fix>"
     }}
   ],
   "strengths": ["<strength 1>", "<strength 2>"],
@@ -285,7 +317,13 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
         stock=stock,
     )
 
-    user_prompt = f"Grade this {agent} agent report for {stock} ({sector_type}):\n\n{report_md}"
+    user_prompt = (
+        f"## Evaluation Request\n"
+        f"Agent: {agent}\n"
+        f"Stock: {stock}\n"
+        f"Sector: {sector_type}\n\n"
+        f"## Report\n\n{report_md}"
+    )
     if evidence_context:
         user_prompt += f"\n\n---\n\n{evidence_context}"
 
@@ -338,8 +376,20 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
         for i in parsed.get("issues", [])
     ]
 
-    grade = parsed.get("grade", "F")
-    grade_numeric = parsed.get("grade_numeric") or GRADE_MAP.get(grade, 50)
+    # Extract overall grade (new format nests under "overall", fallback to flat)
+    overall = parsed.get("overall", {})
+    grade = overall.get("grade") or parsed.get("grade", "F")
+    grade_numeric = overall.get("grade_numeric") or parsed.get("grade_numeric") or GRADE_MAP.get(grade, 50)
+
+    # Extract per-parameter grades
+    parameters: dict[str, ParameterGrade] = {}
+    for param_name, param_data in parsed.get("parameters", {}).items():
+        if isinstance(param_data, dict):
+            parameters[param_name] = ParameterGrade(
+                grade=param_data.get("grade", ""),
+                numeric=param_data.get("numeric", 0),
+                rationale=param_data.get("rationale", ""),
+            )
 
     return AgentEvalResult(
         agent=agent,
@@ -347,6 +397,7 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
         sector=sector_type,
         grade=grade,
         grade_numeric=grade_numeric,
+        parameters=parameters,
         issues=issues,
         strengths=parsed.get("strengths", []),
         summary=parsed.get("summary", ""),
@@ -430,21 +481,42 @@ def append_results_tsv(results: dict[str, AgentEvalResult], sector: str, cycle: 
 
 
 def print_summary(results: dict[str, AgentEvalResult], target_numeric: int = 90) -> None:
-    """Print greppable summary."""
+    """Print greppable summary with per-parameter breakdown."""
     total = len(results)
     passing = sum(1 for r in results.values() if r.grade_numeric >= target_numeric)
     failing = total - passing
 
-    print(f"\n{'='*60}")
+    PARAM_SHORT = {
+        "analytical_depth": "Depth",
+        "logical_consistency": "Logic",
+        "completeness": "Complete",
+        "actionability": "Action",
+        "sector_framework": "Sector",
+        "data_sourcing": "Data",
+    }
+
+    print(f"\n{'='*90}")
     print(f"EVAL SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'='*90}")
+    header = f"  {'Name':12s}  {'Overall':8s}  " + "  ".join(f"{v:8s}" for v in PARAM_SHORT.values()) + "  Fixes"
+    print(header)
+    print(f"  {'-'*12}  {'-'*8}  " + "  ".join("-"*8 for _ in PARAM_SHORT) + "  -----")
     for name, r in sorted(results.items()):
         status = "PASS" if r.grade_numeric >= target_numeric else "FAIL"
         prompt_fixes = sum(1 for i in r.issues if i.type == "PROMPT_FIX")
-        print(f"  {name:12s}  {r.grade:3s} ({r.grade_numeric:2d})  [{status}]  prompt_fixes:{prompt_fixes}")
-    print(f"{'='*60}")
+        overall = f"{r.grade:3s}({r.grade_numeric:2d})"
+        params = []
+        for pk in PARAM_SHORT:
+            pg = r.parameters.get(pk)
+            if pg:
+                params.append(f"{pg.grade:3s}({pg.numeric:2d})")
+            else:
+                params.append("  ---  ")
+        param_str = "  ".join(f"{p:8s}" for p in params)
+        print(f"  {name:12s}  {overall:8s}  {param_str}  {prompt_fixes} [{status}]")
+    print(f"{'='*90}")
     print(f"passing:{passing}  failing:{failing}  total:{total}")
-    print(f"{'='*60}")
+    print(f"{'='*90}")
 
 
 # ---------------------------------------------------------------------------
