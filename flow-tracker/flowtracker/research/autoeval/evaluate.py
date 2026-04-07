@@ -480,6 +480,36 @@ def append_results_tsv(results: dict[str, AgentEvalResult], sector: str, cycle: 
             f.write(f"{ts}\t{cycle}\t{r.agent}\t{r.stock}\t{sector}\t{r.grade}\t{r.grade_numeric}\t{r.report_length}\t{r.run_duration_s:.1f}\t{r.eval_duration_s:.1f}\t{prompt_fixes}\t{r.summary[:100]}\n")
 
 
+def append_fix_tracker(results: dict[str, AgentEvalResult], sector: str, cycle: int = 0) -> None:
+    """Append all issues from eval results to fix_tracker.md."""
+    tracker_path = Path(__file__).parent / "fix_tracker.md"
+    if not tracker_path.exists():
+        return
+
+    # Read existing to determine next ID
+    existing = tracker_path.read_text()
+    existing_lines = [l for l in existing.splitlines() if l.startswith("| ") and not l.startswith("| ID") and not l.startswith("| -")]
+    next_id = len(existing_lines) + 1
+
+    lines = []
+    for _name, r in results.items():
+        for issue in r.issues:
+            # Escape pipes in text fields
+            section = issue.section.replace("|", "/")
+            desc = issue.issue.replace("|", "/").replace("\n", " ")[:150]
+            suggestion = issue.suggestion.replace("|", "/").replace("\n", " ")[:150]
+            lines.append(
+                f"| {next_id} | {r.agent} | {sector} | {r.stock} | {cycle} | {issue.type} | "
+                f"{section} | {desc} | {suggestion} | pending | | |"
+            )
+            next_id += 1
+
+    if lines:
+        with open(tracker_path, "a") as f:
+            f.write("\n".join(lines) + "\n")
+        print(f"Appended {len(lines)} fixes to fix_tracker.md (IDs {next_id - len(lines)}-{next_id - 1})")
+
+
 def print_summary(results: dict[str, AgentEvalResult], target_numeric: int = 90) -> None:
     """Print greppable summary with per-parameter breakdown."""
     total = len(results)
@@ -612,6 +642,7 @@ async def async_main_sector(args: argparse.Namespace) -> None:
 
     write_last_run(last_run)
     append_results_tsv(results, args.sector, cycle=args.cycle)
+    append_fix_tracker(results, args.sector, cycle=args.cycle)
     print_summary(results, target_numeric)
 
 
@@ -641,6 +672,7 @@ async def async_main_agent(args: argparse.Namespace) -> None:
         results[sector_name] = result
         # Append per-sector as we go (don't wait till end)
         append_results_tsv({agent: result}, sector_name, cycle=args.cycle)
+        append_fix_tracker({agent: result}, sector_name, cycle=args.cycle)
         print()
 
     # Build last_run keyed by sector (not agent)

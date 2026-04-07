@@ -43,6 +43,7 @@ The orchestrator can edit the full agent prompt and tool surface. But be mindful
 | `agent.py` — `AGENT_MAX_TURNS`, `DEFAULT_EFFORT` | Tune iteration/cost limits per agent | Agent running out of turns or budget |
 | `resources.md` | Accumulated learnings | Always |
 | `changelog.md` | Structured experiment log (change → grade → kept/reverted) | After every experiment |
+| `fix_tracker.md` | All Gemini-recommended fixes across all evals with status | Auto-appended by evaluate.py; update status after applying/skipping |
 
 ### Decision Framework: Sector Skill vs Core Prompt
 
