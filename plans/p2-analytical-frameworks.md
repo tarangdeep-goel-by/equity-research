@@ -2,7 +2,7 @@
 
 > Context: Gemini review + internal audit identified 11 analytical gaps that real analysts use daily. All implementable from existing data — no new sources needed.
 > Reviewed by: Gemini 3.1 Pro (2026-04-02) — 6 critical fixes applied.
-> Project: `/Users/tarang/Documents/Projects/equity-research/flow-tracker/`
+> Project: `./flow-tracker/`
 > Branch: TBD (worktree)
 
 ## Scope: 10 new MCP tools + 2 prompt updates across 5 files

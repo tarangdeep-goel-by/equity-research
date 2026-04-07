@@ -3,7 +3,7 @@
 > Plan created: 2026-03-31
 > Status: Ready for implementation
 > Harness: Claude Agent SDK (`claude_agent_sdk>=0.1.50`)
-> Project: `/Users/tarang/Documents/Projects/equity-research/flow-tracker/`
+> Project: `./flow-tracker/`
 > Branch: `feat/multi-agent-research`
 
 ## Quick Reference
@@ -1192,7 +1192,7 @@ This section is the **implementation spec for a fresh session**. Each task has e
 ### Codebase Context (read this first)
 
 ```
-Project root: /Users/tarang/Documents/Projects/equity-research/flow-tracker/
+Project root: ./flow-tracker/
 Package:      flowtracker (Python 3.12+, managed with uv)
 CLI:          uv run flowtrack <command>
 DB:           ~/.local/share/flowtracker/flows.db (SQLite)

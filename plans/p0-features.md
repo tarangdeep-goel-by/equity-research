@@ -3,7 +3,7 @@
 > Created: 2026-03-31
 > Status: Ready for implementation
 > Prerequisite: Multi-agent system complete (6 specialists + verification + synthesis)
-> Project: `/Users/tarang/Documents/Projects/equity-research/flow-tracker/`
+> Project: `./flow-tracker/`
 > Branch: `feat/p0-features`
 
 ## Quick Reference
@@ -1176,7 +1176,7 @@ async def get_sector_valuations(args):
 ### Codebase Context
 
 ```
-Project root: /Users/tarang/Documents/Projects/equity-research/flow-tracker/
+Project root: ./flow-tracker/
 Package:      flowtracker (Python 3.12+, managed with uv)
 CLI:          uv run flowtrack <command>
 DB:           ~/.local/share/flowtracker/flows.db (SQLite)

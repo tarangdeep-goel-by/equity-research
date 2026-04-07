@@ -3,7 +3,7 @@
 > Created: 2026-03-31
 > Status: Planning — not ready for implementation
 > Prerequisite: P0 features complete (ranking, catalysts, comparison, sector agent)
-> Project: `/Users/tarang/Documents/Projects/equity-research/flow-tracker/`
+> Project: `./flow-tracker/`
 > Branch: TBD per feature
 
 ## Quick Reference

@@ -2,7 +2,7 @@
 
 > Context: Gemini review flagged "Ferrari engine, confusing steering wheel" — 67 tools, 33 per agent, 5000-word prompts. Root cause: agents are computing metrics that should be pre-stored.
 > Prerequisite: P-2 complete (11 analytical tools, BFSI routing, sector KPIs)
-> Project: `/Users/tarang/Documents/Projects/equity-research/flow-tracker/`
+> Project: `./flow-tracker/`
 > Branch: TBD (worktree)
 
 ## Goal
