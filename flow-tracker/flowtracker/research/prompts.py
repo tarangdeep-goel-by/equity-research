@@ -980,539 +980,11 @@ End with a JSON code block:
 """
 
 
-
-
-def _build_bfsi_injection() -> str:
-    """Return ~150-word BFSI mode block for dynamic injection into agent prompts."""
-    return """
-## BFSI Mode (Auto-Detected)
-
-This company is a bank, NBFC, or financial services company. Apply BFSI-specific analysis:
-
-**Primary Metrics** (from `get_quality_scores` section='bfsi' or 'all'):
-- **NIM** (Net Interest Margin): Net Interest Income ÷ Average Earning Assets. >3% good, >4% excellent for Indian banks
-- **ROA**: Net Profit ÷ Average Total Assets. 1-2% is excellent for banks
-- **ROE**: Net Profit ÷ Average Equity. Use DuPont (ROA × Equity Multiplier) to decompose
-- **Cost-to-Income**: Operating Expenses ÷ Total Income. <45% efficient, >55% inefficient
-- **P/B Ratio**: primary valuation metric. >2.5x = premium, <1x = distressed/PSU
-- **CASA Ratio**: Current + Savings deposits ÷ Total deposits. Higher = cheaper funding. Source from concall insights
-- **Asset Quality**: GNPA%, NNPA%, Provision Coverage Ratio (PCR), Slippage Ratio, Credit Cost. Source from concall insights
-
-**DO NOT USE for BFSI (these are MEANINGLESS for banks):**
-- **ROCE (Return on Capital Employed)** — deposits are raw material, not "capital employed". Do NOT include ROCE in peer comparison tables. Use ROA and ROE instead for all profitability comparisons.
-- EBITDA / Operating Margin — not applicable to banking P&L structure
-- CFO/PAT ratio — bank CFO swings with deposit/loan flows, not earnings quality
-- **FCF (Free Cash Flow)** — CFO minus capex is meaningless when deposits/loans dominate cash flows. Do NOT report FCF CAGRs, FCF trends, or FCF CAGR tables for banks. If the data tools return FCF numbers, IGNORE them entirely — do not even show them with a caveat.
-- **Standard DCF / Reverse DCF (FCFE model)** — invalid for banks. Do NOT include DCF sensitivity matrices or FCFE-based reverse DCF. Use P/B-ROE framework (justified P/B = ROE/CoE), Dividend Discount Model (DDM), or Residual Income Model instead.
-- Working capital metrics, capex cycle, gross margin
-
-**Emphasize for BFSI:** NIM trend (the single most important metric), book value growth, CASA ratio, credit cost trajectory, advances vs deposit growth, asset quality (GNPA/NNPA), P/B-based valuation, and **Credit-Deposit (CD) ratio** (pre-computed in `get_quality_scores` bfsi section as `cd_ratio_pct` — >78% stretched, >85% risky).
-
-**Valuation:** Use P/B band (primary), P/B vs ROE framework (justified P/B = ROE/CoE), Residual Income Model, or Gordon Growth for mature PSU banks. For conglomerates with listed subsidiaries, use Sum-of-the-Parts (SOTP): value core bank on P/ABV + listed subsidiary values per share with 20-25% holding company discount.
-
-**Insider Transactions:** For board-managed banks (0% promoter holding), absence of open-market insider buying is NORMAL — executives are compensated via ESOPs. Track insider SELLING (ESOP disposals above normal) as the governance signal, not absence of buying.
-
-**Beta Caveat:** yfinance beta is calculated against S&P 500 (global), not Nifty 50. Indian bank betas against Nifty are typically 0.9-1.3x. Do NOT cite yfinance beta as-is for Indian market sensitivity analysis — note the global benchmark limitation.
-"""
-
-
-def _build_insurance_injection() -> str:
-    """Return insurance mode block for dynamic injection into agent prompts."""
-    return """
-## Insurance Mode (Auto-Detected)
-
-This company is an insurance company. Apply insurance-specific analysis:
-
-**Sub-Type Detection:** Check industry — "Life Insurance" → life framework, "General Insurance" → general framework.
-
-**Primary Metrics** (from `get_quality_scores` section='insurance' or 'all'):
-- **ROE**: valid for insurance. Decompose using DuPont where possible
-- **ROA**: Net Profit ÷ Total Assets. Lower than banks due to investment portfolio dominance
-- **Opex Ratio**: Operating expenses ÷ Net Earned Premium. Lower = more efficient
-- **Solvency Ratio**: Regulatory minimum 150%. Source from concall insights
-- **Premium Growth**: YoY growth in Gross Written Premium
-
-**Life Insurance Specific:**
-- **VNB (Value of New Business)**: measures profitability of new policies sold. VNB margin >25% excellent
-- **APE (Annualized Premium Equivalent)**: standardized new business metric
-- **Persistency (13th/61st month)**: policy retention — 13M >85% good, 61M >50% good
-- **Embedded Value (EV)**: present value of future profits from in-force book
-- **Valuation**: P/EV (Price ÷ Embedded Value per share) is PRIMARY. P/VNB for growth. If EV data unavailable, fall back to P/B with stated limitations
-
-**General Insurance Specific:**
-- **Combined Ratio**: Loss Ratio + Expense Ratio. <100% = underwriting profit. <95% excellent
-- **Loss Ratio**: Claims paid ÷ Net Earned Premium
-- **Expense Ratio**: Operating expenses ÷ Net Written Premium
-- **Valuation**: P/B (primary), target P/E acceptable for general insurers
-
-**DO NOT USE for Insurance (these are MEANINGLESS):**
-- EBITDA, EBIT margin, ROCE — not applicable to insurance P&L
-- FCF (Free Cash Flow) — investment income and claim reserves distort cash flows
-- Standard DCF / Reverse DCF — invalid for insurance. Do NOT include DCF sensitivity matrices
-- Working capital metrics, inventory, capex cycle, gross margin
-- CFO/PAT ratio — reserve movements and investment cash flows distort
-
-**Fallback when concall KPIs unavailable:** If VNB/EV/combined ratio data is not available from tools, explicitly state this gap. For life insurance, fall back to P/B + ROE framework. For general insurance, use P/B + underwriting profit trends from P&L. Do NOT guess or estimate these KPIs.
-
-**Emphasize:** Premium growth trajectory, product mix (protection vs savings for life), investment yield, solvency buffer above 150%, and claims ratio trend.
-"""
-
-
-def _build_metals_injection() -> str:
-    """Return metals/mining mode block for dynamic injection into agent prompts."""
-    return """
-## Metals/Mining Mode (Auto-Detected)
-
-This company is in the metals, mining, or steel sector. Apply cyclical-sector analysis:
-
-**CRITICAL WARNING — PE Trap:**
-PE ratio is a CYCLICAL TRAP for commodity companies. The lowest PE often marks the COMMODITY CYCLE PEAK (earnings are temporarily inflated). The highest PE often marks the cycle TROUGH (earnings are temporarily depressed). Do NOT use PE in isolation for valuation.
-
-**How to assess cycle position:**
-- Compare current EV/EBITDA to the company's 5-year average (available in `get_quality_scores` metals section). If current << average → likely at cycle peak. If current >> average → likely at cycle trough.
-- Check commodity price trends relative to marginal cost of production
-- Review capacity utilization levels from concall data
-
-**Primary Valuation Metrics:**
-- **EV/EBITDA**: primary metric. Compare to 5Y average and global peers
-- **P/B at trough**: book value provides floor valuation at cycle bottom
-- **Net Debt/EBITDA**: <2x comfortable, 2-3x cautious, >3x risky for cyclicals
-- **Dividend yield**: relevant for mature miners with low reinvestment needs
-
-**DO NOT USE in isolation:**
-- PE ratio — cyclical trap as described above. Only cite PE alongside cycle position context
-- PEG ratio — meaningless for cyclicals (growth is mean-reverting, not compounding)
-
-**Emphasize:** Net Debt/EBITDA trajectory, commodity price sensitivity, capex cycle (expansion vs maintenance), EBITDA margins vs historical range, capacity utilization, and cost curve position.
-
-**Concall KPIs to surface if available:** Production volumes, realization per tonne, cost per tonne, capacity utilization %, expansion capex vs maintenance capex.
-"""
-
-
-def _build_realestate_injection() -> str:
-    """Return real estate mode block for dynamic injection into agent prompts."""
-    return """
-## Real Estate Mode (Auto-Detected)
-
-This is a real estate developer. Revenue recognition distortions make standard metrics unreliable.
-
-**CRITICAL — Revenue Recognition Distortion:**
-Real estate revenue is recognized on percentage-of-completion or completed-contract basis. This creates massive lumping — a company can show zero revenue in Q1-Q3 and all revenue in Q4. PE, EPS, ROE, and ROCE are all distorted by this accounting treatment.
-
-**Primary Valuation Metrics:**
-- **P/Adjusted Book Value**: primary metric. Available in `get_quality_scores` realestate section. Note: this is book value, NOT true NAV (which requires land bank revaluation at current market rates from investor presentations)
-- **EV/EBITDA**: acceptable for rental/commercial real estate and REITs, less useful for project developers
-- **Pre-sales value and volume**: THE most important operational metric — forward revenue visibility. Source from concall insights
-
-**DO NOT USE (misleading for real estate developers):**
-- PE / EPS — distorted by revenue recognition timing. Do NOT use PE for valuation
-- ROE / ROCE — same distortion, plus leverage effects from project financing
-- Standard DCF — project cash flows are too lumpy and uncertain
-- FCF — massive swings from land acquisition and project payments
-- **Inventory months from annual financials** — this metric is INVALID when computed as inventory/revenue. Revenue is lumpy (completion-based). Valid inventory months require area sold / sales velocity data from investor presentations ONLY. Do NOT compute this from annual data.
-
-**Emphasize:**
-- Pre-sales momentum (value and volume trends, QoQ and YoY)
-- Realization per sqft (pricing power and location quality)
-- Collection efficiency (actual cash collections vs bookings)
-- Net debt trajectory (leverage management through project cycles)
-- Launch pipeline (future revenue visibility)
-- Land bank value and location quality
-- Unsold inventory as months of sales (from investor presentations ONLY)
-
-**Fallback:** If pre-sales data is not available from concall insights, use P/Adjusted Book Value as primary valuation and flag the absence of operational data as a limitation.
-
-**REITs Note:** If this is a REIT (Embassy, Mindspace, Brookfield), use rental yield framework: P/FFO (Funds From Operations), dividend yield, NAV discount/premium. REITs have predictable cash flows unlike project developers.
-"""
-
-
-def _build_telecom_injection() -> str:
-    """Return telecom operator mode block for dynamic injection into agent prompts."""
-    return """
-## Telecom Mode (Auto-Detected)
-
-This is a telecom operator. Spectrum amortization and heavy capex distort standard profitability metrics.
-
-**Key Distortions:**
-- PAT margin is depressed by massive spectrum amortization charges (not a real cash cost after initial payment)
-- PE appears artificially high due to amortization-depressed earnings
-- Capex intensity is structural (network expansion, 5G rollout) — penalizing high capex misses the growth story
-
-**Primary Valuation Metrics:**
-- **EV/EBITDA**: primary metric for telecom — removes spectrum amortization distortion
-- **OpFCF (Operating Free Cash Flow)**: EBITDA minus capex. Available in `get_quality_scores` telecom section. Shows true cash generation after network investment
-- **Net Debt/EBITDA**: critical for telecom given heavy leverage from spectrum purchases. <3x manageable, >4x stressed
-- **Capex/Revenue ratio**: investment intensity — 15-25% typical for Indian telecom in expansion phase
-
-**DO NOT USE in isolation (misleading for telecom):**
-- PE ratio — spectrum amortization makes PE artificially high and non-comparable
-- PAT margin — same distortion from amortization
-- PEG ratio — misleading when earnings are depressed by non-cash charges
-
-**Key Operational Metrics (from concall insights):**
-- **ARPU (Average Revenue Per User)**: THE most important KPI. ARPU × subscribers = revenue
-- **Subscriber count and net additions**: volume driver
-- **Churn rate**: retention quality
-- **Data usage per subscriber**: engagement and monetization potential
-- **4G/5G mix**: technology migration progress
-
-**SOTP Note:** For conglomerates (e.g., Bharti Airtel = mobile India + Africa + towers + broadband + enterprise + payments), SOTP analysis is appropriate but requires segment-level data from investor presentations. If segment data is not available from tools, state this limitation explicitly rather than estimating segment values.
-
-**Emphasize:** ARPU growth trajectory, subscriber market share, 5G monetization timeline, spectrum holding adequacy, tower-sharing economics, and Africa/international segment contribution (for Bharti).
-"""
-
-
-def _build_telecom_infra_injection() -> str:
-    """Return telecom infrastructure/tower mode block for dynamic injection."""
-    return """
-## Telecom Infrastructure/Tower Mode (Auto-Detected)
-
-This is a telecom tower or infrastructure company. Tower companies are infrastructure plays, NOT telecom operators.
-
-**Business Model:** Tower companies lease space on towers to telecom operators. Revenue = number of towers × tenants per tower × rental per tenant. Operating leverage is extreme — adding a tenant to an existing tower has near-zero incremental cost.
-
-**Primary Metrics:**
-- **Tenancy Ratio**: average tenants per tower. Higher = better economics. 1.5-2.0x typical, >2.0x excellent
-- **Rental per Tower/Tenant**: pricing power. Watch for erosion from operator consolidation
-- **Tower count growth**: driven by 5G densification and rural expansion
-- **EBITDA margin**: should be 50%+ for mature tower companies due to operating leverage
-- **EV/EBITDA**: primary valuation metric
-- **Dividend yield**: relevant for mature tower companies
-
-**DO NOT USE (not relevant for tower companies):**
-- ARPU — telecom operator metric, not applicable
-- Subscriber count — tower companies don't have subscribers
-- Spectrum holdings — tower companies don't hold spectrum
-
-**Emphasize:** Tenancy ratio trends, colocation revenue growth, 5G small cell opportunity, counterparty risk (concentration in 2-3 operators), and long-term contract visibility.
-"""
-
-
-def _build_broker_injection() -> str:
-    """Return broker/stockbroking mode block for dynamic injection into agent prompts."""
-    return """
-## Broker/Stockbroking Mode (Auto-Detected)
-
-This is a stockbroking or trading platform company. Apply broker-specific analysis ON TOP of standard financial analysis.
-
-**CRITICAL — Cash Flow Distortion:**
-- **DO NOT USE:** FCF, CFO, CFO/PAT ratio — client money held in settlement accounts and margin deposits create massive cash flow distortions that have NOTHING to do with business quality
-- CFO can swing wildly based on client trading activity and settlement timing
-- This is the single most important analytical adjustment for brokers
-
-**Primary Metrics:**
-- **ROE / ROA**: valid and important — efficiency of capital deployment
-- **Revenue Quality**: Break down revenue into brokerage, interest on client funds, advisory/distribution fees, proprietary trading. Higher share of recurring/fee income = higher quality
-- **Cost-to-Income**: operating efficiency metric, similar to banks
-- **Active Client Growth**: leading indicator — new Demat accounts, monthly active users
-- **AUM Growth**: for brokers with distribution/wealth management arms
-- **ARPU (Average Revenue Per User)**: revenue quality indicator
-
-**Valuation:** P/E is the primary metric for brokers (unlike banks which use P/B). ROE-based P/E framework (higher ROE justifies higher PE). Compare to fintech/platform peers, not just traditional brokers.
-
-**Emphasize:** Market share trends (NSE active clients), revenue per order, F&O vs cash segment mix, technology platform moat, regulatory risk (SEBI margin rules, true-to-label), and client money segregation compliance.
-"""
-
-
-def _build_amc_injection() -> str:
-    """Return AMC mode block for dynamic injection into agent prompts."""
-    return """
-## Asset Management Company (AMC) Mode (Auto-Detected)
-
-This is a mutual fund asset management company. Apply AMC-specific analysis.
-
-**Business Model:** AMCs earn management fees as a % of AUM. Revenue = AUM × fee rate. Operating leverage is extreme — costs are mostly fixed, so AUM growth drops directly to profit.
-
-**Primary Metrics:**
-- **AUM Growth**: total and split by equity/debt/hybrid. Equity AUM earns 2-3x the fee rate of debt AUM
-- **Net Flows**: net new money coming in (gross sales - redemptions). Positive net flows = organic growth beyond market appreciation
-- **SIP Book**: monthly SIP flows — most stable and predictable revenue source. SIP book growth rate is a key forward indicator
-- **Revenue Yield (bps)**: total revenue ÷ average AUM × 10000. Tracks fee realization — should be stable or rising
-- **Operating Profit Margin**: AMCs should have 35-50%+ OPM due to operating leverage
-
-**Valuation:**
-- **P/E**: primary metric — AMCs have stable, predictable earnings
-- **% of AUM**: Market cap as % of AUM. Indian AMCs typically trade at 5-10% of equity AUM
-- PE comparison should be against other AMCs, not banks or NBFCs
-
-**DO NOT USE (misleading for AMCs):**
-- P/B ratio — AMCs are asset-light, book value is not meaningful
-- EV/EBITDA — not standard for AMCs, P/E is preferred
-- Working capital analysis — AMCs have minimal working capital needs
-
-**Emphasize:** Market share in equity AUM, SIP flows growth, distribution reach (IFA vs direct vs bank), new fund offer pipeline, regulatory impact (TER reduction trends), and passive/ETF cannibalization risk.
-"""
-
-
-def _build_exchange_injection() -> str:
-    """Return exchange/depository mode block for dynamic injection into agent prompts."""
-    return """
-## Exchange/Depository Mode (Auto-Detected)
-
-This is a stock exchange, commodity exchange, or depository. Apply platform-business analysis.
-
-**Business Model:** Exchanges and depositories are natural monopolies/duopolies with transaction-based revenue. They have extreme operating leverage — mostly fixed costs, so volume growth drops to profit.
-
-**Key Difference from Brokers:** FCF IS valid for exchanges. They don't hold client money — revenue is transaction fees. Standard cash flow analysis applies fully.
-
-**Primary Metrics:**
-- **Transaction Volumes**: ADT (Average Daily Turnover) for exchanges, new Demat accounts for depositories
-- **Market Share**: BSE vs NSE, CDSL vs NSDL — market share shifts are the key competitive signal
-- **Revenue per Transaction**: pricing power indicator — watch for regulatory pressure on transaction charges
-- **Operating Leverage**: incremental revenue should flow at 60-80%+ incremental margin
-- **New Participant Registration**: Demat accounts (depositories), new member additions (exchanges)
-
-**Valuation:**
-- **P/E**: primary metric. Exchanges deserve premium PE due to monopoly/duopoly position and operating leverage
-- **DCF**: valid — predictable cash flows
-- **FCF yield**: valid and important — exchanges generate significant free cash flow
-
-**Emphasize:** Volume trends (cash, F&O, commodity segments), market share vs competitor, technology infrastructure investments, regulatory changes (transaction tax, lot sizes), and new product/segment launches.
-"""
-
-
-def _build_it_injection() -> str:
-    return """
-## IT Services Mode (Auto-Detected)
-
-This is an Indian IT services company. Standard manufacturing/asset-heavy metrics are misleading.
-
-**Primary Metrics:**
-- **Constant Currency (CC) Revenue Growth**: THE most important metric. Reported revenue includes FX tailwinds/headwinds — CC growth isolates true demand. Always compare CC growth to reported growth
-- **Deal TCV/ACV (Total/Annual Contract Value)**: Forward revenue visibility. Large deal wins are lumpy — use trailing 4Q average. TCV >$1B is a mega-deal
-- **LTM Attrition Rate**: Talent retention — <15% healthy, 15-20% manageable, >20% margin risk (replacement hiring + training costs). Source from concall insights
-- **Utilization Rate**: 82-86% is the sweet spot. Below 80% = bench bloat (margin drag). Above 88% = no capacity for new deals
-- **EBIT Margin**: Track in 50bps bands. Every 100bps margin change on ₹1L Cr revenue = ₹1,000 Cr EBIT impact
-- **Subcontracting Cost %**: Rising = demand exceeds bench (positive short-term, margin pressure). Falling = bench building (positive long-term)
-
-**Structural Margin Levers:**
-- **Onsite/Offshore Mix**: Every 1% shift to offshore improves margin ~30-50bps. Track direction
-- **Employee Pyramid**: Fresher hiring ratio — higher ratio = margin expansion via pyramid optimization
-- **Client Concentration**: Top 5/Top 10 clients as % of revenue. >30% from top 5 = concentration risk
-
-**Vertical Exposure:** BFSI vs Retail vs Communications/Media vs Manufacturing. BFSI slowdowns disproportionately hit Indian IT — always flag BFSI revenue share
-
-**Valuation:** Standard PE/DCF valid. Indian IT typically trades at 20-35x PE. Premium justified by: high ROCE (>30%), cash generation, dividend + buyback. Cross-currency hedging gains/losses can distort quarterly PAT — flag if material.
-
-**DO NOT USE (misleading for IT services):**
-- Inventory metrics, working capital analysis (IT is asset-light, negative working capital is normal)
-- Debt-to-Equity analysis (IT companies are inherently cash-rich, near-zero debt)
-
-**Concall KPIs:** Deal pipeline commentary, discretionary vs non-discretionary spend trends, pricing environment, visa costs, wage hike cycle impact.
-"""
-
-
-def _build_gold_loan_injection() -> str:
-    return """
-## Gold Loan NBFC Mode (Auto-Detected)
-
-This is a gold loan company. Gold NBFCs do NOT behave like standard banks or corporate lenders.
-
-**Primary Metrics:**
-- **Gold Tonnage AUM**: The true volume metric — total gold held as collateral. More meaningful than loan book value (which fluctuates with gold prices)
-- **LTV (Loan-to-Value)**: Regulatory cap at ~75%. Portfolio average LTV is the key risk metric — higher LTV = less buffer against gold price decline
-- **Yield on Gold Loans vs Cost of Funds**: The spread drives profitability. Track both independently — yield compression from competition vs funding cost from rate cycles
-- **Auction Rate**: % of loans where gold collateral was auctioned due to default. >2% is a red flag. Low auction rates prove the self-liquidating nature of the business
-
-**Gold Price Sensitivity (CRITICAL):**
-A 10% gold price crash compresses LTV ratios across the portfolio — borrowers near 75% LTV face margin calls. Model the impact: "If gold falls X%, Y% of the portfolio breaches LTV cap, requiring either top-up or auction." This is THE key risk for gold NBFCs.
-
-**DO NOT USE (misleading for gold loans):**
-- Standard GNPA/NNPA analysis — gold loans are FULLY SECURED with liquid collateral. NPA optics can mislead when the underlying gold is worth more than the loan
-- Unsecured lending frameworks or provisioning norms designed for corporate/retail credit
-
-**Valuation:** P/B is primary. ROA and spread trajectory drive re-rating.
-
-**Emphasize:** Branch network expansion (drives AUM growth), online gold loan penetration, competitive landscape (banks entering gold loans), and regulatory actions (RBI gold loan LTV reviews).
-"""
-
-
-def _build_microfinance_injection() -> str:
-    return """
-## Microfinance Mode (Auto-Detected)
-
-This is a microfinance institution (MFI). MFI lending is high-yield but extremely vulnerable to localized, non-financial shocks.
-
-**Primary Metrics:**
-- **GLP (Gross Loan Portfolio)**: The AUM equivalent for MFIs. Growth rate signals market penetration
-- **PAR-30 / PAR-90 (Portfolio at Risk)**: THE single most important asset quality metric. PAR-30 >5% is early warning, >10% is crisis. PAR-90 indicates likely write-offs
-- **Collection Efficiency %**: Must be >95% in normal conditions. Track monthly — drops precede NPA recognition by 1-2 quarters
-- **Credit Cost %**: Annualized provisioning + write-offs as % of AUM. <3% healthy, 3-5% stressed, >5% crisis
-
-**Geographic Concentration (THE KEY RISK):**
-If >20% of GLP is concentrated in a single state, this is a MAJOR risk. Indian MFIs have been destroyed by state-specific events: Andhra Pradesh crisis (2010), demonetization impact, COVID rural lockdowns, state election-year farm loan waivers. ALWAYS flag the top 3 states by exposure and any recent adverse events.
-
-**Exogenous Shock Sensitivity:**
-MFI borrowers (rural women, small traders) are vulnerable to: floods/droughts (agricultural income), elections (loan waiver populism), social unrest, and regulatory changes (RBI interest rate caps). These are NOT normal credit risks — they are binary, state-level events.
-
-**Valuation:** P/B is primary. ROA trajectory (driven by credit cost normalization, not just AUM growth) is the re-rating lever.
-
-**DO NOT USE:** Collateral-based credit analysis (MFI is inherently unsecured JLG/SHG lending).
-
-**Emphasize:** Borrower retention rates, average ticket size trends, rural vs semi-urban mix, and technology adoption (digital collections, cashless disbursals).
-"""
-
-
-def _build_sector_caveats(industry: str) -> str:
-    """Return lightweight sector-specific caveats based on industry classification."""
-    _PHARMA_INDUSTRIES = {"Pharmaceuticals"}
-    _FMCG_INDUSTRIES = {
-        "Diversified FMCG", "Household Products", "Personal Care",
-        "Packaged Foods", "Other Food Products", "Household Appliances",
-    }
-    _AUTO_INDUSTRIES = {
-        "Passenger Cars & Utility Vehicles", "2/3 Wheelers", "Commercial Vehicles",
-        "Tractors", "Construction Vehicles",
-    }
-    _HOSPITAL_INDUSTRIES = {"Hospital", "Healthcare Service Provider"}
-
-    if industry in _PHARMA_INDUSTRIES:
-        return """
-
-## Pharma Sector Caveats
-
-- **R&D spend is investment, not cost.** High R&D/Revenue (>8%) is POSITIVE for pipeline-driven pharma — do NOT penalize margin for R&D intensity
-- **US price erosion** is structural (~5-8%/year for generics). The key question is whether new launch pipeline offsets erosion. Focus on ANDA filing rate and approval velocity
-- **SOTP** is appropriate for complex pharma with multiple business lines (API + formulations + CRAMS/CDMO + biosimilars). Value each segment on relevant multiples
-- **Note on sub-sectors:** Hospitals, Diagnostics, and CDMO have fundamentally different frameworks
-- Standard PE/DCF valuation works. Growth pharma trades at premium to generics
-"""
-
-    if industry in _FMCG_INDUSTRIES:
-        return """
-
-## FMCG Sector Caveats
-
-- **Negative working capital is a STRENGTH** — advance collections from distributors and tight receivable management. Pre-computed WC trend available in `get_quality_scores` sector_health section. Flag if this advantage is SHRINKING
-- **Volume growth vs price growth split** is the single most important metric. Pure price growth without volume growth is unsustainable and signals demand destruction. Source from concall commentary
-- **Rural vs urban demand mix**: Rural recovery/slowdown is a key cyclical driver
-- **Distributor/channel inventory**: Watch for channel stuffing signals — primary sales growing faster than secondary sales is a red flag
-- FMCG commands premium PE (40-60x) justified by earnings visibility and defensive nature. Compare to own history, not cross-sector
-"""
-
-    if industry in _AUTO_INDUSTRIES:
-        return """
-
-## Auto Sector Caveats
-
-- **Auto is cyclical** — use mid-cycle earnings for valuation, not peak or trough. Current PE may look cheap at cycle peak or expensive at cycle trough
-- **EV transition progress**: % of sales from EVs/hybrids is the key structural metric. Companies with credible EV strategies deserve premium valuations
-- **Dealer inventory days** (from concall): demand leading indicator. Rising inventory = slowing demand. 20-30 days normal for PVs, 40+ concerning
-- **SOTP** for conglomerates (e.g., M&M = auto + farm + financial services, Tata Motors = JLR + India PV + India CV + EV)
-- **Raw material basket**: Steel, aluminium, rubber, precious metals. Commodity price cycles affect margins with 1-2 quarter lag
-"""
-
-    if industry in _HOSPITAL_INDUSTRIES:
-        return """
-
-## Hospital/Healthcare Sector Caveats
-
-- **ARPOB (Average Revenue Per Occupied Bed)**: THE primary operational metric. Drives revenue alongside occupancy
-- **Occupancy Rate**: >65% good, >75% excellent. New hospital ramp-up takes 3-5 years to mature occupancy
-- **Payor Mix**: Insurance vs out-of-pocket vs government (CGHS/Ayushman). Higher insurance share = better realization
-- **EBITDA per bed**: profitability metric normalized for scale. Compare within peer set
-- Standard PE/EV-EBITDA valuation works. Premium for multi-city chains with proven execution
-"""
-
-    return ""
-
-
-def _build_regulated_power_injection() -> str:
-    """Return regulated power/utility mode block for dynamic injection into agent prompts."""
-    return """
-## Regulated Power/Utility Mode (Auto-Detected)
-
-This is a REGULATED power utility. Revenue and returns are governed by CERC/SERC tariff orders, not market forces.
-
-**Key Framework:**
-- Revenue growth is NOT a meaningful metric — fuel costs are pass-through, so revenue swings with input costs, not demand
-- EBITDA margin % is also misleading for same reason — focus on absolute EBITDA or regulated equity base growth
-- The regulated ROE (typically 15.5% on equity base per CERC norms) is the anchor — actual ROE should track this
-
-**Primary Valuation Metrics:**
-- **P/B vs Regulated ROE**: The primary framework. Justified P/B = ROE ÷ Cost of Equity. Available in `get_quality_scores` power section
-- **Dividend Yield vs G-sec Spread**: Regulated utilities are bond-proxies. Spread over 10Y G-sec yield is the key metric. Positive spread = attractive. Available in `get_quality_scores` power section
-- **Regulated Equity Base growth**: drives future earnings — check capex plans and CWIP-to-fixed-assets ratio
-
-**DO NOT USE (misleading for regulated utilities):**
-- Revenue growth rate — fuel pass-through noise
-- EBITDA margin % — same reason, use absolute EBITDA instead
-- PEG ratio — growth is regulatory, not organic
-- Standard DCF with high growth assumptions — regulated ROE caps upside
-
-**Emphasize:** PLF (Plant Load Factor) / PAF (Plant Availability Factor), AT&C losses (for distribution), fuel cost trends, regulatory order outcomes, dividend payout ratio, and capacity addition pipeline.
-
-**Concall KPIs:** PLF/PAF trends, tariff order outcomes, fuel supply agreements, renewable capacity additions, CWIP capitalization timeline.
-"""
-
-
-def _build_merchant_power_injection() -> str:
-    """Return merchant/renewable power mode block for dynamic injection into agent prompts."""
-    return """
-## Merchant/Renewable Power Mode (Auto-Detected)
-
-This is a merchant power producer or integrated utility with significant unregulated/renewable capacity.
-
-**Key Framework:**
-- Unlike regulated utilities, merchant power earnings are driven by power exchange prices, fuel costs, and PPA terms
-- Revenue and EBITDA growth ARE meaningful for merchant producers
-- Standard valuation (PE, EV/EBITDA, DCF) is more applicable than for regulated utilities
-
-**Primary Valuation Metrics:**
-- **EV/EBITDA**: primary metric for merchant/renewable power
-- **P/E**: acceptable for merchant producers with stable earnings
-- **DCF**: valid if PPA mix and capacity pipeline are visible
-
-**Emphasize:** Merchant vs PPA revenue mix (higher PPA % = more predictable), renewable portfolio % and growth, power exchange price trends, fuel cost position, capacity additions, and operating leverage from renewable transition (zero fuel cost).
-
-**Risk Factors:** Power exchange price volatility, fuel supply risk (for thermal), regulatory changes (RPO obligations, green energy mandates), counterparty risk for PPAs.
-"""
-
-
-def _build_holding_company_injection() -> str:
-    """Return holding company mode block for dynamic injection into agent prompts."""
-    return """
-## Holding Company Mode (Auto-Detected)
-
-This is a holding/investment company. Its primary value derives from stakes in other listed entities, NOT from operating earnings.
-
-**Primary Valuation: NAV (Net Asset Value) Discount/Premium**
-- Calculate NAV: sum of market value of all listed holdings (shares x current price) + book value of unlisted investments + net cash
-- Compare to current market cap -> holding company discount (typically 20-40% in India)
-- Narrowing discount = catalyst; widening = governance concern
-
-**DO NOT USE (meaningless for holding companies):**
-- PE ratio — earnings are mostly dividend income + mark-to-market gains, not operating profit
-- EV/EBITDA — same issue
-- Revenue growth — no operating revenue
-- ROCE — no meaningful capital employed in operations
-
-**Emphasize:** NAV discount trend, portfolio composition, dividend income yield, corporate governance (why does the discount exist?), demerger/simplification potential.
-"""
-
-
-def _build_conglomerate_injection() -> str:
-    """Return conglomerate / multi-segment mode block for dynamic injection into agent prompts."""
-    return """
-## Conglomerate / Multi-Segment Mode (Auto-Detected)
-
-This company operates across multiple distinct business segments. Single-segment valuation frameworks are MISLEADING.
-
-**MANDATORY: Sum-of-the-Parts (SOTP) Valuation**
-- Identify each business segment and its revenue/EBIT contribution
-- Value each segment using peer multiples from pure-play comparables
-- Apply 15-25% holding company discount to aggregate value
-- If segment data is unavailable from tools, state explicitly and pose as open question
-
-**Key Risks for Conglomerates:**
-- Cross-subsidization between segments (profitable segment funds unprofitable growth)
-- Capital allocation opacity (which segment gets capex priority?)
-- Consolidated metrics hide segment-level deterioration (aggregate margins may look stable while one segment collapses)
-
-**DO NOT USE in isolation:** Consolidated PE, consolidated EV/EBITDA — these blend segment multiples and produce meaningless averages.
-
-**Emphasize:** Segment-level EBIT margins, segment growth rates, capital allocation by segment, demerger/listing potential for valuable subsidiaries.
-"""
+# ---------------------------------------------------------------------------
+# Sector injection functions removed — content migrated to sector_skills/{sector}/_shared.md
+# See build_specialist_prompt() which loads from files instead.
+# Only _build_mcap_injection() remains here (it has dynamic logic based on mcap/agent).
+# ---------------------------------------------------------------------------
 
 
 _MCAP_TIERS = [
@@ -1549,35 +1021,32 @@ def _build_mcap_injection(mcap_cr: float, agent_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Sector injection dispatch table
-# ---------------------------------------------------------------------------
-# Each entry: (detector_name, builder_func, agent_set)
-# Evaluated in order — first match wins (cascade priority matters).
-# detector_name is a method name on ResearchDataAPI (str) to allow lazy import.
-
-_ALL_SPECIALIST_AGENTS = {"financials", "valuation", "risk", "ownership", "sector", "technical"}
-
-# Dispatch table: (detector_method_name, builder_fn, eligible_agent_set)
+# Sector detection dispatch table.
+# Each entry: (detector_method_name, sector_skill_directory_name)
 # Evaluated in cascade order — first match wins. Priority matters for overlapping sectors.
-_SECTOR_INJECTIONS: list[tuple[str, object, set[str]]] = [
+# detector_name is a method name on ResearchDataAPI (str) to allow lazy import.
+# Sector content is loaded from sector_skills/{dir}/_shared.md + {agent}.md.
+# ---------------------------------------------------------------------------
+
+_SECTOR_DETECTORS: list[tuple[str, str]] = [
     # Holding companies detected first — NAV framework overrides everything
-    ("_is_holding_company", _build_holding_company_injection, _ALL_SPECIALIST_AGENTS),
+    ("_is_holding_company", "holding_company"),
     # Financial sector cascade: insurance > gold_loan > microfinance > bfsi > broker > amc > exchange
-    ("_is_insurance", _build_insurance_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_gold_loan_nbfc", _build_gold_loan_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_microfinance", _build_microfinance_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_bfsi", _build_bfsi_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_broker", _build_broker_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_amc", _build_amc_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_exchange", _build_exchange_injection, _ALL_SPECIALIST_AGENTS),
+    ("_is_insurance", "insurance"),
+    ("_is_gold_loan_nbfc", "gold_loan"),
+    ("_is_microfinance", "microfinance"),
+    ("_is_bfsi", "bfsi"),
+    ("_is_broker", "broker"),
+    ("_is_amc", "amc"),
+    ("_is_exchange", "exchange"),
     # Non-financial sectors
-    ("_is_realestate", _build_realestate_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_metals", _build_metals_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_regulated_power", _build_regulated_power_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_merchant_power", _build_merchant_power_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_telecom", _build_telecom_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_telecom_infra", _build_telecom_infra_injection, _ALL_SPECIALIST_AGENTS),
-    ("_is_it_services", _build_it_injection, _ALL_SPECIALIST_AGENTS),
+    ("_is_realestate", "real_estate"),
+    ("_is_metals", "metals"),
+    ("_is_regulated_power", "regulated_power"),
+    ("_is_merchant_power", "merchant_power"),
+    ("_is_telecom", "telecom"),
+    ("_is_telecom_infra", "telecom_infra"),
+    ("_is_it_services", "it_services"),
 ]
 
 
@@ -1590,7 +1059,7 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
                      + sector skill (if exists)
     user_instructions = Workflow + Report Sections + Structured Briefing
 
-    Uses V2 prompts (macro-tool optimized). Walks the _SECTOR_INJECTIONS
+    Uses V2 prompts (macro-tool optimized). Walks the _SECTOR_DETECTORS
     dispatch table in cascade order — first matching detector wins.
     Falls back to light sector caveats if no full injection matches.
     Always appends market-cap persona injection to system_prompt.
@@ -1609,29 +1078,36 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     system_prompt = SHARED_PREAMBLE_V2 + system_base
     matched_sector: str | None = None
 
+    skills_dir = Path(__file__).parent / "sector_skills"
+
     with ResearchDataAPI() as api:
         mcap = api.get_valuation_snapshot(symbol).get("market_cap_cr", 0) or 0
 
         # Walk dispatch table — first matching detector wins
-        for detector_name, builder, agent_set in _SECTOR_INJECTIONS:
+        # Loads shared sector rules from _shared.md (replaces old Python injection functions)
+        for detector_name, sector_dir in _SECTOR_DETECTORS:
             detector = getattr(api, detector_name)
-            if detector(symbol) and agent_name in agent_set:
-                system_prompt += builder()
-                matched_sector = detector_name.removeprefix("_is_")
+            if detector(symbol):
+                matched_sector = sector_dir
+                shared_path = skills_dir / sector_dir / "_shared.md"
+                if shared_path.exists():
+                    system_prompt += "\n\n" + shared_path.read_text()
                 break  # first match wins — cascade priority
         else:
             # No full sector injection matched — check for light caveats
             industry = api._get_industry(symbol)
-            caveats = _build_sector_caveats(industry)
-            if caveats:
-                system_prompt += caveats
-            # Map common industries to sector skill directories
             matched_sector = _industry_to_sector_skill(industry)
+            if matched_sector:
+                shared_path = skills_dir / matched_sector / "_shared.md"
+                if shared_path.exists():
+                    system_prompt += "\n\n" + shared_path.read_text()
 
         # Conglomerate check — runs AFTER main cascade (additive, not exclusive)
         # A company can be both BFSI and a conglomerate (e.g. ICICI)
-        if api._is_conglomerate(symbol) and agent_name in _ALL_SPECIALIST_AGENTS:
-            system_prompt += _build_conglomerate_injection()
+        if api._is_conglomerate(symbol):
+            conglom_path = skills_dir / "conglomerate" / "_shared.md"
+            if conglom_path.exists():
+                system_prompt += "\n\n" + conglom_path.read_text()
             if not matched_sector:
                 matched_sector = "conglomerate"
 
@@ -1639,9 +1115,9 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     if mcap > 0:
         system_prompt += _build_mcap_injection(mcap, agent_name)
 
-    # Sector skill injection (from autoeval loop)
+    # Agent-specific sector skill (from autoeval loop — additive to shared)
     if matched_sector:
-        skill_path = Path(__file__).parent / "sector_skills" / matched_sector / f"{agent_name}.md"
+        skill_path = skills_dir / matched_sector / f"{agent_name}.md"
         if skill_path.exists():
             system_prompt += f"\n\n## Sector-Specific Analysis Guide\n\n{skill_path.read_text()}"
 
