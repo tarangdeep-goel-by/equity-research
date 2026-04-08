@@ -71,21 +71,32 @@ def _screener_period_to_fy_quarter(period: str) -> str:
 
 
 def _download_transcript_from_url(url: str, dest_path: Path) -> bool:
-    """Download a transcript PDF/HTML from a Screener-sourced URL.
+    """Download a transcript PDF from a Screener-sourced URL.
 
-    Returns True if downloaded successfully. Skips BSE URLs (unreliable).
+    Returns True if downloaded successfully.
+    Handles BSE 406 (needs browser headers), retries on timeout.
     """
-    # BSE links from Screener are direct file URLs — they work reliably
     import httpx
-    try:
-        with httpx.Client(follow_redirects=True, timeout=30) as client:
-            resp = client.get(url)
-            if resp.status_code == 200 and len(resp.content) > 1000:
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-                dest_path.write_bytes(resp.content)
-                return True
-    except Exception:
-        pass
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "application/pdf,application/octet-stream,*/*",
+    }
+    for attempt in range(2):
+        try:
+            with httpx.Client(follow_redirects=True, timeout=45, headers=headers) as client:
+                resp = client.get(url)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    dest_path.write_bytes(resp.content)
+                    return True
+                if resp.status_code in (403, 404, 406):
+                    return False  # permanent failure, don't retry
+        except httpx.TimeoutException:
+            if attempt == 0:
+                continue  # retry once on timeout
+        except Exception:
+            return False
     return False
 
 
