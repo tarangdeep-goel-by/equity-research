@@ -245,76 +245,55 @@ def thesis(
         p0.duration_seconds = _time.monotonic() - pipeline_start
         trace.phases.append(p0)
 
-    # Phase 0b: Concall extraction (auto-run if stale or missing)
-    from pathlib import Path
-    from datetime import date, timedelta
-    extraction_path = Path.home() / "vault" / "stocks" / symbol / "fundamentals" / "concall_extraction_v2.json"
-    extraction_fresh = False
-    if extraction_path.exists():
-        import os, json as _json
-        mtime = date.fromtimestamp(os.path.getmtime(extraction_path))
-        if (date.today() - mtime) < timedelta(days=30):
-            # Validate content — check that at least half the quarters have real data
-            try:
-                _data = _json.loads(extraction_path.read_text())
-                _quarters = _data.get("quarters", [])
-                _good = sum(1 for q in _quarters if "extraction_error" not in q)
-                extraction_fresh = _good >= len(_quarters) / 2
-                if not extraction_fresh and _quarters:
-                    console.print(f"  [yellow]⚠[/] Previous concall extraction had {_good}/{len(_quarters)} quarters — re-extracting")
-            except Exception:
-                pass  # corrupt file — re-extract
+    # Phase 0b: Concall extraction (per-quarter cached)
+    console.print(f"\n[bold]Phase 0b: Concall Pipeline[/]")
+    p0b = PhaseEvent(phase="concall", started_at=_dt.now(_tz.utc).isoformat())
+    p0b_start = _time.monotonic()
 
-    if not extraction_fresh:
-        console.print(f"\n[bold]Phase 0b: Concall Pipeline[/]")
-        p0b = PhaseEvent(phase="concall", started_at=_dt.now(_tz.utc).isoformat())
-        p0b_start = _time.monotonic()
+    # Fetch BSE filing PDFs (additional source beyond Screener transcripts)
+    if not skip_fetch:
+        try:
+            from flowtracker.filing_client import FilingClient
+            fc = FilingClient()
+            filings = fc.fetch_research_filings(symbol)
+            downloaded = 0
+            for filing in filings:
+                path = fc.download_filing(filing)
+                if path:
+                    downloaded += 1
+            console.print(f"  [green]✓[/] Filings: {len(filings)} found, {downloaded} PDFs downloaded")
+        except Exception as e:
+            console.print(f"  [yellow]⚠[/] Filing download: {e}")
 
-        # Step 1: Fetch + download filing PDFs from BSE
-        if not skip_fetch:
-            try:
-                from flowtracker.filing_client import FilingClient
-                fc = FilingClient()
-                filings = fc.fetch_research_filings(symbol)
-                downloaded = 0
-                for filing in filings:
-                    path = fc.download_filing(filing)
-                    if path:
-                        downloaded += 1
-                console.print(f"  [green]✓[/] Filings: {len(filings)} found, {downloaded} PDFs downloaded")
-            except Exception as e:
-                console.print(f"  [yellow]⚠[/] Filing download: {e}")
-
-        # Step 2: Check for concall PDFs now that we've downloaded
-        from flowtracker.research.concall_extractor import _find_concall_pdfs
-        concall_pdfs = _find_concall_pdfs(symbol, quarters=4)
-        if concall_pdfs:
-            console.print(f"  Found {len(concall_pdfs)} concall PDFs")
-            console.print("  Extracting concall insights (this costs ~$0.20-0.40)...")
-            try:
-                from flowtracker.research.concall_extractor import extract_concalls
-                from flowtracker.research.data_api import ResearchDataAPI
-                _industry = None
-                try:
-                    with ResearchDataAPI() as _api:
-                        _industry = _api._get_industry(symbol)
-                        if _industry == "Unknown":
-                            _industry = None
-                except Exception:
-                    pass
-                result = asyncio.run(extract_concalls(symbol, quarters=4, industry=_industry))
-                console.print(f"  [green]✓[/] Extracted {result.get('quarters_analyzed', 0)} quarters")
-            except Exception as e:
-                console.print(f"  [yellow]⚠[/] Concall extraction failed: {e}")
-                console.print("  [dim]Agents will work without concall data[/]")
+    # Per-quarter cached extraction — only extracts new quarters
+    try:
+        from flowtracker.research.concall_extractor import ensure_concall_data
+        from flowtracker.research.data_api import ResearchDataAPI
+        _industry = None
+        try:
+            with ResearchDataAPI() as _api:
+                _industry = _api._get_industry(symbol)
+                if _industry == "Unknown":
+                    _industry = None
+        except Exception:
+            pass
+        _concall_result = asyncio.run(ensure_concall_data(symbol, quarters=4, industry=_industry))
+        if _concall_result:
+            _new_q = _concall_result.get("_new_quarters_extracted", 0)
+            _total_q = _concall_result.get("quarters_analyzed", 0)
+            if _new_q > 0:
+                console.print(f"  [green]✓[/] Extracted {_new_q} new quarter(s) ({_total_q} total)")
+            else:
+                console.print(f"  [dim]Concall data cached ({_total_q} quarters)[/]")
         else:
-            console.print(f"  [dim]No concall PDFs found for {symbol} after download. Agents will work without concall data.[/]")
+            console.print(f"  [dim]No concall PDFs found for {symbol}. Agents will work without concall data.[/]")
+    except Exception as e:
+        console.print(f"  [yellow]⚠[/] Concall extraction failed: {e}")
+        console.print("  [dim]Agents will work without concall data[/]")
 
-        p0b.finished_at = _dt.now(_tz.utc).isoformat()
-        p0b.duration_seconds = _time.monotonic() - p0b_start
-        trace.phases.append(p0b)
-    else:
-        console.print(f"\n[dim]Concall extraction is fresh (<30 days). Skipping.[/]")
+    p0b.finished_at = _dt.now(_tz.utc).isoformat()
+    p0b.duration_seconds = _time.monotonic() - p0b_start
+    trace.phases.append(p0b)
 
     # Phase 1 + 1.5: Specialist agents (parallel) + Verification
     console.print(f"\n[bold]Phase 1: Running 7 specialist agents for {symbol}...[/]")
@@ -906,6 +885,33 @@ def run_agent(
         p0.finished_at = _dt.now(_tz.utc).isoformat()
         p0.duration_seconds = _time.monotonic() - p0_start
         trace.phases.append(p0)
+
+    # Ensure concall data is available (per-quarter cached)
+    if specialist_agents and not skip_fetch:
+        console.print(f"\n[bold]Ensuring concall data for {symbol}...[/]")
+        try:
+            from flowtracker.research.concall_extractor import ensure_concall_data
+            from flowtracker.research.data_api import ResearchDataAPI
+            _industry = None
+            try:
+                with ResearchDataAPI() as _api:
+                    _industry = _api._get_industry(symbol)
+                    if _industry == "Unknown":
+                        _industry = None
+            except Exception:
+                pass
+            _concall_result = asyncio.run(ensure_concall_data(symbol, quarters=4, industry=_industry))
+            if _concall_result:
+                _new_q = _concall_result.get("_new_quarters_extracted", 0)
+                _total_q = _concall_result.get("quarters_analyzed", 0)
+                if _new_q > 0:
+                    console.print(f"  [green]✓[/] Extracted {_new_q} new quarter(s) ({_total_q} total)")
+                else:
+                    console.print(f"  [dim]Concall data cached ({_total_q} quarters)[/]")
+            else:
+                console.print(f"  [dim]No concall PDFs available for {symbol}[/]")
+        except Exception as e:
+            console.print(f"  [yellow]⚠[/] Concall: {e}")
 
     # Run specialist agents
     total_cost = 0.0

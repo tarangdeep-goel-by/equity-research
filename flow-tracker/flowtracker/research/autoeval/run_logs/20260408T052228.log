@@ -1,0 +1,9 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260408T052228.log
+AutoEval (agent-first): agent=financials sectors=['platform']
+Target: grade_numeric >= 90
+
+--- financials / ETERNAL (platform) ---
+  Report: 48040 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+ERROR: google-genai not installed. Run: uv sync --extra autoeval

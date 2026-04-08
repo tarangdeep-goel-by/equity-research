@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260408T081549.log
+AutoEval (agent-first): agent=financials sectors=['conglomerate']
+Target: grade_numeric >= 90
+
+--- financials / ADANIENT (conglomerate) ---
+  Report: 30102 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A (93) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260408T081706_all_for_financials.json
+
+======================================================================
+AGENT SUMMARY: financials
+======================================================================
+  conglomerate        ADANIENT      A   (93)  [PASS]  prompt_fixes:1
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

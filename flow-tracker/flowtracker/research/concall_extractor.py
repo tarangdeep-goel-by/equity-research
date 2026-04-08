@@ -187,6 +187,29 @@ def _find_concall_pdfs(symbol: str, quarters: int = 6) -> list[Path]:
         # Re-sort by recency
         results.sort(key=lambda p: _fy_sort_key(p.parent), reverse=True)
 
+    # Download concall_ppt (investor deck) for quarters that have transcripts but no PPT
+    try:
+        from flowtracker.store import FlowStore
+        with FlowStore() as store:
+            ppt_docs = store._conn.execute(
+                "SELECT period, url FROM company_documents "
+                "WHERE symbol = ? AND doc_type = 'concall_ppt' "
+                "ORDER BY period DESC",
+                (symbol,),
+            ).fetchall()
+        for doc in ppt_docs:
+            try:
+                fy_q = _screener_period_to_fy_quarter(doc["period"])
+            except (ValueError, KeyError):
+                continue
+            if fy_q not in seen_quarters:
+                continue  # only download PPTs for quarters we have transcripts for
+            dest = filings_dir / fy_q / "concall_ppt.pdf"
+            if not dest.exists():
+                _download_transcript_from_url(doc["url"], dest)
+    except Exception:
+        pass
+
     return results[:quarters]
 
 
@@ -350,7 +373,9 @@ Rules:
 - **CRITICAL FORMAT RULE**: Your ENTIRE response must be valid JSON. Do not write any text before or after the JSON object. Do not wrap in markdown code fences. Start with { and end with }. If you include ANY text outside the JSON, the extraction will fail.
 """
 
-CROSS_QUARTER_PROMPT = """You are a financial analyst reviewing multiple quarters of concall extractions for the same company. Your job is to find the NARRATIVE ARC — how the story has evolved quarter to quarter.
+CROSS_QUARTER_PROMPT = """**OUTPUT FORMAT: Return ONLY a single valid JSON object. No prose, no markdown fences, no explanation before or after. Start your response with `{` and end with `}`.**
+
+You are a financial analyst reviewing multiple quarters of concall extractions for the same company. Your job is to find the NARRATIVE ARC — how the story has evolved quarter to quarter.
 
 Given the per-quarter structured extractions below, produce a cross-quarter analysis JSON:
 
@@ -394,6 +419,7 @@ Rules:
 - Flag narrative shifts — when management changes their story, that's a signal
 - Identify questions analysts keep asking repeatedly (unresolved issues)
 - Be opinionated about management credibility — the data supports a view, state it
+- **CRITICAL FORMAT RULE**: Your ENTIRE response must be valid JSON. Do not write any text before or after the JSON object. Do not wrap in markdown code fences. Start with { and end with }. If you include ANY text outside the JSON, the extraction will fail.
 """
 
 
@@ -522,6 +548,163 @@ def _build_partial_extraction(response: str, quarter_label: str, docs_read: list
 # --- Main extraction pipeline ---
 
 
+async def _extract_single_quarter(
+    pdf_path: Path,
+    symbol: str,
+    model: str,
+    industry: str | None,
+) -> dict:
+    """Extract structured insights from a single concall PDF.
+
+    Returns one quarter extraction dict with extraction_status field.
+    """
+    quarter_label = _quarter_label_from_path(pdf_path)
+    quarter_dir = pdf_path.parent
+
+    # Read concall text
+    user_parts = [f"## Concall Transcript — {quarter_label}\n\n{_read_pdf_text(pdf_path)}"]
+    docs_read = ["concall.pdf"]
+
+    # Read supplementary docs
+    for extra in _find_supplementary_pdfs(quarter_dir):
+        extra_text = _read_pdf_text(extra)
+        if extra_text.strip():
+            user_parts.append(f"\n\n## {extra.stem.replace('_', ' ').title()} — {quarter_label}\n\n{extra_text}")
+            docs_read.append(extra.name)
+
+    # Build sector-specific KPI hint if industry is known
+    sector_hint = ""
+    if industry:
+        from flowtracker.research.sector_kpis import build_extraction_hint
+        sector_hint = build_extraction_hint(industry)
+
+    user_prompt = (
+        f"Company: {symbol}\nQuarter: {quarter_label}\n"
+        f"Documents provided: {', '.join(docs_read)}\n"
+    )
+    if sector_hint:
+        user_prompt += f"\n{sector_hint}\n"
+        user_prompt += "Use the EXACT canonical field names listed above in your operational_metrics. If a KPI is not mentioned in the transcript, include it with value: null.\n\n"
+    else:
+        user_prompt += "\n"
+    user_prompt += "\n".join(user_parts)
+
+    response = await _call_claude(
+        CONCALL_EXTRACTION_PROMPT, user_prompt, model,
+        max_budget=0.60, max_turns=3,
+    )
+
+    try:
+        extraction = _extract_json(response)
+        extraction["extraction_status"] = "complete"
+    except (json.JSONDecodeError, ValueError):
+        # Primary extraction returned prose — try recovery with cheap model
+        if len(response.strip()) > 200:
+            logger.warning(
+                "Concall extraction for %s %s returned prose (%d chars) — attempting JSON recovery",
+                symbol, quarter_label, len(response),
+            )
+            try:
+                extraction = await _recover_json_from_prose(
+                    response, quarter_label, symbol, model,
+                )
+                extraction["extraction_status"] = "recovered"
+            except (json.JSONDecodeError, ValueError, Exception) as exc:
+                logger.warning(
+                    "JSON recovery also failed for %s %s: %s",
+                    symbol, quarter_label, exc,
+                )
+                extraction = _build_partial_extraction(
+                    response, quarter_label, docs_read,
+                )
+        else:
+            extraction = {
+                "label": quarter_label,
+                "fy_quarter": quarter_label,
+                "extraction_status": "failed",
+                "extraction_error": "Empty or very short response from Claude",
+                "raw_response": response[:2000],
+            }
+
+    # Ensure consistent fields
+    extraction.setdefault("fy_quarter", quarter_label)
+    extraction.setdefault("documents_read", docs_read)
+
+    # Validate canonical KPIs if sector is known
+    if industry and extraction.get("extraction_status") in ("complete", "recovered"):
+        from flowtracker.research.sector_kpis import get_kpis_for_industry
+        canonical = get_kpis_for_industry(industry)
+        if canonical:
+            ops = extraction.get("operational_metrics", {})
+            for kpi in canonical:
+                key = kpi["key"]
+                if key not in ops:
+                    ops[key] = {"value": None, "reason": "not_mentioned_in_concall"}
+            extraction["operational_metrics"] = ops
+
+    return extraction
+
+
+async def _generate_cross_quarter_narrative(
+    quarter_results: list[dict],
+    symbol: str,
+    model: str,
+) -> dict:
+    """Generate cross-quarter narrative from multiple quarter extractions.
+
+    Returns empty dict if fewer than 2 quarters provided.
+    """
+    if len(quarter_results) < 2:
+        return {}
+
+    quarters_json = json.dumps(quarter_results, indent=2, default=str)
+    cross_prompt = (
+        f"Company: {symbol}\n"
+        f"Quarters analyzed: {len(quarter_results)}\n\n"
+        f"Per-quarter extractions:\n```json\n{quarters_json}\n```"
+    )
+    cross_response = await _call_claude(CROSS_QUARTER_PROMPT, cross_prompt, model)
+    try:
+        return _extract_json(cross_response)
+    except (json.JSONDecodeError, ValueError):
+        # Fallback: recover JSON from prose using cheap model
+        if len(cross_response.strip()) > 200:
+            logger.warning(
+                "Cross-quarter narrative for %s returned prose (%d chars) — attempting JSON recovery",
+                symbol, len(cross_response),
+            )
+            recovery_prompt = (
+                f"The following is a prose cross-quarter analysis for {symbol}. "
+                "It was supposed to be structured JSON but came out as text.\n\n"
+                "Convert this into the JSON structure below. Preserve ALL specific numbers and quarter references.\n"
+                "Return ONLY valid JSON — no markdown, no explanation.\n\n"
+                "Required structure:\n"
+                '{"key_themes": ["<theme with numbers>"], '
+                '"guidance_track_record": {"promises": [], "delivery": [], "credibility_score": "", "assessment": ""}, '
+                '"metric_trajectories": {"<metric>": {"values_by_quarter": {}, "trend": "", "interpretation": ""}}, '
+                '"narrative_shifts": [], "recurring_analyst_concerns": [], '
+                '"biggest_positive": "", "biggest_concern": "", '
+                '"management_credibility": "", "what_to_watch_next_quarter": []}\n\n'
+                f"Prose to convert:\n{cross_response[:8000]}"
+            )
+            try:
+                recovery = await _call_claude(
+                    system_prompt="You are a data extraction assistant. Convert prose into JSON. Return ONLY valid JSON.",
+                    user_prompt=recovery_prompt,
+                    model="claude-sonnet-4-6",
+                    max_budget=0.15,
+                    max_turns=1,
+                )
+                return _extract_json(recovery)
+            except (json.JSONDecodeError, ValueError, Exception) as exc:
+                logger.warning("Cross-quarter JSON recovery failed for %s: %s", symbol, exc)
+
+        return {
+            "extraction_error": "Failed to parse cross-quarter narrative",
+            "raw_response": cross_response[:2000],
+        }
+
+
 async def extract_concalls(
     symbol: str,
     quarters: int = 4,
@@ -549,111 +732,12 @@ async def extract_concalls(
 
     # --- Per-quarter extraction ---
     quarter_results: list[dict] = []
-
     for pdf_path in pdfs:
-        quarter_label = _quarter_label_from_path(pdf_path)
-        quarter_dir = pdf_path.parent
-
-        # Read concall text
-        user_parts = [f"## Concall Transcript — {quarter_label}\n\n{_read_pdf_text(pdf_path)}"]
-        docs_read = ["concall.pdf"]
-
-        # Read supplementary docs
-        for extra in _find_supplementary_pdfs(quarter_dir):
-            extra_text = _read_pdf_text(extra)
-            if extra_text.strip():
-                user_parts.append(f"\n\n## {extra.stem.replace('_', ' ').title()} — {quarter_label}\n\n{extra_text}")
-                docs_read.append(extra.name)
-
-        # Build sector-specific KPI hint if industry is known
-        sector_hint = ""
-        if industry:
-            from flowtracker.research.sector_kpis import build_extraction_hint
-            sector_hint = build_extraction_hint(industry)
-
-        user_prompt = (
-            f"Company: {symbol}\nQuarter: {quarter_label}\n"
-            f"Documents provided: {', '.join(docs_read)}\n"
-        )
-        if sector_hint:
-            user_prompt += f"\n{sector_hint}\n"
-            user_prompt += "Use the EXACT canonical field names listed above in your operational_metrics. If a KPI is not mentioned in the transcript, include it with value: null.\n\n"
-        else:
-            user_prompt += "\n"
-        user_prompt += "\n".join(user_parts)
-
-        response = await _call_claude(
-            CONCALL_EXTRACTION_PROMPT, user_prompt, model,
-            max_budget=0.60, max_turns=3,
-        )
-
-        try:
-            extraction = _extract_json(response)
-            extraction["extraction_status"] = "complete"
-        except (json.JSONDecodeError, ValueError):
-            # Primary extraction returned prose — try recovery with cheap model
-            if len(response.strip()) > 200:
-                logger.warning(
-                    "Concall extraction for %s %s returned prose (%d chars) — attempting JSON recovery",
-                    symbol, quarter_label, len(response),
-                )
-                try:
-                    extraction = await _recover_json_from_prose(
-                        response, quarter_label, symbol, model,
-                    )
-                    extraction["extraction_status"] = "recovered"
-                except (json.JSONDecodeError, ValueError, Exception) as exc:
-                    logger.warning(
-                        "JSON recovery also failed for %s %s: %s",
-                        symbol, quarter_label, exc,
-                    )
-                    extraction = _build_partial_extraction(
-                        response, quarter_label, docs_read,
-                    )
-            else:
-                extraction = {
-                    "label": quarter_label,
-                    "fy_quarter": quarter_label,
-                    "extraction_status": "failed",
-                    "extraction_error": "Empty or very short response from Claude",
-                    "raw_response": response[:2000],
-                }
-
-        # Ensure consistent fields
-        extraction.setdefault("fy_quarter", quarter_label)
-        extraction.setdefault("documents_read", docs_read)
-
-        # A5: Validate canonical KPIs if sector is known
-        if industry and extraction.get("extraction_status") in ("complete", "recovered"):
-            from flowtracker.research.sector_kpis import get_kpis_for_industry
-            canonical = get_kpis_for_industry(industry)
-            if canonical:
-                ops = extraction.get("operational_metrics", {})
-                for kpi in canonical:
-                    key = kpi["key"]
-                    if key not in ops:
-                        ops[key] = {"value": None, "reason": "not_mentioned_in_concall"}
-                extraction["operational_metrics"] = ops
-
+        extraction = await _extract_single_quarter(pdf_path, symbol, model, industry)
         quarter_results.append(extraction)
 
     # --- Cross-quarter narrative ---
-    cross_narrative = {}
-    if len(quarter_results) >= 2:
-        quarters_json = json.dumps(quarter_results, indent=2, default=str)
-        cross_prompt = (
-            f"Company: {symbol}\n"
-            f"Quarters analyzed: {len(quarter_results)}\n\n"
-            f"Per-quarter extractions:\n```json\n{quarters_json}\n```"
-        )
-        cross_response = await _call_claude(CROSS_QUARTER_PROMPT, cross_prompt, model)
-        try:
-            cross_narrative = _extract_json(cross_response)
-        except (json.JSONDecodeError, ValueError):
-            cross_narrative = {
-                "extraction_error": "Failed to parse cross-quarter narrative",
-                "raw_response": cross_response[:2000],
-            }
+    cross_narrative = await _generate_cross_quarter_narrative(quarter_results, symbol, model)
 
     # --- Assemble final output ---
     result = {
@@ -673,4 +757,114 @@ async def extract_concalls(
 
     logger.info("[concall] %s: done %.1fs, %d quarters extracted",
                 symbol, _time.time() - concall_start, result.get("quarters_analyzed", 0))
+    return result
+
+
+async def ensure_concall_data(
+    symbol: str,
+    quarters: int = 4,
+    model: str = "claude-sonnet-4-20250514",
+    industry: str | None = None,
+) -> dict | None:
+    """Ensure concall extraction data is available, extracting only new quarters.
+
+    Per-quarter caching: if a quarter was already extracted successfully,
+    it won't be re-extracted. Only quarters with PDFs but no extraction are processed.
+    Cross-quarter narrative is regenerated only when new quarters are added.
+
+    Returns the full extraction dict (same schema as concall_extraction_v2.json),
+    or None if no concall PDFs exist for this symbol.
+    """
+    import time as _time
+    start = _time.time()
+    symbol = symbol.upper()
+
+    # Step 1: Find available PDFs (downloads missing ones via Screener URLs)
+    pdfs = _find_concall_pdfs(symbol, quarters=quarters)
+    if not pdfs:
+        logger.info("[concall_ensure] %s: no PDFs found", symbol)
+        return None
+
+    available = {pdf.parent.name: pdf for pdf in pdfs}  # {"FY26-Q3": Path, ...}
+
+    # Step 2: Load existing extraction
+    extraction_path = _VAULT_BASE / symbol / "fundamentals" / "concall_extraction_v2.json"
+    existing: dict | None = None
+    cached_quarters: dict[str, dict] = {}  # fy_quarter -> quarter dict
+
+    if extraction_path.exists():
+        try:
+            existing = json.loads(extraction_path.read_text())
+            for q in existing.get("quarters", []):
+                fq = q.get("fy_quarter")
+                if fq and q.get("extraction_status") in ("complete", "recovered"):
+                    cached_quarters[fq] = q
+        except (json.JSONDecodeError, OSError):
+            existing = None  # corrupt file, treat as empty
+
+    # Step 3: Determine which quarters need extraction
+    missing = sorted(
+        [fq for fq in available if fq not in cached_quarters],
+        key=_fy_sort_key_from_str,
+        reverse=True,
+    )
+
+    # Step 4: Fast path — nothing to extract
+    if not missing and existing:
+        logger.info("[concall_ensure] %s: all %d quarters cached", symbol, len(cached_quarters))
+        existing["_new_quarters_extracted"] = 0
+        return existing
+
+    # Step 5: Extract missing quarters only
+    new_extractions: list[dict] = []
+    for fq in missing:
+        pdf_path = available[fq]
+        logger.info("[concall_ensure] %s: extracting %s", symbol, fq)
+        extraction = await _extract_single_quarter(pdf_path, symbol, model, industry)
+        new_extractions.append(extraction)
+
+    # Step 6: Merge new + existing quarters
+    merged_quarters: dict[str, dict] = dict(cached_quarters)
+    # Also keep non-cached existing quarters (partial/failed) that aren't being replaced
+    if existing:
+        for q in existing.get("quarters", []):
+            fq = q.get("fy_quarter")
+            if fq and fq not in merged_quarters:
+                merged_quarters[fq] = q
+    # Add new extractions (overwrite any failed/partial for same quarter)
+    for q in new_extractions:
+        fq = q.get("fy_quarter")
+        if fq:
+            merged_quarters[fq] = q
+
+    all_quarters = sorted(
+        merged_quarters.values(),
+        key=lambda q: _fy_sort_key_from_str(q.get("fy_quarter", "FY00-Q1")),
+        reverse=True,
+    )
+
+    # Step 7: Regenerate cross-quarter narrative only if new quarters were added
+    cross_narrative = existing.get("cross_quarter_narrative", {}) if existing else {}
+    if new_extractions:
+        cross_narrative = await _generate_cross_quarter_narrative(all_quarters, symbol, model)
+
+    # Step 8: Assemble and save
+    result = {
+        "symbol": symbol,
+        "quarters_analyzed": len(all_quarters),
+        "sector": industry or (existing.get("sector", "") if existing else ""),
+        "extraction_date": date.today().isoformat(),
+        "quarters": all_quarters,
+        "cross_quarter_narrative": cross_narrative,
+    }
+
+    out_dir = _VAULT_BASE / symbol / "fundamentals"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    extraction_path.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+
+    logger.info(
+        "[concall_ensure] %s: done %.1fs, %d new quarters, %d total",
+        symbol, _time.time() - start, len(new_extractions), len(all_quarters),
+    )
+    result["_new_quarters_extracted"] = len(new_extractions)
     return result
