@@ -206,10 +206,10 @@ def run_agent(agent: str, stock: str) -> tuple[float, bool]:
             if line:
                 print(f"  {line.rstrip()}", file=sys.stderr)
             # Check timeout
-            if time.monotonic() - start > 900:
+            if time.monotonic() - start > 1800:
                 proc.kill()
                 proc.wait()
-                raise subprocess.TimeoutExpired(cmd="agent", timeout=900)
+                raise subprocess.TimeoutExpired(cmd="agent", timeout=1800)
         # Drain remaining stderr
         for line in proc.stderr:
             print(f"  {line.rstrip()}", file=sys.stderr)
