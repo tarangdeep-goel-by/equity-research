@@ -22,3 +22,13 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-07T12:55:58Z	1	business	GROWW	broker	ERR	0	49776	0.0	65.4	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-07T12:56:34Z	1	business	PIDILITIND	chemicals	A-	91	31315	0.0	41.9	2	This is an institutional-quality business breakdown that brilliantly captures the qualitative essenc
 2026-04-07T12:59:12Z	1	business	GROWW	broker	A-	92	49776	0.0	147.4	2	This is a highly sophisticated, institutional-quality business report that brilliantly navigates com
+2026-04-07T13:47:13Z	1	financials	SBIN	bfsi	ERR	0	40808	857.2	29.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-07T14:15:23Z	1	financials	SBIN	bfsi	ERR	0	40808	0.0	1199.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
+2026-04-07T14:20:16Z	1	financials	SBIN	bfsi	ERR	0	40808	0.0	1836.4	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
+2026-04-07T14:55:44Z	1	financials	SBIN	bfsi	A-	91	40808	0.0	51.5	2	This is a highly sophisticated, institutional-grade financial analysis that perfectly adapts its fra
+2026-04-07T15:20:54Z	1	financials	TCS	it_services	A-	90	27399	0.0	53.8	2	A very strong, institutional-quality foundation that excels in general financial decomposition (DuPo
+2026-04-07T15:37:15Z	1	financials	VEDL	metals	A-	91	46302	0.0	56.6	2	This is a highly sophisticated financial report that demonstrates excellent critical thinking by cat
+2026-04-07T15:39:30Z	1	financials	ETERNAL	platform	ERR	0	0	0.0	0.0	0	No report file found
+2026-04-07T15:43:07Z	1	financials	ETERNAL	platform	ERR	0	0	0.0	0.0	0	No report file found
+2026-04-07T15:45:11Z	1	financials	ETERNAL	platform	ERR	0	0	0.0	0.0	0	No report file found
+2026-04-07T15:46:24Z	1	financials	ADANIENT	conglomerate	ERR	0	0	0.0	0.0	0	No report file found

@@ -1,0 +1,176 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260407T133225.log
+AutoEval (agent-first): agent=financials sectors=['bfsi']
+Target: grade_numeric >= 90
+
+--- financials / SBIN (bfsi) ---
+  Running agent...
+  19:02:26 [INFO] flowtracker.research.refresh: [refresh] SBIN: started (max_age=6h)
+  19:02:26 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  19:02:26 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  19:02:26 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  19:02:26 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/SBIN/consolidated/ "HTTP/1.1 200 OK"
+  19:02:26 [INFO] flowtracker.research.refresh: [refresh] SBIN: company_profile ok 1 records
+  19:02:26 [INFO] flowtracker.research.refresh: [refresh] SBIN: company_documents ok 75 records
+  19:02:27 [INFO] flowtracker.research.refresh: [refresh] SBIN: quarterly_results ok 13 records
+  19:02:27 [INFO] flowtracker.research.refresh: [refresh] SBIN: screener_ratios ok 12 records
+  19:02:27 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/SBIN/consolidated/ "HTTP/1.1 200 OK"
+  19:02:27 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/6598877/ "HTTP/1.1 200 OK"
+  19:02:27 [INFO] flowtracker.research.refresh: [refresh] SBIN: annual_financials ok 10 records
+  19:02:27 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/SBIN/ "HTTP/1.1 200 OK"
+  19:02:28 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/1762/ "HTTP/1.1 200 OK"
+  19:02:28 [INFO] flowtracker.research.refresh: [refresh] SBIN: standalone_financials ok 10 records
+  19:02:28 [INFO] flowtracker.research.refresh: [refresh] SBIN: screener_ids ok 1 records
+  19:02:28 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/chart/?q=Price+to+Earning-Median+PE-EPS&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  19:02:28 [INFO] flowtracker.research.refresh: [refresh] SBIN: chart_pe ok 1139 records
+  19:02:29 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  19:02:29 [INFO] flowtracker.research.refresh: [refresh] SBIN: chart_price ok 5490 records
+  19:02:30 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6598877/peers/ "HTTP/1.1 200 OK"
+  19:02:30 [INFO] flowtracker.research.refresh: [refresh] SBIN: peers ok 8 records
+  19:02:30 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3188/investors/promoters/quarterly/ "HTTP/1.1 200 OK"
+  19:02:31 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3188/investors/foreign_institutions/quarterly/ "HTTP/1.1 200 OK"
+  19:02:32 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3188/investors/domestic_institutions/quarterly/ "HTTP/1.1 200 OK"
+  19:02:33 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3188/investors/public/quarterly/ "HTTP/1.1 200 OK"
+  19:02:34 [INFO] flowtracker.research.refresh: [refresh] SBIN: shareholders ok 88 records
+  19:02:34 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:02:35 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:02:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:02:37 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:02:38 [INFO] flowtracker.research.refresh: [refresh] SBIN: schedules_quarters ok 143 records
+  19:02:38 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:02:39 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:02:41 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:02:42 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:02:43 [INFO] flowtracker.research.refresh: [refresh] SBIN: schedules_profit-loss ok 156 records
+  19:02:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:02:44 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:02:45 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:02:46 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:02:47 [INFO] flowtracker.research.refresh: [refresh] SBIN: schedules_balance-sheet ok 151 records
+  19:02:47 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  19:02:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  19:02:49 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  19:02:50 [INFO] flowtracker.research.refresh: [refresh] SBIN: schedules_cash-flow ok 276 records
+  19:02:51 [INFO] flowtracker.research.refresh: [refresh] SBIN: valuation_snapshot ok 1 records
+  19:02:51 [INFO] flowtracker.research.refresh: [refresh] SBIN: consensus_estimate ok 1 records
+  /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/yfinance/scrapers/fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+    warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+  19:02:51 [INFO] flowtracker.research.refresh: [refresh] SBIN: earnings_surprises ok 4 records
+  19:02:52 [INFO] flowtracker.research.refresh: [refresh] SBIN: corporate_actions ok 31 records
+  19:02:52 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/companies-listing/corporate-filings-insider-trading "HTTP/1.1 200 OK"
+  19:02:52 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/corporates-pit?from_date=07-01-2026&to_date=07-04-2026&symbol=SBIN "HTTP/1.1 200 OK"
+  19:02:52 [WARNING] flowtracker.research.refresh: [refresh] SBIN: insider_transactions skipped: no data
+  19:02:52 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_31032026.csv "HTTP/1.1 200 OK"
+  19:02:52 [INFO] flowtracker.bhavcopy_client: Fetched 2026-03-31: 2448 records (total: 2448, day 0/7)
+  19:02:53 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_01042026.csv "HTTP/1.1 200 OK"
+  19:02:53 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-01: 2447 records (total: 4895, day 1/7)
+  19:02:54 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_02042026.csv "HTTP/1.1 200 OK"
+  19:02:54 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-02: 2451 records (total: 7346, day 2/7)
+  19:02:54 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_03042026.csv "HTTP/1.1 200 OK"
+  19:02:54 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-03: 2451 records (total: 9797, day 3/7)
+  19:02:55 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_06042026.csv "HTTP/1.1 200 OK"
+  19:02:55 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-06: 2453 records (total: 12250, day 6/7)
+  19:02:55 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_07042026.csv "HTTP/1.1 200 OK"
+  19:02:55 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-07: 2453 records (total: 14703, day 7/7)
+  19:02:56 [INFO] flowtracker.bhavcopy_client: Backfill complete: 6 trading days, 14703 records
+  19:02:56 [INFO] flowtracker.research.refresh: [refresh] SBIN: delivery_data ok 6 records
+  19:02:57 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/market-data/live-equity-market "HTTP/1.1 200 OK"
+  19:02:57 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/snapshot-capital-market-largedeal "HTTP/1.1 200 OK"
+  19:02:57 [INFO] flowtracker.research.refresh: [refresh] SBIN: bulk_block_deals ok 0 records
+  19:02:58 [INFO] httpx: HTTP Request: GET https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields "HTTP/1.1 200 OK"
+  19:02:58 [INFO] flowtracker.research.refresh: [refresh] SBIN: macro ok 6 records
+  19:02:58 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/reports/fii-dii "HTTP/1.1 200 OK"
+  19:02:58 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/fiidiiTradeReact "HTTP/1.1 200 OK"
+  19:02:58 [INFO] flowtracker.research.refresh: [refresh] SBIN: fii_dii_flows ok 2 records
+  19:02:58 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/PeerSmartSearch/w?Type=SS&text=SBIN "HTTP/1.1 200 OK"
+  19:02:59 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=1&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:00 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=2&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:01 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=3&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:04 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=4&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:05 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=5&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:06 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=6&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:09 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=7&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:10 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=8&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:11 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=9&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:12 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=10&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:14 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=11&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:16 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=12&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:18 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=13&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:20 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=14&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:21 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=15&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:22 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=16&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:24 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=17&strCat=-1&subcategory=-1&strPrevDate=20230408&strToDate=20260407&strSearch=P&strscrip=500112&strType=C "HTTP/1.1 200 OK"
+  19:03:24 [INFO] flowtracker.research.refresh: [refresh] SBIN: filings ok 844 records
+  19:03:25 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/discounted-cash-flow/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  19:03:25 [WARNING] flowtracker.fmp_client: FMP request failed: /discounted-cash-flow/SBIN.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/discounted-cash-flow/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:25 [WARNING] flowtracker.research.refresh: [refresh] SBIN: fmp_dcf skipped: no data
+  19:03:25 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14 "HTTP/1.1 403 Forbidden"
+  19:03:25 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SBIN.NS {'type': 'rsi', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:26 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50 "HTTP/1.1 403 Forbidden"
+  19:03:26 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SBIN.NS {'type': 'sma', 'period': 50} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:27 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200 "HTTP/1.1 403 Forbidden"
+  19:03:27 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SBIN.NS {'type': 'sma', 'period': 200} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:27 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14 "HTTP/1.1 403 Forbidden"
+  19:03:27 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SBIN.NS {'type': 'macd', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:28 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14 "HTTP/1.1 403 Forbidden"
+  19:03:28 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SBIN.NS {'type': 'adx', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:28 [WARNING] flowtracker.research.refresh: [refresh] SBIN: fmp_technicals skipped: no data
+  19:03:28 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/key-metrics/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  19:03:28 [WARNING] flowtracker.fmp_client: FMP request failed: /key-metrics/SBIN.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/key-metrics/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:28 [WARNING] flowtracker.research.refresh: [refresh] SBIN: fmp_key_metrics skipped: no data
+  19:03:29 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/financial-growth/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  19:03:29 [WARNING] flowtracker.fmp_client: FMP request failed: /financial-growth/SBIN.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/financial-growth/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:29 [WARNING] flowtracker.research.refresh: [refresh] SBIN: fmp_growth skipped: no data
+  19:03:29 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/grade/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  19:03:29 [WARNING] flowtracker.fmp_client: FMP request failed: /grade/SBIN.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/grade/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:29 [WARNING] flowtracker.research.refresh: [refresh] SBIN: fmp_grades skipped: no data
+  19:03:29 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/price-target/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  19:03:29 [WARNING] flowtracker.fmp_client: FMP request failed: /price-target/SBIN.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/price-target/SBIN.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:03:29 [WARNING] flowtracker.research.refresh: [refresh] SBIN: fmp_targets skipped: no data
+  19:03:29 [WARNING] flowtracker.research.refresh: [refresh] SBIN: analytical_snapshot skipped: Cannot operate on a closed database.
+  19:03:29 [INFO] flowtracker.research.refresh: [refresh] SBIN: done 63.7s, 32 sources, 8468 total records
+  19:03:29 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SBIN: started
+  19:03:29 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SBIN: done 0.0s, 0 peers fetched, 8 cached, 6 benchmarks
+  19:03:30 [INFO] httpx: HTTP Request: GET https://news.google.com/rss/search?q=State%20Bank%20of%20India%20SBIN%20stock%20India&hl=en-IN&gl=IN&ceid=IN:en "HTTP/1.1 200 OK"
+  19:03:31 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  19:03:46 [INFO] flowtracker.research.agent: [financials] tool_call: ToolSearch({"query": "select:mcp__financials__get_analytical_profile,mcp__financials__get_fundament...", "max_results": "5"})
+  19:03:49 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__get_analytical_profile({"symbol": "SBIN"})
+  19:03:50 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__get_fundamentals({"symbol": "SBIN", "section": "[\"quarterly_results\", \"annual_financials\", \"ratios\", \"cost_structure\", \"balan..."})
+  19:03:51 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__get_quality_scores({"symbol": "SBIN", "section": "[\"dupont\", \"bfsi\", \"subsidiary\"]"})
+  19:03:51 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__get_estimates({"symbol": "SBIN", "section": "[\"consensus\", \"surprises\", \"revisions\", \"revenue\"]"})
+  19:03:51 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__get_peer_sector({"symbol": "SBIN", "section": "[\"peer_metrics\", \"peer_growth\", \"benchmarks\"]"})
+  19:05:35 [INFO] flowtracker.research.agent: [financials] tool_call: ToolSearch({"query": "select:mcp__financials__render_chart,mcp__financials__get_valuation", "max_results": "2"})
+  19:05:40 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__render_chart({"symbol": "SBIN", "chart_type": "quarterly"})
+  19:05:40 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__render_chart({"symbol": "SBIN", "chart_type": "margin_trend"})
+  19:05:41 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__render_chart({"symbol": "SBIN", "chart_type": "dupont"})
+  19:05:41 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__render_chart({"symbol": "SBIN", "chart_type": "cashflow"})
+  19:05:41 [INFO] flowtracker.research.agent: [financials] tool_call: mcp__financials__get_valuation({"symbol": "SBIN", "section": "[\"snapshot\", \"sotp\"]"})
+  19:16:42 [INFO] flowtracker.research.agent: [financials] unused_tools: SdkMcpTool(name='calculate', description="Financial calculator — use this for ALL math instead of computing in your head. Operations (pass operation + a + b): 'shares_to_value_cr': a=shares (raw count), b=price (₹) → value in ₹ Cr. 'per_share_to_total_cr': a=per_share_value (₹), b=shares (raw count) → total in ₹ Cr. 'total_cr_to_per_share': a=total_cr (₹ Cr), b=shares (raw count) → per share (₹). 'pe_from_price_eps': a=price (₹), b=eps (₹) → PE ratio. 'eps_from_pat_shares': a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹). 'fair_value': a=pe_multiple, b=eps (₹) → fair value per share (₹). 'growth_rate': a=old value, b=new value → growth %. 'mcap_cr': a=price (₹), b=shares (raw count) → market cap in ₹ Cr. 'margin_of_safety': a=fair_value (₹), b=current_price (₹) → MoS %. 'annualize_quarterly': a=quarterly_value → annualized (×4). 'pct_of': a=part, b=whole → percentage. 'ratio': a=numerator, b=denominator → ratio. 'expr': a=arithmetic expression as string (e.g. '(623 * 0.25) / 114.4') → result. Returns the result + the full calculation string so you can verify and cite it. ALWAYS use this tool for any multiplication, division, or unit conversion. Never compute in your head.", input_schema={'operation': <class 'str'>, 'a': <class 'float'>, 'b': <class 'float'>}, handler=<function calculate at 0x1101dd800>, annotations=None), SdkMcpTool(name='get_analytical_profile', description='Pre-computed analytical profile (updated weekly). Returns ALL metrics in ONE call: composite score (0-100), Piotroski F-Score (0-9), Beneish M-Score, earnings quality, Bernstein reverse DCF (implied growth + implied margin + 5x5 sensitivity matrix), capex cycle phase, common size P&L, BFSI metrics (NIM/ROA if bank), price performance (1M/3M/6M/1Y vs Nifty + sector). CALL THIS FIRST — drill into individual tools only for full 10Y history.', input_schema={'symbol': <class 'str'>}, handler=<function get_analytical_profile at 0x1101dc900>, annotations=None), SdkMcpTool(name='get_chart_data', description="Get Screener chart time series. chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function get_chart_data at 0x1101d6d40>, annotations=None), SdkMcpTool(name='get_company_context', description="Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>, 'doc_type': <class 'str'>, 'limit': <class 'int'>}, handler=<function get_company_context at 0x1101dd580>, annotations=None), SdkMcpTool(name='get_estimates', description="Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_estimates at 0x1101dd300>, annotations=None), SdkMcpTool(name='get_events_actions', description="Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']. Optional: years (default 10), quarters (default 12), days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_events_actions at 0x1101dd6c0>, annotations=None), SdkMcpTool(name='get_fair_value_analysis', description="Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_fair_value_analysis at 0x1101dd080>, annotations=None), SdkMcpTool(name='get_fundamentals', description="Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']. Optional: quarters (default 12), years (default 10), sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_fundamentals at 0x1101dcb80>, annotations=None), SdkMcpTool(name='get_peer_sector', description="Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | ['section1', 'section2']. Optional: metric (for specific valuation metric).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_peer_sector at 0x1101dd1c0>, annotations=None), SdkMcpTool(name='get_quality_scores', description="Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'forensic_checks' | 'improvement_metrics' | 'capital_discipline' | 'incremental_roce' | 'altman_zscore' | 'working_capital' | 'operating_leverage' | 'fcf_yield' | 'tax_rate_analysis' | 'receivables_quality' | 'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | ['section1', 'section2']. BFSI routing: 'all' auto-skips non-applicable. 'incremental_roce' = marginal return on new capital. 'altman_zscore' = EM distress predictor. 'working_capital' = CCC trend + channel stuffing flags. 'operating_leverage' = DOL earnings sensitivity. 'fcf_yield' = FCF/EV vs risk-free. 'tax_rate_analysis' = ETR anomalies. 'receivables_quality' = revenue recognition risk.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_quality_scores at 0x1101dccc0>, annotations=None), SdkMcpTool(name='get_valuation', description="Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']. Optional: metric (for band, default 'pe_trailing'), days (default 2500), years (default 10).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_valuation at 0x1101dcf40>, annotations=None), SdkMcpTool(name='render_chart', description="Generate a PNG chart and return the file path for embedding in your report. Use the embed_markdown value directly in your report to show the chart. chart_type options: STOCK CHARTS: 'price' (price + SMA50/200, 7yr), 'pe' (PE ratio history, 7yr), 'delivery' (delivery % + volume bars, 90 days), 'revenue_profit' (10yr annual revenue & profit bars), 'quarterly' (12-quarter revenue & profit bars), 'margin_trend' (10yr OPM & NPM lines), 'roce_trend' (10yr ROCE bars, color-coded by quality), 'dupont' (DuPont decomposition: margin × turnover × leverage → ROE), 'cashflow' (10yr operating & free cash flow bars), 'shareholding' (12-quarter ownership trend lines), 'fair_value_range' (bear/base/bull vs current price horizontal bar), 'expense_pie' (expense breakdown pie chart), 'composite_radar' (8-factor quality score spider chart), 'dividend_history' (dividend payout ratio & DPS over time). SECTOR CHARTS: 'sector_mcap' (all sector stocks by market cap), 'sector_growth_bars' (sector peer revenue growth bars), 'sector_profitability_bars' (sector peer ROCE bars), 'sector_pe_distribution' (sector PE histogram with subject marked), 'sector_valuation_scatter' (PE vs ROCE scatter — bargain/avoid quadrants), 'sector_ownership_flow' (MF ownership changes — accumulation/exit). COMPARISON CHARTS (use comma-separated symbols, e.g. symbol='HDFCBANK,ICICIBANK'): 'comparison_revenue' (indexed revenue trajectories), 'comparison_pe' (PE history overlay), 'comparison_shareholding' (FII/MF ownership trends overlay), 'comparison_radar' (quality score radars overlaid), 'comparison_margins' (OPM/NPM trends overlay). Returns: {path, embed_markdown}.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function render_chart at 0x1101d7ce0>, annotations=None)
+  19:16:42 [INFO] flowtracker.research.agent: [financials] done: success 40808 chars, 12 calls, 8/12 tools used, 791s, $0.91
+  Agent completed in 857.2s (success=True)
+  Report: 40808 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  [ERROR] Gemini eval failed for financials/SBIN: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+  Grade: ERR (0) [FAIL]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260407T134713_all_for_financials.json
+
+======================================================================
+AGENT SUMMARY: financials
+======================================================================
+  bfsi                SBIN          ERR ( 0)  [FAIL]  prompt_fixes:0
+======================================================================
+passing:0  failing:1  total:1
+======================================================================
