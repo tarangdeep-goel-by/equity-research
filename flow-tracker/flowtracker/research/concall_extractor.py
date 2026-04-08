@@ -75,8 +75,7 @@ def _download_transcript_from_url(url: str, dest_path: Path) -> bool:
 
     Returns True if downloaded successfully. Skips BSE URLs (unreliable).
     """
-    if "bseindia.com" in url:
-        return False  # BSE is flaky, skip
+    # BSE links from Screener are direct file URLs — they work reliably
     import httpx
     try:
         with httpx.Client(follow_redirects=True, timeout=30) as client:
