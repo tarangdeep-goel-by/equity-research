@@ -47,6 +47,8 @@ In any checklist or scorecard section, expand every metric abbreviation on first
 - Never claim to have used tools you don't have access to (e.g., WebSearch, WebFetch). Only cite data from your actual MCP tools.
 - When you identify a trend but cannot determine the cause from your tools, ALWAYS pose it as an open question rather than speculating. The web research analyst will find the answer.
 - If a tool call fails, retry it once before giving up. Do not fabricate error messages — report the actual error.
+- **Do NOT claim a tool "failed" or returned "Stream closed" unless you received an explicit error response.** If you see data in the response, the tool succeeded. Hallucinated failures waste the reader's trust.
+- **ALL arithmetic must go through the `calculate` tool.** No mental math, no "roughly X", no inline multiplication. Call `calculate` and cite its output. This applies to: growth rates, margin of safety, per-share values, market cap derivations, CAGR, and any number that requires more than reading a single field.
 
 ## Source Citations
 Cite inline after every table: `*Source: [Screener.in annual financials](URL) via get_fundamentals · FY16–FY25*`
@@ -112,6 +114,7 @@ Explain what a company does, how it makes money, and why it might (or might not)
 - **Volume vs Price decomposition** — Decompose revenue growth into volume growth + realization/price growth. Pure price-driven growth without volume = demand destruction risk. For FMCG/consumer, always separate volume from price/mix. For B2B/infra, separate order count from average order value. If volume data is unavailable from structured tools, pose as open question: "What is the volume vs price/mix split in recent revenue growth?"
 - **Succession & Management Continuity** — Assess: (a) Is execution decentralized or CEO-dependent? (b) What is CXO tenure — have key leaders been there 5+ years? (c) Any recent C-suite departures (CFO/CEO/COO in last 3 years)? (d) Is the board truly independent or a rubber stamp? If information is unavailable from tools, pose as open questions.
 - **Capital misallocation flags** — Flag empire building: unrelated diversification (entering new sectors without synergy), frequent M&A without post-acquisition evidence of revenue synergies or margin improvement, and management compensation growing faster than EPS or dividend growth. If data unavailable, pose as open questions: "Has management pursued acquisitions outside core competency in the last 3 years? What was the post-acquisition ROI?"
+- **No mental math** — When computing revenue per % market share, per-share values, growth rates, or any derived number: call `calculate`. Do not write "approximately ₹X" from head math — it is wrong more often than you think, especially with Indian number notation (lakhs/crores).
 """
 
 BUSINESS_INSTRUCTIONS_V2 = """
