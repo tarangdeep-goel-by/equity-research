@@ -1,0 +1,73 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-08T08:17:06.182384+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "conglomerate": {
+      "agent": "financials",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "A",
+      "grade_numeric": 93,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional depth in unpacking the 'Other Income' distortion and correctly identifying the structural decline in asset turnover due to the capex cycle."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Highly consistent narrative. The conglomerate framing established in the introduction is perfectly carried through the DuPont, margin, and cash flow analyses."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Strong overall, but misses a critical dimension for a highly leveraged infrastructure conglomerate: debt maturity profile, liquidity position, and Net Debt/EBITDA analysis."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides clear, actionable warnings (e.g., the 'PE illusion') and sets up specific watch-metrics (capex-to-revenue conversion) for future quarters."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of the holding company/incubator framework. The use of the Ambit Capital Allocation cycle and the Standalone vs. Subsidiary PAT breakdown is institutional grade."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Good use of the calculate tool and clear citations. However, attributing the 'Jaiprakash Associates acquisition' directly to AEL's balance sheet risk (rather than the cement subsidiaries) is worth verifying."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 4 \u2014 Balance Sheet & Cash Flow",
+          "issue": "Missing debt maturity and liquidity analysis. For a conglomerate with \u20b91.09L Cr in debt and thin interest coverage, analyzing the debt schedule and liquidity buffer is mandatory.",
+          "suggestion": "Update instructions to require 'Net Debt/EBITDA', 'Debt Maturity Profile', and 'Liquidity/Cash Equivalents' analysis for heavy-capex/infrastructure conglomerates."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "Section 4 \u2014 Balance Sheet & Cash Flow",
+          "issue": "Mentions 'March 2026 Jaiprakash Associates acquisition' as a direct balance sheet risk for AEL. This is likely an LLM context bleed from Adani Group's cement acquisitions (Ambuja/ACC), which are separate listed entities.",
+          "suggestion": "None. Inherent LLM limitation regarding complex group-level vs. entity-level news attribution."
+        }
+      ],
+      "strengths": [
+        "Brilliant use of the Ambit Capital 6-Step Capital Allocation Cycle to diagnose the exact phase of the conglomerate's investment cycle.",
+        "Excellent decomposition of Standalone vs. Subsidiary revenue and PAT, perfectly setting up the Valuation agent for an SOTP approach.",
+        "Superb identification of the 'PE illusion' caused by trailing non-recurring 'Other Income' versus forward estimates."
+      ],
+      "summary": "This is an institutional-quality report that perfectly captures the complex, distorted financial reality of an incubator conglomerate. The primary gap is the lack of a deep dive into the debt maturity profile and liquidity position, which is critical given the \u20b91.09L Cr debt burden and thin interest coverage. However, the analytical deconstruction of earnings quality, asset turnover, and the 'PE illusion' is outstanding.",
+      "report_length": 30102,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 76.35350316693075,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional depth in unpacking the 'Other Income' distortion and correctly identifying the structural decline in asset turnover due to the capex cycle.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Highly consistent narrative. The conglomerate framing established in the introduction is perfectly carried through the DuPont, margin, and cash flow analyses.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Strong overall, but misses a critical dimension for a highly leveraged infrastructure conglomerate: debt maturity profile, liquidity position, and Net Debt/EBITDA analysis.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides clear, actionable warnings (e.g., the 'PE illusion') and sets up specific watch-metrics (capex-to-revenue conversion) for future quarters.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of the holding company/incubator framework. The use of the Ambit Capital Allocation cycle and the Standalone vs. Subsidiary PAT breakdown is institutional grade.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Good use of the calculate tool and clear citations. However, attributing the 'Jaiprakash Associates acquisition' directly to AEL's balance sheet risk (rather than the cement subsidiaries) is worth verifying.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 93\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 4 \u2014 Balance Sheet & Cash Flow\",\n      \"issue\": \"Missing debt maturity and liquidity analysis. For a conglomerate with \u20b91.09L Cr in debt and thin interest coverage, analyzing the debt schedule and liquidity buffer is mandatory.\",\n      \"suggestion\": \"Update instructions to require 'Net Debt/EBITDA', 'Debt Maturity Profile', and 'Liquidity/Cash Equivalents' analysis for heavy-capex/infrastructure conglomerates.\"\n    },\n    {\n      \"type\": \"NOT_OUR_PROBLEM\",\n      \"section\": \"Section 4 \u2014 Balance Sheet & Cash Flow\",\n      \"issue\": \"Mentions 'March 2026 Jaiprakash Associates acquisition' as a direct balance sheet risk for AEL. This is likely an LLM context bleed from Adani Group's cement acquisitions (Ambuja/ACC), which are separate listed entities.\",\n      \"suggestion\": \"None. Inherent LLM limitation regarding complex group-level vs. entity-level news attribution.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant use of the Ambit Capital 6-Step Capital Allocation Cycle to diagnose the exact phase of the conglomerate's investment cycle.\",\n    \"Excellent decomposition of Standalone vs. Subsidiary revenue and PAT, perfectly setting up the Valuation agent for an SOTP approach.\",\n    \"Superb identification of the 'PE illusion' caused by t"
+    }
+  }
+}

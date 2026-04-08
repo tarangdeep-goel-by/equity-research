@@ -1,0 +1,66 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-08T05:23:18.871379+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "platform": {
+      "agent": "financials",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent connection of balance sheet changes (inventory/leases) to P&L mix shifts. However, it fails to analyze the largest cost bucket ('Other Costs' at 51% of revenue) which contains critical operational levers."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Strong logical progression and excellent contextualization of the M-Score as a likely false positive. Minor flaw: it assumes the Q2 FY26 revenue jump is purely a mix shift/gross billing without fully exploring potential M&A impacts, though it does flag it as an open question."
+        },
+        "completeness": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Major gap: 'Other Costs' make up 51% of FY25 revenue, yet the report completely ignores its composition. It also mentions the 'District' segment in the intro but provides no financial context for it."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "The subsidiary split analysis (core profitability vs. subsidiary burn) is highly actionable for valuation. However, it could have provided a clearer view on the normalized run-rate of cash burn to estimate the exact funding runway."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Applies platform frameworks well (negative CCC, operating leverage), but misses the core food delivery framework: analyzing delivery costs and customer acquisition costs (marketing), which are buried in the unanalyzed 'Other Costs'."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Excellent use of the `calculate` tool to derive exact percentages and multiples. Minor gap: It relied on the `cost_structure` tool for high-level percentages but failed to call `expense_breakdown` to get the granular data needed."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "2. Margin Analysis",
+          "issue": "The agent ignored 'Other Costs' which constitutes 51% of FY25 revenue. For a food delivery/quick commerce company, this contains critical metrics like delivery rider costs and marketing/CAC.",
+          "suggestion": "Instruct the agent to always call `get_fundamentals(section='expense_breakdown')` when 'Other Costs' exceed 20% of revenue to analyze the underlying operational drivers."
+        }
+      ],
+      "strengths": [
+        "Brilliant deduction of the business model mix shift (gross billing/inventory model) by triangulating the Q2 FY26 revenue jump, material cost spike, and balance sheet inventory/lease surges.",
+        "Excellent isolation of the core business profitability (Zomato standalone at 22.7% net margin) versus the consolidated investment-phase cash burn."
+      ],
+      "summary": "This is a highly insightful and well-written financial deep dive that correctly identifies the structural break in FY26 and the hidden profitability of the core business. However, it misses a critical sector-specific analysis by failing to break down 'Other Costs' (51% of revenue), which houses the essential delivery and marketing expenses.",
+      "report_length": 48040,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 36.24843633302953,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent connection of balance sheet changes (inventory/leases) to P&L mix shifts. However, it fails to analyze the largest cost bucket ('Other Costs' at 51% of revenue) which contains critical operational levers.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Strong logical progression and excellent contextualization of the M-Score as a likely false positive. Minor flaw: it assumes the Q2 FY26 revenue jump is purely a mix shift/gross billing without fully exploring potential M&A impacts, though it does flag it as an open question.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Major gap: 'Other Costs' make up 51% of FY25 revenue, yet the report completely ignores its composition. It also mentions the 'District' segment in the intro but provides no financial context for it.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"The subsidiary split analysis (core profitability vs. subsidiary burn) is highly actionable for valuation. However, it could have provided a clearer view on the normalized run-rate of cash burn to estimate the exact funding runway.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Applies platform frameworks well (negative CCC, operating leverage), but misses the core food delivery framework: analyzing delivery costs and customer acquisition costs (marketing), which are buried in the unanalyzed 'Other Costs'.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Excellent use of the `calculate` tool to derive exact percentages and multiples. Minor gap: It relied on the `cost_structure` tool for high-level percentages but failed to call `expense_breakdown` to get the granular data needed.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2. Margin Analysis\",\n      \"issue\": \"The agent ignored 'Other Costs' which constitutes 51% of FY25 revenue. For a food delivery/quick commerce company, this contains critical metrics like delivery rider costs and marketing/CAC.\",\n      \"suggestion\": \"Instruct the agent to always call `get_fundamentals(section='expense_breakdown')` when 'Other Costs' exceed 20% of revenue to analyze the underlying operational drivers.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant deduction of the business model mix shift (gross billing/inventory model) by triangulating the Q2 FY26 revenue jump, material cost spike, and balance sheet inventory/lease surges.\",\n    \"Excellent isolation of the core business profitability (Zomato standalone at 22.7% net margin) versus the consolidated investment-phase cash burn.\"\n  ],\n  \"summary\": \"This is a highly insightful and well-written financial deep dive tha"
+    }
+  }
+}

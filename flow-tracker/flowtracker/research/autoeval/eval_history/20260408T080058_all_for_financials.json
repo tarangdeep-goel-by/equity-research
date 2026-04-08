@@ -1,0 +1,73 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-08T08:00:58.895170+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "insurance": {
+      "agent": "financials",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Excellent breakdown of the loss-to-profit journey and the 'treasury subsidy' masking operating EBIT losses. However, it punts marketing efficiency (CAC/LTV proxy) entirely to the business agent instead of analyzing the 'Other Expenses' trend more deeply."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "The narrative flows logically from P&L to cash flow. The only minor flaw is comparing Q3 FY26 OPM (9%) directly with FY25 annual EBIT (-0.5%) in the summary without explicitly bridging the timeline/D&A gap, which could confuse a quick reader."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers all major financial statements well, but misses an opportunity to back-calculate Paisabazaar's specific financial drag using the provided standalone vs. consolidated data."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides clear warnings (receivables, Q4 estimate cuts) and explicitly calls out the SOTP requirement. However, the final 'mixed' signal lacks a definitive threshold for when the cash flow risks would trigger a downgrade."
+        },
+        "sector_framework": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Brilliantly rejects standard BFSI metrics for a marketplace model, but makes a critical sector terminology error: it conflates Gross Margin with Take Rate (65.65% is Gross Margin; Take Rate for insurance brokers is typically 10-15% of total premium)."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent use of tools, particularly the `calculate` tool to verify math and growth rates. Minor deduction for accepting the BFSI tool's 'Take Rate' label without verifying the underlying formula."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 3: Business Quality",
+          "issue": "Conflating Gross Margin with Take Rate. The report states 'Take Rate / Gross Margin Proxy | 65.65%'. For an insurance aggregator, Take Rate = Revenue / Total Premium Distributed (usually 10-15%). 65.65% is the Gross Margin.",
+          "suggestion": "Update sector framework instructions for aggregators/marketplaces to explicitly differentiate between Take Rate (Revenue/GMV) and Gross Margin (Revenue - Direct Costs / Revenue)."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 6: Subsidiary Structure",
+          "issue": "Identifies that Paisabazaar is likely loss-making but fails to estimate the magnitude.",
+          "suggestion": "Instruct the agent to use basic algebra on consolidated vs. standalone data to estimate the financial profile of major subsidiaries when SOTP valuation is flagged."
+        }
+      ],
+      "strengths": [
+        "Superb identification of the 'treasury subsidy' (EBIT vs PAT divergence), proving that core operations are not yet fully self-sustaining.",
+        "Excellent adaptation of the BFSI framework, correctly identifying that standard banking metrics do not apply to a commission-earning platform.",
+        "Strong forensic work on the cash flow statement, isolating the exact cause of the Piotroski F-Score failure (receivables surge)."
+      ],
+      "summary": "A highly insightful and institutional-quality financial teardown that successfully bridges the gap between P&L profitability and cash flow reality. The primary gap is a sector-specific terminology error regarding Take Rate vs. Gross Margin, but the underlying analysis of operating leverage and treasury-subsidized earnings is exceptional.",
+      "report_length": 31067,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 273.4661094159819,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Excellent breakdown of the loss-to-profit journey and the 'treasury subsidy' masking operating EBIT losses. However, it punts marketing efficiency (CAC/LTV proxy) entirely to the business agent instead of analyzing the 'Other Expenses' trend more deeply.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"The narrative flows logically from P&L to cash flow. The only minor flaw is comparing Q3 FY26 OPM (9%) directly with FY25 annual EBIT (-0.5%) in the summary without explicitly bridging the timeline/D&A gap, which could confuse a quick reader.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers all major financial statements well, but misses an opportunity to back-calculate Paisabazaar's specific financial drag using the provided standalone vs. consolidated data.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides clear warnings (receivables, Q4 estimate cuts) and explicitly calls out the SOTP requirement. However, the final 'mixed' signal lacks a definitive threshold for when the cash flow risks would trigger a downgrade.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Brilliantly rejects standard BFSI metrics for a marketplace model, but makes a critical sector terminology error: it conflates Gross Margin with Take Rate (65.65% is Gross Margin; Take Rate for insurance brokers is typically 10-15% of total premium).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent use of tools, particularly the `calculate` tool to verify math and growth rates. Minor deduction for accepting the BFSI tool's 'Take Rate' label without verifying the underlying formula.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 3: Business Quality\",\n      \"issue\": \"Conflating Gross Margin with Take Rate. The report states 'Take Rate / Gross Margin Proxy | 65.65%'. For an insurance aggregator, Take Rate = Revenue / Total Premium Distributed (usually 10-15%). 65.65% is the Gross Margin.\",\n      \"suggestion\": \"Update sector framework instructions for aggregators/marketplaces to explicitly differentiate between Take Rate (Revenue/GMV) and Gross Margin (Revenue - Direct Costs / Revenue).\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 6: Subsidiary Structure\",\n      \"issue\": \"Identifies that Paisabazaar is likely loss-making but fails to estimate the magnitude.\",\n      \"suggestion\": \"Instruct the agent to use basic algebra on consolidated vs. standalone data to estimate the financial profile of major subsidiaries when SOTP valuation is flagged.\"\n    }\n  ],\n  \"strengths\": [\n    \"Superb identification of the 'treas"
+    }
+  }
+}
