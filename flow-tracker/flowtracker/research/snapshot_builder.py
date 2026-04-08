@@ -29,13 +29,25 @@ def _build_screener(symbol: str, store: FlowStore) -> dict:
         data["name"] = row["company_name"]
         data["industry"] = row["industry"]
 
-    # CMP + market_cap + PE from peer_comparison self-row
+    # CMP + market_cap + PE from peer_comparison self-row, fallback to valuation_snapshot
     peers = store.get_peers(symbol)
     self_row = next((p for p in peers if p.get("peer_symbol") == symbol), None)
     if self_row:
         data["cmp"] = self_row.get("cmp")
         data["market_cap"] = self_row.get("market_cap")
         data["pe_trailing"] = self_row.get("pe")
+
+    # Fallback: fill gaps from valuation_snapshot (yfinance has CMP, market_cap, PE too)
+    if not data.get("cmp") or not data.get("pe_trailing"):
+        snaps = store.get_valuation_history(symbol, days=7)
+        if snaps:
+            s = snaps[-1]
+            if not data.get("cmp") and s.price:
+                data["cmp"] = s.price
+            if not data.get("market_cap") and s.market_cap:
+                data["market_cap"] = s.market_cap
+            if not data.get("pe_trailing") and s.pe_trailing:
+                data["pe_trailing"] = s.pe_trailing
 
     # ROCE from screener_ratios (latest year)
     ratios = store.get_screener_ratios(symbol, limit=1)
