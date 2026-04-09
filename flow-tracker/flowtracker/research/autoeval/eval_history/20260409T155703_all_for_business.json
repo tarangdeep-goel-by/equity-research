@@ -1,0 +1,97 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T15:57:03.519663+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "chemicals",
+    "telecom"
+  ],
+  "results": {
+    "chemicals": {
+      "agent": "business",
+      "stock": "PIDILITIND",
+      "sector": "Specialty chemicals",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+      "report_length": 30295,
+      "run_duration_s": 735.8086546669947,
+      "eval_duration_s": 488.5617413329892,
+      "run_skipped": false,
+      "raw_gemini_response": "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+    },
+    "telecom": {
+      "agent": "business",
+      "stock": "BHARTIARTL",
+      "sector": "Telecom operator",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Exceptional breakdown of transaction-level economics (the \u20b9299/month walkthrough) and operating leverage. However, it lacks deep unit economic analysis for the non-mobile segments (Africa, Enterprise, Nxtra) which constitute ~20% of revenue."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "The narrative flows logically from unit economics to cash flow generation. However, there is a minor mathematical inconsistency in the EV/EBITDA back-calculation where the implied EV does not perfectly match the stated Market Cap + Net Debt."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers the business model, moat, and revenue drivers well. But it misses a dedicated section on management's capital allocation history (e.g., Indus Towers stake, OneWeb) and omits specific churn rate metrics, which are critical for telecom."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly actionable with a clear bull/bear framework, specific catalysts (next ARPU hike timing, Jio IPO), and a well-structured investor checklist."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Applies the exact right frameworks for telecom: EV/EBITDA over PE, CFO over PAT (due to spectrum amortization), and ARPU/subscriber leverage. Could be improved by detailing the spectrum renewal timeline/capex cycle."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 84,
+          "rationale": "Good use of concall data and financial tools, but the agent left a broken markdown link for the `expense_pie` chart in the final report instead of handling the missing data gracefully."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "2. The Money Machine - Expense Profile",
+          "issue": "The `expense_pie` chart failed to render due to Screener standalone format limitations, leaving a broken markdown image link in the report.",
+          "suggestion": "Update the `render_chart` tool to fallback to consolidated data if standalone is unavailable, or instruct the agent to remove broken markdown links if a chart fails to generate."
+        },
+        {
+          "type": "COMPUTATION",
+          "section": "3. Financial Fingerprint - Balance Sheet Health",
+          "issue": "The implied EV used to calculate EBITDA (\u20b913,48,169 Cr) does not match the sum of the stated Market Cap (\u20b911,32,648 Cr) and Net Debt (\u20b91,70,225 Cr), which equals \u20b913,02,873 Cr.",
+          "suggestion": "Instruct the agent to use the `calculate` tool to sum Market Cap and Net Debt directly before dividing by the EV/EBITDA multiple to ensure internal mathematical consistency."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Throughout / 5. Why It Wins",
+          "issue": "Management quality and capital allocation history (Indus Towers, OneWeb, Africa IPO) are core to the Business agent's scope but are only briefly mentioned in the summary.",
+          "suggestion": "Add explicit instructions to the Business Agent prompt to include a dedicated 'Management & Capital Allocation' section evaluating past M&A, investments, and capital return policies."
+        }
+      ],
+      "strengths": [
+        "Brilliant transaction-level walkthrough of unit economics (the \u20b9299/month breakdown) that makes the telecom business model instantly understandable.",
+        "Correctly identifies and explains the accounting distortions inherent in telecom (Depreciation vs CFO, EV/EBITDA vs PE), ensuring the reader doesn't fall into the PE trap."
+      ],
+      "summary": "A highly insightful and well-structured report that perfectly captures the operating leverage and cash-generation mechanics of a mature telecom duopoly. The primary gaps are a missing deep-dive into management's capital allocation history, a minor mathematical inconsistency in EV calculation, and a broken chart link left in the text.",
+      "report_length": 28395,
+      "run_duration_s": 610.1739882919937,
+      "eval_duration_s": 121.86773054092191,
+      "run_skipped": false,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Exceptional breakdown of transaction-level economics (the \u20b9299/month walkthrough) and operating leverage. However, it lacks deep unit economic analysis for the non-mobile segments (Africa, Enterprise, Nxtra) which constitute ~20% of revenue.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"The narrative flows logically from unit economics to cash flow generation. However, there is a minor mathematical inconsistency in the EV/EBITDA back-calculation where the implied EV does not perfectly match the stated Market Cap + Net Debt.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers the business model, moat, and revenue drivers well. But it misses a dedicated section on management's capital allocation history (e.g., Indus Towers stake, OneWeb) and omits specific churn rate metrics, which are critical for telecom.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly actionable with a clear bull/bear framework, specific catalysts (next ARPU hike timing, Jio IPO), and a well-structured investor checklist.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Applies the exact right frameworks for telecom: EV/EBITDA over PE, CFO over PAT (due to spectrum amortization), and ARPU/subscriber leverage. Could be improved by detailing the spectrum renewal timeline/capex cycle.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 84,\n      \"rationale\": \"Good use of concall data and financial tools, but the agent left a broken markdown link for the `expense_pie` chart in the final report instead of handling the missing data gracefully.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"2. The Money Machine - Expense Profile\",\n      \"issue\": \"The `expense_pie` chart failed to render due to Screener standalone format limitations, leaving a broken markdown image link in the report.\",\n      \"suggestion\": \"Update the `render_chart` tool to fallback to consolidated data if standalone is unavailable, or instruct the agent to remove broken markdown links if a chart fails to generate.\"\n    },\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"3. Financial Fingerprint - Balance Sheet Health\",\n      \"issue\": \"The implied EV used to calculate EBITDA (\u20b913,48,169 Cr) does not match the sum of the stated Market Cap (\u20b911,32,648 Cr) and Net Debt (\u20b91,70,225 Cr), which equals \u20b913,02,873 Cr.\",\n      \"suggestion\": \"Instruct the agent to use the `calculate` tool to sum Market Cap and Net Debt directly before dividing by the EV/EBITDA multiple to ensure internal mathematical consistency.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Throughout / 5. Why It Wins\",\n      \"issue\": \"Man"
+    }
+  }
+}

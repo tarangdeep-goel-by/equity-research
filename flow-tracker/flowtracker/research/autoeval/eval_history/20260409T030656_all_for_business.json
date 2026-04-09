@@ -1,0 +1,143 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T03:06:56.038387+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "chemicals",
+    "telecom"
+  ],
+  "results": {
+    "chemicals": {
+      "agent": "business",
+      "stock": "PIDILITIND",
+      "sector": "Specialty chemicals",
+      "grade": "F",
+      "grade_numeric": 50,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "No analysis was provided because the request timed out."
+        },
+        "logical_consistency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Cannot evaluate logic as no text was generated."
+        },
+        "completeness": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "The report is completely empty due to a pipeline timeout."
+        },
+        "actionability": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Zero actionability; no insights or conclusions were produced."
+        },
+        "sector_framework": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "No sector frameworks were applied as the report failed to generate."
+        },
+        "data_sourcing": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Despite 31 tool calls, no data was presented in the final output."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Entire Report",
+          "issue": "The agent execution timed out after 18,237 seconds and 31 tool calls, resulting in a completely empty report.",
+          "suggestion": "Investigate the pipeline infrastructure for hanging tool calls (likely a specific API endpoint not returning) and implement a strict timeout/circuit breaker for the agent."
+        }
+      ],
+      "strengths": [
+        "None (Execution failed)"
+      ],
+      "summary": "The report generation failed completely due to a severe pipeline timeout (over 5 hours of execution time). No content was produced to evaluate, resulting in an automatic failing grade across all parameters.",
+      "report_length": 17,
+      "run_duration_s": 1782.2403018330224,
+      "eval_duration_s": 25.818231542012654,
+      "run_skipped": false,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"No analysis was provided because the request timed out.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Cannot evaluate logic as no text was generated.\"\n    },\n    \"completeness\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"The report is completely empty due to a pipeline timeout.\"\n    },\n    \"actionability\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Zero actionability; no insights or conclusions were produced.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"No sector frameworks were applied as the report failed to generate.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Despite 31 tool calls, no data was presented in the final output.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"F\",\n    \"grade_numeric\": 50\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Entire Report\",\n      \"issue\": \"The agent execution timed out after 18,237 seconds and 31 tool calls, resulting in a completely empty report.\",\n      \"suggestion\": \"Investigate the pipeline infrastructure for hanging tool calls (likely a specific API endpoint not returning) and implement a strict timeout/circuit breaker for the agent.\"\n    }\n  ],\n  \"strengths\": [\n    \"None (Execution failed)\"\n  ],\n  \"summary\": \"The report generation failed completely due to a severe pipeline timeout (over 5 hours of execution time). No content was produced to evaluate, resulting in an automatic failing grade across all parameters.\"\n}"
+    },
+    "telecom": {
+      "agent": "business",
+      "stock": "BHARTIARTL",
+      "sector": "Telecom operator",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent breakdown of operating leverage and the 'depreciation trap' explaining why EV/EBITDA is the correct metric. However, it stops short of analyzing per-subscriber unit economics (CAC, LTV) which are critical for telecom."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Generally strong narrative flow connecting ARPU hikes to FCF generation. Minor contradiction: calls Net Debt/EBITDA of 1.61x 'manageable' but flags EBITDA/Interest of 4.87x as 'near threshold' (4.87x is actually quite healthy for a capital-intensive telco)."
+        },
+        "completeness": {
+          "grade": "B",
+          "numeric": 83,
+          "rationale": "Significant gaps in standard telecom KPIs: completely missing churn rates, gross vs. net subscriber additions, and data consumption trends (GB/user/month). Also highlights Enterprise as a 'hidden compounder' but provides no deep dive into its metrics."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "The Bull/Bear framework and 'The Big Question' regarding the Jio IPO vs. permanent pricing reset are highly actionable and perfectly frame the investment thesis for a PM."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Correctly applies the ARPU \u00d7 Subs model, focuses on EV/EBITDA, and tracks the CWIP-to-Net-Block capex cycle. However, a true telecom framework must include network utilization, churn, and ARPM/data yield."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Good use of Screener data and clear citations. However, the agent abandoned concall insights because the output was 'too large', missing crucial management commentary that could have answered its own 'Open Questions' about rising other expenses."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "2. The Money Machine",
+          "issue": "Missing critical telecom operational KPIs (Churn rate, Data usage per subscriber, Gross vs Net adds).",
+          "suggestion": "Instruct the business agent to explicitly query and include operational KPIs (churn, data usage, ARPU vs ARPM) when analyzing telecom operators, rather than just top-level ARPU and total subs."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Data Sources / Open Questions",
+          "issue": "Agent failed to process concall insights because the output was too large, leaving key questions (like the nature of rising 'other expenses') unanswered.",
+          "suggestion": "Update agent instructions to handle large tool outputs gracefully (e.g., by refining the search query, asking for specific sections, or using a summarization tool) rather than abandoning the data source entirely."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. The Business - Transaction by Transaction",
+          "issue": "Identifies Enterprise as the 'hidden compounder' but fails to analyze it further in the report.",
+          "suggestion": "Prompt the agent to ensure that any segment identified as a key growth driver receives a dedicated sub-section analyzing its specific revenue growth, margins, and unit economics."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Data Sources",
+          "issue": "The `render_chart` tool failed to generate the 'expense_pie' chart due to missing data.",
+          "suggestion": "Investigate the `render_chart` backend to ensure expense breakdown data is properly mapped for BHARTIARTL, or have the tool return a graceful fallback table."
+        }
+      ],
+      "strengths": [
+        "Superb explanation of telecom operating leverage and why the 'depreciation trap' makes PE a misleading metric for Airtel.",
+        "The framing of the Jio IPO as the single most important exogenous risk is spot-on and highly relevant for current market dynamics."
+      ],
+      "summary": "A solid, highly readable report that correctly identifies the core drivers of Airtel's business (ARPU leverage, capex commissioning, and the Jio IPO threat). However, it misses institutional-level depth by omitting critical telecom KPIs like churn and data usage, and it gave up on reading concall transcripts which could have solved its unanswered questions.",
+      "report_length": 28126,
+      "run_duration_s": 1534.1907478340436,
+      "eval_duration_s": 56.75124762498308,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent breakdown of operating leverage and the 'depreciation trap' explaining why EV/EBITDA is the correct metric. However, it stops short of analyzing per-subscriber unit economics (CAC, LTV) which are critical for telecom.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Generally strong narrative flow connecting ARPU hikes to FCF generation. Minor contradiction: calls Net Debt/EBITDA of 1.61x 'manageable' but flags EBITDA/Interest of 4.87x as 'near threshold' (4.87x is actually quite healthy for a capital-intensive telco).\"\n    },\n    \"completeness\": {\n      \"grade\": \"B\",\n      \"numeric\": 83,\n      \"rationale\": \"Significant gaps in standard telecom KPIs: completely missing churn rates, gross vs. net subscriber additions, and data consumption trends (GB/user/month). Also highlights Enterprise as a 'hidden compounder' but provides no deep dive into its metrics.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"The Bull/Bear framework and 'The Big Question' regarding the Jio IPO vs. permanent pricing reset are highly actionable and perfectly frame the investment thesis for a PM.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Correctly applies the ARPU \u00d7 Subs model, focuses on EV/EBITDA, and tracks the CWIP-to-Net-Block capex cycle. However, a true telecom framework must include network utilization, churn, and ARPM/data yield.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Good use of Screener data and clear citations. However, the agent abandoned concall insights because the output was 'too large', missing crucial management commentary that could have answered its own 'Open Questions' about rising other expenses.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2. The Money Machine\",\n      \"issue\": \"Missing critical telecom operational KPIs (Churn rate, Data usage per subscriber, Gross vs Net adds).\",\n      \"suggestion\": \"Instruct the business agent to explicitly query and include operational KPIs (churn, data usage, ARPU vs ARPM) when analyzing telecom operators, rather than just top-level ARPU and total subs.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Data Sources / Open Questions\",\n      \"issue\": \"Agent failed to process concall insights because the output was too large, leaving key questions (like the nature of rising 'other expenses') unanswered.\",\n      \"suggestion\": \"Update agent instructions to handle large tool outputs gracefully (e.g., by refining the search query, asking for specific sections, or using a summarization tool) rather than abandoning the data source entirely.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\":"
+    }
+  }
+}

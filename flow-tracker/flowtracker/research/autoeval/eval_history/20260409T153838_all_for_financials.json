@@ -1,0 +1,27 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T15:38:38.496900+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "pharma"
+  ],
+  "results": {
+    "pharma": {
+      "agent": "financials",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: ",
+      "report_length": 37486,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 178.2163879579166,
+      "run_skipped": true,
+      "raw_gemini_response": ""
+    }
+  }
+}
