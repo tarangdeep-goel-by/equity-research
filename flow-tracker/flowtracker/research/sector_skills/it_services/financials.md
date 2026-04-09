@@ -23,6 +23,11 @@ For IT services, margin moves are driven by:
 
 Use `get_fundamentals(section='cost_structure')` to identify employee cost trends and subcontracting costs.
 
+### FX Impact & Receivables
+- If >30% of revenue is from exports (always true for IT), analyze currency translation impact on margins. Check Other Income for FX gains/losses and hedging gains
+- Track receivables/unbilled revenue as % of revenue — rising ratio = revenue recognition risk
+- DSO >90 days or receivables >20% of revenue needs ageing context
+
 ### Revenue Classification
 - Break revenue by **vertical** (BFSI, retail, telecom, manufacturing) and **geography** (Americas, Europe, RoW) if available from concall_insights
 - BFSI slowdowns disproportionately hit Indian IT — always flag BFSI revenue share

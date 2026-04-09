@@ -23,6 +23,7 @@ This is how FMCG companies manage earnings — it's a deliberate lever:
 - Rural recovery/slowdown is a key cyclical driver for Indian FMCG. Extract rural/urban growth split from `concall_insights`
 - Rural demand is a LEADING indicator for volume recovery
 
-### Channel Health
+### Channel Health & Trade Margins
 - Watch for **channel stuffing** signals: primary sales (company to distributor) growing materially faster than secondary sales (distributor to retailer) — extract from concall_insights if available
 - Rising trade receivables + flat/declining secondary sales = stuffing risk
+- **Trade margins / promotions** — FMCG companies use trade schemes to push volume. If gross margin looks stable but trade spends are rising (hidden in "selling expenses" or "sales promotion"), effective realization is falling. Check `get_fundamentals(section='cost_structure')` for selling expense trends

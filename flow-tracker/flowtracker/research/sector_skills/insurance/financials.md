@@ -1,7 +1,10 @@
 ## Insurance / Insurtech — Financials Agent
 
-### Sub-Type: Aggregator vs Manufacturer
-Detect from company profile whether this is an **aggregator/marketplace** (PB Fintech, InsuranceDekho) or an **insurance manufacturer** (HDFC Life, ICICI Lombard). Their P&Ls are completely different — do NOT mix frameworks.
+### Sub-Type: Aggregator vs Underwriter (CRITICAL — DO NOT MIX)
+First, determine the sub-type from company profile. These are COMPLETELY DIFFERENT businesses:
+- **Aggregator/Platform** (PB Fintech/Policybazaar, InsuranceDekho): earns commissions on policies sold. Has Take Rate, unit economics, tech-platform P&L. DO NOT look for Combined Ratio or VNB — these don't apply.
+- **Life Insurer** (HDFC Life, SBI Life, ICICI Pru Life): manufactures policies. Has VNB, APE, Embedded Value. DO NOT look for Take Rate — insurers don't have one.
+- **General Insurer** (ICICI Lombard, Star Health): underwrites risk. Has Combined Ratio, Claims Ratio. DO NOT use life insurance metrics.
 
 ### IF AGGREGATOR (e.g., Policybazaar):
 **Take Rate vs Gross Margin — DIFFERENT metrics, never conflate:**

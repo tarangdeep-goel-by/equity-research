@@ -10,10 +10,11 @@
 - Margins are commodity-price-driven — separate price effect from volume effect in revenue growth
 - Check capacity utilization from `concall_insights` to confirm cycle position
 
-### Leverage — Track Absolute Net Debt, Not Just Ratios
+### Debt Maturity & Leverage
 - **AVAILABLE** from `get_quality_scores(section='metals')` — returns `net_debt` in absolute crores
 - In peak cycles, EBITDA explodes making Net Debt/EBITDA look artificially safe. Track **absolute net debt trajectory** over 3-5 years
 - Are they retiring debt or just riding cycle-peak EBITDA? Flag if absolute debt is rising despite "low" leverage ratio
+- If Net Debt/EBITDA > 2x, analyze debt maturity from `get_fundamentals(section='balance_sheet_detail')`: what % is short-term vs long-term?
 
 ### Capex: Maintenance vs Growth
 - Extract from `concall_insights` — management typically discloses this split

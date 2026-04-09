@@ -20,6 +20,13 @@ Many Indian platforms are shifting business models (e.g., Zomato: food delivery 
 - New segments typically have WORSE unit economics initially — flag if consolidated margins are being dragged by a new segment
 - Separate mature segment profitability from investment-phase segments
 
+### ESOP Adjustment (CRITICAL for New-Age Tech)
+New-age companies routinely exclude ESOP costs from "Adjusted EBITDA" — this hides real cash burn.
+- Always compute **EBITDA including ESOP costs** (reported EBITDA minus ESOP expense add-back)
+- If the company reports "Adjusted EBITDA" that excludes ESOPs, flag: "Adjusted EBITDA of ₹X Cr excludes ₹Y Cr ESOP costs — true EBITDA is ₹Z Cr"
+- ESOP expense is in `get_fundamentals(section='cost_structure')` under employee costs or as a separate line
+- Annual dilution from ESOPs: check share count growth YoY. >2% annual dilution is material
+
 ### Cash Burn & Balance Sheet
 - Track **quarterly cash burn** = change in cash + investments
 - **Cash runway** = current cash / quarterly burn rate
