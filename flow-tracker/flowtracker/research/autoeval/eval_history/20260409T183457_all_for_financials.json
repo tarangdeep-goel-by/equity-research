@@ -1,0 +1,80 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T18:34:57.284737+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "pharma"
+  ],
+  "results": {
+    "pharma": {
+      "agent": "financials",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent identification and adjustment of the FY21/FY22 Taro exceptional items and the H1 FY26 intangible asset jump. However, it lacks analysis on the ROIC impact of the Taro squeeze-out and ignores forex impacts on margins, which are material for export-heavy pharma."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Strong causal links between specialty mix and RM cost declines. However, there is a slight narrative contradiction: it praises a 'near-zero debt' fortress balance sheet while simultaneously noting short-term borrowings spiked to \u20b94,683 Cr in H1 FY26."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers P&L, balance sheet, cash flow, and DuPont well. However, it completely misses R&D capitalization vs. expensing policies and forex gain/loss impacts, which are critical financial dimensions for global pharma companies."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides excellent open questions for the Valuation and Risk agents (e.g., the \u20b914k Cr intangible jump). However, the flagged receivable elongation lacks an estimation of potential bad debt impact or specific working capital drag for FY26."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Applies general manufacturing frameworks well (inventory days, RM costs), but fails to explicitly isolate R&D as a % of sales (the most critical pharma metric) and uses Standalone vs. Subsidiary as a proxy for India vs. US, which is imprecise."
+        },
+        "data_sourcing": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Good use of Screener and yfinance data. However, the agent failed to call `get_company_context` correctly (missing the required `doc_type` argument) and failed to retry, leaving concall insights out of the report."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Data Sources / Execution Log",
+          "issue": "Agent failed to call get_company_context because it missed the required 'doc_type' parameter and did not attempt to fix and retry the call.",
+          "suggestion": "Update agent instructions to always include 'doc_type' (e.g., 'earnings_calls', 'annual_reports') when calling get_company_context, and to handle/retry errors if a tool call fails."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Margin Analysis \u2014 10-Year Decomposition",
+          "issue": "Agent grouped R&D into 'Other Costs' and stated the precise R&D ratio was unavailable, failing to use filings or detailed expense breakdowns to extract this mandatory pharma metric.",
+          "suggestion": "Instruct the financials agent to explicitly search for R&D expenses (using get_fundamentals expense_breakdown or get_company_context with annual_reports) when analyzing Pharma/Tech sectors."
+        },
+        {
+          "type": "COMPUTATION",
+          "section": "Growth Trajectory & Forward View",
+          "issue": "Agent correctly identified that the 3Y CAGR was distorted by FY22 exceptionals, but failed to calculate and present the *adjusted* 3Y CAGR using its own adjusted FY22 base.",
+          "suggestion": "Instruct the agent to use the 'calculate' tool to compute normalized CAGRs when it identifies and strips out exceptional items from base years."
+        }
+      ],
+      "strengths": [
+        "Superb handling of the FY21/FY22 Taro exceptional write-offs, preventing a distorted view of the 10-year earnings trajectory.",
+        "Astute balance sheet forensic work, specifically catching the \u20b914,025 Cr jump in intangible assets in H1 FY26 and correctly linking it to a likely unannounced/recent acquisition and rising short-term debt."
+      ],
+      "summary": "A highly competent and forensic financial review that successfully normalizes historical earnings and catches a massive, recent balance sheet anomaly (intangibles jump). However, it falls short of institutional A-grade because it fails to isolate R&D spend\u2014a non-negotiable metric for pharma\u2014and fumbles a key tool call that would have provided management's context on these exact numbers.",
+      "report_length": 30517,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 29.163031958043575,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent identification and adjustment of the FY21/FY22 Taro exceptional items and the H1 FY26 intangible asset jump. However, it lacks analysis on the ROIC impact of the Taro squeeze-out and ignores forex impacts on margins, which are material for export-heavy pharma.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Strong causal links between specialty mix and RM cost declines. However, there is a slight narrative contradiction: it praises a 'near-zero debt' fortress balance sheet while simultaneously noting short-term borrowings spiked to \u20b94,683 Cr in H1 FY26.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers P&L, balance sheet, cash flow, and DuPont well. However, it completely misses R&D capitalization vs. expensing policies and forex gain/loss impacts, which are critical financial dimensions for global pharma companies.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides excellent open questions for the Valuation and Risk agents (e.g., the \u20b914k Cr intangible jump). However, the flagged receivable elongation lacks an estimation of potential bad debt impact or specific working capital drag for FY26.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Applies general manufacturing frameworks well (inventory days, RM costs), but fails to explicitly isolate R&D as a % of sales (the most critical pharma metric) and uses Standalone vs. Subsidiary as a proxy for India vs. US, which is imprecise.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Good use of Screener and yfinance data. However, the agent failed to call `get_company_context` correctly (missing the required `doc_type` argument) and failed to retry, leaving concall insights out of the report.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Data Sources / Execution Log\",\n      \"issue\": \"Agent failed to call get_company_context because it missed the required 'doc_type' parameter and did not attempt to fix and retry the call.\",\n      \"suggestion\": \"Update agent instructions to always include 'doc_type' (e.g., 'earnings_calls', 'annual_reports') when calling get_company_context, and to handle/retry errors if a tool call fails.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Margin Analysis \u2014 10-Year Decomposition\",\n      \"issue\": \"Agent grouped R&D into 'Other Costs' and stated the precise R&D ratio was unavailable, failing to use filings or detailed expense breakdowns to extract this mandatory pharma metric.\",\n      \"suggestion\": \"Instruct the financials agent to explicitly search for R&D expenses (using get_fundamentals expense_breakdown o"
+    }
+  }
+}

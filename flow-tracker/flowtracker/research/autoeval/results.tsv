@@ -60,3 +60,7 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-09T18:00:52Z	2	financials	GROWW	broker	B+	88	29213	0.0	31.2	3	A highly insightful report that does an excellent job normalizing pre-IPO accounting distortions to 
 2026-04-09T18:01:22Z	2	financials	PIDILITIND	chemicals	A-	92	29085	0.0	29.6	2	This is a highly sophisticated financial teardown that correctly identifies the core drivers of Pidi
 2026-04-09T18:02:20Z	2	financials	GODREJPROP	real_estate	A-	90	31646	0.0	36.3	2	This is a highly sophisticated financial analysis that perfectly captures the accounting nuances of 
+2026-04-09T18:12:52Z	0	business	PIDILITIND	chemicals	B+	88	32186	513.6	30.3	3	This is a highly engaging and insightful report that nails Pidilite's unique B2B2C moat and margin d
+2026-04-09T18:31:33Z	0	business	PIDILITIND	chemicals	B+	89	30823	629.3	29.8	2	This is a strong foundational report with flashes of brilliant insight, particularly in the moat and
+2026-04-09T18:34:57Z	3	financials	SUNPHARMA	pharma	B+	89	30517	0.0	29.2	2	A highly competent and forensic financial review that successfully normalizes historical earnings an
+2026-04-09T18:39:35Z	3	financials	GROWW	broker	A-	91	31126	0.0	30.1	3	This is a highly sophisticated, institutional-quality financial teardown that expertly navigates the

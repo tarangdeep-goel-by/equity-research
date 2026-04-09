@@ -1,0 +1,80 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T18:12:52.371080+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "chemicals"
+  ],
+  "results": {
+    "chemicals": {
+      "agent": "business",
+      "stock": "PIDILITIND",
+      "sector": "Specialty chemicals",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Brilliant breakdown of the B2B2C moat and pricing power, but lacks equivalent depth on the unit economics and distribution mechanics of the rapidly growing B2B construction chemicals segment."
+        },
+        "logical_consistency": {
+          "grade": "B-",
+          "numeric": 80,
+          "rationale": "Glaring contradiction in Section 7: claims the stock is down 55.3% over 1 year, but in the very next sentence notes it is only 14.5% below its 52-week high."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Management quality and capital allocation history are explicitly in the agent's scope but are relegated to the JSON summary and open questions rather than analyzed in the main text."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "The bull/bear framework and risk identification (employee cost creep) are excellent, but it fails to provide specific leading indicators (e.g., real estate registrations, rural wage data) to track the volume deceleration risk."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Correctly applies FMCG-like metrics (UVG) to the consumer business, but a true specialty chemicals framework for Pidilite requires a dedicated look at the VAM (Vinyl Acetate Monomer) global price cycle, which is only briefly mentioned."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 86,
+          "rationale": "Generally strong use of the calculate tool and Screener data, but the erroneous 55.3% price drop suggests a failure to verify price performance data from the analytical profile against basic price anchors."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "7. The Big Question",
+          "issue": "Contradictory price performance data (claims 55.3% 1-year drop while noting price is only 14.5% below 52-week high).",
+          "suggestion": "Add a prompt instruction requiring the agent to sanity-check all relative return and price drop claims against the 52-week high/low anchors."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Throughout",
+          "issue": "Management quality and capital allocation track record are missing from the main body despite being in the agent's scope.",
+          "suggestion": "Explicitly require a 'Management & Capital Allocation' subsection in the business agent's output template."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "2. The Money Machine",
+          "issue": "Lacks specific tracking of VAM (Vinyl Acetate Monomer) prices, which is the single most important raw material variable for Pidilite.",
+          "suggestion": "Instruct the agent to identify the primary raw material for chemical companies and analyze its specific global price cycle/trend."
+        }
+      ],
+      "strengths": [
+        "The 'What Actually Happens When Someone Buys Fevicol' opening is a masterclass in qualitative moat analysis, perfectly capturing the consumer-in-a-B2B-market dynamic.",
+        "Excellent dissection of the margin story, correctly identifying the divergence between easing raw material costs and creeping employee costs as the key forward-looking risk."
+      ],
+      "summary": "This is a highly engaging and insightful report that nails Pidilite's unique B2B2C moat and margin dynamics. However, it suffers from a glaring logical contradiction regarding the stock's 1-year price performance and skips a dedicated analysis of management quality. Fixing the data hallucination and expanding on the B2B segment's unit economics would elevate this to institutional quality.",
+      "report_length": 32186,
+      "run_duration_s": 513.602785874973,
+      "eval_duration_s": 30.283260624972172,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Brilliant breakdown of the B2B2C moat and pricing power, but lacks equivalent depth on the unit economics and distribution mechanics of the rapidly growing B2B construction chemicals segment.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B-\",\n      \"numeric\": 80,\n      \"rationale\": \"Glaring contradiction in Section 7: claims the stock is down 55.3% over 1 year, but in the very next sentence notes it is only 14.5% below its 52-week high.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Management quality and capital allocation history are explicitly in the agent's scope but are relegated to the JSON summary and open questions rather than analyzed in the main text.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"The bull/bear framework and risk identification (employee cost creep) are excellent, but it fails to provide specific leading indicators (e.g., real estate registrations, rural wage data) to track the volume deceleration risk.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Correctly applies FMCG-like metrics (UVG) to the consumer business, but a true specialty chemicals framework for Pidilite requires a dedicated look at the VAM (Vinyl Acetate Monomer) global price cycle, which is only briefly mentioned.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 86,\n      \"rationale\": \"Generally strong use of the calculate tool and Screener data, but the erroneous 55.3% price drop suggests a failure to verify price performance data from the analytical profile against basic price anchors.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"7. The Big Question\",\n      \"issue\": \"Contradictory price performance data (claims 55.3% 1-year drop while noting price is only 14.5% below 52-week high).\",\n      \"suggestion\": \"Add a prompt instruction requiring the agent to sanity-check all relative return and price drop claims against the 52-week high/low anchors.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Throughout\",\n      \"issue\": \"Management quality and capital allocation track record are missing from the main body despite being in the agent's scope.\",\n      \"suggestion\": \"Explicitly require a 'Management & Capital Allocation' subsection in the business agent's output template.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2. The Money Machine\",\n      \"issue\": \"Lacks specific tracking of VAM (Vinyl Acetate Monomer) prices, which is the single most important raw material variable for Pidilite.\",\n      \"suggestion\": \"Instruct the agent to identify the primary raw material for chemical companies and analyze its specific global price cycle/trend.\"\n    }\n  ],\n  \"strengths\""
+    }
+  }
+}
