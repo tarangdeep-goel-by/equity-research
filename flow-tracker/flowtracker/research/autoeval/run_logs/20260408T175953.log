@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260408T175953.log
+AutoEval (agent-first): agent=business sectors=['chemicals']
+Target: grade_numeric >= 90
+
+--- business / PIDILITIND (chemicals) ---
+  Running agent...
+  23:29:54 [INFO] flowtracker.research.refresh: [refresh_business] PIDILITIND: started
+  23:29:54 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  23:29:54 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  23:29:54 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  23:29:54 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/PIDILITIND/consolidated/ "HTTP/1.1 200 OK"
+  23:29:54 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: company_profile ok 1 records
+  23:29:55 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: company_documents ok 147 records
+  23:29:55 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6597863/peers/ "HTTP/1.1 200 OK"
+  23:29:55 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: peers ok 8 records
+  23:29:55 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:29:56 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:29:57 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:29:58 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:29:59 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_quarters ok 143 records
+  23:29:59 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"

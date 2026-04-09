@@ -79,7 +79,7 @@ def _build_screener(symbol: str, store: FlowStore) -> dict:
 
 
 def _build_yfinance(symbol: str, store: FlowStore) -> dict:
-    """Collect yfinance-owned fields from valuation_snapshot."""
+    """Collect yfinance-owned fields from valuation_snapshot + live sector/industry."""
     data: dict = {}
     snaps = store.get_valuation_history(symbol, days=7)
     if not snaps:
@@ -101,6 +101,19 @@ def _build_yfinance(symbol: str, store: FlowStore) -> dict:
     data["current_ratio"] = s.current_ratio
     data["high_52w"] = s.fifty_two_week_high
     data["low_52w"] = s.fifty_two_week_low
+
+    # Sector/industry from yfinance (authoritative source)
+    try:
+        from flowtracker.fund_client import FundClient
+        fc = FundClient()
+        live = fc.get_live_snapshot(symbol)
+        if live.sector:
+            data["sector"] = live.sector
+        if live.industry:
+            data["industry"] = live.industry
+    except Exception:
+        pass  # non-critical — don't block snapshot build
+
     return data
 
 

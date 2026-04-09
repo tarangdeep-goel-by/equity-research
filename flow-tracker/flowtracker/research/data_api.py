@@ -25,6 +25,10 @@ def _percentile_rank(values: list[float], value: float) -> float:
 
 
 _BFSI_INDUSTRIES = {
+    # yfinance strings
+    "Banks - Regional", "Banks - Diversified", "Credit Services",
+    "Mortgage Finance", "Financial Conglomerates",
+    # Screener fallback strings
     "Private Sector Bank", "Public Sector Bank", "Other Bank",
     "Non Banking Financial Company (NBFC)", "Financial Institution",
     "Other Financial Services", "Financial Products Distributor",
@@ -32,58 +36,119 @@ _BFSI_INDUSTRIES = {
     "Microfinance Institutions",
 }
 
-_INSURANCE_INDUSTRIES = {"Life Insurance", "General Insurance"}
+_INSURANCE_INDUSTRIES = {
+    # yfinance
+    "Insurance - Life", "Insurance - Diversified", "Insurance - Property & Casualty",
+    "Insurance - Specialty", "Insurance - Reinsurance",
+    # Screener
+    "Life Insurance", "General Insurance",
+}
 
-_REALESTATE_INDUSTRIES = {"Residential Commercial Projects"}
+_REALESTATE_INDUSTRIES = {
+    # yfinance
+    "Real Estate - Development", "Real Estate - Diversified", "Real Estate Services",
+    # Screener
+    "Residential Commercial Projects",
+}
 
 _METALS_INDUSTRIES = {
-    "Iron & Steel", "Iron & Steel Products", "Aluminium", "Copper", "Zinc",
-    "Diversified Metals", "Coal", "Industrial Minerals",
+    # yfinance
+    "Steel", "Aluminum", "Copper", "Other Industrial Metals & Mining",
+    "Gold", "Silver", "Other Precious Metals & Mining", "Coal",
+    # Screener
+    "Iron & Steel", "Iron & Steel Products", "Aluminium", "Zinc",
+    "Diversified Metals", "Industrial Minerals",
 }
 
 _TELECOM_INDUSTRIES = {
+    # yfinance
+    "Telecom Services",
+    # Screener
     "Telecom - Cellular & Fixed line services", "Other Telecom Services",
 }
 
 _TELECOM_INFRA_INDUSTRIES = {
+    # yfinance
+    "Communication Equipment",
+    # Screener
     "Telecom - Infrastructure", "Telecom - Equipment & Accessories",
 }
 
 _REGULATED_POWER_INDUSTRIES = {
+    # yfinance
+    "Utilities - Regulated Electric", "Utilities - Regulated Gas",
+    "Utilities - Diversified",
+    # Screener
     "Power Generation", "Power Distribution", "Power - Transmission",
 }
 
 _MERCHANT_POWER_INDUSTRIES = {
+    # yfinance
+    "Utilities - Independent Power Producers", "Utilities - Renewable",
+    # Screener
     "Integrated Power Utilities",
 }
 
-_BROKER_INDUSTRIES = {"Stockbroking & Allied"}
+_BROKER_INDUSTRIES = {
+    # yfinance
+    "Capital Markets",
+    # Screener
+    "Stockbroking & Allied",
+}
 
-_AMC_INDUSTRIES = {"Asset Management Company"}
+_AMC_INDUSTRIES = {
+    # yfinance
+    "Asset Management",
+    # Screener
+    "Asset Management Company",
+}
 
 _EXCHANGE_INDUSTRIES = {
+    # yfinance
+    "Financial Data & Stock Exchanges",
+    # Screener
     "Exchange and Data Platform",
     "Depositories Clearing Houses and Other Intermediaries",
 }
 
-_HOSPITAL_INDUSTRIES = {"Hospital", "Healthcare Service Provider"}
+_HOSPITAL_INDUSTRIES = {
+    # yfinance
+    "Medical Care Facilities", "Health Information Services",
+    # Screener
+    "Hospital", "Healthcare Service Provider",
+}
 
 _IT_INDUSTRIES = {
+    # yfinance
+    "Information Technology Services", "Software - Infrastructure",
+    "Software - Application",
+    # Screener
     "Computers - Software & Consulting", "IT Enabled Services",
     "Software Products", "Business Process Outsourcing (BPO)/ Knowledge Process Outsourcing (KPO)",
 }
 
 _GOLD_LOAN_KEYWORDS = {"gold", "muthoot", "manappuram"}
 
-_MICROFINANCE_INDUSTRIES = {"Microfinance Institutions"}
+_MICROFINANCE_INDUSTRIES = {
+    # yfinance: classified as Credit Services (shared with NBFCs) — use keywords
+    "Microfinance Institutions",
+}
 
 _HOLDING_COMPANY_INDUSTRIES = {
+    # yfinance
+    "Conglomerates",
+    # Screener
     "Holding Company", "Investment Company",
-    "Diversified Commercial Services",  # some holding cos classified here
+    "Diversified Commercial Services",
 }
 _HOLDING_COMPANY_KEYWORDS = {"holdings", "investment", "enterprises"}
 
-_CONGLOMERATE_INDUSTRIES = {"Diversified", "Conglomerate"}
+_CONGLOMERATE_INDUSTRIES = {
+    # yfinance
+    "Conglomerates",
+    # Screener
+    "Diversified", "Conglomerate",
+}
 _CONGLOMERATE_KEYWORDS = {
     "reliance", "tata", "adani", "bajaj", "mahindra", "godrej",
     "aditya birla", "itc", "l&t", "larsen",
@@ -191,9 +256,16 @@ class ResearchDataAPI:
     # --- Industry Helpers ---
 
     def _get_industry(self, symbol: str) -> str:
-        """Get industry for a symbol from index_constituents."""
+        """Get industry for a symbol. Prefers yfinance (company_snapshot) over NSE/Screener."""
+        # Primary: yfinance-sourced industry from company_snapshot (better classification)
+        row = self._store._conn.execute(
+            "SELECT industry FROM company_snapshot WHERE symbol = ?", (symbol,)
+        ).fetchone()
+        if row and row[0]:
+            return row[0]
+        # Fallback: index_constituents (NSE/Screener)
         info = self.get_company_info(symbol)
-        return info.get("industry", "Unknown")
+        return info.get("industry") or "Unknown"
 
     def _is_bfsi(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _BFSI_INDUSTRIES

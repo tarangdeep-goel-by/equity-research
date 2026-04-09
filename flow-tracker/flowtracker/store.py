@@ -1018,6 +1018,7 @@ class FlowStore:
         self._migrate_valuation_snapshot()
         self._migrate_quarterly_and_annual()
         self._migrate_analytical_snapshot()
+        self._migrate_company_snapshot()
 
     def _migrate_analytical_snapshot(self) -> None:
         """Add new columns to analytical_snapshot if they don't exist."""
@@ -1063,6 +1064,17 @@ class FlowStore:
                 self._conn.execute(
                     f"ALTER TABLE analytical_snapshot ADD COLUMN {col} {typ}"
                 )
+
+    def _migrate_company_snapshot(self) -> None:
+        """Add sector column to company_snapshot (yfinance-sourced)."""
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(company_snapshot)").fetchall()
+        }
+        for col_name, col_type in [("sector", "TEXT")]:
+            if col_name not in existing:
+                self._conn.execute(f"ALTER TABLE company_snapshot ADD COLUMN {col_name} {col_type}")
+        self._conn.commit()
 
     def _migrate_quarterly_and_annual(self) -> None:
         """Add new columns to quarterly_results and annual_financials if they don't exist."""
@@ -3028,18 +3040,19 @@ class FlowStore:
     # -- Company snapshot --
 
     def upsert_snapshot_screener(self, symbol: str, data: dict) -> int:
-        """Write Screener-owned columns to company_snapshot. Never touches yfinance columns."""
+        """Write Screener-owned columns to company_snapshot. Never touches yfinance columns.
+        Note: industry/sector are owned by yfinance — not written here."""
         self._conn.execute(
-            """INSERT INTO company_snapshot (symbol, name, industry, cmp, market_cap, pe_trailing, roce,
+            """INSERT INTO company_snapshot (symbol, name, cmp, market_cap, pe_trailing, roce,
                 sales_qtr, qtr_sales_var, np_qtr, qtr_profit_var, screener_updated_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
             ON CONFLICT(symbol) DO UPDATE SET
-                name=excluded.name, industry=excluded.industry, cmp=excluded.cmp,
+                name=excluded.name, cmp=excluded.cmp,
                 market_cap=excluded.market_cap, pe_trailing=excluded.pe_trailing, roce=excluded.roce,
                 sales_qtr=excluded.sales_qtr, qtr_sales_var=excluded.qtr_sales_var,
                 np_qtr=excluded.np_qtr, qtr_profit_var=excluded.qtr_profit_var,
                 screener_updated_at=datetime('now'), updated_at=datetime('now')""",
-            (symbol.upper(), data.get("name"), data.get("industry"), data.get("cmp"),
+            (symbol.upper(), data.get("name"), data.get("cmp"),
              data.get("market_cap"), data.get("pe_trailing"), data.get("roce"),
              data.get("sales_qtr"), data.get("qtr_sales_var"), data.get("np_qtr"),
              data.get("qtr_profit_var")),
@@ -3050,11 +3063,13 @@ class FlowStore:
     def upsert_snapshot_yfinance(self, symbol: str, data: dict) -> int:
         """Write yfinance-owned columns to company_snapshot. Never touches Screener columns."""
         self._conn.execute(
-            """INSERT INTO company_snapshot (symbol, pe_forward, pb, ev_ebitda, peg, div_yield,
+            """INSERT INTO company_snapshot (symbol, sector, industry, pe_forward, pb, ev_ebitda, peg, div_yield,
                 operating_margin, net_margin, roe, roa, revenue_growth, earnings_growth,
                 beta, debt_to_equity, current_ratio, high_52w, low_52w, yfinance_updated_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
             ON CONFLICT(symbol) DO UPDATE SET
+                sector=excluded.sector,
+                industry=excluded.industry,
                 pe_forward=excluded.pe_forward, pb=excluded.pb, ev_ebitda=excluded.ev_ebitda,
                 peg=excluded.peg, div_yield=excluded.div_yield,
                 operating_margin=excluded.operating_margin, net_margin=excluded.net_margin,
@@ -3063,7 +3078,8 @@ class FlowStore:
                 beta=excluded.beta, debt_to_equity=excluded.debt_to_equity,
                 current_ratio=excluded.current_ratio, high_52w=excluded.high_52w, low_52w=excluded.low_52w,
                 yfinance_updated_at=datetime('now'), updated_at=datetime('now')""",
-            (symbol.upper(), data.get("pe_forward"), data.get("pb"), data.get("ev_ebitda"),
+            (symbol.upper(), data.get("sector"), data.get("industry"),
+             data.get("pe_forward"), data.get("pb"), data.get("ev_ebitda"),
              data.get("peg"), data.get("div_yield"), data.get("operating_margin"),
              data.get("net_margin"), data.get("roe"), data.get("roa"),
              data.get("revenue_growth"), data.get("earnings_growth"), data.get("beta"),

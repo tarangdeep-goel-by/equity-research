@@ -1,0 +1,125 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260408T183404.log
+AutoEval (agent-first): agent=business sectors=['chemicals', 'telecom']
+Target: grade_numeric >= 90
+
+--- business / PIDILITIND (chemicals) ---
+  Running agent...
+  00:04:04 [INFO] flowtracker.research.refresh: [refresh_business] PIDILITIND: started
+  00:04:04 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  00:04:05 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  00:04:05 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  00:04:05 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/PIDILITIND/consolidated/ "HTTP/1.1 200 OK"
+  00:04:05 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: company_profile ok 1 records
+  00:04:05 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: company_documents ok 147 records
+  00:04:05 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6597863/peers/ "HTTP/1.1 200 OK"
+  00:04:05 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: peers ok 8 records
+  00:04:05 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  00:04:06 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  00:04:07 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  00:04:08 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  00:04:09 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_quarters ok 143 records
+  00:04:09 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  00:04:10 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  00:04:11 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  00:04:12 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  00:04:13 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_profit-loss ok 168 records
+  00:04:13 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  00:04:14 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  00:04:15 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  00:04:16 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  00:04:17 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_balance-sheet ok 288 records
+  00:04:17 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  00:04:18 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  00:04:20 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  00:04:21 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_cash-flow ok 288 records
+  00:04:21 [INFO] flowtracker.research.refresh: [refresh_business] PIDILITIND: done 16.4s, 7 sources, 1043 total records
+  00:04:21 [INFO] flowtracker.research.peer_refresh: [peer_refresh] PIDILITIND: started
+  00:04:21 [INFO] flowtracker.research.peer_refresh: [peer_refresh] PIDILITIND: done 0.0s, 0 peers fetched, 12 cached, 6 benchmarks
+  00:04:21 [INFO] flowtracker.research.concall_extractor: [concall_ensure] PIDILITIND: extracting FY26-Q2
+  00:04:22 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  00:08:05 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  00:10:57 [ERROR] claude_agent_sdk._internal.query: Fatal error in message reader: Command failed with exit code 1 (exit code: 1)
+  Error output: Check stderr output for details
+  00:10:57 [WARNING] flowtracker.research.concall_extractor: Cross-quarter narrative for PIDILITIND returned prose (237 chars) — attempting JSON recovery
+  00:10:57 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  00:11:13 [INFO] flowtracker.research.concall_extractor: [concall_ensure] PIDILITIND: done 412.7s, 1 new quarters, 4 total
+  00:11:14 [INFO] httpx: HTTP Request: GET https://news.google.com/rss/search?q=Pidilite%20Industries%20Limited%20PIDILITIND%20stock%20India&hl=en-IN&gl=IN&ceid=IN:en "HTTP/1.1 200 OK"
+  00:11:14 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  00:11:26 [INFO] flowtracker.research.agent: [business] tool_call: ToolSearch({"query": "select:mcp__business__get_analytical_profile,mcp__business__get_company_conte...", "max_results": "6"})
+  00:11:29 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_analytical_profile({"symbol": "PIDILITIND"})
+  00:11:30 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_company_context({"symbol": "PIDILITIND", "section": "[\"info\", \"profile\", \"concall_insights\", \"business_profile\"]", "doc_type": "all", "limit": "5"})
+  00:11:31 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_fundamentals({"symbol": "PIDILITIND", "section": "[\"annual_financials\", \"ratios\", \"cost_structure\"]"})
+  00:11:31 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_valuation({"symbol": "PIDILITIND", "section": "snapshot"})
+  00:11:32 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_events_actions({"symbol": "PIDILITIND", "section": "catalysts"})
+  00:11:32 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_peer_sector({"symbol": "PIDILITIND", "section": "[\"peer_table\", \"peer_metrics\", \"benchmarks\"]"})
+  00:11:36 [INFO] flowtracker.research.agent: [business] tool_call: ToolSearch({"query": "select:mcp__business__render_chart,mcp__business__calculate,mcp__business__sa...", "max_results": "3"})
+  00:12:11 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "revenue_profit"})
+  00:12:11 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "margin_trend"})
+  00:12:11 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "expense_pie"})
+  00:12:12 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "roce_trend"})
+  00:12:12 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "0", "b": "0"})
+  00:12:22 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "5361.17", "b": "13140.31"})
+  00:12:22 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "802.83", "b": "2076.24"})
+  00:12:22 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "0", "b": "0"})
+  00:12:23 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "6135.04", "b": "13140.31"})
+  00:12:24 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "6821.12", "b": "11799.1"})
+  00:12:25 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "2076.24", "b": "13140.31"})
+  00:12:26 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "ratio", "a": "2286.63", "b": "2076.24"})
+  00:12:26 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "0", "b": "0"})
+  00:12:27 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "1465.97", "b": "1742.45"})
+  00:12:27 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "13140.31", "b": "100"})
+  00:12:36 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "0", "b": "0"})
+  00:12:36 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "1729.38", "b": "2076.24"})
+  00:12:36 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "12382.99", "b": "13140.31"})
+  00:12:37 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "10512", "b": "13140"})
+  00:12:38 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "6964", "b": "13140"})
+  00:18:37 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "13140.31", "b": "1"})
+  00:18:38 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "2076.24", "b": "2822.7"})
+  00:18:38 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "2822.7", "b": "220.95"})
+  05:15:12 [ERROR] claude_agent_sdk._internal.query: Fatal error in message reader: Command failed with exit code 1 (exit code: 1)
+  Error output: Check stderr output for details
+  05:15:12 [WARNING] flowtracker.research.agent: Agent 'business' for PIDILITIND raised Exception after producing content — proceeding with partial output
+  05:15:12 [WARNING] flowtracker.research.agent: Briefing extraction skipped for 'business' PIDILITIND: report too short (17 chars)
+  05:15:12 [INFO] flowtracker.research.agent: [business] unused_tools: SdkMcpTool(name='calculate', description="Financial calculator — use this for ALL math instead of computing in your head. Operations (pass operation + a + b): 'shares_to_value_cr': a=shares (raw count), b=price (₹) → value in ₹ Cr. 'per_share_to_total_cr': a=per_share_value (₹), b=shares (raw count) → total in ₹ Cr. 'total_cr_to_per_share': a=total_cr (₹ Cr), b=shares (raw count) → per share (₹). 'pe_from_price_eps': a=price (₹), b=eps (₹) → PE ratio. 'eps_from_pat_shares': a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹). 'fair_value': a=pe_multiple, b=eps (₹) → fair value per share (₹). 'growth_rate': a=old value, b=new value → growth %. 'mcap_cr': a=price (₹), b=shares (raw count) → market cap in ₹ Cr. 'margin_of_safety': a=fair_value (₹), b=current_price (₹) → MoS %. 'annualize_quarterly': a=quarterly_value → annualized (×4). 'pct_of': a=part, b=whole → percentage. 'ratio': a=numerator, b=denominator → ratio. 'expr': a=arithmetic expression as string (e.g. '(623 * 0.25) / 114.4') → result. Returns the result + the full calculation string so you can verify and cite it. ALWAYS use this tool for any multiplication, division, or unit conversion. Never compute in your head.", input_schema={'operation': <class 'str'>, 'a': <class 'float'>, 'b': <class 'float'>}, handler=<function calculate at 0x10c44e340>, annotations=None), SdkMcpTool(name='get_analytical_profile', description='Pre-computed analytical profile (updated weekly). Returns ALL metrics in ONE call: composite score (0-100), Piotroski F-Score (0-9), Beneish M-Score, earnings quality, Bernstein reverse DCF (implied growth + implied margin + 5x5 sensitivity matrix), capex cycle phase, common size P&L, BFSI metrics (NIM/ROA if bank), price performance (1M/3M/6M/1Y vs Nifty + sector). CALL THIS FIRST — drill into individual tools only for full 10Y history.', input_schema={'symbol': <class 'str'>}, handler=<function get_analytical_profile at 0x10c44d440>, annotations=None), SdkMcpTool(name='get_chart_data', description="Get Screener chart time series. chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function get_chart_data at 0x10c4477e0>, annotations=None), SdkMcpTool(name='get_company_context', description="Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>, 'doc_type': <class 'str'>, 'limit': <class 'int'>}, handler=<function get_company_context at 0x10c44e0c0>, annotations=None), SdkMcpTool(name='get_events_actions', description="Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']. Optional: years (default 10), quarters (default 12), days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_events_actions at 0x10c44e200>, annotations=None), SdkMcpTool(name='get_fundamentals', description="Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']. Optional: quarters (default 12), years (default 10), sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_fundamentals at 0x10c44d6c0>, annotations=None), SdkMcpTool(name='get_peer_sector', description="Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers' | ['section1', 'section2']. Optional: metric (for specific valuation metric).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_peer_sector at 0x10c44dd00>, annotations=None), SdkMcpTool(name='get_valuation', description="Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']. Optional: metric (for band, default 'pe_trailing'), days (default 2500), years (default 10).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_valuation at 0x10c44da80>, annotations=None), SdkMcpTool(name='get_yahoo_peers', description="Get Yahoo Finance recommended peer companies with fundamentals snapshots. Returns subject + peer company snapshots (valuation, profitability, growth, ownership) with similarity scores. Better peer selection than Screener — uses Yahoo's recommendation engine.", input_schema={'symbol': <class 'str'>}, handler=<function get_yahoo_peers at 0x10c447920>, annotations=None), SdkMcpTool(name='render_chart', description="Generate a PNG chart and return the file path for embedding in your report. Use the embed_markdown value directly in your report to show the chart. chart_type options: STOCK CHARTS: 'price' (price + SMA50/200, 7yr), 'pe' (PE ratio history, 7yr), 'delivery' (delivery % + volume bars, 90 days), 'revenue_profit' (10yr annual revenue & profit bars), 'quarterly' (12-quarter revenue & profit bars), 'margin_trend' (10yr OPM & NPM lines), 'roce_trend' (10yr ROCE bars, color-coded by quality), 'dupont' (DuPont decomposition: margin × turnover × leverage → ROE), 'cashflow' (10yr operating & free cash flow bars), 'shareholding' (12-quarter ownership trend lines), 'fair_value_range' (bear/base/bull vs current price horizontal bar), 'expense_pie' (expense breakdown pie chart), 'composite_radar' (8-factor quality score spider chart), 'dividend_history' (dividend payout ratio & DPS over time). SECTOR CHARTS: 'sector_mcap' (all sector stocks by market cap), 'sector_growth_bars' (sector peer revenue growth bars), 'sector_profitability_bars' (sector peer ROCE bars), 'sector_pe_distribution' (sector PE histogram with subject marked), 'sector_valuation_scatter' (PE vs ROCE scatter — bargain/avoid quadrants), 'sector_ownership_flow' (MF ownership changes — accumulation/exit). COMPARISON CHARTS (use comma-separated symbols, e.g. symbol='HDFCBANK,ICICIBANK'): 'comparison_revenue' (indexed revenue trajectories), 'comparison_pe' (PE history overlay), 'comparison_shareholding' (FII/MF ownership trends overlay), 'comparison_radar' (quality score radars overlaid), 'comparison_margins' (OPM/NPM trends overlay). Returns: {path, embed_markdown}.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function render_chart at 0x10c44c860>, annotations=None), SdkMcpTool(name='save_business_profile', description='Save a business profile to vault for future reuse. Content should be structured markdown covering: what they do, how they make money, competitive position, industry dynamics, key risks.', input_schema={'symbol': <class 'str'>, 'content': <class 'str'>}, handler=<function save_business_profile at 0x10c447e20>, annotations=None)
+  05:15:12 [INFO] flowtracker.research.agent: [business] done: success 17 chars, 31 calls, 9/11 tools used, 18237s, $0.61
+  Agent completed in 1782.2s (success=True)
+  Report: 17 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: F (50) [FAIL]
+
+--- business / BHARTIARTL (telecom) ---
+  Running agent...
+  05:15:40 [INFO] flowtracker.research.refresh: [refresh_business] BHARTIARTL: started
+  05:15:40 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  05:15:40 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  05:15:40 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  05:15:41 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/BHARTIARTL/consolidated/ "HTTP/1.1 200 OK"
+  05:15:41 [INFO] flowtracker.research.refresh: [refresh] BHARTIARTL: company_profile ok 1 records
+  05:15:41 [INFO] flowtracker.research.refresh: [refresh] BHARTIARTL: company_documents ok 61 records
+  05:15:41 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6595023/peers/ "HTTP/1.1 200 OK"
+  05:15:41 [INFO] flowtracker.research.refresh: [refresh] BHARTIARTL: peers ok 8 records
+  05:15:41 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  05:15:42 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  05:15:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  05:15:44 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  05:15:45 [INFO] flowtracker.research.refresh: [refresh] BHARTIARTL: schedules_quarters ok 130 records
+  05:15:45 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  05:15:46 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  05:15:47 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  05:15:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  05:15:49 [INFO] flowtracker.research.refresh: [refresh] BHARTIARTL: schedules_profit-loss ok 168 records
+  05:15:50 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  05:15:51 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  05:15:52 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  05:15:53 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  05:15:54 [INFO] flowtracker.research.refresh: [refresh] BHARTIARTL: schedules_balance-sheet ok 300 records
+  05:15:54 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  05:15:55 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  05:15:56 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/467/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  05:15:57 [INFO] flowtracker.research.refresh: [refresh] BHARTIARTL: schedules_cash-flow ok 336 records
+  05:15:57 [INFO] flowtracker.research.refresh: [refresh_business] BHARTIARTL: done 17.1s, 7 sources, 1004 total records
+  05:15:57 [INFO] flowtracker.research.peer_refresh: [peer_refresh] BHARTIARTL: started
+  05:15:57 [INFO] flowtracker.research.peer_refresh: [peer_refresh] BHARTIARTL: done 0.0s, 0 peers fetched, 7 cached, 6 benchmarks
+  05:15:57 [INFO] flowtracker.research.concall_extractor: [concall_ensure] BHARTIARTL: extracting FY26-Q2
+  05:25:57 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude

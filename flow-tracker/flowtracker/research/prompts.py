@@ -193,6 +193,10 @@ Decode a company's numbers — earnings trajectory, margin mechanics, quality of
 - **Capital Allocation Cycle (Ambit 6-Step)** — Trace the full cycle: (1) Incremental Capex → (2) Conversion to Sales Growth → (3) Pricing Discipline (PBIT margin maintained?) → (4) Capital Employed Turnover → (5) Balance Sheet Discipline (D/E stable, no dilution) → (6) Cash Generation (CFO growing). A "great" company executes all 6 steps. Identify WHERE the chain breaks — that's the key insight.
 - **Balance Sheet Loss Recognition** — Check if reserves decreased YoY without corresponding dividend payments. Companies sometimes write off losses directly against reserves or adjust goodwill instead of recognizing them in P&L. If reserves fell and dividends don't explain it, flag: "Potential loss write-off through balance sheet."
 - **Dividend quality** — Dividends funded from free cash flow are sustainable; dividends funded from borrowings are a red flag. Compute Dividend/FCF coverage from capital_allocation data (dividends_paid / FCF). If coverage >1.0 for 2+ consecutive years, flag "unsustainable payout" — the company is borrowing or liquidating assets to pay dividends.
+- **Anomaly resolution — exhaust your tools before asking open questions.** When you spot a major P&L anomaly (one-time charge, margin collapse, revenue spike), you MUST call `get_company_context(section='concall_insights')` and check `get_events_actions(section='corporate_actions')` to find the cause BEFORE listing it as an open question. Open questions are for things your tools genuinely cannot answer — not for things you didn't look up.
+- **Expense breakdown for opaque cost lines.** If "Other Costs", "Other Expenses", or any single unclassified cost line exceeds 20% of revenue, call `get_fundamentals(section='expense_breakdown')` to decompose it. For platform/marketplace businesses, these often contain critical operational costs (delivery, marketing, CAC).
+- **Standalone vs consolidated delta.** When both standalone and consolidated financials exist and differ materially (revenue >20% gap), ALWAYS present the delta explicitly: what % of consolidated revenue/PAT comes from subsidiaries? Is the subsidiary profitable or loss-making? Use `get_quality_scores(section='subsidiary')` for this. This directly feeds the Valuation agent's SOTP analysis.
+- **Dividend data for yield stocks.** For companies paying dividends, call `get_events_actions(section='dividends')` to get actual payout history. Don't leave dividend sustainability as an open question when the data is one tool call away.
 """
 
 FINANCIAL_INSTRUCTIONS_V2 = """
@@ -1132,11 +1136,25 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
 
 # Map industries without specialized injections to sector skill directories
 _INDUSTRY_SECTOR_MAP: dict[str, str] = {
-    "pharmaceuticals": "pharma", "pharma": "pharma", "drug": "pharma",
-    "auto": "auto", "automobile": "auto", "vehicle": "auto", "two wheeler": "auto",
-    "fmcg": "fmcg", "consumer": "fmcg", "personal care": "fmcg", "food": "fmcg",
+    # Pharma (yfinance: "Drug Manufacturers - Specialty & Generic")
+    "drug manufacturer": "pharma", "pharmaceutical": "pharma", "pharma": "pharma",
+    "biotechnology": "pharma",
+    # Auto (yfinance: "Auto Manufacturers", "Auto Parts")
+    "auto manufacturer": "auto", "auto parts": "auto", "auto": "auto",
+    "vehicle": "auto", "two wheeler": "auto", "2/3 wheeler": "auto",
+    # FMCG (yfinance: "Household & Personal Products", "Packaged Foods", "Tobacco")
+    "household": "fmcg", "personal products": "fmcg", "packaged food": "fmcg",
+    "tobacco": "fmcg", "beverages": "fmcg", "fmcg": "fmcg", "consumer": "fmcg",
+    # Chemicals (yfinance: "Specialty Chemicals", "Chemicals")
     "chemical": "chemicals", "specialty chemical": "chemicals", "agrochemical": "chemicals",
-    "platform": "platform", "marketplace": "platform", "internet": "platform",
+    # Platform (yfinance: "Internet Retail", "Internet Content & Information")
+    "internet retail": "platform", "internet content": "platform",
+    "e-retail": "platform", "e-commerce": "platform", "platform": "platform",
+    "marketplace": "platform",
+    # Insurance broker (yfinance: "Insurance Brokers")
+    "insurance broker": "insurance",
+    # Hospital (yfinance: "Medical Care Facilities")
+    "medical care": "hospital", "hospital": "hospital",
 }
 
 

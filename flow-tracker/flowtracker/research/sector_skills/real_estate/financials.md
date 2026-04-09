@@ -1,0 +1,30 @@
+## Real Estate — Financials Agent
+
+### CRITICAL: P&L Revenue Is Backward-Looking
+Under Ind-AS 115 (project completion method), revenue is recognized only when the project is substantially complete and possession is given. This means:
+- **Reported revenue** reflects projects COMPLETED 2-3 years ago, NOT current business momentum
+- A company can be selling aggressively today but show flat/declining revenue because completions haven't caught up
+- Do NOT draw conclusions about business trajectory from P&L revenue alone
+
+### The Real Metrics (from concall_insights / sector_kpis)
+Extract these — they tell the actual story:
+- **Pre-sales (Booking Value in ₹ Cr)** — current demand signal. This IS the revenue equivalent for real estate
+- **Pre-sales Volume (mn sq ft)** — physical demand, strips out ASP inflation
+- **Collections (₹ Cr)** — cash actually received from customers. Compare to pre-sales for collection efficiency
+- **Net Debt** — THE most important balance sheet metric. Track absolute reduction over time
+
+### Cash Flow Is King
+- Compare **Operating Cash Flow** against **Collections**. OCF should track collections closely
+- If OCF << Collections, the company is burning cash on new land/construction faster than collecting
+- Track Net Debt reduction as the primary measure of financial health. Real estate deleveraging = equity value creation
+
+### What Structured Tools CAN Tell You
+- `get_fundamentals(section='balance_sheet_detail')` — borrowing structure, cash position, net debt
+- `get_fundamentals(section='cash_flow_quality')` — OCF trajectory, capex (land + construction)
+- `get_fundamentals(section='working_capital')` — advances from customers (a GOOD sign in real estate = money collected before completion)
+- `get_quality_scores(section='realestate')` — pre-computed real estate metrics if available
+
+### Valuation
+- **P/E is misleading** due to lumpy revenue recognition. Use NAV (Net Asset Value) based on land bank + ongoing projects
+- **EV/Pre-sales** or **Mcap/Pre-sales** as a proxy for PE
+- Net Debt / Equity is the risk metric — >1.0x is elevated for Indian developers

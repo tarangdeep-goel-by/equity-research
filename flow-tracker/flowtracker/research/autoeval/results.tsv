@@ -35,3 +35,6 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-08T08:00:58Z	1	financials	POLICYBZR	insurance	A-	90	31067	0.0	273.5	2	A highly insightful and institutional-quality financial teardown that successfully bridges the gap b
 2026-04-08T08:17:06Z	1	financials	ADANIENT	conglomerate	A	93	30102	0.0	76.4	1	This is an institutional-quality report that perfectly captures the complex, distorted financial rea
 2026-04-08T09:33:24Z	1	financials	OLAELEC	auto	A	94	31371	0.0	85.1	2	This is an outstanding, institutional-quality financial teardown of a complex, loss-making EV manufa
+2026-04-08T18:16:42Z	0	business	PIDILITIND	chemicals	ERR	0	0	996.8	0.0	0	Agent run failed
+2026-04-08T18:33:41Z	0	business	BHARTIARTL	telecom	ERR	0	0	1018.9	0.0	0	Agent run failed
+2026-04-08T23:45:39Z	0	business	PIDILITIND	chemicals	F	50	17	1782.2	25.8	0	The report generation failed completely due to a severe pipeline timeout (over 5 hours of execution 
