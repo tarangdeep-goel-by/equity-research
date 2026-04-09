@@ -187,40 +187,53 @@ def _find_concall_pdfs(symbol: str, quarters: int = 6) -> list[Path]:
         # Re-sort by recency
         results.sort(key=lambda p: _fy_sort_key(p.parent), reverse=True)
 
-    # Download concall_ppt (investor deck) for quarters that have transcripts but no PPT
-    try:
-        from flowtracker.store import FlowStore
-        with FlowStore() as store:
-            ppt_docs = store._conn.execute(
-                "SELECT period, url FROM company_documents "
-                "WHERE symbol = ? AND doc_type = 'concall_ppt' "
-                "ORDER BY period DESC",
-                (symbol,),
-            ).fetchall()
-        for doc in ppt_docs:
-            try:
-                fy_q = _screener_period_to_fy_quarter(doc["period"])
-            except (ValueError, KeyError):
-                continue
-            if fy_q not in seen_quarters:
-                continue  # only download PPTs for quarters we have transcripts for
-            dest = filings_dir / fy_q / "concall_ppt.pdf"
-            if not dest.exists():
-                _download_transcript_from_url(doc["url"], dest)
-    except Exception:
-        pass
+    # PPT download disabled — investor decks are 20-60 pages of slides that
+    # produce 100K+ chars of garbled text via pdfplumber, blowing extraction
+    # budgets for marginal value over transcript + Screener financials.
+    # Re-enable when we have native PDF vision (Anthropic API) or better
+    # PDF-to-markdown extraction (pymupdf4llm).
+    #
+    # try:
+    #     from flowtracker.store import FlowStore
+    #     with FlowStore() as store:
+    #         ppt_docs = store._conn.execute(
+    #             "SELECT period, url FROM company_documents "
+    #             "WHERE symbol = ? AND doc_type = 'concall_ppt' "
+    #             "ORDER BY period DESC",
+    #             (symbol,),
+    #         ).fetchall()
+    #     for doc in ppt_docs:
+    #         try:
+    #             fy_q = _screener_period_to_fy_quarter(doc["period"])
+    #         except (ValueError, KeyError):
+    #             continue
+    #         if fy_q not in seen_quarters:
+    #             continue
+    #         dest = filings_dir / fy_q / "concall_ppt.pdf"
+    #         if not dest.exists():
+    #             _download_transcript_from_url(doc["url"], dest)
+    # except Exception:
+    #     pass
 
     return results[:quarters]
 
 
 def _find_supplementary_pdfs(quarter_dir: Path) -> list[Path]:
-    """Find investor deck or concall PPT in same directory as concall.pdf."""
-    extras = []
-    for name in ("investor_deck.pdf", "concall_ppt.pdf"):
-        p = quarter_dir / name
-        if p.exists():
-            extras.append(p)
-    return extras
+    """Find investor deck or concall PPT in same directory as concall.pdf.
+
+    PPT/investor deck reading disabled — pdfplumber produces garbled text
+    from slide decks (100K+ chars), blowing extraction budgets. Financial
+    numbers are available via Screener (get_fundamentals). Re-enable when
+    we have native PDF vision or better PDF extraction.
+    """
+    # Disabled: PPT text extraction is too noisy and expensive
+    # extras = []
+    # for name in ("investor_deck.pdf", "concall_ppt.pdf"):
+    #     p = quarter_dir / name
+    #     if p.exists():
+    #         extras.append(p)
+    # return extras
+    return []
 
 
 # --- PDF text extraction ---
