@@ -18,7 +18,7 @@ This is a chemicals company. Apply chemicals-sector-specific analysis.
 - R&D pipeline for new molecules/applications
 - Consumer brand moat (distribution network, brand recall, pricing power)
 
-**Valuation consistency rule:** Your bull/bear valuation multiples MUST come from the peer group you identified via `get_yahoo_peers` or `get_peer_sector`. If the peers are consumer companies, use consumer multiples. If the peers are commodity chemicals, use commodity multiples. Do not default to generic "chemicals sector" multiples when your own analysis identifies different peers.
+**Valuation consistency:** Your bull/bear valuation multiples should come from the peer group you identified via `get_yahoo_peers` or `get_peer_sector`. A stock whose peers are consumer companies (Asian Paints, HUL) deserves consumer multiples, not commodity chemical multiples — otherwise your valuation contradicts your own thesis about the company's competitive position.
 
 **Key Risks:**
 - **Raw material price volatility** — crude oil, natural gas, benzene, ethylene derivatives. 1-2 quarter lag in passthrough
