@@ -4919,6 +4919,22 @@ class ResearchDataAPI:
                     return prices_dict[d]
             return None
 
+        # Get split adjustments — multiply old prices by cumulative split ratio
+        split_rows = conn.execute(
+            "SELECT ex_date, multiplier FROM corporate_actions "
+            "WHERE symbol = ? AND action_type = 'split' AND multiplier IS NOT NULL "
+            "ORDER BY ex_date",
+            (symbol.upper(),),
+        ).fetchall()
+
+        def split_adjustment(from_date, to_date) -> float:
+            """Cumulative split multiplier between two dates (divide old price by this)."""
+            factor = 1.0
+            for row in split_rows:
+                if from_date < row["ex_date"] <= str(to_date):
+                    factor *= row["multiplier"]
+            return factor
+
         periods = []
         for label, days in period_defs:
             start_date = today - timedelta(days=days)
@@ -4926,6 +4942,11 @@ class ResearchDataAPI:
             stock_start = find_price(stock_prices, start_date)
             if stock_start is None or stock_start <= 0:
                 continue
+
+            # Adjust for splits between start and now
+            adj = split_adjustment(str(start_date), today)
+            if adj > 1:
+                stock_start = stock_start / adj
 
             stock_return = round((latest_price - stock_start) / stock_start * 100, 2)
 
