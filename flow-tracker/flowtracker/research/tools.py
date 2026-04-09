@@ -5,8 +5,39 @@ from __future__ import annotations
 import json
 
 from claude_agent_sdk import tool
+from mcp.types import ToolAnnotations
 
 from flowtracker.research.data_api import ResearchDataAPI
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True)
+
+import hashlib
+from contextvars import ContextVar
+
+# Per-session tool result cache for deduplication
+_tool_result_cache: ContextVar[dict[str, str]] = ContextVar("tool_result_cache", default={})
+
+
+def _cache_key(tool_name: str, args: dict) -> str:
+    """Stable hash of tool name + sorted args."""
+    arg_str = json.dumps(args, sort_keys=True, default=str)
+    return hashlib.sha256(f"{tool_name}:{arg_str}".encode()).hexdigest()[:16]
+
+
+def _with_dedup(tool_name: str, result: dict, args: dict) -> dict:
+    """Return compact stub if result matches a previous call with same args."""
+    cache = _tool_result_cache.get()
+    key = _cache_key(tool_name, args)
+    result_text = result["content"][0]["text"] if result.get("content") else ""
+    result_hash = hashlib.sha256(result_text.encode()).hexdigest()[:16]
+
+    if key in cache and cache[key] == result_hash:
+        return {"content": [{"type": "text", "text":
+            "[Identical to previous call with same arguments — use prior result.]"}]}
+
+    cache[key] = result_hash
+    _tool_result_cache.set(cache)
+    return result
 
 
 def _parse_section(section: str | list) -> str | list:
@@ -34,11 +65,12 @@ def _parse_section(section: str | list) -> str | list:
     "get_quarterly_results",
     "Get quarterly P&L: revenue, expenses, operating profit, net income, EPS, margins. Returns up to 12 quarters.",
     {"symbol": str, "quarters": int},
+    annotations=READ_ONLY,
 )
 async def get_quarterly_results(args):
     with ResearchDataAPI() as api:
         data = api.get_quarterly_results(args["symbol"], args.get("quarters", 12))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_quarterly_results", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -47,22 +79,24 @@ async def get_quarterly_results(args):
     "Balance Sheet: equity capital, reserves, borrowings, total assets, net block, CWIP, investments, receivables, inventory, cash. "
     "Cash Flow: CFO, CFI, CFF, net cash flow. Also includes: expense breakdown (raw material, employee, power, selling costs), shares outstanding, dividend, and price.",
     {"symbol": str, "years": int},
+    annotations=READ_ONLY,
 )
 async def get_annual_financials(args):
     with ResearchDataAPI() as api:
         data = api.get_annual_financials(args["symbol"], args.get("years", 10))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_annual_financials", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_efficiency_ratios",
     "Get efficiency ratios: debtor days, inventory days, cash conversion cycle, working capital days, ROCE%. Up to 10 years.",
     {"symbol": str, "years": int},
+    annotations=READ_ONLY,
 )
 async def get_efficiency_ratios(args):
     with ResearchDataAPI() as api:
         data = api.get_screener_ratios(args["symbol"], args.get("years", 10))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_efficiency_ratios", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -70,11 +104,12 @@ async def get_efficiency_ratios(args):
     "Get quarterly balance sheet from yfinance: total assets, debt, equity, cash, investments, shares outstanding. "
     "Up to 8 quarters. Values in crores. Not available for all stocks (some return empty).",
     {"symbol": str, "quarters": int},
+    annotations=READ_ONLY,
 )
 async def get_quarterly_balance_sheet(args):
     with ResearchDataAPI() as api:
         data = api.get_quarterly_balance_sheet(args["symbol"], args.get("quarters", 8))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_quarterly_balance_sheet", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -82,11 +117,12 @@ async def get_quarterly_balance_sheet(args):
     "Get quarterly cash flow from yfinance: operating CF, free CF, capex, investing CF, financing CF, working capital changes. "
     "Up to 8 quarters. Values in crores. NOT available for banks or many Indian stocks — if empty, use annual CF from get_annual_financials.",
     {"symbol": str, "quarters": int},
+    annotations=READ_ONLY,
 )
 async def get_quarterly_cash_flow(args):
     with ResearchDataAPI() as api:
         data = api.get_quarterly_cash_flow(args["symbol"], args.get("quarters", 8))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_quarterly_cash_flow", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Valuation ---
@@ -96,17 +132,19 @@ async def get_quarterly_cash_flow(args):
     "get_valuation_snapshot",
     "Get latest valuation snapshot: price, PE, PB, EV/EBITDA, dividend yield, margins, market cap — 50+ fields.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_valuation_snapshot(args):
     with ResearchDataAPI() as api:
         data = api.get_valuation_snapshot(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_valuation_snapshot", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_valuation_band",
     "Get PE (or other metric) percentile band over historical period. Shows where current valuation sits vs history.",
     {"symbol": str, "metric": str, "days": int},
+    annotations=READ_ONLY,
 )
 async def get_valuation_band(args):
     with ResearchDataAPI() as api:
@@ -115,18 +153,19 @@ async def get_valuation_band(args):
             args.get("metric", "pe_trailing"),
             args.get("days", 2500),
         )
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_valuation_band", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_pe_history",
     "Get historical PE and price time series for charting. Up to ~7 years of daily data.",
     {"symbol": str, "days": int},
+    annotations=READ_ONLY,
 )
 async def get_pe_history(args):
     with ResearchDataAPI() as api:
         data = api.get_pe_history(args["symbol"], args.get("days", 2500))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_pe_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -134,11 +173,12 @@ async def get_pe_history(args):
     "Get WACC parameters for a stock: risk-free rate, equity risk premium, beta (Nifty regression), "
     "cost of equity (CAPM), cost of debt, debt/equity mix, and final WACC%. Used as discount rate for DCF.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_wacc_params(args):
     with ResearchDataAPI() as api:
         data = api.get_wacc_params(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_wacc_params", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Ownership & Institutional ---
@@ -148,66 +188,72 @@ async def get_wacc_params(args):
     "get_shareholding",
     "Get quarterly ownership breakdown: FII%, DII%, MF%, Promoter%, Public%. Up to 12 quarters.",
     {"symbol": str, "quarters": int},
+    annotations=READ_ONLY,
 )
 async def get_shareholding(args):
     with ResearchDataAPI() as api:
         data = api.get_shareholding(args["symbol"], args.get("quarters", 12))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_shareholding", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_shareholding_changes",
     "Get latest quarter-over-quarter ownership changes by category (FII, DII, Promoter, etc.).",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_shareholding_changes(args):
     with ResearchDataAPI() as api:
         data = api.get_shareholding_changes(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_shareholding_changes", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_insider_transactions",
     "Get SAST insider buy/sell trades: person name, category, quantity, value. Up to 1 year.",
     {"symbol": str, "days": int},
+    annotations=READ_ONLY,
 )
 async def get_insider_transactions(args):
     with ResearchDataAPI() as api:
         data = api.get_insider_transactions(args["symbol"], args.get("days", 1825))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_insider_transactions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_bulk_block_deals",
     "Get BSE bulk/block deals — large institutional trades with buyer/seller, qty, price.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_bulk_block_deals(args):
     with ResearchDataAPI() as api:
         data = api.get_bulk_block_deals(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_bulk_block_deals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_mf_holdings",
     "Get MF scheme holdings — which mutual fund schemes hold this stock, quantity, % of NAV.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_mf_holdings(args):
     with ResearchDataAPI() as api:
         data = api.get_mf_holdings(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_mf_holdings", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_mf_holding_changes",
     "Get MF holding changes for this stock (latest month). Shows scheme-level additions/reductions.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_mf_holding_changes(args):
     with ResearchDataAPI() as api:
         data = api.get_mf_holding_changes(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_mf_holding_changes", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Market Signals ---
@@ -217,22 +263,24 @@ async def get_mf_holding_changes(args):
     "get_delivery_trend",
     "Get delivery % trend — weekly data up to 20 years from Screener charts. High delivery signals accumulation, low signals speculative churn. Default 90 days, set days=9999 for full history.",
     {"symbol": str, "days": int},
+    annotations=READ_ONLY,
 )
 async def get_delivery_trend(args):
     with ResearchDataAPI() as api:
         data = api.get_delivery_trend(args["symbol"], args.get("days", 30))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_delivery_trend", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_promoter_pledge",
     "Get quarterly promoter pledge % history. Rising pledge = risk signal.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_promoter_pledge(args):
     with ResearchDataAPI() as api:
         data = api.get_promoter_pledge(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_promoter_pledge", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Consensus ---
@@ -242,22 +290,24 @@ async def get_promoter_pledge(args):
     "get_consensus_estimate",
     "Get latest analyst consensus: target price, recommendation, forward PE, earnings growth estimate.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_consensus_estimate(args):
     with ResearchDataAPI() as api:
         data = api.get_consensus_estimate(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_consensus_estimate", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_earnings_surprises",
     "Get quarterly earnings surprises: actual vs estimate EPS, surprise %. Shows beat/miss history.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_earnings_surprises(args):
     with ResearchDataAPI() as api:
         data = api.get_earnings_surprises(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_earnings_surprises", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -265,11 +315,12 @@ async def get_earnings_surprises(args):
     "Get EPS estimate revision trends: current vs 7/30/60/90 day ago estimates, plus analyst upgrade/downgrade counts. "
     "Shows if consensus is moving up or down for current quarter, next quarter, current FY, and next FY.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_estimate_revisions(args):
     with ResearchDataAPI() as api:
         data = api.get_estimate_revisions(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_estimate_revisions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -277,11 +328,12 @@ async def get_estimate_revisions(args):
     "Get computed estimate momentum signal: score (0-1), direction (positive/neutral/negative), "
     "and narrative summary of revision trends. Rising estimates = fundamental momentum.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_estimate_momentum(args):
     with ResearchDataAPI() as api:
         data = api.get_estimate_momentum(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_estimate_momentum", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Events & Calendar ---
@@ -292,11 +344,12 @@ async def get_estimate_momentum(args):
     "Get upcoming events: next earnings date (with days until), ex-dividend date, consensus EPS and revenue estimates. "
     "Live fetch — always current. Check before any research to set temporal context.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_events_calendar(args):
     with ResearchDataAPI() as api:
         data = api.get_events_calendar(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_events_calendar", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Dividend History ---
@@ -307,11 +360,12 @@ async def get_events_calendar(args):
     "Get annual dividend per share, payout ratio, and yield history (up to 10 years). "
     "Computed from corporate actions + annual financials. Shows dividend growth trends.",
     {"symbol": str, "years": int},
+    annotations=READ_ONLY,
 )
 async def get_dividend_history(args):
     with ResearchDataAPI() as api:
         data = api.get_dividend_history(args["symbol"], args.get("years", 10))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_dividend_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Macro Context ---
@@ -321,33 +375,36 @@ async def get_dividend_history(args):
     "get_macro_snapshot",
     "Get current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec yield.",
     {},
+    annotations=READ_ONLY,
 )
 async def get_macro_snapshot(args):
     with ResearchDataAPI() as api:
         data = api.get_macro_snapshot()
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_macro_snapshot", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_fii_dii_streak",
     "Get current FII/DII buying/selling streak — consecutive days of net buy or sell.",
     {},
+    annotations=READ_ONLY,
 )
 async def get_fii_dii_streak(args):
     with ResearchDataAPI() as api:
         data = api.get_fii_dii_streak()
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_fii_dii_streak", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_fii_dii_flows",
     "Get daily FII/DII net flows (in crores) for recent period. Up to 30 days.",
     {"days": int},
+    annotations=READ_ONLY,
 )
 async def get_fii_dii_flows(args):
     with ResearchDataAPI() as api:
         data = api.get_fii_dii_flows(args.get("days", 30))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_fii_dii_flows", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Screener APIs (Phase 2) ---
@@ -357,22 +414,24 @@ async def get_fii_dii_flows(args):
     "get_chart_data",
     "Get Screener chart time series. chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'.",
     {"symbol": str, "chart_type": str},
+    annotations=READ_ONLY,
 )
 async def get_chart_data(args):
     with ResearchDataAPI() as api:
         data = api.get_chart_data(args["symbol"], args["chart_type"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_chart_data", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_peer_comparison",
     "Get peer comparison table: CMP, P/E, MCap, ROCE%, etc. for sector peers of the given stock.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_peer_comparison(args):
     with ResearchDataAPI() as api:
         data = api.get_peer_comparison(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_peer_comparison", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -381,38 +440,41 @@ async def get_peer_comparison(args):
     "Returns subject + peer company snapshots (valuation, profitability, growth, ownership) with similarity scores. "
     "Better peer selection than Screener — uses Yahoo's recommendation engine.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_yahoo_peers(args):
     symbol = args["symbol"].upper()
     with ResearchDataAPI() as api:
         data = api.get_yahoo_peer_comparison(symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_yahoo_peers", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_shareholder_detail",
     "Get individual shareholder names and quarterly %: e.g. Vanguard, LIC, etc. Optionally filter by classification.",
     {"symbol": str, "classification": str},
+    annotations=READ_ONLY,
 )
 async def get_shareholder_detail(args):
     with ResearchDataAPI() as api:
         data = api.get_shareholder_detail(
             args["symbol"], args.get("classification")
         )
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_shareholder_detail", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_expense_breakdown",
     "Get raw schedule sub-item breakdowns from financial_schedules table (e.g., Expenses -> Employee Cost, Raw Material). section: 'profit-loss', 'balance-sheet', 'quarters', 'cash-flow'. For structured/analyzed views, use get_fundamentals with section: 'cost_structure', 'balance_sheet_detail', 'cash_flow_quality', or 'working_capital'.",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_expense_breakdown(args):
     with ResearchDataAPI() as api:
         data = api.get_expense_breakdown(
             args["symbol"], args.get("section", "profit-loss")
         )
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_expense_breakdown", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Filings & Info ---
@@ -422,22 +484,24 @@ async def get_expense_breakdown(args):
     "get_recent_filings",
     "Get recent BSE corporate filings for a stock. Returns filing type, date, subject, PDF link.",
     {"symbol": str, "limit": int},
+    annotations=READ_ONLY,
 )
 async def get_recent_filings(args):
     with ResearchDataAPI() as api:
         data = api.get_recent_filings(args["symbol"], args.get("limit", 10))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_recent_filings", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_company_info",
     "Get basic company info: symbol, company name, and industry classification.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_company_info(args):
     with ResearchDataAPI() as api:
         data = api.get_company_info(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_company_info", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Company Profile & Documents ---
@@ -447,22 +511,24 @@ async def get_company_info(args):
     "get_company_profile",
     "Get company business description, key points, and Screener URL. Use to understand what the company does.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_company_profile(args):
     with ResearchDataAPI() as api:
         data = api.get_company_profile(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_company_profile", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_company_documents",
     "Get concall transcript/PPT/recording URLs and annual report URLs. Optionally filter by doc_type: 'concall_transcript', 'concall_ppt', 'annual_report'.",
     {"symbol": str, "doc_type": str},
+    annotations=READ_ONLY,
 )
 async def get_company_documents(args):
     with ResearchDataAPI() as api:
         data = api.get_company_documents(args["symbol"], args.get("doc_type"))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_company_documents", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Business Profile (Vault) ---
@@ -472,6 +538,7 @@ async def get_company_documents(args):
     "get_business_profile",
     "Read cached business profile from vault. Returns markdown content if exists, empty if not. Check this BEFORE doing web research.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_business_profile(args):
     from pathlib import Path
@@ -479,8 +546,8 @@ async def get_business_profile(args):
     path = Path.home() / "vault" / "stocks" / symbol / "profile.md"
     if path.exists():
         content = path.read_text()
-        return {"content": [{"type": "text", "text": content}]}
-    return {"content": [{"type": "text", "text": ""}]}
+        return _with_dedup("get_business_profile", {"content": [{"type": "text", "text": content}]}, args)
+    return _with_dedup("get_business_profile", {"content": [{"type": "text", "text": ""}]}, args)
 
 
 @tool(
@@ -504,99 +571,108 @@ async def save_business_profile(args):
     "get_dcf_valuation",
     "Get DCF intrinsic value and margin of safety for a stock. Shows how much the stock is over/under-valued according to discounted cash flow model.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_dcf_valuation(args):
     with ResearchDataAPI() as api:
         data = api.get_dcf_valuation(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_dcf_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_dcf_history",
     "Get historical DCF intrinsic value trajectory. Shows how fair value has changed over time.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_dcf_history(args):
     with ResearchDataAPI() as api:
         data = api.get_dcf_history(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_dcf_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_technical_indicators",
     "Get latest RSI, SMA-50, SMA-200, MACD, ADX. Use for entry timing context — NOT for buy/sell decisions alone.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_technical_indicators(args):
     with ResearchDataAPI() as api:
         data = api.get_technical_indicators(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_technical_indicators", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_dupont_decomposition",
     "Decompose ROE into Net Profit Margin × Asset Turnover × Equity Multiplier (10yr history). Shows what's driving ROE — margin, efficiency, or leverage.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_dupont_decomposition(args):
     with ResearchDataAPI() as api:
         data = api.get_dupont_decomposition(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_dupont_decomposition", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_key_metrics_history",
     "Get comprehensive per-share metrics and valuation ratios history (up to 10 years). Includes PE, PB, EV/EBITDA, ROE, ROIC, FCF yield, etc.",
     {"symbol": str, "years": int},
+    annotations=READ_ONLY,
 )
 async def get_key_metrics_history(args):
     with ResearchDataAPI() as api:
         data = api.get_key_metrics_history(args["symbol"], args.get("years", 10))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_key_metrics_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_financial_growth_rates",
     "Get pre-computed annual growth rates: revenue, EBITDA, net income, EPS, FCF. Includes 3yr, 5yr, 10yr CAGRs.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_financial_growth_rates(args):
     with ResearchDataAPI() as api:
         data = api.get_financial_growth_rates(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_financial_growth_rates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_analyst_grades",
     "Get analyst upgrade/downgrade history. Shows which firms are changing ratings and the direction — useful for sell-side sentiment momentum.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_analyst_grades(args):
     with ResearchDataAPI() as api:
         data = api.get_analyst_grades(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_analyst_grades", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_price_targets",
     "Get individual analyst price targets with consensus mean, high, low. Shows analyst dispersion and conviction.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_price_targets(args):
     with ResearchDataAPI() as api:
         data = api.get_price_targets(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_price_targets", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_fair_value",
     "Get combined fair value estimate from PE band + DCF + analyst consensus. Returns bear/base/bull range, margin of safety %, and signal (DEEP VALUE / UNDERVALUED / FAIR VALUE / EXPENSIVE).",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_fair_value(args):
     with ResearchDataAPI() as api:
         data = api.get_fair_value(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_fair_value", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Scoring ---
@@ -606,6 +682,7 @@ async def get_fair_value(args):
     "get_composite_score",
     "Get 8-factor composite score (0-100) for a stock: ownership, insider, valuation, earnings, quality, delivery, estimates, risk. Each factor has a score, raw value, and explanation.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_composite_score(args):
     from flowtracker.screener_engine import ScreenerEngine
@@ -615,7 +692,7 @@ async def get_composite_score(args):
         engine = ScreenerEngine(store)
         score = engine.score_stock(args["symbol"])
     if score is None:
-        return {"content": [{"type": "text", "text": "No scoring data available"}]}
+        return _with_dedup("get_composite_score", {"content": [{"type": "text", "text": "No scoring data available"}]}, args)
     data = {
         "symbol": score.symbol,
         "composite_score": score.composite_score,
@@ -624,7 +701,7 @@ async def get_composite_score(args):
             for f in score.factors
         ],
     }
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_composite_score", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Peer Benchmarking ---
@@ -634,50 +711,55 @@ async def get_composite_score(args):
     "get_peer_metrics",
     "Get FMP key financial metrics (PE, PB, EV/EBITDA, ROE, ROIC, FCF yield, debt/equity, margins) for the subject company and all its peers. Returns subject data, individual peer data, and peer count.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_peer_metrics(args):
     with ResearchDataAPI() as api:
         data = api.get_peer_metrics(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_peer_metrics", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_peer_growth",
     "Get FMP growth rates (revenue, EBITDA, net income, EPS, FCF growth + 3yr/5yr CAGRs) for the subject company and all its peers.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_peer_growth(args):
     with ResearchDataAPI() as api:
         data = api.get_peer_growth(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_peer_growth", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_valuation_matrix",
     "Get multi-metric valuation comparison matrix for a stock vs all its peers. Returns PE, PB, EV/EBITDA, EV/Sales, margins, ROE, growth for subject + all peers, with sector medians and subject percentile ranks. Use this for relative valuation analysis.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_valuation_matrix(args):
     with ResearchDataAPI() as api:
         data = api.get_valuation_matrix(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_valuation_matrix", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_sector_benchmarks",
     "Get computed sector benchmark statistics for a metric: subject value, sector median, P25/P75, min/max, and the subject's percentile rank. If no metric specified, returns all benchmarks.",
     {"symbol": str, "metric": str},
+    annotations=READ_ONLY,
 )
 async def get_sector_benchmarks(args):
     with ResearchDataAPI() as api:
         data = api.get_sector_benchmarks(args["symbol"], args.get("metric"))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_sector_benchmarks", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 get_concall_insights = tool(
     "get_concall_insights",
     "Get pre-extracted concall insights from the vault: 4 quarters of operational metrics, financial metrics, management commentary, subsidiary updates, risk flags, and cross-quarter narrative themes. This is structured data already extracted from concall transcripts — much richer and faster than reading raw PDFs.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 
 
@@ -685,7 +767,7 @@ get_concall_insights = tool(
 async def get_concall_insights(args):
     with ResearchDataAPI() as api:
         data = api.get_concall_insights(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_concall_insights", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -734,22 +816,24 @@ async def render_chart(args):
     "get_corporate_actions",
     "Get all corporate actions (bonuses, stock splits, dividends, spinoffs, buybacks) for a stock. Shows action type, date, ratio/multiplier, and source. Use to understand share capital changes and adjust historical per-share metrics.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_corporate_actions(args):
     with ResearchDataAPI() as api:
         data = api.get_corporate_actions(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_corporate_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_adjusted_eps",
     "Get quarterly EPS adjusted for all stock splits and bonuses. Returns both raw and adjusted EPS so you can see the true earnings trend without per-share discontinuities. Essential for any stock that has had a split or bonus.",
     {"symbol": str, "quarters": int},
+    annotations=READ_ONLY,
 )
 async def get_adjusted_eps(args):
     with ResearchDataAPI() as api:
         data = api.get_adjusted_eps(args["symbol"], args.get("quarters", 12))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_adjusted_eps", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -759,11 +843,12 @@ async def get_adjusted_eps(args):
     "and implied fair values at different PE multiples. The agent should refine assumptions using concall "
     "guidance and sector context — these are starting estimates, not final answers.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_financial_projections(args):
     with ResearchDataAPI() as api:
         data = api.get_financial_projections(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_financial_projections", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Sector Analysis ---
@@ -774,11 +859,12 @@ async def get_financial_projections(args):
     "Get industry-level overview: stock count, total market cap, median PE/PB/ROCE, "
     "valuation range, top stocks. Looks up the industry from the given stock's classification.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_sector_overview_metrics(args):
     with ResearchDataAPI() as api:
         data = api.get_sector_overview_metrics(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_sector_overview_metrics", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -786,11 +872,12 @@ async def get_sector_overview_metrics(args):
     "Get aggregate institutional ownership changes across all stocks in the subject's industry. "
     "Shows which stocks MFs are accumulating, which they're exiting, and net sector flow direction.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_sector_flows(args):
     with ResearchDataAPI() as api:
         data = api.get_sector_flows(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_sector_flows", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -798,11 +885,12 @@ async def get_sector_flows(args):
     "Get all stocks in the subject's industry ranked by market cap, with key metrics: "
     "PE, ROCE, FII%, MF%, price change. Shows where the subject ranks among peers.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_sector_valuations(args):
     with ResearchDataAPI() as api:
         data = api.get_sector_valuations(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_sector_valuations", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -811,11 +899,12 @@ async def get_sector_valuations(args):
     "ex-dividend, RBI policy, estimated results dates. Returns events within the next "
     "N days sorted by date.",
     {"symbol": str, "days": int},
+    annotations=READ_ONLY,
 )
 async def get_upcoming_catalysts(args):
     with ResearchDataAPI() as api:
         data = api.get_upcoming_catalysts(args["symbol"], args.get("days", 90))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_upcoming_catalysts", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -823,33 +912,36 @@ async def get_upcoming_catalysts(args):
     "Earnings quality analysis: CFO/PAT ratio, CFO/EBITDA ratio, accrual ratio (5-10Y trend). "
     "Signals high/low cash conversion quality. NOT available for banks/NBFCs (requires NPA data).",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_earnings_quality(args):
     with ResearchDataAPI() as api:
         data = api.get_earnings_quality(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_earnings_quality", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_piotroski_score",
     "Piotroski F-Score (0-9): profitability, leverage, operating efficiency. Adapted for BFSI (NIM proxy for gross margin). Uses split/bonus-adjusted shares for dilution check.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_piotroski_score(args):
     with ResearchDataAPI() as api:
         data = api.get_piotroski_score(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_piotroski_score", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
     "get_beneish_score",
     "Beneish M-Score: earnings manipulation probability. 8-variable model. Skipped for BFSI. Returns null if any variable can't be computed (no defaults).",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_beneish_score(args):
     with ResearchDataAPI() as api:
         data = api.get_beneish_score(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_beneish_score", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -858,11 +950,12 @@ async def get_beneish_score(args):
     "Uses FCFF model (WACC) for non-BFSI, FCFE model (Ke) for banks. "
     "Compares implied growth with historical 3Y/5Y revenue CAGR.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_reverse_dcf(args):
     with ResearchDataAPI() as api:
         data = api.get_reverse_dcf(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_reverse_dcf", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -870,11 +963,12 @@ async def get_reverse_dcf(args):
     "CWIP/Capex tracking with phase detection (Investing/Commissioning/Harvesting/Mature). "
     "10Y trend of CWIP/NetBlock, asset turnover, capex intensity. Not applicable to BFSI.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_capex_cycle(args):
     with ResearchDataAPI() as api:
         data = api.get_capex_cycle(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_capex_cycle", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -883,11 +977,12 @@ async def get_capex_cycle(args):
     "For BFSI, denominator is Total Income (interest earned + other income). "
     "Highlights biggest cost and fastest-growing cost category.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_common_size_pl(args):
     with ResearchDataAPI() as api:
         data = api.get_common_size_pl(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_common_size_pl", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -895,11 +990,12 @@ async def get_common_size_pl(args):
     "Consensus revenue estimates: avg/low/high for current and next quarter/year. "
     "Values in crores. Coverage limited to ~Nifty 100-150 stocks.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_revenue_estimates(args):
     with ResearchDataAPI() as api:
         data = api.get_revenue_estimates(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_revenue_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -907,11 +1003,12 @@ async def get_revenue_estimates(args):
     "Growth estimates: stock growth vs index growth for current/next quarter and year. "
     "Includes long-term growth (LTG) estimate. Coverage limited to ~Nifty 100-150 stocks.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_growth_estimates(args):
     with ResearchDataAPI() as api:
         data = api.get_growth_estimates(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_growth_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -919,11 +1016,12 @@ async def get_growth_estimates(args):
     "Price return vs Nifty 50 and sector index (1M/3M/6M/1Y). "
     "Price return only — excludes dividends. Uses local DB for stock prices, live yfinance for index.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_price_performance(args):
     with ResearchDataAPI() as api:
         data = api.get_price_performance(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_price_performance", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -933,11 +1031,12 @@ async def get_price_performance(args):
     "FMCG, auto, cement, metals, real estate, telecom, chemicals, power, oil & gas). "
     "Returns per-quarter values + trends. Requires concall extraction to exist.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_sector_kpis(args):
     with ResearchDataAPI() as api:
         data = api.get_sector_kpis(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_sector_kpis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -945,11 +1044,12 @@ async def get_sector_kpis(args):
     "Bank/NBFC-specific metrics: NIM, ROA, Cost-to-Income, P/B, equity multiplier (5Y trend). "
     "Only for BFSI stocks — returns skipped for non-BFSI and insurance.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_bfsi_metrics(args):
     with ResearchDataAPI() as api:
         data = api.get_bfsi_metrics(args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_bfsi_metrics", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -961,13 +1061,14 @@ async def get_bfsi_metrics(args):
     "price performance (1M/3M/6M/1Y vs Nifty + sector). "
     "CALL THIS FIRST — drill into individual tools only for full 10Y history.",
     {"symbol": str},
+    annotations=READ_ONLY,
 )
 async def get_analytical_profile(args):
     with ResearchDataAPI() as api:
         data = api.get_analytical_profile(args["symbol"])
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, args["symbol"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_analytical_profile", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -979,11 +1080,12 @@ async def get_analytical_profile(args):
     "Available: f_score, m_score, composite_score, eq_signal, rdcf_implied_growth, "
     "capex_phase, perf_1y_excess, is_bfsi, industry, m_score_signal.",
     {"filters": dict},
+    annotations=READ_ONLY,
 )
 async def screen_stocks(args):
     with ResearchDataAPI() as api:
         data = api.screen_stocks(args["filters"])
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("screen_stocks", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Macro Tools (V2 consolidated) ---
@@ -1043,6 +1145,7 @@ def _get_fundamentals_section(api, symbol, section, args):
     "get_fundamentals",
     "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']. Optional: quarters (default 12), years (default 10), sub_section.",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_fundamentals(args):
     symbol = args["symbol"]
@@ -1071,7 +1174,7 @@ async def get_fundamentals(args):
             data = _get_fundamentals_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_fundamentals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_quality_scores_section(api, symbol, section, args):
@@ -1140,6 +1243,7 @@ def _get_quality_scores_section(api, symbol, section, args):
     "'incremental_roce' = marginal return on new capital. 'altman_zscore' = EM distress predictor. 'working_capital' = CCC trend + channel stuffing flags. "
     "'operating_leverage' = DOL earnings sensitivity. 'fcf_yield' = FCF/EV vs risk-free. 'tax_rate_analysis' = ETR anomalies. 'receivables_quality' = revenue recognition risk.",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_quality_scores(args):
     symbol = args["symbol"]
@@ -1194,7 +1298,7 @@ async def get_quality_scores(args):
             data = _get_quality_scores_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_quality_scores", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_ownership_section(api, symbol, section, args):
@@ -1225,6 +1329,7 @@ def _get_ownership_section(api, symbol, section, args):
     "get_ownership",
     "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | ['section1', 'section2']. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_ownership(args):
     symbol = args["symbol"]
@@ -1248,7 +1353,7 @@ async def get_ownership(args):
             data = _get_ownership_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_valuation_section(api, symbol, section, args):
@@ -1273,6 +1378,7 @@ def _get_valuation_section(api, symbol, section, args):
     "get_valuation",
     "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']. Optional: metric (for band, default 'pe_trailing'), days (default 2500), years (default 10).",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_valuation(args):
     symbol = args["symbol"]
@@ -1291,7 +1397,7 @@ async def get_valuation(args):
             data = _get_valuation_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_fair_value_analysis_section(api, symbol, section, args):
@@ -1314,6 +1420,7 @@ def _get_fair_value_analysis_section(api, symbol, section, args):
     "get_fair_value_analysis",
     "Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | ['section1', 'section2']",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_fair_value_analysis(args):
     symbol = args["symbol"]
@@ -1333,7 +1440,7 @@ async def get_fair_value_analysis(args):
             data = _get_fair_value_analysis_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_fair_value_analysis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_peer_sector_section(api, symbol, section, args):
@@ -1364,6 +1471,7 @@ def _get_peer_sector_section(api, symbol, section, args):
     "get_peer_sector",
     "Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers' | ['section1', 'section2']. Optional: metric (for specific valuation metric).",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_peer_sector(args):
     symbol = args["symbol"]
@@ -1386,7 +1494,7 @@ async def get_peer_sector(args):
             data = _get_peer_sector_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_peer_sector", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_estimates_section(api, symbol, section, args):
@@ -1415,6 +1523,7 @@ def _get_estimates_section(api, symbol, section, args):
     "get_estimates",
     "Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_estimates(args):
     symbol = args["symbol"]
@@ -1437,7 +1546,7 @@ async def get_estimates(args):
             data = _get_estimates_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_market_context_section(api, symbol, section, args):
@@ -1468,6 +1577,7 @@ def _get_market_context_section(api, symbol, section, args):
     "get_market_context",
     "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']. Optional: days (default 90).",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_market_context(args):
     symbol = args["symbol"]
@@ -1503,7 +1613,7 @@ async def get_market_context(args):
             data = _get_market_context_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_market_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_company_context_section(api, symbol, section, args):
@@ -1532,6 +1642,7 @@ def _get_company_context_section(api, symbol, section, args):
     "get_company_context",
     "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']",
     {"symbol": str, "section": str, "doc_type": str, "limit": int},
+    annotations=READ_ONLY,
 )
 async def get_company_context(args):
     symbol = args["symbol"]
@@ -1553,7 +1664,7 @@ async def get_company_context(args):
             data = _get_company_context_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_company_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 def _get_events_actions_section(api, symbol, section, args):
@@ -1580,6 +1691,7 @@ def _get_events_actions_section(api, symbol, section, args):
     "get_events_actions",
     "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']. Optional: years (default 10), quarters (default 12), days (default 90).",
     {"symbol": str, "section": str},
+    annotations=READ_ONLY,
 )
 async def get_events_actions(args):
     symbol = args["symbol"]
@@ -1601,7 +1713,7 @@ async def get_events_actions(args):
             data = _get_events_actions_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_events_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- News ---
@@ -1615,11 +1727,12 @@ async def get_events_actions(args):
     "catalysts, regulatory actions, M&A, management changes. "
     "Each article has: title, source, date, url, summary.",
     {"symbol": str, "days": int},
+    annotations=READ_ONLY,
 )
 async def get_stock_news(args):
     with ResearchDataAPI() as api:
         data = api.get_stock_news(args["symbol"], args.get("days", 90))
-    return {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}
+    return _with_dedup("get_stock_news", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Financial Calculator ---
@@ -1645,6 +1758,7 @@ async def get_stock_news(args):
     "Returns the result + the full calculation string so you can verify and cite it. "
     "ALWAYS use this tool for any multiplication, division, or unit conversion. Never compute in your head.",
     {"operation": str, "a": float, "b": float},
+    annotations=READ_ONLY,
 )
 async def calculate(args):
     import math
@@ -1706,7 +1820,7 @@ async def calculate(args):
     except Exception as e:
         result = {"error": str(e)}
 
-    return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+    return _with_dedup("calculate", {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}, args)
 
 
 # --- Tool Registry ---

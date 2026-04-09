@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 from claude_agent_sdk import (
     AssistantMessage,
+    CLIConnectionError,
     ClaudeAgentOptions,
+    RateLimitEvent,
     ResultMessage,
     ToolResultBlock,
     ToolUseBlock,
@@ -33,6 +35,7 @@ from flowtracker.research.briefing import (
     save_trace,
 )
 from flowtracker.research.tools import (
+    _tool_result_cache,
     BUSINESS_AGENT_TOOLS_V2,
     FINANCIAL_AGENT_TOOLS_V2,
     NEWS_AGENT_TOOLS_V2,
@@ -99,6 +102,9 @@ AGENT_TIERS = {
     # Tier 3: Enhancers — sector and market timing
     "sector": 3, "technical": 3, "news": 3,
 }
+
+# Tier-aware retry counts — tier-1 agents are critical, get extra retries
+TIER_MAX_RETRIES = {1: 2, 2: 1, 3: 1}
 
 AGENT_MAX_TURNS: dict[str, int] = {
     "business": 40,
@@ -510,6 +516,9 @@ async def _run_specialist(
     if extra_builtins:
         options.allowed_tools = extra_builtins
 
+    # Reset per-session tool result dedup cache
+    _tool_result_cache.set({})
+
     # Phase 1: Generate report with thinking
     agent_started = datetime.now(timezone.utc).isoformat()
     start_time = time.time()
@@ -532,6 +541,14 @@ async def _run_specialist(
             prompt=user_prompt or f"Analyze {symbol}. Pull all relevant data using your tools. Produce your full report section.",
             options=options,
         ):
+            if isinstance(message, RateLimitEvent):
+                logger.warning(
+                    "[%s] rate limited: status=%s type=%s resets_at=%s",
+                    name, message.rate_limit_info.status,
+                    message.rate_limit_info.rate_limit_type,
+                    message.rate_limit_info.resets_at,
+                )
+                continue
             if isinstance(message, AssistantMessage):
                 # Accumulate tokens from each assistant turn (usage is a dict)
                 msg_usage = getattr(message, "usage", None)
@@ -944,16 +961,38 @@ async def run_all_agents(
     # Pre-fetch baseline context once for all agents
     baseline = _build_baseline_context(symbol)
 
-    # Phase 1: Run specialists with concurrency limit and retry
+    # Phase 1: Run specialists with concurrency limit, error recovery, and abort cascading
     specialists_phase = PhaseEvent(phase="specialists", started_at=datetime.now(timezone.utc).isoformat())
     MAX_CONCURRENT = 3  # max agents running simultaneously
-    MAX_RETRIES = 1     # retry once on failure
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+    tier1_failed = asyncio.Event()  # abort signal for tier-3 agents
+
+    def _classify_error(exc: Exception) -> tuple[str, int]:
+        """Classify exception for error-specific backoff. Returns (error_class, base_delay_s)."""
+        if isinstance(exc, CLIConnectionError):
+            return "cli_connection", 5
+        err_str = str(exc).lower()
+        if "rate limit" in err_str or "429" in err_str:
+            return "rate_limit", 30
+        if "overloaded" in err_str or "529" in err_str:
+            return "overloaded", 15
+        return "unknown", 5
 
     async def _run_with_limit(name: str, sys_prompt: str, instr: str) -> tuple[str, BriefingEnvelope | Exception, AgentTrace | None]:
-        """Run a specialist with concurrency limiting and retry."""
+        """Run a specialist with concurrency limiting, error-classified retry, and abort awareness."""
+        tier = AGENT_TIERS.get(name, 3)
+        max_retries = TIER_MAX_RETRIES.get(tier, 1)
         last_trace: AgentTrace | None = None
-        for attempt in range(1 + MAX_RETRIES):
+
+        for attempt in range(1 + max_retries):
+            # Tier-3 agents check abort before acquiring semaphore
+            if tier == 3 and tier1_failed.is_set():
+                logger.info("[%s] skipped — tier-1 failed, synthesis capped", name)
+                return name, BriefingEnvelope(
+                    agent=name, symbol=symbol,
+                    status="skipped", failure_reason="Tier-1 agent failed",
+                ), None
+
             async with semaphore:
                 try:
                     envelope, agent_trace = await _run_specialist(
@@ -966,30 +1005,49 @@ async def run_all_agents(
                     if envelope.report and len(envelope.report.strip()) > 100:
                         return name, envelope, agent_trace
                     # Empty report — treat as failure for retry
-                    if attempt < MAX_RETRIES:
+                    if attempt < max_retries:
                         agent_trace.status = "retried"
                         logger.warning(
-                            "Agent '%s' for %s produced empty report (attempt %d/%d) — retrying in 5s",
-                            name, symbol, attempt + 1, 1 + MAX_RETRIES,
+                            "[%s] empty report (attempt %d/%d) — retrying in 5s",
+                            name, attempt + 1, 1 + max_retries,
                         )
                         await asyncio.sleep(5)
                         continue
                     return name, envelope, agent_trace  # return empty on last attempt
                 except Exception as exc:
-                    if attempt < MAX_RETRIES:
+                    error_class, base_delay = _classify_error(exc)
+                    delay = min(base_delay * (2 ** attempt), 120)
+                    if attempt < max_retries:
                         logger.warning(
-                            "Agent '%s' for %s failed (attempt %d/%d): %s — retrying in 5s",
-                            name, symbol, attempt + 1, 1 + MAX_RETRIES, exc,
+                            "[%s] %s error (attempt %d/%d) — retrying in %ds: %s",
+                            name, error_class, attempt + 1, 1 + max_retries, delay, exc,
                         )
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(delay)
                         continue
                     logger.error(
-                        "Agent '%s' for %s failed after %d attempts: %s",
-                        name, symbol, 1 + MAX_RETRIES, exc,
+                        "[%s] failed after %d attempts (%s): %s",
+                        name, 1 + max_retries, error_class, exc,
                     )
                     return name, exc, last_trace
         # Should not reach here, but just in case
         return name, Exception(f"Agent {name} exhausted retries"), last_trace
+
+    async def _run_with_abort(name: str, sys_prompt: str, instr: str) -> tuple[str, BriefingEnvelope | Exception, AgentTrace | None]:
+        """Wrapper that signals/checks tier-1 abort cascading."""
+        result = await _run_with_limit(name, sys_prompt, instr)
+        name_r, envelope_r, trace_r = result
+
+        # Signal abort if tier-1 agent failed
+        tier = AGENT_TIERS.get(name, 3)
+        if tier == 1:
+            is_failed = isinstance(envelope_r, Exception) or (
+                hasattr(envelope_r, "status") and envelope_r.status in ("failed", "empty")
+            )
+            if is_failed:
+                tier1_failed.set()
+                logger.warning("[%s] tier-1 failed — signaling abort for pending tier-3 agents", name)
+
+        return result
 
     # Build tasks for all agents that have prompts
     specialist_tasks = []
@@ -997,7 +1055,7 @@ async def run_all_agents(
         system_prompt, instructions = build_specialist_prompt(name, symbol)
         if not system_prompt:
             continue
-        specialist_tasks.append(_run_with_limit(name, system_prompt, instructions))
+        specialist_tasks.append(_run_with_abort(name, system_prompt, instructions))
 
     # Run with concurrency limit — gather still handles parallelism,
     # but the semaphore ensures only MAX_CONCURRENT run at once

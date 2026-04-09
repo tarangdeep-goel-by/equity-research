@@ -235,6 +235,7 @@
       'roic',
       'sales_qtr',
       'screener_updated_at',
+      'sector',
       'symbol',
       'updated_at',
       'yfinance_updated_at',
