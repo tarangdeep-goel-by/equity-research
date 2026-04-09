@@ -1738,6 +1738,10 @@ class ResearchDataAPI:
         operational metrics, financial metrics, management commentary,
         subsidiary updates, flags, and cross-quarter narrative themes.
         Falls back to v1 extraction if v2 doesn't exist.
+
+        QA sessions are trimmed to questions + notable flags only (full
+        management responses dropped) to keep payload under ~30K chars.
+        key_numbers_mentioned is dropped (redundant with operational_metrics).
         """
         import json
         from pathlib import Path
@@ -1749,6 +1753,19 @@ class ResearchDataAPI:
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
                     data["_source_file"] = filename
+                    # Trim verbose sections to keep payload manageable for agents
+                    for q in data.get("quarters", []):
+                        # QA: keep questions + notable only, drop full management responses
+                        trimmed_qa = []
+                        for qa in q.get("qa_session", []):
+                            trimmed_qa.append({
+                                "analyst": qa.get("analyst", ""),
+                                "questions": qa.get("questions", []),
+                                "notable": qa.get("notable", ""),
+                            })
+                        q["qa_session"] = trimmed_qa
+                        # Drop key_numbers_mentioned (redundant with operational_metrics)
+                        q.pop("key_numbers_mentioned", None)
                     return data
                 except (json.JSONDecodeError, OSError):
                     continue
