@@ -206,6 +206,20 @@ FINANCIAL_INSTRUCTIONS_V2 = """
 4. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 5. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
 6. **Visualizations**: Call `render_chart` once each for `quarterly` (12-quarter revenue & profit), `margin_trend` (10yr OPM & NPM), `roce_trend` (10yr ROCE bars), `dupont` (DuPont decomposition), and `cashflow` (10yr operating & free cash flow). Do NOT call the same chart_type twice.
+7. **Investigate before writing.** Before you start the report, scan the data you've collected for anomalies, unexplained spikes, or gaps. For each one, make the appropriate tool call:
+   - P&L anomaly (margin collapse, revenue spike, one-time charge) → `get_company_context(section='concall_insights')`
+   - Share count or price discontinuity → `get_events_actions(section='corporate_actions')`
+   - Opaque "Other Costs" >20% of revenue → `get_fundamentals(section='expense_breakdown')`
+   - Dividend-paying company → `get_events_actions(section='dividends')`
+   - Sector-specific KPIs needed (check your sector skill file) → `get_company_context(section='sector_kpis')`
+   This step is what separates institutional-quality analysis from surface-level number assembly. Steps 1-6 give you the data; step 7 gives you the insight.
+
+**Example — good vs bad analysis:**
+Bad: "Other Income fell from ₹2,100 Cr to -₹800 Cr in FY22, a significant decline. This is an open question for the web research agent."
+Good: Agent calls `get_company_context(section='concall_insights')`, finds the Taro Pharmaceutical buyout write-off, then writes: "Other Income collapsed to -₹800 Cr in FY22 due to a ₹2,900 Cr write-off on the Taro Pharmaceutical minority buyout (source: Q4 FY22 concall). Stripping this one-off, normalized Other Income was ~₹200 Cr, consistent with prior years."
+
+Bad: "R&D spend is likely buried in Other Costs but exact figures are unavailable."
+Good: Agent calls `get_fundamentals(section='expense_breakdown')`, finds R&D line item, then writes: "R&D spend was ₹2,450 Cr (4.7% of revenue), up from ₹1,890 Cr (4.2%) — rising R&D intensity signals pipeline investment for specialty portfolio."
 
 ## Report Sections
 1. **Earnings & Growth** — 12Q quarterly table (Revenue, OP, NP, OPM%, YoY growth) + 10Y annual table. Highlight inflection points, seasonality. Include peer growth comparison with sector percentiles.
