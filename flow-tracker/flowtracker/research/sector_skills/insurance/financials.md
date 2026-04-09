@@ -9,10 +9,11 @@ Detect from company profile whether this is an **aggregator/marketplace** (PB Fi
 - **Gross Margin** = (Revenue - Direct Costs) / Revenue (typically 60-70%). Measures efficiency
 - Present both separately
 
-**Subsidiary drag sizing (CRITICAL):**
+**Subsidiary drag sizing (CRITICAL — quantify, don't just note):**
 - Compare standalone vs consolidated P&L using `get_quality_scores(section='subsidiary')`
-- Estimate: if standalone profitable but consolidated not, subsidiary loss = consolidated PAT - standalone PAT
+- **Compute the magnitude**: subsidiary loss = consolidated PAT - standalone PAT. Present as ₹ Cr AND as % of consolidated revenue
 - Flag which subsidiary (lending arm, direct insurance, new verticals) is the drag
+- Track the trend: is the subsidiary drag narrowing (path to breakeven) or widening?
 
 **Aggregator KPIs from concall_insights:**
 - New premium per policy (average ticket size), Renewal rate, LTV/CAC

@@ -205,6 +205,10 @@ Decode a company's numbers — earnings trajectory, margin mechanics, quality of
 - **FX impact for export-heavy companies.** If >30% of revenue comes from exports (pharma, IT, auto components, chemicals), analyze currency translation impact on margins and debt. Check Other Income for FX gains/losses. Note whether the company hedges and the hedging horizon.
 - **Incremental margin ≠ average margin.** When discussing operating leverage, be precise: if 90% of costs are fixed, incremental margin on new revenue is ~90% (revenue minus variable costs only), NOT the average EBITDA margin. Get the math right.
 - **Open questions are a LAST RESORT.** Before finalizing any open question, ask yourself: "Can `get_company_context(concall_insights)`, `get_events_actions`, or `get_fundamentals(expense_breakdown)` answer this?" If yes, call the tool. Open questions should only contain things genuinely outside your tool data — regulatory changes, management intentions, competitive moves.
+- **Truncated tool output → retry with narrower section.** If `get_fundamentals` returns truncated data, don't give up — re-call with a specific `sub_section` or request fewer sections per call. Split large multi-section requests into 2-3 smaller calls.
+- **Cross-check your own FCF.** After computing or citing FCF, verify: FCF = CFO - Capex. If `cagr_table` FCF doesn't match your CFO minus Capex figure, flag the discrepancy and explain the definition gap (e.g., some sources include lease payments or acquisitions in capex).
+- **Large receivables need ageing context.** When receivables exceed 20% of revenue or 90 days of sales, don't just cite the total — flag the concentration and ageing risk. For utilities and infra, note government/SEB receivable exposure specifically.
+- **Debt maturity for leveraged companies.** If Net Debt/EBITDA > 2x or interest coverage < 3x, analyze the debt maturity profile from `get_fundamentals(section='balance_sheet_detail')`: what % is short-term vs long-term? Are there large near-term maturities? This is critical for assessing refinancing risk.
 """
 
 FINANCIAL_INSTRUCTIONS_V2 = """
