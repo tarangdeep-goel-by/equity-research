@@ -2,8 +2,8 @@
 
 This is a stockbroking or trading platform company. Apply broker-specific analysis ON TOP of standard financial analysis.
 
-**CRITICAL — Cash Flow Distortion:**
-- **DO NOT USE:** FCF, CFO, CFO/PAT ratio — client money held in settlement accounts and margin deposits create massive cash flow distortions that have NOTHING to do with business quality
+**Cash Flow Distortion — The Key Analytical Adjustment:**
+- **FCF, CFO, CFO/PAT ratio give misleading results** — client money held in settlement accounts and margin deposits create massive cash flow distortions unrelated to business quality
 - CFO can swing wildly based on client trading activity and settlement timing
 - This is the single most important analytical adjustment for brokers
 

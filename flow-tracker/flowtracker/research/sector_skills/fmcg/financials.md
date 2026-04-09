@@ -1,8 +1,8 @@
 ## FMCG / Consumer Staples — Financials Agent
 
-### Volume vs Price Growth (THE Most Important Split)
+### Volume vs Price Growth — The Most Important Split
 Revenue growth is a blended number that hides pricing power. Extract from `concall_insights` or `sector_kpis`:
-- **Volume growth %** — real demand signal. Sustained >5% is strong for mature FMCG
+- **Volume growth %** — real demand signal. Compare against peer median and the company's own historical range via `get_peer_sector(section='benchmarks')`
 - **Price/mix growth %** — pricing power + premiumization. Pure price growth without volume is unsustainable and signals demand destruction
 - If this split isn't in concall data, flag as the #1 open question
 

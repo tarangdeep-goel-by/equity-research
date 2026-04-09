@@ -4,7 +4,7 @@ This is a merchant power producer or integrated utility with significant unregul
 
 **Key Framework:**
 - Unlike regulated utilities, merchant power earnings are driven by power exchange prices, fuel costs, and PPA terms
-- Revenue and EBITDA growth ARE meaningful for merchant producers
+- Revenue and EBITDA growth are meaningful for merchant producers (unlike regulated utilities where fuel passthrough distorts revenue)
 - Standard valuation (PE, EV/EBITDA, DCF) is more applicable than for regulated utilities
 
 **Primary Valuation Metrics:**

@@ -16,9 +16,9 @@ This is a mutual fund asset management company. Apply AMC-specific analysis.
 - **% of AUM**: Market cap as % of AUM. Indian AMCs typically trade at 5-10% of equity AUM
 - PE comparison should be against other AMCs, not banks or NBFCs
 
-**DO NOT USE (misleading for AMCs):**
-- P/B ratio — AMCs are asset-light, book value is not meaningful
-- EV/EBITDA — not standard for AMCs, P/E is preferred
-- Working capital analysis — AMCs have minimal working capital needs
+**Metrics that mislead for AMCs:**
+- P/B ratio — AMCs are asset-light businesses where value comes from AUM and fee income, not book assets, so P/B gives misleading comparisons
+- EV/EBITDA — not standard for AMCs; P/E is preferred because AMCs have predictable, fee-based earnings
+- Working capital analysis — AMCs have minimal working capital needs, so WC metrics are not informative
 
 **Emphasize:** Market share in equity AUM, SIP flows growth, distribution reach (IFA vs direct vs bank), new fund offer pipeline, regulatory impact (TER reduction trends), and passive/ETF cannibalization risk.

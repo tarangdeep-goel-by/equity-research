@@ -5,9 +5,9 @@ Extract from `get_company_context(section='concall_insights')` or `get_company_c
 - **Constant Currency (CC) revenue growth** — the real growth signal, strips out forex volatility. Reported growth can diverge from CC by 2-5pp depending on USD/INR moves
 - **Total Contract Value (TCV)** / deal wins — leading indicator of future revenue. Large deals (>$50M) vs run-rate
 - **Book-to-bill ratio** — TCV / trailing revenue. Above 1.0 = growing pipeline
-- **Attrition rate** — talent cost pressure indicator. <15% healthy, >20% margin risk
+- **Attrition rate** — talent cost pressure indicator. Compare against peer median and the company's own trend
 
-If concall data doesn't contain these, flag as open questions. Do NOT guess CC growth from reported numbers.
+If concall data doesn't contain these, flag as open questions. Guessing CC growth from reported numbers produces unreliable estimates because FX impact can be 2-5pp in either direction.
 
 ### Earnings Quality Checks
 - **DSO (Days Sales Outstanding)**: AVAILABLE from `get_quality_scores(section='sector_health')` — returns `dso_days`, `dso_trend`, `dso_yoy_change`. Rising DSO while revenue slows = aggressive revenue recognition / unbilled revenue buildup. Flag if DSO increases >5 days YoY

@@ -9,7 +9,7 @@ Asset quality is the most critical dimension for bank analysis — a single quar
 - **Credit Cost** — provisions as % of average advances
 - **Provisioning / Operating Profit** — what share of core earnings are consumed by bad loans? Rising ratio = deteriorating quality even if headline NPA is stable
 
-If concall data doesn't contain these, flag as open questions — do NOT fabricate asset quality numbers.
+If concall data doesn't contain these, flag as open questions — fabricated asset quality numbers are worse than no numbers, since even small errors in NPA/slippage data can completely change the investment thesis.
 
 ### Available Structured BFSI Metrics
 `get_quality_scores(section='bfsi')` returns: NIM%, ROA%, Cost-to-Income%, P/B, Equity Multiplier, CD Ratio. Use these directly.
@@ -17,7 +17,7 @@ If concall data doesn't contain these, flag as open questions — do NOT fabrica
 ### Liability Franchise — Why It Drives Long-Term NIM
 Indian banks compete primarily on deposit cost, not lending rates (which are largely repo-linked). A bank with a strong CASA franchise has structurally cheaper funding, which translates directly into wider NIMs that persist through rate cycles. This is why CASA is the single best predictor of sustainable profitability.
 - Extract from `concall_insights` or `sector_kpis`:
-- **CASA Ratio** — Current + Savings deposits / Total deposits. Higher = cheaper funding = wider NIM. CASA >40% is strong for private banks, >35% for PSU banks
+- **CASA Ratio** — Current + Savings deposits / Total deposits. Higher = cheaper funding = wider NIM. Compare against peer median via `get_peer_sector(section='benchmarks')` and the bank's own trend
 - **Cost of Funds** — tracks funding cost trajectory. Compare to repo rate cycle
 
 ### Operating Profit Quality

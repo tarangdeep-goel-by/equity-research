@@ -1,6 +1,6 @@
 ## Platform / Internet — Financials Agent
 
-### Unit Economics (THE Core Analysis)
+### Unit Economics — The Core Analysis
 Platform P&Ls are meaningless at the aggregate level — high growth masks whether the underlying economics work. Decompose into unit economics from `get_company_context(section='concall_insights')` or `sector_kpis`:
 - **Revenue per order** — monetization metric
 - **Contribution margin per order** — after variable costs (delivery, payment gateway, packaging)

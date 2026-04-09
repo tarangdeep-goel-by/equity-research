@@ -1,8 +1,9 @@
 ## Conglomerate / Multi-Segment Mode (Auto-Detected)
 
-This company operates across multiple distinct business segments. Single-segment valuation frameworks are MISLEADING.
+This company operates across multiple distinct business segments. Single-segment valuation frameworks give misleading results because they blend fundamentally different businesses.
 
-**MANDATORY: Sum-of-the-Parts (SOTP) Valuation**
+**Sum-of-the-Parts (SOTP) Valuation — The Right Framework**
+Conglomerates need segment-level valuation because blending all segments into one PE or EV/EBITDA produces a meaningless average:
 - Identify each business segment and its revenue/EBIT contribution
 - Value each segment using peer multiples from pure-play comparables
 - Apply 15-25% holding company discount to aggregate value
@@ -13,6 +14,6 @@ This company operates across multiple distinct business segments. Single-segment
 - Capital allocation opacity (which segment gets capex priority?)
 - Consolidated metrics hide segment-level deterioration (aggregate margins may look stable while one segment collapses)
 
-**DO NOT USE in isolation:** Consolidated PE, consolidated EV/EBITDA — these blend segment multiples and produce meaningless averages.
+**Metrics that mislead for conglomerates:** Consolidated PE and consolidated EV/EBITDA blend segment multiples and produce averages that don't reflect any individual business's reality.
 
 **Emphasize:** Segment-level EBIT margins, segment growth rates, capital allocation by segment, demerger/listing potential for valuable subsidiaries.

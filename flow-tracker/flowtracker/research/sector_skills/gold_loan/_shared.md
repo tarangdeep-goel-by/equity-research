@@ -1,19 +1,19 @@
 ## Gold Loan NBFC Mode (Auto-Detected)
 
-This is a gold loan company. Gold NBFCs do NOT behave like standard banks or corporate lenders.
+This is a gold loan company. Gold NBFCs have a fundamentally different risk profile from standard banks or corporate lenders.
 
 **Primary Metrics:**
 - **Gold Tonnage AUM**: The true volume metric — total gold held as collateral. More meaningful than loan book value (which fluctuates with gold prices)
 - **LTV (Loan-to-Value)**: Regulatory cap at ~75%. Portfolio average LTV is the key risk metric — higher LTV = less buffer against gold price decline
 - **Yield on Gold Loans vs Cost of Funds**: The spread drives profitability. Track both independently — yield compression from competition vs funding cost from rate cycles
-- **Auction Rate**: % of loans where gold collateral was auctioned due to default. >2% is a red flag. Low auction rates prove the self-liquidating nature of the business
+- **Auction Rate**: % of loans where gold collateral was auctioned due to default. Compare against peer median and the company's own trend. Low auction rates prove the self-liquidating nature of the business
 
-**Gold Price Sensitivity (CRITICAL):**
-A 10% gold price crash compresses LTV ratios across the portfolio — borrowers near 75% LTV face margin calls. Model the impact: "If gold falls X%, Y% of the portfolio breaches LTV cap, requiring either top-up or auction." This is THE key risk for gold NBFCs.
+**Gold Price Sensitivity — The Key Risk:**
+A 10% gold price crash compresses LTV ratios across the portfolio — borrowers near 75% LTV face margin calls. Model the impact: "If gold falls X%, Y% of the portfolio breaches LTV cap, requiring either top-up or auction." This is the defining risk for gold NBFCs because the entire loan book is collateralized by a single volatile asset.
 
-**DO NOT USE (misleading for gold loans):**
-- Standard GNPA/NNPA analysis — gold loans are FULLY SECURED with liquid collateral. NPA optics can mislead when the underlying gold is worth more than the loan
-- Unsecured lending frameworks or provisioning norms designed for corporate/retail credit
+**Metrics that mislead for gold loans:**
+- Standard GNPA/NNPA analysis — gold loans are fully secured with liquid collateral, so NPA optics can mislead when the underlying gold is worth more than the loan. Asset quality for gold NBFCs is better measured by auction rates and LTV distribution
+- Unsecured lending frameworks or provisioning norms designed for corporate/retail credit — these assume credit risk dynamics that don't apply to collateral-backed lending
 
 **Valuation:** P/B is primary. ROA and spread trajectory drive re-rating.
 

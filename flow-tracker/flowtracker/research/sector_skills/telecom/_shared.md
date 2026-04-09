@@ -10,16 +10,16 @@ This is a telecom operator. Spectrum amortization and heavy capex distort standa
 **Primary Valuation Metrics:**
 - **EV/EBITDA**: primary metric for telecom — removes spectrum amortization distortion
 - **OpFCF (Operating Free Cash Flow)**: EBITDA minus capex. Available in `get_quality_scores` telecom section. Shows true cash generation after network investment
-- **Net Debt/EBITDA**: critical for telecom given heavy leverage from spectrum purchases. <3x manageable, >4x stressed
+- **Net Debt/EBITDA**: critical for telecom given heavy leverage from spectrum purchases. Compare to peer median and the company's own trend to assess leverage trajectory
 - **Capex/Revenue ratio**: investment intensity — 15-25% typical for Indian telecom in expansion phase
 
-**DO NOT USE in isolation (misleading for telecom):**
-- PE ratio — spectrum amortization makes PE artificially high and non-comparable
-- PAT margin — same distortion from amortization
-- PEG ratio — misleading when earnings are depressed by non-cash charges
+**Metrics that mislead in isolation for telecom:**
+- PE ratio — spectrum amortization depresses reported earnings, making PE artificially high and non-comparable across sectors
+- PAT margin — same distortion from amortization; EV/EBITDA removes this noise
+- PEG ratio — growth appears distorted when earnings are depressed by non-cash charges, making PEG unreliable
 
 **Key Operational Metrics (from concall insights):**
-- **ARPU (Average Revenue Per User)**: THE most important KPI. ARPU × subscribers = revenue
+- **ARPU (Average Revenue Per User)**: the single most important KPI — ARPU x subscribers = revenue
 - **Subscriber count and net additions**: volume driver
 - **Churn rate**: retention quality
 - **Data usage per subscriber**: engagement and monetization potential

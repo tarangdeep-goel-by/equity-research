@@ -18,14 +18,18 @@ You are an autonomous prompt optimization agent. Your job is to iteratively impr
    git checkout -b autoeval/$(date +%Y%m%d-%H%M)
    ```
 
-## Constraints (NEVER VIOLATE)
+## Immutable Boundaries
 
-- **NEVER modify `evaluate.py`** — the eval harness is sacred. Changing the judge is cheating.
-- **NEVER modify `eval_matrix.yaml`** — the test matrix is fixed.
-- **NEVER touch anything outside the agent layer** — no store.py, data_api.py, clients, infra.
-- **ALWAYS update `changelog.md`** after each experiment — add experiment entry, update fix statuses, and log learnings.
-- **ALWAYS commit before running eval** — so you can revert cleanly on failure.
-- **ONE issue per edit** — never batch multiple fixes. Attribution must be clear.
+These files are off-limits because changing them invalidates the evaluation:
+- `evaluate.py` — the eval harness. Changing the judge is cheating.
+- `eval_matrix.yaml` — the test matrix. Fixed benchmark.
+- Anything outside the agent layer (store.py, data_api.py, clients, infra) — data layer, not your problem.
+
+Your edit surface is the prompt layer only: `prompts.py`, `sector_skills/`, `tools.py`, `agent.py`.
+
+- Update `changelog.md` after each experiment — it's the single source of truth for what was tried and learned.
+- Commit before running eval so you can revert cleanly on failure.
+- One fix per edit — attribution must be clear so you know what helped and what didn't.
 
 ## Edit Surface — What You CAN Modify
 
@@ -56,11 +60,13 @@ Ask yourself: **"If I apply this fix, will it help or hurt OTHER sectors?"**
 
 **Key rule:** If a general prompt change fixes multiple failing sectors at once, prefer the general change. If it would hurt other sectors, make it a sector skill.
 
-**Caution with general changes:** After editing core prompts, you MUST re-run ALL previously passing sectors for that agent to check for regressions. Sector skill changes only require re-running that one sector.
+**Caution with general changes:** After editing core prompts, re-run all previously passing sectors for that agent to check for regressions. A general change that helps one sector but breaks two others is a net loss. Sector skill changes only require re-running that one sector.
 
-## Read-Only Files (NEVER TOUCH)
+## Read-Only Files
 
-| File | Why |
+These are outside your edit surface — modifications would either invalidate the eval or change the wrong layer:
+
+| File | Why it's off-limits |
 |------|-----|
 | `evaluate.py` | Eval harness — changing the judge is cheating |
 | `eval_matrix.yaml` | Test matrix — fixed benchmark |
@@ -213,6 +219,6 @@ Stop when ANY of these is true:
 5. **Simplification wins** — if you can remove a rule and maintain the grade, remove it
 6. **Cross-sector learning** — if a fix for BFSI looks like it applies to insurance too, note it in resources.md for when you get to that sector
 
-## NEVER STOP
+## Continuous Iteration
 
 Keep iterating through (agent, sector) pairs until all stop conditions are met or the user intervenes. Do not ask for confirmation between pairs — just proceed. Log everything to results.tsv and resources.md so a human can review later.

@@ -1,6 +1,6 @@
 ## Capital Goods / Industrials — Financials Agent
 
-### Order Book Analysis (THE Key Metric)
+### Order Book Analysis — The Key Metric
 Extract from `get_company_context(section='concall_insights')` or `sector_kpis`:
 - **Order inflow** (₹ Cr) — current quarter and trailing 12M
 - **Order book** (₹ Cr) — total unexecuted orders

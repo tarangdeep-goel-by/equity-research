@@ -4,7 +4,7 @@ This is a capital goods, engineering, or industrial company. Order book visibili
 
 **Primary Metrics:**
 - **Order Book / Order Inflow** — the forward revenue pipeline. Track Book-to-Bill ratio (order inflow / revenue). >1.0x = growing pipeline
-- **Order Book / Revenue ratio** — execution visibility in years. 2-3x = strong, <1x = weak pipeline
+- **Order Book / Revenue ratio** — execution visibility in years. Compare against peer median via `get_peer_sector(section='benchmarks')` and the company's own trend
 - **Execution Run-Rate** — quarterly revenue as % of opening order book. Measures execution speed
 - **Working Capital Cycle** — capital goods have long WC cycles (advance-heavy, receivable-heavy). Track CCC direction
 

@@ -76,7 +76,7 @@ class TestNoRedundantFetches:
         assert count == 1, f"Expected 1 get_valuation call, found {count}"
 
     def test_preamble_warns_against_refetch(self):
-        assert "Do NOT re-fetch" in SHARED_PREAMBLE_V2
+        assert "avoids redundant calls" in SHARED_PREAMBLE_V2
 
     def test_preamble_lists_profile_contents(self):
         assert "Quality scores" in SHARED_PREAMBLE_V2

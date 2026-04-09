@@ -3,7 +3,7 @@
 ### Business Model Economics
 AMCs earn management fees as % of AUM. Revenue = AUM × fee rate. Operating leverage is extreme — costs are mostly fixed (staff, technology, compliance), so AUM growth drops directly to profit.
 
-### Fee Yield Compression (THE Structural Risk)
+### Fee Yield Compression — The Structural Risk
 - **Yield on AUM** = Total Revenue / Average AUM — extract from `concall_insights` if available
 - Indian AMC yields are compressing due to: SEBI TER (Total Expense Ratio) reductions, shift to passive/index funds (lower fee), direct plan growth (lower commission)
 - If yield is falling faster than AUM is growing, revenue growth stalls despite AUM growth. Flag this explicitly

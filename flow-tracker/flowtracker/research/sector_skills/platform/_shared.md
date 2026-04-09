@@ -16,10 +16,10 @@ This is a platform/marketplace/internet business. Standard manufacturing metrics
 - Contribution margin positive = unit economics work, just need scale
 - Contribution margin negative = burning money on every order, fundamental business model risk
 
-**DO NOT USE (misleading for platforms):**
-- PE ratio (for loss-making companies) — use EV/Revenue or EV/GMV instead
-- ROCE/ROE — meaningless when there are accumulated losses
-- Traditional working capital analysis — platforms are asset-light
+**Metrics that mislead for platforms:**
+- PE ratio (for loss-making companies) — negative earnings make PE undefined or misleading; use EV/Revenue or EV/GMV instead
+- ROCE/ROE — accumulated losses distort the equity base, making these ratios not meaningful
+- Traditional working capital analysis — platforms are asset-light, so WC metrics provide no insight into business health
 
 **Cash Burn & Runway:**
 - Track quarterly cash burn rate and remaining cash runway

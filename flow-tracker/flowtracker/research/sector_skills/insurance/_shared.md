@@ -12,25 +12,25 @@ This company is an insurance company. Apply insurance-specific analysis:
 - **Premium Growth**: YoY growth in Gross Written Premium
 
 **Life Insurance Specific:**
-- **VNB (Value of New Business)**: measures profitability of new policies sold. VNB margin >25% excellent
+- **VNB (Value of New Business)**: measures profitability of new policies sold. Compare VNB margin against peer median via `get_peer_sector(section='benchmarks')` and the company's own trend
 - **APE (Annualized Premium Equivalent)**: standardized new business metric
-- **Persistency (13th/61st month)**: policy retention — 13M >85% good, 61M >50% good
+- **Persistency (13th/61st month)**: policy retention — higher is better. Compare against peer median and the company's own trend
 - **Embedded Value (EV)**: present value of future profits from in-force book
-- **Valuation**: P/EV (Price ÷ Embedded Value per share) is PRIMARY. P/VNB for growth. If EV data unavailable, fall back to P/B with stated limitations
+- **Valuation**: P/EV (Price ÷ Embedded Value per share) is the primary metric because it captures the present value of future profits. P/VNB for growth. If EV data unavailable, fall back to P/B with stated limitations
 
 **General Insurance Specific:**
-- **Combined Ratio**: Loss Ratio + Expense Ratio. <100% = underwriting profit. <95% excellent
+- **Combined Ratio**: Loss Ratio + Expense Ratio. <100% = underwriting profit. Compare against peer median for context
 - **Loss Ratio**: Claims paid ÷ Net Earned Premium
 - **Expense Ratio**: Operating expenses ÷ Net Written Premium
 - **Valuation**: P/B (primary), target P/E acceptable for general insurers
 
-**DO NOT USE for Insurance (these are MEANINGLESS):**
-- EBITDA, EBIT margin, ROCE — not applicable to insurance P&L
-- FCF (Free Cash Flow) — investment income and claim reserves distort cash flows
-- Standard DCF / Reverse DCF — invalid for insurance. Do NOT include DCF sensitivity matrices
-- Working capital metrics, inventory, capex cycle, gross margin
-- CFO/PAT ratio — reserve movements and investment cash flows distort
+**Metrics that give misleading results for insurance:**
+- **EBITDA, EBIT margin, ROCE** — insurance P&L structure is fundamentally different from manufacturing/services; these metrics are not applicable
+- **FCF (Free Cash Flow)** — investment income and claim reserves distort cash flows, making FCF a formula artifact rather than a business signal
+- **Standard DCF / Reverse DCF** — insurance cash flows are driven by actuarial reserves and investment portfolios, not operating free cash flow. DCF sensitivity matrices are not meaningful here
+- **Working capital metrics, inventory, capex cycle, gross margin** — not applicable to the insurance business model
+- **CFO/PAT ratio** — reserve movements and investment cash flows distort this ratio beyond usefulness
 
-**Fallback when concall KPIs unavailable:** If VNB/EV/combined ratio data is not available from tools, explicitly state this gap. For life insurance, fall back to P/B + ROE framework. For general insurance, use P/B + underwriting profit trends from P&L. Do NOT guess or estimate these KPIs.
+**Fallback when concall KPIs unavailable:** If VNB/EV/combined ratio data is not available from tools, explicitly state this gap. For life insurance, fall back to P/B + ROE framework. For general insurance, use P/B + underwriting profit trends from P&L. These are insurance-specific KPIs that require actuarial data — estimating them from standard financials would produce unreliable numbers.
 
 **Emphasize:** Premium growth trajectory, product mix (protection vs savings for life), investment yield, solvency buffer above 150%, and claims ratio trend.

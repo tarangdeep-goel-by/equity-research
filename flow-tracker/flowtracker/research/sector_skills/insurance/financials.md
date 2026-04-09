@@ -25,14 +25,14 @@ Aggregators typically run loss-making subsidiaries (lending, direct insurance, n
 
 ### IF LIFE INSURER:
 Standard P&L financials are **distorted by actuarial accounting** — reported profits reflect reserve movements, not business performance. Extract from `concall_insights` or `sector_kpis`:
-- **VNB (Value of New Business)** — profitability of new policies. VNB Margin >25% excellent
+- **VNB (Value of New Business)** — profitability of new policies. Compare VNB Margin against peer median via `get_peer_sector(section='benchmarks')` and the company's own trend
 - **APE (Annualized Premium Equivalent)** — standardized new business volume metric
 - **Embedded Value (EV)** — present value of in-force book + adjusted net worth
-- **Persistency (13th/61st month)** — policy retention. 13M >85% good, 61M >50% good
-- **Valuation**: P/EV is PRIMARY for life insurers. If EV unavailable, fall back to P/B with caveat
+- **Persistency (13th/61st month)** — policy retention. Higher is better — compare against peer median and the company's own trend
+- **Valuation**: P/EV is the primary metric for life insurers because it captures the value of the in-force book. If EV unavailable, fall back to P/B with caveat
 
 ### IF GENERAL INSURER:
 - **Combined Ratio** = Claims Ratio + Expense Ratio. <100% = underwriting profit
   - Break it down: **Claims Ratio** (underwriting quality) vs **Expense Ratio** (efficiency) — they tell different stories
 - **Investment income yield** — float deployment quality
-- **Solvency ratio** — regulatory minimum 150%, comfortable 180%+
+- **Solvency ratio** — regulatory minimum 150%. Compare buffer above minimum against peer median
