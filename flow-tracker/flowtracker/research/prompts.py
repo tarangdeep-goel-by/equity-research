@@ -1,5 +1,7 @@
 """Prompt templates for equity research agents."""
 
+import hashlib
+
 SHARED_PREAMBLE_V2 = """
 # Universal Research Rules
 
@@ -90,6 +92,8 @@ Check `_meta.data_age_hours` in tool responses. If data is >336 hours (2 weeks) 
 
 Use these directly from analytical_profile. Drill deeper ONLY when you need full time-series history.
 """
+
+_SHARED_PREAMBLE_HASH = hashlib.sha256(SHARED_PREAMBLE_V2.encode()).hexdigest()
 
 
 BUSINESS_SYSTEM_V2 = """
@@ -1088,6 +1092,9 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     Conglomerate injection runs as a secondary check (additive, not cascade).
     Sector skills (from autoeval) are loaded last as additive guidance.
     """
+    assert hashlib.sha256(SHARED_PREAMBLE_V2.encode()).hexdigest() == _SHARED_PREAMBLE_HASH, \
+        "SHARED_PREAMBLE_V2 mutated at runtime — this breaks prompt caching across agents"
+
     from pathlib import Path
 
     from flowtracker.research.data_api import ResearchDataAPI

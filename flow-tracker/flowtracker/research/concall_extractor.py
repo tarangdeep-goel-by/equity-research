@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -13,11 +14,172 @@ logger = logging.getLogger(__name__)
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
+    RateLimitEvent,
     ResultMessage,
     query,
 )
 
 _VAULT_BASE = Path.home() / "vault" / "stocks"
+
+MAX_CONCURRENT_EXTRACTIONS = 3
+
+# --- JSON Schemas for API-level structured output enforcement ---
+
+_METRIC_VALUE = {
+    "type": "object",
+    "properties": {
+        "value": {},
+        "yoy_change": {"type": "string"},
+        "qoq_change": {"type": "string"},
+        "context": {"type": "string"},
+        "source": {"type": "string"},
+        "detail": {"type": "string"},
+        "margin_pct": {},
+        "effective_rate_pct": {},
+    },
+    "additionalProperties": True,
+}
+
+_CONCALL_EXTRACTION_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "concall_extraction",
+        "strict": False,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "label": {"type": "string"},
+                "fy_quarter": {"type": "string"},
+                "period_ended": {"type": "string"},
+                "documents_read": {"type": "array", "items": {"type": "string"}},
+                "opening_remarks": {
+                    "type": "object",
+                    "properties": {
+                        "speaker": {"type": "string"},
+                        "key_points": {"type": "array", "items": {"type": "string"}},
+                        "tone": {"type": "string"},
+                        "emphasis": {"type": "string"},
+                    },
+                },
+                "operational_metrics": {
+                    "type": "object",
+                    "additionalProperties": _METRIC_VALUE,
+                },
+                "financial_metrics": {
+                    "type": "object",
+                    "properties": {
+                        "consolidated": {"type": "object", "additionalProperties": True},
+                        "standalone": {"type": "object", "additionalProperties": True},
+                        "segment_breakdown": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "segment": {"type": "string"},
+                                    "revenue_cr": {},
+                                    "growth": {"type": "string"},
+                                    "margin_pct": {},
+                                    "commentary": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+                "management_commentary": {
+                    "type": "object",
+                    "properties": {
+                        "guidance": {"type": "object", "additionalProperties": True},
+                        "strategy_updates": {"type": "array", "items": {"type": "string"}},
+                        "challenges_acknowledged": {"type": "array", "items": {"type": "string"}},
+                        "competitive_landscape": {"type": "string"},
+                        "capital_allocation": {"type": "string"},
+                        "hiring_and_headcount": {"type": "string"},
+                    },
+                },
+                "subsidiaries": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "revenue_cr": {},
+                            "growth": {"type": "string"},
+                            "key_metrics": {"type": "string"},
+                            "management_commentary": {"type": "string"},
+                            "outlook": {"type": "string"},
+                        },
+                    },
+                },
+                "qa_session": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "analyst": {"type": "string"},
+                            "questions": {"type": "array", "items": {"type": "string"}},
+                            "management_response": {"type": "string"},
+                            "notable": {"type": "string"},
+                        },
+                    },
+                },
+                "flags": {
+                    "type": "object",
+                    "properties": {
+                        "guidance_change": {"type": "string"},
+                        "new_risks": {"type": "array", "items": {"type": "string"}},
+                        "positive_surprises": {"type": "array", "items": {"type": "string"}},
+                        "red_flags": {"type": "array", "items": {"type": "string"}},
+                        "commitments_made": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+                "key_numbers_mentioned": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+_CROSS_QUARTER_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "cross_quarter_narrative",
+        "strict": False,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "key_themes": {"type": "array", "items": {"type": "string"}},
+                "guidance_track_record": {
+                    "type": "object",
+                    "properties": {
+                        "promises": {"type": "array", "items": {"type": "string"}},
+                        "delivery": {"type": "array", "items": {"type": "string"}},
+                        "credibility_score": {"type": "string"},
+                        "assessment": {"type": "string"},
+                    },
+                },
+                "metric_trajectories": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "values_by_quarter": {"type": "object", "additionalProperties": {"type": "string"}},
+                            "trend": {"type": "string"},
+                            "interpretation": {"type": "string"},
+                        },
+                    },
+                },
+                "narrative_shifts": {"type": "array", "items": {"type": "string"}},
+                "recurring_analyst_concerns": {"type": "array", "items": {"type": "string"}},
+                "biggest_positive": {"type": "string"},
+                "biggest_concern": {"type": "string"},
+                "management_credibility": {"type": "string"},
+                "what_to_watch_next_quarter": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+    },
+}
 
 # --- FY quarter sorting helpers ---
 
@@ -100,6 +262,32 @@ def _download_transcript_from_url(url: str, dest_path: Path) -> bool:
     return False
 
 
+def ensure_transcript_pdfs(symbol: str, max_quarters: int = 6) -> int:
+    """Download missing concall PDFs from Screener transcript URLs. Returns count downloaded."""
+    from flowtracker.store import FlowStore
+    symbol = symbol.upper()
+    vault_base = Path.home() / "vault" / "stocks"
+    downloaded = 0
+    with FlowStore() as store:
+        transcript_docs = store._conn.execute(
+            "SELECT period, url FROM company_documents "
+            "WHERE symbol = ? AND doc_type = 'concall_transcript' "
+            "ORDER BY period DESC LIMIT ?",
+            (symbol, max_quarters),
+        ).fetchall()
+    for doc in transcript_docs:
+        try:
+            fy_q = _screener_period_to_fy_quarter(doc["period"])
+        except (ValueError, KeyError):
+            continue
+        dest = vault_base / symbol / "filings" / fy_q / "concall.pdf"
+        if dest.exists():
+            continue
+        if _download_transcript_from_url(doc["url"], dest):
+            downloaded += 1
+    return downloaded
+
+
 # --- PDF discovery ---
 
 
@@ -154,33 +342,22 @@ def _find_concall_pdfs(symbol: str, quarters: int = 6) -> list[Path]:
     # If we have fewer than desired, try Screener transcript URLs
     if len(results) < quarters:
         try:
-            from flowtracker.store import FlowStore
-            with FlowStore() as store:
-                docs = store._conn.execute(
-                    "SELECT period, url FROM company_documents "
-                    "WHERE symbol = ? AND doc_type = 'concall_transcript' "
-                    "ORDER BY period DESC",
-                    (symbol,),
-                ).fetchall()
-
-            for doc in docs:
-                try:
-                    fy_q = _screener_period_to_fy_quarter(doc["period"])
-                except (ValueError, KeyError):
+            ensure_transcript_pdfs(symbol, max_quarters=quarters)
+            # Re-scan for newly downloaded PDFs
+            for qdir in sorted(
+                [d for d in filings_dir.iterdir() if d.is_dir() and re.match(r"FY\d{2}-Q[1-4]", d.name)],
+                key=_fy_sort_key, reverse=True,
+            ):
+                if qdir.name in seen_quarters:
                     continue
-                if fy_q in seen_quarters:
-                    continue
-                if _fy_sort_key_from_str(fy_q) < min_key:
-                    continue
-                dest = filings_dir / fy_q / "concall.pdf"
-                if dest.exists():
-                    results.append(dest)
-                    seen_quarters.add(fy_q)
-                elif _download_transcript_from_url(doc["url"], dest):
-                    results.append(dest)
-                    seen_quarters.add(fy_q)
-                if len(results) >= quarters:
+                if _fy_sort_key(qdir) < min_key:
                     break
+                concall = qdir / "concall.pdf"
+                if concall.exists():
+                    results.append(concall)
+                    seen_quarters.add(qdir.name)
+                    if len(results) >= quarters:
+                        break
         except Exception:
             pass  # don't break extraction if DB lookup fails
 
@@ -438,7 +615,8 @@ Rules:
 
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
-    max_budget: float = 0.50, max_turns: int = 3,
+    max_budget: float = 0.50, max_turns: int = 1,
+    output_format: dict | None = None,
 ) -> str:
     """Call Claude via Agent SDK. Handles the TextBlock fallback for empty ResultMessage."""
     options = ClaudeAgentOptions(
@@ -447,40 +625,66 @@ async def _call_claude(
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
+        disallowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep",
+                          "WebSearch", "WebFetch", "Agent", "Skill",
+                          "NotebookEdit", "TodoWrite"],
+        stderr=lambda line: logger.debug("[cli-stderr] %s", line),
+        env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000"},
     )
+    if output_format:
+        options.output_format = output_format
     text_blocks: list[str] = []
     result_text = ""
     try:
         async for msg in query(prompt=user_prompt, options=options):
+            if isinstance(msg, RateLimitEvent):
+                logger.warning(
+                    "[concall] rate limited: status=%s type=%s",
+                    msg.rate_limit_info.status,
+                    msg.rate_limit_info.rate_limit_type,
+                )
+                continue
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if type(block).__name__ == "TextBlock":
                         text_blocks.append(block.text)
             elif isinstance(msg, ResultMessage):
                 result_text = msg.result or ""
-    except Exception:
-        pass
+    except Exception as exc:
+        if not (result_text or text_blocks):
+            logger.error("_call_claude failed with no content: %s: %s", type(exc).__name__, exc)
+            raise
+        logger.warning("_call_claude raised %s after capturing content — proceeding", type(exc).__name__)
     return result_text or "\n".join(text_blocks)
 
 
 def _extract_json(text: str) -> dict:
     """Extract JSON from a Claude response that may contain markdown code fences."""
     text = text.strip()
+
+    def _try_parse(s: str) -> dict:
+        """Try parsing, with a trailing-comma repair on first failure."""
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            repaired = re.sub(r',\s*([}\]])', r'\1', s)
+            return json.loads(repaired)
+
     # Try direct JSON parse first (most likely with strict format)
     if text.startswith("{"):
         try:
-            return json.loads(text)
+            return _try_parse(text)
         except json.JSONDecodeError:
             pass
     # Try extracting from ```json ... ``` block
     m = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
     if m:
-        return json.loads(m.group(1).strip())
+        return _try_parse(m.group(1).strip())
     # Try finding first { to last }
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end > start:
-        return json.loads(text[start:end + 1])
+        return _try_parse(text[start:end + 1])
     raise json.JSONDecodeError("No JSON found", text, 0)
 
 
@@ -571,6 +775,8 @@ async def _extract_single_quarter(
 
     Returns one quarter extraction dict with extraction_status field.
     """
+    import time as _time
+    q_start = _time.time()
     quarter_label = _quarter_label_from_path(pdf_path)
     quarter_dir = pdf_path.parent
 
@@ -604,7 +810,8 @@ async def _extract_single_quarter(
 
     response = await _call_claude(
         CONCALL_EXTRACTION_PROMPT, user_prompt, model,
-        max_budget=0.60, max_turns=3,
+        max_budget=1.00, max_turns=2,
+        output_format=_CONCALL_EXTRACTION_SCHEMA,
     )
 
     try:
@@ -655,6 +862,7 @@ async def _extract_single_quarter(
                     ops[key] = {"value": None, "reason": "not_mentioned_in_concall"}
             extraction["operational_metrics"] = ops
 
+    extraction["extraction_duration_seconds"] = round(_time.time() - q_start, 1)
     return extraction
 
 
@@ -676,7 +884,10 @@ async def _generate_cross_quarter_narrative(
         f"Quarters analyzed: {len(quarter_results)}\n\n"
         f"Per-quarter extractions:\n```json\n{quarters_json}\n```"
     )
-    cross_response = await _call_claude(CROSS_QUARTER_PROMPT, cross_prompt, model)
+    cross_response = await _call_claude(
+        CROSS_QUARTER_PROMPT, cross_prompt, model,
+        output_format=_CROSS_QUARTER_SCHEMA,
+    )
     try:
         return _extract_json(cross_response)
     except (json.JSONDecodeError, ValueError):
@@ -721,7 +932,7 @@ async def _generate_cross_quarter_narrative(
 async def extract_concalls(
     symbol: str,
     quarters: int = 4,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-4-6",
     industry: str | None = None,
 ) -> dict:
     """Extract structured insights from the last N concall PDFs.
@@ -744,10 +955,15 @@ async def extract_concalls(
         )
 
     # --- Per-quarter extraction ---
-    quarter_results: list[dict] = []
-    for pdf_path in pdfs:
-        extraction = await _extract_single_quarter(pdf_path, symbol, model, industry)
-        quarter_results.append(extraction)
+    _extract_sem = asyncio.Semaphore(MAX_CONCURRENT_EXTRACTIONS)
+
+    async def _extract_with_limit(pdf_path: Path) -> dict:
+        async with _extract_sem:
+            return await _extract_single_quarter(pdf_path, symbol, model, industry)
+
+    quarter_results = list(await asyncio.gather(
+        *[_extract_with_limit(p) for p in pdfs]
+    ))
 
     # --- Cross-quarter narrative ---
     cross_narrative = await _generate_cross_quarter_narrative(quarter_results, symbol, model)
@@ -776,7 +992,7 @@ async def extract_concalls(
 async def ensure_concall_data(
     symbol: str,
     quarters: int = 4,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-4-6",
     industry: str | None = None,
 ) -> dict | None:
     """Ensure concall extraction data is available, extracting only new quarters.
@@ -829,12 +1045,16 @@ async def ensure_concall_data(
         return existing
 
     # Step 5: Extract missing quarters only
-    new_extractions: list[dict] = []
-    for fq in missing:
-        pdf_path = available[fq]
-        logger.info("[concall_ensure] %s: extracting %s", symbol, fq)
-        extraction = await _extract_single_quarter(pdf_path, symbol, model, industry)
-        new_extractions.append(extraction)
+    _extract_sem = asyncio.Semaphore(MAX_CONCURRENT_EXTRACTIONS)
+
+    async def _extract_missing(fq: str) -> dict:
+        async with _extract_sem:
+            logger.info("[concall_ensure] %s: extracting %s", symbol, fq)
+            return await _extract_single_quarter(available[fq], symbol, model, industry)
+
+    new_extractions = list(await asyncio.gather(
+        *[_extract_missing(fq) for fq in missing]
+    )) if missing else []
 
     # Step 6: Merge new + existing quarters
     merged_quarters: dict[str, dict] = dict(cached_quarters)

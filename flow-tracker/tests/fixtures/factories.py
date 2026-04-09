@@ -235,7 +235,7 @@ def make_valuation_snapshot(
 
 
 def make_valuation_snapshots(symbol: str = "SBIN", n: int = 30) -> list[ValuationSnapshot]:
-    base = date.fromisoformat("2026-03-01")
+    base = date.today() - timedelta(days=n - 1)  # ends today, always within 7-day query window
     base_price = 800.0 if symbol == "SBIN" else 1800.0
     base_pe = 9.0 if symbol == "SBIN" else 28.0
     snapshots = []
