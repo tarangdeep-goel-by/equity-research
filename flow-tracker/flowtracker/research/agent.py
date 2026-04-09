@@ -114,7 +114,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
 
 AGENT_MAX_BUDGET: dict[str, float] = {
     "business": 1.50,
-    "financials": 1.00,
+    "financials": 2.00,
     "ownership": 0.75,
     "valuation": 0.75,
     "risk": 0.75,
@@ -130,6 +130,8 @@ AGENT_MAX_BUDGET: dict[str, float] = {
 _DISALLOWED_BUILTINS = [
     "Bash", "Write", "Edit", "Read", "Glob", "Grep",
     "NotebookEdit", "Agent", "TodoWrite",
+    "Skill", "ReadMcpResourceTool", "ListMcpResourcesTool",
+    "WebSearch", "WebFetch",  # only web_research/news agents get these
 ]
 
 # Additional Claude Code built-ins that specific agents ARE allowed to use.
