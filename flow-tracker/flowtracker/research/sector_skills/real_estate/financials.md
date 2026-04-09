@@ -6,8 +6,8 @@ Under Ind-AS 115 (project completion method), revenue is recognized only when th
 - A company can be selling aggressively today but show flat/declining revenue because completions haven't caught up
 - Do NOT draw conclusions about business trajectory from P&L revenue alone
 
-### The Real Metrics (from concall_insights / sector_kpis)
-Extract these — they tell the actual story:
+### The Real Metrics — MUST CALL concall tools
+You MUST call `get_company_context(section='concall_insights')` and `get_company_context(section='sector_kpis')` for real estate. These contain the actual business metrics. Without them, your report is analyzing backward-looking noise.
 - **Pre-sales (Booking Value in ₹ Cr)** — current demand signal. This IS the revenue equivalent for real estate
 - **Pre-sales Volume (mn sq ft)** — physical demand, strips out ASP inflation
 - **Collections (₹ Cr)** — cash actually received from customers. Compare to pre-sales for collection efficiency
@@ -23,6 +23,10 @@ Extract these — they tell the actual story:
 - `get_fundamentals(section='cash_flow_quality')` — OCF trajectory, capex (land + construction)
 - `get_fundamentals(section='working_capital')` — advances from customers (a GOOD sign in real estate = money collected before completion)
 - `get_quality_scores(section='realestate')` — pre-computed real estate metrics if available
+
+### Skip or Heavily Adapt Standard Frameworks
+- **DuPont decomposition is misleading** — margin × turnover × leverage computed on Ind-AS 115 revenue produces meaningless numbers. If you include DuPont, compute it on pre-sales (from concalls) not reported revenue
+- **Standard earnings quality checks** (CFO/PAT, accrual ratio) are distorted by project-based cash flows — advances from customers inflate CFO, completion timing distorts PAT
 
 ### Valuation
 - **P/E is misleading** due to lumpy revenue recognition. Use NAV (Net Asset Value) based on land bank + ongoing projects

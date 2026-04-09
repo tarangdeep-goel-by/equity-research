@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T16:12:27.612879+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "regulated_power": {
+      "agent": "financials",
+      "stock": "NTPC",
+      "sector": "Regulated utility",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptional job explaining the 'why' behind the numbers, particularly regarding how fuel pass-throughs distort margins and why CWIP is the forward earnings engine. However, it misses analyzing the spread between the cost of debt and the CERC-allowed return on debt, which is a key driver of equity returns."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "The narrative is highly consistent, correctly ignoring revenue growth to focus on absolute EBITDA and Net Income. The only minor flaw is a lack of reconciliation in the FCF calculation (CFO of \u20b950,436 Cr minus Capex of \u20b945,800 Cr does not equal the stated FCF of \u20b97,337 Cr without explaining the bridge)."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers the major bases well, but lacks a breakdown of receivables ageing (critical for assessing SEB risk) and does not detail the actual MW capacity mix (Thermal vs. Renewable) which is necessary to fully contextualize the subsidiary earnings shift."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides a very clear framework for how to view the stock (growth-in-regulated-infrastructure vs. bond-proxy) and tees up the SOTP valuation perfectly. However, it leaves basic factual questions (like current commissioned renewable capacity) to the 'open questions' section instead of answering them."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Outstanding application of the regulated utility framework. Correctly dismisses OPM% and standard reverse DCF, focusing instead on CWIP capitalization and CERC's 15.5% ROE. It only misses the Plant Availability Factor (PAF) incentive income mechanics, which explain how NTPC beats the base ROE."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Extensive and transparent use of the calculate tool for inline math, with clear citations for all Screener data. The opaque derivation of the FCF figure is the only notable sourcing gap."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Business Quality \u2014 DuPont Decomposition",
+          "issue": "Missed analysis of Plant Availability Factor (PAF) and incentive income. CERC allows 15.5% base ROE, but utilities generate higher actual returns through operational efficiencies and PAF incentives.",
+          "suggestion": "Instruct the agent to explicitly check for and analyze incentive income and PAF metrics when applying the Regulated Utility framework."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "4b. Cash Flow Quality",
+          "issue": "FCF figure (\u20b97,337 Cr) does not match the implied math of CFO (\u20b950,436 Cr) minus Capex/CFI (\u20b945,800 Cr).",
+          "suggestion": "Instruct the agent to explicitly show the formula/bridge used when quoting FCF, especially if it includes interest received or excludes certain investing cash flows."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "4a. Balance Sheet Structure",
+          "issue": "Mentions total receivables (\u20b934,720 Cr) and SEB risk, but fails to analyze the ageing profile of these receivables.",
+          "suggestion": "Require the agent to pull and analyze receivables ageing (e.g., >6 months vs <6 months) when evaluating working capital for power utilities."
+        }
+      ],
+      "strengths": [
+        "Superb application of sector-specific logic, explicitly warning the reader against using standard metrics (revenue growth, OPM%, reverse DCF) that fail for regulated utilities.",
+        "Excellent framing of CWIP (Capital Work-in-Progress) not as a drag or risk, but as the primary forward earnings engine once capitalized into the regulated equity base.",
+        "Strong subsidiary analysis that correctly identifies the NGEL profitability inflection and its implications for a Sum-of-the-Parts (SOTP) valuation."
+      ],
+      "summary": "This is an institutional-quality financial deep-dive that perfectly applies the nuances of Indian regulated utility economics, correctly steering the reader away from misleading headline metrics. To achieve absolute perfection, it needs to incorporate operational incentive mechanics (PAF) and provide a deeper ageing analysis of the SEB receivables.",
+      "report_length": 28676,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 103.34877983294427,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptional job explaining the 'why' behind the numbers, particularly regarding how fuel pass-throughs distort margins and why CWIP is the forward earnings engine. However, it misses analyzing the spread between the cost of debt and the CERC-allowed return on debt, which is a key driver of equity returns.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"The narrative is highly consistent, correctly ignoring revenue growth to focus on absolute EBITDA and Net Income. The only minor flaw is a lack of reconciliation in the FCF calculation (CFO of \u20b950,436 Cr minus Capex of \u20b945,800 Cr does not equal the stated FCF of \u20b97,337 Cr without explaining the bridge).\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers the major bases well, but lacks a breakdown of receivables ageing (critical for assessing SEB risk) and does not detail the actual MW capacity mix (Thermal vs. Renewable) which is necessary to fully contextualize the subsidiary earnings shift.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides a very clear framework for how to view the stock (growth-in-regulated-infrastructure vs. bond-proxy) and tees up the SOTP valuation perfectly. However, it leaves basic factual questions (like current commissioned renewable capacity) to the 'open questions' section instead of answering them.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Outstanding application of the regulated utility framework. Correctly dismisses OPM% and standard reverse DCF, focusing instead on CWIP capitalization and CERC's 15.5% ROE. It only misses the Plant Availability Factor (PAF) incentive income mechanics, which explain how NTPC beats the base ROE.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Extensive and transparent use of the calculate tool for inline math, with clear citations for all Screener data. The opaque derivation of the FCF figure is the only notable sourcing gap.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Business Quality \u2014 DuPont Decomposition\",\n      \"issue\": \"Missed analysis of Plant Availability Factor (PAF) and incentive income. CERC allows 15.5% base ROE, but utilities generate higher actual returns through operational efficiencies and PAF incentives.\",\n      \"suggestion\": \"Instruct the agent to explicitly check for and analyze incentive income and PAF metrics when applying the Regulated Utility framework.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"4b. Cash Flow Quality\",\n      \"issue\": \"FCF figure (\u20b97,337 Cr) does not match the implied math of CFO (\u20b950,436 Cr) minus Capex/CFI (\u20b945,800 Cr).\",\n "
+    }
+  }
+}

@@ -45,3 +45,12 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-09T15:44:51Z	0	business	PIDILITIND	chemicals	ERR	0	30295	735.8	488.6	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-09T15:57:03Z	0	business	BHARTIARTL	telecom	B+	89	28395	610.2	121.9	1	A highly insightful and well-structured report that perfectly captures the operating leverage and ca
 2026-04-09T16:03:14Z	1	financials	GODREJPROP	real_estate	ERR	0	28718	0.0	275.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-09T16:07:53Z	1	financials	SUNPHARMA	pharma	B+	89	37486	0.0	554.7	3	This is a highly analytical and well-structured financial report that successfully identifies the co
+2026-04-09T16:10:43Z	1	financials	GODREJPROP	real_estate	ERR	0	28718	0.0	149.6	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-09T16:12:27Z	1	financials	NTPC	regulated_power	A-	92	28676	0.0	103.3	3	This is an institutional-quality financial deep-dive that perfectly applies the nuances of Indian re
+2026-04-09T16:13:11Z	1	financials	GROWW	broker	B+	88	29250	0.0	43.2	3	A strong, highly contextualized report that correctly identifies the structural accounting quirks of
+2026-04-09T16:13:57Z	1	financials	GODREJPROP	real_estate	B+	87	28718	0.0	30.3	2	This is a highly insightful report that brilliantly deconstructs the accounting illusions of real es
+2026-04-09T16:43:07Z	0	business	BHARTIARTL	telecom	A-	90	33389	1605.6	25.7	2	This is a highly insightful, institutional-quality report that demonstrates a deep understanding of 
+2026-04-09T16:46:49Z	1	financials	PIDILITIND	chemicals	B+	87	15696	0.0	62.4	3	This is a fundamentally strong report with excellent forensic instincts, but it suffers from poor to
+2026-04-09T16:47:50Z	1	financials	BHARTIARTL	telecom	A-	92	30616	0.0	35.0	2	This is a highly sophisticated financial report that correctly identifies and adjusts for telecom-sp
+2026-04-09T16:49:55Z	1	financials	HINDUNILVR	fmcg	A-	92	33627	0.0	60.9	2	This is an institutional-quality financial deep dive that expertly navigates a major accounting dist

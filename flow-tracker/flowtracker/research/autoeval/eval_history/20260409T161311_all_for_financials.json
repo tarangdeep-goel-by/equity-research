@@ -1,0 +1,80 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T16:13:11.827533+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "broker"
+  ],
+  "results": {
+    "broker": {
+      "agent": "financials",
+      "stock": "GROWW",
+      "sector": "Fintech broker",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent breakdown of CFO distortions and pre-IPO ESOP anomalies. However, it notes a massive \u20b9318 Cr drop in intangibles and says 'needs further investigation' without actually using available tools to investigate it."
+        },
+        "logical_consistency": {
+          "grade": "B",
+          "numeric": 83,
+          "rationale": "Contains a major conceptual error regarding operating leverage: if 90% of costs are fixed and average OPM is 59%, incremental margin is ~96%, not 59%. Also contradicts its own FY24 anomaly explanation in the 'Open Questions' section."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers core financials well but completely misses the unit economics (yield, cost of funds, spread) of the rapidly growing \u20b92,971 Cr MTF credit book, which is now a massive balance sheet component."
+        },
+        "actionability": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Clear warnings on what metrics to ignore (FCF, pre-IPO EPS) are highly actionable. However, actionability is diluted by leaving highly solvable items (like MTF asset quality) in the 'Open Questions' section."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Superb handling of broker-specific working capital and CFO distortions (client float). However, it lacks the NBFC framework (NIM, GNPA) needed to evaluate the growing lending/MTF book."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Clear citations and handles missing tool data (analytical profile) gracefully. Fails to definitively resolve the share count discrepancy despite having the tools to do so."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Margin Analysis",
+          "issue": "Fundamental misunderstanding of operating leverage math. The agent states: 'With 90% of costs being fixed... every incremental rupee of revenue... generates ~\u20b90.59 of additional operating profit.' If variable costs are only 10% of total costs, the incremental margin should be >90%, not the average margin of 59%.",
+          "suggestion": "Add instructions to the financial agent on the mathematical relationship between fixed costs, variable costs, and incremental margins (Contribution Margin = Revenue - Variable Costs)."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Structured Briefing (Open Questions)",
+          "issue": "The agent lists critical questions (e.g., MTF credit quality, intangibles drop, exact IPO share count) that it should have answered itself using the `get_company_context` (filings/concalls) tool.",
+          "suggestion": "Instruct the agent to actively use context/filing tools to answer its own 'open questions' before finalizing the report. 'Open questions' should only be used for genuinely undisclosed information."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Balance Sheet & Cash Flow",
+          "issue": "Fails to analyze the unit economics (yield, cost of funds, spread) of the \u20b92,971 Cr MTF book, despite noting that it is funded by \u20b9610 Cr in debentures.",
+          "suggestion": "Require the agent to apply basic lending metrics (NIM, spread, GNPA) when a broker's MTF/credit book exceeds a material threshold of total assets."
+        }
+      ],
+      "strengths": [
+        "Exceptional handling of broker-specific accounting distortions, correctly warning the user not to use CFO/FCF as quality signals due to client float and MTF expansion.",
+        "Excellent identification and isolation of pre-IPO accounting anomalies (ESOP charges and write-backs) to reveal normalized operating performance."
+      ],
+      "summary": "A strong, highly contextualized report that correctly identifies the structural accounting quirks of a newly listed broker. However, it suffers from a fundamental mathematical error regarding operating leverage and leaves too many critical questions unanswered that could have been resolved with deeper tool usage.",
+      "report_length": 29250,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 43.194060540990904,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent breakdown of CFO distortions and pre-IPO ESOP anomalies. However, it notes a massive \u20b9318 Cr drop in intangibles and says 'needs further investigation' without actually using available tools to investigate it.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B\",\n      \"numeric\": 83,\n      \"rationale\": \"Contains a major conceptual error regarding operating leverage: if 90% of costs are fixed and average OPM is 59%, incremental margin is ~96%, not 59%. Also contradicts its own FY24 anomaly explanation in the 'Open Questions' section.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers core financials well but completely misses the unit economics (yield, cost of funds, spread) of the rapidly growing \u20b92,971 Cr MTF credit book, which is now a massive balance sheet component.\"\n    },\n    \"actionability\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Clear warnings on what metrics to ignore (FCF, pre-IPO EPS) are highly actionable. However, actionability is diluted by leaving highly solvable items (like MTF asset quality) in the 'Open Questions' section.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Superb handling of broker-specific working capital and CFO distortions (client float). However, it lacks the NBFC framework (NIM, GNPA) needed to evaluate the growing lending/MTF book.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Clear citations and handles missing tool data (analytical profile) gracefully. Fails to definitively resolve the share count discrepancy despite having the tools to do so.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Margin Analysis\",\n      \"issue\": \"Fundamental misunderstanding of operating leverage math. The agent states: 'With 90% of costs being fixed... every incremental rupee of revenue... generates ~\u20b90.59 of additional operating profit.' If variable costs are only 10% of total costs, the incremental margin should be >90%, not the average margin of 59%.\",\n      \"suggestion\": \"Add instructions to the financial agent on the mathematical relationship between fixed costs, variable costs, and incremental margins (Contribution Margin = Revenue - Variable Costs).\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Structured Briefing (Open Questions)\",\n      \"issue\": \"The agent lists critical questions (e.g., MTF credit quality, intangibles drop, exact IPO share count) that it should have answered itself using the `get_company_context` (filings/concalls) tool.\",\n      \"suggestion\": \"Instruct the agent to actively use context/filing tools to answer its own 'open questions' before finalizing the report. 'Open questions' should only be used for gen"
+    }
+  }
+}
