@@ -6,8 +6,8 @@ Auto companies should be analyzed per-unit alongside aggregate financials. Extra
 - **EBITDA per unit** — operating profitability per vehicle
 - If unit volumes available, use `calculate` tool to derive. If not, flag as open question
 
-### Wholesale vs Retail Gap (CRITICAL)
-Companies report wholesale (factory dispatches) for revenue, but actual demand = retail sales.
+### Wholesale vs Retail Gap — Why Dispatches Can Mislead
+Companies report wholesale (factory dispatches) for revenue, but actual demand = retail sales. The gap between these two accumulates as dealer inventory, and when it gets too high, production cuts and margin pressure follow — often with a 1-2 quarter lag.
 - Extract **Dealer Inventory Days** from `concall_insights` — defined in `sector_kpis` as `dealer_inventory_days`
 - Rising dealer inventory = imminent production cuts and margin pressure
 - 20-30 days normal for PVs, 40+ days is a red flag

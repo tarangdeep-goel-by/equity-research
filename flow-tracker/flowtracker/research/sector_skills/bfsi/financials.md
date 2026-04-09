@@ -1,7 +1,7 @@
 ## BFSI — Financials Agent
 
 ### Asset Quality Metrics
-Asset quality is the most critical dimension for bank analysis. Extract from `get_company_context(section='concall_insights')` or `get_company_context(section='sector_kpis')`:
+Asset quality is the most critical dimension for bank analysis — a single quarter of slippage spikes can wipe out years of earnings. Extract from `get_company_context(section='concall_insights')` or `get_company_context(section='sector_kpis')`:
 - **GNPA** (Gross Non-Performing Assets) ratio — 5Y+ trend
 - **NNPA** (Net NPA) ratio — 5Y+ trend
 - **PCR** (Provision Coverage Ratio) — higher = more conservative
@@ -14,8 +14,9 @@ If concall data doesn't contain these, flag as open questions — do NOT fabrica
 ### Available Structured BFSI Metrics
 `get_quality_scores(section='bfsi')` returns: NIM%, ROA%, Cost-to-Income%, P/B, Equity Multiplier, CD Ratio. Use these directly.
 
-### Liability Franchise (CRITICAL for Indian Banks)
-Extract from `concall_insights` or `sector_kpis`:
+### Liability Franchise — Why It Drives Long-Term NIM
+Indian banks compete primarily on deposit cost, not lending rates (which are largely repo-linked). A bank with a strong CASA franchise has structurally cheaper funding, which translates directly into wider NIMs that persist through rate cycles. This is why CASA is the single best predictor of sustainable profitability.
+- Extract from `concall_insights` or `sector_kpis`:
 - **CASA Ratio** — Current + Savings deposits / Total deposits. Higher = cheaper funding = wider NIM. CASA >40% is strong for private banks, >35% for PSU banks
 - **Cost of Funds** — tracks funding cost trajectory. Compare to repo rate cycle
 

@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260409T180052.log
+AutoEval (agent-first): agent=financials sectors=['chemicals']
+Target: grade_numeric >= 90
+
+--- financials / PIDILITIND (chemicals) ---
+  Report: 29085 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A- (92) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260409T180122_all_for_financials.json
+
+======================================================================
+AGENT SUMMARY: financials
+======================================================================
+  chemicals           PIDILITIND    A-  (92)  [PASS]  prompt_fixes:2
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

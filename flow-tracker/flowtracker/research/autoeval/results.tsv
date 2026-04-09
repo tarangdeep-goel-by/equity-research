@@ -54,3 +54,9 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-09T16:46:49Z	1	financials	PIDILITIND	chemicals	B+	87	15696	0.0	62.4	3	This is a fundamentally strong report with excellent forensic instincts, but it suffers from poor to
 2026-04-09T16:47:50Z	1	financials	BHARTIARTL	telecom	A-	92	30616	0.0	35.0	2	This is a highly sophisticated financial report that correctly identifies and adjusts for telecom-sp
 2026-04-09T16:49:55Z	1	financials	HINDUNILVR	fmcg	A-	92	33627	0.0	60.9	2	This is an institutional-quality financial deep dive that expertly navigates a major accounting dist
+2026-04-09T17:57:51Z	0	business	PIDILITIND	chemicals	A-	92	30295	0.0	27.6	2	This is a highly insightful, institutional-quality breakdown of Pidilite's business model and unit e
+2026-04-09T17:58:20Z	0	business	PIDILITIND	chemicals	A-	91	30295	0.0	27.8	2	This is a highly insightful, institutional-quality business breakdown that perfectly captures Pidili
+2026-04-09T18:00:19Z	2	financials	SUNPHARMA	pharma	B+	89	27978	0.0	29.8	2	A highly analytical and well-structured report that correctly identifies Sun Pharma's core financial
+2026-04-09T18:00:52Z	2	financials	GROWW	broker	B+	88	29213	0.0	31.2	3	A highly insightful report that does an excellent job normalizing pre-IPO accounting distortions to 
+2026-04-09T18:01:22Z	2	financials	PIDILITIND	chemicals	A-	92	29085	0.0	29.6	2	This is a highly sophisticated financial teardown that correctly identifies the core drivers of Pidi
+2026-04-09T18:02:20Z	2	financials	GODREJPROP	real_estate	A-	90	31646	0.0	36.3	2	This is a highly sophisticated financial analysis that perfectly captures the accounting nuances of 

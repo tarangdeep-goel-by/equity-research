@@ -1,0 +1,46 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260409T180347.log
+AutoEval (agent-first): agent=business sectors=['chemicals']
+Target: grade_numeric >= 90
+
+--- business / PIDILITIND (chemicals) ---
+  Running agent...
+  23:33:48 [INFO] flowtracker.research.refresh: [refresh_business] PIDILITIND: started
+  23:33:48 [INFO] flowtracker.research.peer_refresh: [peer_refresh] PIDILITIND: started
+  23:33:48 [INFO] flowtracker.research.peer_refresh: [peer_refresh] PIDILITIND: done 0.0s, 0 peers fetched, 12 cached, 6 benchmarks
+  23:33:48 [INFO] flowtracker.research.concall_extractor: [concall_ensure] PIDILITIND: all 4 quarters cached
+  23:33:49 [INFO] httpx: HTTP Request: GET https://news.google.com/rss/search?q=Pidilite%20Industries%20Limited%20PIDILITIND%20stock%20India&hl=en-IN&gl=IN&ceid=IN:en "HTTP/1.1 200 OK"
+  23:33:49 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  23:34:13 [INFO] flowtracker.research.agent: [business] tool_call: ToolSearch({"query": "select:mcp__business__get_analytical_profile,mcp__business__get_company_conte...", "max_results": "6"})
+  23:34:17 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_analytical_profile({"symbol": "PIDILITIND"})
+  23:34:18 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_company_context({"symbol": "PIDILITIND", "section": "[\"info\", \"profile\", \"concall_insights\", \"business_profile\"]", "doc_type": "all", "limit": "5"})
+  23:34:18 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_fundamentals({"symbol": "PIDILITIND", "section": "[\"annual_financials\", \"ratios\", \"cost_structure\"]"})
+  23:34:19 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_valuation({"symbol": "PIDILITIND", "section": "[\"snapshot\", \"wacc\"]"})
+  23:34:20 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_events_actions({"symbol": "PIDILITIND", "section": "catalysts"})
+  23:34:20 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__get_peer_sector({"symbol": "PIDILITIND", "section": "[\"peer_table\", \"peer_metrics\", \"benchmarks\"]"})
+  23:34:47 [INFO] flowtracker.research.agent: [business] tool_call: ToolSearch({"query": "select:mcp__business__render_chart,mcp__business__calculate,mcp__business__sa...", "max_results": "3"})
+  23:35:06 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "revenue_profit"})
+  23:35:06 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "expense_pie"})
+  23:35:06 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "margin_trend"})
+  23:35:06 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__render_chart({"symbol": "PIDILITIND", "chart_type": "roce_trend"})
+  23:35:07 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "((13140.31/5361.17)**(1/9) - 1) * 100", "b": "0"})
+  23:35:07 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "((2076.24/802.83)**(1/9) - 1) * 100", "b": "0"})
+  23:35:08 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "((20.409/7.829)**(1/9) - 1) * 100", "b": "0"})
+  23:35:09 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "1017.2", "b": "2076.24"})
+  23:35:10 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "13140.31 * 0.80", "b": "0"})
+  23:35:11 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "13140.31 * 0.20", "b": "0"})
+  23:35:12 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "(2286.63/2076.24)", "b": "0"})
+  23:35:12 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "expr", "a": "(13140.31 - 12382.99)/12382.99 * 100", "b": "0"})
+  23:35:29 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "12382.99", "b": "13140.31"})
+  23:35:29 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "1729.38", "b": "2076.24"})
+  23:35:30 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "5361.17", "b": "13140.31"})
+  23:35:30 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "802.83", "b": "2076.24"})
+  23:35:31 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "ratio", "a": "2286.63", "b": "2076.24"})
+  23:35:32 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "6135.04", "b": "13140.31"})
+  23:35:32 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "1742.45", "b": "13140.31"})
+  23:35:33 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "per_share_to_total_cr", "a": "22.49", "b": "508648755"})
+  23:38:04 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "pct_of", "a": "13140.31", "b": "0.8"})
+  23:38:05 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "17.001", "b": "20.409"})
+  23:38:06 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "ratio", "a": "30", "b": "14.545"})
+  23:38:06 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "ratio", "a": "59.23", "b": "43.555"})
+  23:38:08 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "43.555", "b": "59.23"})
+  23:38:08 [INFO] flowtracker.research.agent: [business] tool_call: mcp__business__calculate({"operation": "growth_rate", "a": "1259", "b": "1574.95"})

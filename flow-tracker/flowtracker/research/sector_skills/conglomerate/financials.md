@@ -1,6 +1,6 @@
 ## Conglomerate — Financials Agent
 
-### Debt Maturity & Liquidity (MANDATORY for high-debt conglomerates)
+### Debt Maturity & Liquidity — Why It's the Key Risk for Conglomerates
 Conglomerates often carry heavy debt across multiple entities. When consolidated Net Debt/EBITDA > 2x:
 - Analyze debt maturity profile from `get_fundamentals(section='balance_sheet_detail')`: short-term vs long-term borrowings
 - Flag near-term maturity concentration (>30% of debt maturing within 12 months = refinancing risk)

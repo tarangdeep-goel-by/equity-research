@@ -1,21 +1,22 @@
 ## Insurance / Insurtech — Financials Agent
 
-### Sub-Type: Aggregator vs Underwriter (CRITICAL — DO NOT MIX)
-First, determine the sub-type from company profile. These are COMPLETELY DIFFERENT businesses:
-- **Aggregator/Platform** (PB Fintech/Policybazaar, InsuranceDekho): earns commissions on policies sold. Has Take Rate, unit economics, tech-platform P&L. DO NOT look for Combined Ratio or VNB — these don't apply.
-- **Life Insurer** (HDFC Life, SBI Life, ICICI Pru Life): manufactures policies. Has VNB, APE, Embedded Value. DO NOT look for Take Rate — insurers don't have one.
-- **General Insurer** (ICICI Lombard, Star Health): underwrites risk. Has Combined Ratio, Claims Ratio. DO NOT use life insurance metrics.
+### Sub-Type Determines the Entire Analysis — Aggregator vs Underwriter
+First, determine the sub-type from company profile. These are completely different businesses with different economics, and applying one's metrics to the other produces garbage analysis:
+- **Aggregator/Platform** (PB Fintech/Policybazaar, InsuranceDekho): earns commissions on policies sold. Has Take Rate, unit economics, tech-platform P&L. Combined Ratio or VNB don't apply — aggregators don't bear underwriting risk or manufacture policies.
+- **Life Insurer** (HDFC Life, SBI Life, ICICI Pru Life): manufactures policies. Has VNB, APE, Embedded Value. Take Rate doesn't apply — insurers set premiums, they don't earn commissions on someone else's product.
+- **General Insurer** (ICICI Lombard, Star Health): underwrites risk. Has Combined Ratio, Claims Ratio. Life insurance metrics (VNB, APE, persistency) are structurally different because general insurance policies are annual, not long-duration.
 
 ### IF AGGREGATOR (e.g., Policybazaar):
-**Take Rate vs Gross Margin — DIFFERENT metrics, never conflate:**
-- **Take Rate** = Revenue / Total Premium Distributed (typically 10-15%). Measures pricing power
-- **Gross Margin** = (Revenue - Direct Costs) / Revenue (typically 60-70%). Measures efficiency
-- Present both separately
+**Take Rate vs Gross Margin — different metrics that answer different questions:**
+- **Take Rate** = Revenue / Total Premium Distributed (typically 10-15%). Measures pricing power over insurance partners
+- **Gross Margin** = (Revenue - Direct Costs) / Revenue (typically 60-70%). Measures operational efficiency
+- Present both separately — conflating them misrepresents both pricing power and efficiency
 
-**Subsidiary drag sizing (CRITICAL — quantify, don't just note):**
+**Subsidiary drag sizing — quantify, don't just note:**
+Aggregators typically run loss-making subsidiaries (lending, direct insurance, new verticals) that obscure the core platform's profitability.
 - Compare standalone vs consolidated P&L using `get_quality_scores(section='subsidiary')`
 - **Compute the magnitude**: subsidiary loss = consolidated PAT - standalone PAT. Present as ₹ Cr AND as % of consolidated revenue
-- Flag which subsidiary (lending arm, direct insurance, new verticals) is the drag
+- Flag which subsidiary is the drag
 - Track the trend: is the subsidiary drag narrowing (path to breakeven) or widening?
 
 **Aggregator KPIs from concall_insights:**
@@ -23,7 +24,7 @@ First, determine the sub-type from company profile. These are COMPLETELY DIFFERE
 - Core vs new business mix (insurance mature vs lending investment phase)
 
 ### IF LIFE INSURER:
-Standard P&L financials are **distorted by actuarial accounting**. Extract from `concall_insights` or `sector_kpis`:
+Standard P&L financials are **distorted by actuarial accounting** — reported profits reflect reserve movements, not business performance. Extract from `concall_insights` or `sector_kpis`:
 - **VNB (Value of New Business)** — profitability of new policies. VNB Margin >25% excellent
 - **APE (Annualized Premium Equivalent)** — standardized new business volume metric
 - **Embedded Value (EV)** — present value of in-force book + adjusted net worth

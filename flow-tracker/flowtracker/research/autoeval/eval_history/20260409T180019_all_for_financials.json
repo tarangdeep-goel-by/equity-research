@@ -1,0 +1,75 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T18:00:19.964769+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "pharma"
+  ],
+  "results": {
+    "pharma": {
+      "agent": "financials",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent decomposition of margin drivers (RM cost drop via specialty mix) and DuPont analysis, but leaves the massive FY21-22 anomaly as an 'open question' instead of investigating it."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong logical flow connecting specialty mix to ROE expansion, though it slightly contradicts itself by calling rising other costs 'not a red flag' while simultaneously demanding line-item disclosure."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers standard financials well, but misses a dedicated breakdown of R&D capitalization vs expensing, which is a critical missing dimension for a pharma company."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear view of what the market is pricing (dual-expansion), but the 'open questions' section pushes too much basic research back onto the PM."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Understands pharma dynamics conceptually (specialty vs generics), but fails to explicitly isolate R&D spend as a % of sales, a mandatory KPI for the sector."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 84,
+          "rationale": "Citations are clear, but the agent completely ignored the `get_company_context` tool, which would have answered its questions about the FY21-22 anomaly and the subsidiary buyout."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Earnings & Growth / \u26a0\ufe0f Key Anomalies & Flags",
+          "issue": "Agent identified a massive historical anomaly (FY21-22 Other Income losses) and a major subsidiary buyout (Taro), but left them as 'open questions' because it failed to call the get_company_context tool to check filings.",
+          "suggestion": "Instruct the agent: 'If you identify a massive financial anomaly or M&A event, you MUST use get_company_context (filings/concalls) to find the cause. Do not leave it as an open question if tools are available to answer it.'"
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "2. Margin Analysis",
+          "issue": "Agent assumed R&D is buried in 'Other Costs' but failed to extract the actual R&D expenditure, which is a mandatory metric for Pharma.",
+          "suggestion": "Update sector-specific instructions for Pharma: 'Always extract and analyze R&D spend as a % of revenue and check for R&D capitalization vs expensing policies.'"
+        }
+      ],
+      "strengths": [
+        "Superb analysis of the raw material cost compression and its structural link to the specialty product mix shift.",
+        "Excellent use of DuPont analysis to prove that ROE expansion was driven entirely by margin improvement while the company simultaneously deleveraged.",
+        "Sharp identification of the standalone India business as the hidden engine driving recent consolidated PAT growth."
+      ],
+      "summary": "A highly analytical and well-structured report that correctly identifies Sun Pharma's core financial narrative: a margin-driven ROE expansion fueled by a specialty mix shift. However, the agent's failure to use the company context tool to resolve major historical anomalies (Taro litigation/buyout) and its omission of explicit R&D metrics prevent it from achieving institutional grade.",
+      "report_length": 27978,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 29.79612604097929,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent decomposition of margin drivers (RM cost drop via specialty mix) and DuPont analysis, but leaves the massive FY21-22 anomaly as an 'open question' instead of investigating it.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong logical flow connecting specialty mix to ROE expansion, though it slightly contradicts itself by calling rising other costs 'not a red flag' while simultaneously demanding line-item disclosure.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers standard financials well, but misses a dedicated breakdown of R&D capitalization vs expensing, which is a critical missing dimension for a pharma company.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear view of what the market is pricing (dual-expansion), but the 'open questions' section pushes too much basic research back onto the PM.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Understands pharma dynamics conceptually (specialty vs generics), but fails to explicitly isolate R&D spend as a % of sales, a mandatory KPI for the sector.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 84,\n      \"rationale\": \"Citations are clear, but the agent completely ignored the `get_company_context` tool, which would have answered its questions about the FY21-22 anomaly and the subsidiary buyout.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Earnings & Growth / \u26a0\ufe0f Key Anomalies & Flags\",\n      \"issue\": \"Agent identified a massive historical anomaly (FY21-22 Other Income losses) and a major subsidiary buyout (Taro), but left them as 'open questions' because it failed to call the get_company_context tool to check filings.\",\n      \"suggestion\": \"Instruct the agent: 'If you identify a massive financial anomaly or M&A event, you MUST use get_company_context (filings/concalls) to find the cause. Do not leave it as an open question if tools are available to answer it.'\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2. Margin Analysis\",\n      \"issue\": \"Agent assumed R&D is buried in 'Other Costs' but failed to extract the actual R&D expenditure, which is a mandatory metric for Pharma.\",\n      \"suggestion\": \"Update sector-specific instructions for Pharma: 'Always extract and analyze R&D spend as a % of revenue and check for R&D capitalization vs expensing policies.'\"\n    }\n  ],\n  \"strengths\": [\n    \"Superb analysis of the raw material cost compression and its structural link to the specialty product mix shift.\",\n    \"Excellent use of DuPont analysis to prove that ROE expansion was driven entirely by margin improvement while the company simultaneo"
+    }
+  }
+}

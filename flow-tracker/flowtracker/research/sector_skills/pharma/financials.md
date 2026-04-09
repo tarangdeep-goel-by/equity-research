@@ -8,8 +8,8 @@ The geography split completely alters margin profile. Extract from `concall_insi
 
 If revenue split is available, analyze margin trajectory for each geography separately. Consolidated margin is a blended number that hides US erosion.
 
-### US Price Erosion (CRITICAL)
-- Track **Gross Margin trajectory** specifically — declining gross margin with stable EBITDA margin means the company is cutting costs to offset US pricing pressure. This is a ticking clock
+### US Price Erosion — The Ticking Clock for Generics
+Track **Gross Margin trajectory** specifically — declining gross margin with stable EBITDA margin means the company is cutting costs to offset US pricing pressure. This buys time but isn't sustainable indefinitely — eventually cost-cutting runs out of room while price erosion continues.
 - The question is always: is the ANDA pipeline (new launches) enough to offset base business erosion?
 
 ### R&D Investment
@@ -23,10 +23,10 @@ If revenue split is available, analyze margin trajectory for each geography sepa
 - Approval-to-launch conversion matters more than raw filings
 - **FDA compliance status** — any warning letters, import alerts, or OAI observations. This is binary risk — one FDA warning letter can wipe out an entire facility's revenue
 
-### FX Impact (CRITICAL for Export-Heavy Pharma)
-- If >30% revenue from exports, analyze currency translation impact on margins and consolidated debt
+### FX Impact — Material for Export-Heavy Pharma
+For companies with >30% revenue from exports, currency swings directly impact margins and can distort growth figures. USD depreciation compresses margins for US-facing revenue; INR strengthening hurts reported growth.
+- Analyze currency translation impact on margins and consolidated debt
 - Check Other Income for FX gains/losses. Note hedging policy and horizon from concall_insights
-- USD depreciation compresses margins for US-facing revenue; INR strengthening hurts reported growth
 
 ### Specialty vs Generics
 - If the company has a specialty portfolio (patented/complex generics/biosimilars), separate this from base generics

@@ -1,17 +1,17 @@
 ## Real Estate — Financials Agent
 
-### CRITICAL: P&L Revenue Is Backward-Looking
+### P&L Revenue Is Backward-Looking — Why It Misleads
 Under Ind-AS 115 (project completion method), revenue is recognized only when the project is substantially complete and possession is given. This means:
-- **Reported revenue** reflects projects COMPLETED 2-3 years ago, NOT current business momentum
+- **Reported revenue** reflects projects completed 2-3 years ago, not current business momentum
 - A company can be selling aggressively today but show flat/declining revenue because completions haven't caught up
-- Do NOT draw conclusions about business trajectory from P&L revenue alone
+- Drawing conclusions about business trajectory from P&L revenue alone will produce wrong analysis
 
-### The Real Metrics — MUST CALL concall tools
-You MUST call `get_company_context(section='concall_insights')` and `get_company_context(section='sector_kpis')` for real estate. These contain the actual business metrics. Without them, your report is analyzing backward-looking noise.
+### The Real Metrics — Pre-Sales and Collections
+Because P&L revenue lags reality by years, the actual business metrics live in concall disclosures. Call `get_company_context(section='concall_insights')` and `get_company_context(section='sector_kpis')` — without these, the report is analyzing backward-looking noise rather than current momentum.
 - **Pre-sales (Booking Value in ₹ Cr)** — current demand signal. This IS the revenue equivalent for real estate
 - **Pre-sales Volume (mn sq ft)** — physical demand, strips out ASP inflation
 - **Collections (₹ Cr)** — cash actually received from customers. Compare to pre-sales for collection efficiency
-- **Net Debt** — THE most important balance sheet metric. Track absolute reduction over time
+- **Net Debt** — the most important balance sheet metric. Track absolute reduction over time
 
 ### Cash Flow Is King
 - Compare **Operating Cash Flow** against **Collections**. OCF should track collections closely

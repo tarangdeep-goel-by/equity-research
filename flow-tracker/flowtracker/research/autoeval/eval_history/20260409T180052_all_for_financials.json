@@ -1,0 +1,80 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T18:00:52.252097+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "broker"
+  ],
+  "results": {
+    "broker": {
+      "agent": "financials",
+      "stock": "GROWW",
+      "sector": "Fintech broker",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Excellent forensic work identifying the FY24 CCPS mark-to-market charge and the Q3FY25 ESOP reversal. However, it stops short of estimating the yield on the rapidly growing MTF book."
+        },
+        "logical_consistency": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Major logical gap in Section 4.1: The report claims a \u20b9335 Cr borrowing 'funds the \u20b92,971 Cr loan book via asset-liability matching'. This is mathematically impossible; the book must be funded by equity or client float, which is left unexplained."
+        },
+        "completeness": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Fails to provide a revenue mix breakdown (Brokerage vs. Interest Income vs. Distribution), which is critical given the noted transition toward an NBFC-like MTF lending model."
+        },
+        "actionability": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Provides a clear valuation anchor (forward PE) and excellent 'detective flags' for the PM. Lacks a financial sensitivity framework (e.g., earnings impact if F&O volumes drop X%)."
+        },
+        "sector_framework": {
+          "grade": "B",
+          "numeric": 86,
+          "rationale": "Correctly adjusts for broker-specific CFO distortions and pass-through assets. However, it completely misses applying BFSI metrics (NIM, Cost of Funds, Yield on Advances) to the new \u20b92,971 Cr lending book."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Strong attribution of data sources and clear acknowledgment of the missing analytical profile. However, the agent failed to call `get_quality_scores` with the 'bfsi' parameter."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "4.1 Balance Sheet Snapshot",
+          "issue": "Agent states that \u20b9335 Cr in borrowings funds a \u20b92,971 Cr loan book via asset-liability matching. This is a severe logical error. The agent failed to deduce that the MTF book is likely funded by the company's own net worth or client float.",
+          "suggestion": "Instruct the agent to cross-check funding logic: if Asset A > Liability B, Liability B cannot be the sole funding source. Prompt it to check Net Worth/Equity when analyzing loan book funding."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Sector Framework / Tool Usage",
+          "issue": "Agent identified a massive shift toward lending (MTF book) but did not call `get_quality_scores` with the 'bfsi' parameter to check for banking/lending metrics like NIM or Cost of Funds.",
+          "suggestion": "Update the agent's system prompt to automatically append the 'bfsi' parameter when analyzing brokers that exhibit significant 'Loans & Advances' or interest income."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Structured Briefing / Open Questions",
+          "issue": "Agent asks 'What is GROWW's current revenue composition breakdown' in the open questions instead of attempting to extract it from the available financial tools (e.g., expense_breakdown or annual reports).",
+          "suggestion": "Instruct the agent to exhaust available data tools (like segment revenues if available in fundamentals) before relegating core financial metrics to 'Open Questions'."
+        }
+      ],
+      "strengths": [
+        "Exceptional forensic accounting analysis, correctly identifying and adjusting for pre-IPO CCPS mark-to-market charges and ESOP reversals that heavily distorted reported PAT.",
+        "Excellent handling of broker-specific cash flow mechanics, correctly steering the reader away from meaningless CFO figures and explaining the working capital drain as MTF book building."
+      ],
+      "summary": "A highly insightful report that does an excellent job normalizing pre-IPO accounting distortions to reveal the true underlying margin profile. However, it suffers from a critical logical flaw regarding the funding of the new MTF loan book and misses applying standard lending metrics (NIM/Yield) to this growing segment.",
+      "report_length": 29213,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 31.245414957986213,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Excellent forensic work identifying the FY24 CCPS mark-to-market charge and the Q3FY25 ESOP reversal. However, it stops short of estimating the yield on the rapidly growing MTF book.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Major logical gap in Section 4.1: The report claims a \u20b9335 Cr borrowing 'funds the \u20b92,971 Cr loan book via asset-liability matching'. This is mathematically impossible; the book must be funded by equity or client float, which is left unexplained.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Fails to provide a revenue mix breakdown (Brokerage vs. Interest Income vs. Distribution), which is critical given the noted transition toward an NBFC-like MTF lending model.\"\n    },\n    \"actionability\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Provides a clear valuation anchor (forward PE) and excellent 'detective flags' for the PM. Lacks a financial sensitivity framework (e.g., earnings impact if F&O volumes drop X%).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B\",\n      \"numeric\": 86,\n      \"rationale\": \"Correctly adjusts for broker-specific CFO distortions and pass-through assets. However, it completely misses applying BFSI metrics (NIM, Cost of Funds, Yield on Advances) to the new \u20b92,971 Cr lending book.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Strong attribution of data sources and clear acknowledgment of the missing analytical profile. However, the agent failed to call `get_quality_scores` with the 'bfsi' parameter.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"4.1 Balance Sheet Snapshot\",\n      \"issue\": \"Agent states that \u20b9335 Cr in borrowings funds a \u20b92,971 Cr loan book via asset-liability matching. This is a severe logical error. The agent failed to deduce that the MTF book is likely funded by the company's own net worth or client float.\",\n      \"suggestion\": \"Instruct the agent to cross-check funding logic: if Asset A > Liability B, Liability B cannot be the sole funding source. Prompt it to check Net Worth/Equity when analyzing loan book funding.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Sector Framework / Tool Usage\",\n      \"issue\": \"Agent identified a massive shift toward lending (MTF book) but did not call `get_quality_scores` with the 'bfsi' parameter to check for banking/lending metrics like NIM or Cost of Funds.\",\n      \"suggestion\": \"Update the agent's system prompt to automatically append the 'bfsi' parameter when analyzing brokers that exhibit significant 'Loans & Advances' or interest income.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Structured Briefing / Open Questions\",\n      \"issue\": \"Agent as"
+    }
+  }
+}
