@@ -50,13 +50,19 @@ N. ...
 
 ```
 ## Tool Loading (optional — include only when tool registry is large)
-{Hint to pre-load tools via ToolSearch, including calculate.}
+{Hint to pre-load tools via ToolSearch with max_results=20 and
+ explicit calculate inclusion. Missing calculate forces a second round-trip.}
 
 ## Workflow
 0. **Baseline**: Review the <company_baseline> in the user message.
 1. **Snapshot**: Call get_analytical_profile.
-2. **Core data**: Call agent-specific primary tools.
-3. **Management context**: Call get_company_context for concall_insights, sector_kpis.
+2. **Core data (TOC-then-drill)**: Call agent-specific primary tools with
+   NO section filter first to get a compact TOC, then drill into 2-3 targeted
+   sections based on what the TOC surfaced. Never call section='all' on
+   large-registry tools — MCP transport truncates at ~30-40KB.
+3. **Management context**: Call get_company_context for concall_insights,
+   sector_kpis. Use sub_section parameters to target specific KPIs once the
+   first call surfaces the available-keys TOC.
 ...
 7. **Visualizations**: Call render_chart for agent-relevant chart types.
 8. **Investigate before writing**: Scan collected data for unexplained gaps.
@@ -72,17 +78,22 @@ N. ...
 End with a JSON code block matching the schema in 2.4.
 ```
 
+**The TOC-then-drill pattern** (lifted from the ownership agent's workflow) is now standard. Applies to `get_ownership`, `get_sector_kpis`, `get_concall_insights`, and any large-registry tool. First call returns ~2-5KB TOC listing available slices; subsequent calls with `sub_section=<key>` return just that slice. Eliminates the classic "agent sees truncated response, hallucinates missing data" failure mode.
+
 ### 2.3 Cross-agent invariants (every specialist must have these)
 
-These five rules appear — in the same spirit, adapted to the agent's domain — in **every** agent's SYSTEM prompt. Don't omit.
+These eight rules appear — in the same spirit, adapted to the agent's domain — in **every** agent's SYSTEM prompt. Don't omit.
 
 | # | Invariant | Financials equivalent | Ownership equivalent |
 |---|---|---|---|
 | **I-1** | **Anomaly resolution via tools first.** Before raising an open question, attempt 2+ tool calls. Open questions are for things genuinely outside tool data. | Rule 8 | Implicit in Rule 14 |
 | **I-2** | **Sector Compliance Gate.** Populate `mandatory_metrics_status` with extracted/attempted/not_applicable for each mandatory metric in the sector skill file. `attempted` needs 2+ tool-call traces. | Rule 9 (workflow step) | Rule 16 |
-| **I-3** | **Hard-evidence for overriding system signals.** When a system-classified signal (from `get_analytical_profile`, `get_market_context`, etc.) is reclassified, cite 2+ independent data points. One countervailing fact = speculation. | (add when missing) | Rule 13 |
+| **I-3** | **Hard-evidence for overriding system signals.** When a system-classified signal (from `get_analytical_profile`, `get_market_context`, etc.) is reclassified, cite 2+ independent data points. One countervailing fact = speculation. | Rule 18 | Rule 13 |
 | **I-4** | **Single-period anomaly → reclassification hypothesis first.** >5pp ownership jumps or >20% single-quarter P&L moves default to "corporate action / reclassification / accounting change" before "active directional". | (embedded in Rule 8) | Rule 11 |
 | **I-5** | **Open-questions ceiling: 3-5 per report.** More than that = agent is punting resolvable lookups. | (embedded in Rule 8) | Rule 14 |
+| **I-6** | **Numerical source-of-truth discipline.** Don't hand-multiply raw share counts × price to derive market cap or stake values. Pre-computed authoritative fields (`mcap_cr`, `free_float_mcap_cr`, `pe_trailing`, `eps_ttm` from the analytical profile / valuation snapshot) are the single source of truth — raw share counts are easy to misread as lakhs/crores and produce 10× errors. Route every derivation through `calculate` with authoritative inputs. | SHARED_PREAMBLE "Trust Tool Outputs" | "Market Cap & Share Value" section in INSTRUCTIONS |
+| **I-7** | **Structural signal absence ≠ informational signal.** An absence of buying / selling / activity may be **structural** (regulatory, mechanical, or statutorily constrained) rather than **informational** (conviction-driven). Before drawing conclusions from "no action", check: is the actor legally / structurally capable of the action? MPS 75% caps promoter buying; PSU executives are IAS-cadre not ESOP-compensated; MNC-subsidiary boards don't do open-market deals; PSU dividend policy is Finance-Ministry-set; regulated-utility capex is tariff-order-driven. Absence is signal only when action is possible. | Rule 17 | Rule 9 |
+| **I-8** | **Structural holder reclassification by size × velocity.** Long-held (≥4 quarters), large (e.g., >5% for a category anchor), slow-moving institutional positions are functionally "floor capital" and should be separated from float-at-risk calculations. This applies to quasi-sovereign anchors (LIC-class insurers), promoter holdcos, and ESOP trusts — reclassify before computing liquidity / supply dynamics. | (apply to risk agent when built) | Embedded in ownership Rule 15 + BFSI skill |
 
 ### 2.4 Briefing schema — required fields
 
@@ -214,6 +225,36 @@ Sector names must match keys in `SECTOR_KPI_CONFIG` in `sector_kpis.py`.
 
 Use when insurance (life / general / aggregator), broker (discount / full-service / wealthtech), holding (pure investment / operating), gold_loan (pure / diversified), etc.
 
+### 3.3b Regulatory-boundary-first table pattern (recommended for regulated sectors)
+
+Lifted from the BFSI / ownership agent's mandatory foreign-holding-cap lookup. When a sector has binding regulatory ceilings, statutory floors, or licensing thresholds that **directly change the analytical conclusion**, the skill file should place a mandatory-lookup table at the top — before the agent analyses any other metric. Example pattern:
+
+```markdown
+### {Regulatory Boundary} — Mandatory Lookup
+**Before analysing {metric}, identify the binding regulatory boundary for this subtype. Applying the wrong ceiling/floor inverts the conclusion.**
+
+| Subtype | Binding ceiling / floor | Key statute / rule |
+|---|---|---|
+| **{Subtype A}** | {limit %} | **{Statute Act YYYY s.N}** |
+| **{Subtype B}** | {limit %} | **{Regulation name}** |
+
+Rule: State subtype and applicable limit BEFORE computing headroom / capacity / compliance metrics.
+```
+
+Use when: BFSI (foreign-holding caps differ 20% PSU vs 74% private vs 49% exchanges), pharma (FDA / USFDA facility status is binary), regulated_power (CERC base ROE applies only on regulated asset base), merchant_power (PPA vs merchant cap rules), gold_loan (75% LTV RBI cap), real_estate (70% RERA escrow).
+
+### 3.3c Statutory citation discipline
+
+When a rule is regulatory or statutory, cite the specific statute / regulation / circular — don't just say "per regulations". This gives the agent traceability and gives the reader analytical gravitas. Examples:
+
+- Good: `"Banking Companies (Acquisition and Transfer of Undertakings) Acts 1970/1980 — government stake minimum 51%"`
+- Good: `"Insurance Act 1938 s.2(7A) post-2021 amendment — aggregate foreign cap 74%"`
+- Good: `"IndAS 38 permits R&D capitalization once feasibility is established"`
+- Good: `"SEBI LODR Regulation 23 — 5% of turnover royalty cap"`
+- Bad: `"per regulations"` / `"as required by law"` (no traceability)
+
+Citations should be in **bold** on first mention within a section to draw the agent's eye.
+
 ### 3.4 Mandatory Checklist pattern (light-touch alternative to structured gate)
 
 ```markdown
@@ -240,6 +281,17 @@ Prefer these over generic questions:
 ```
 
 Limit to 3-5 templates per skill file.
+
+### 3.5b Data-shape awareness (defensive skill-file language)
+
+Agent tools may return degraded or partial shapes in specific conditions (pipeline failure, cold cache, missing extraction). Skill files should teach the agent to recognize these shapes and fall back gracefully rather than hallucinating or collapsing:
+
+- If `shareholder_detail` surfaces empty holder names → pipeline returned classifications only; use `shareholding` aggregate data as primary
+- If `cagr_table` shows EBITDA for a BFSI stock → pre-fix legacy output (should be stripped at the tool layer, but defensively flag)
+- If `concall_insights` returns a truncated preview mid-field → call with `sub_section=<specific_category>` to pull the targeted slice
+- If `sector_kpis` returns `status='schema_valid_but_unavailable'` → concall extractor did not capture this canonical KPI; fall back to narrative-prose extraction via `get_company_context(sub_section='management_commentary')`
+
+Encoding these fallbacks in skill files lets the agent recover without escalating every data-shape quirk to an open question.
 
 ### 3.6 Consistency principles (non-negotiable)
 
