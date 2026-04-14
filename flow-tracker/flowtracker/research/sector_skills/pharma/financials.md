@@ -23,6 +23,8 @@ Track **Gross Margin trajectory** specifically — declining gross margin with s
 - Approval-to-launch conversion matters more than raw filings
 - **FDA compliance status** — any warning letters, import alerts, or OAI observations. This is binary risk — one FDA warning letter can wipe out an entire facility's revenue
 
+**Data-shape fallback:** if `get_sector_kpis(sub_section='anda_filed_number'|'anda_approved_number'|'r_and_d_spend_pct'|'us_price_erosion_pct')` returns `status='schema_valid_but_unavailable'`, the extractor did not capture the canonical KPI for this quarter. Fall back to `get_company_context(section='concall_insights', sub_section='management_commentary')` and scan for ANDA / R&D / pricing mentions in prose. Also check `get_company_context(section='filings')` for 20-F / 10-K equivalents that carry US pharma granular disclosures. Cite the quarter and source when extracted narratively.
+
 ### FX Impact — Material for Export-Heavy Pharma
 For companies with >30% revenue from exports, currency swings directly impact margins and can distort growth figures. USD depreciation compresses margins for US-facing revenue; INR strengthening hurts reported growth.
 - Analyze currency translation impact on margins and consolidated debt

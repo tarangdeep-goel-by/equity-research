@@ -1,5 +1,20 @@
 ## Regulated Power — Financials Agent
 
+### Regulatory Parameters — Mandatory Lookup Before Modeling Returns
+**Before analyzing earnings, identify which CERC/SERC normative parameters bind. Applying the wrong benchmark turns a "above-normative incentive" story into a "sub-normative penalty" story (or vice versa).**
+
+| Regulated parameter | Binding normative level | Source / rule |
+|---|---|---|
+| **Base ROE on equity** | **15.5%** on regulated equity portion (pre-tax 19.36% grossed up) | **CERC Tariff Regulations** (current 2024-29 block) |
+| **Notional D/E gearing** | **70:30** debt-to-equity project-cost basis | CERC normative — over-equitization drags blended ROE toward debt yields |
+| **Station Heat Rate (SHR)** — thermal | ~2,350–2,450 kcal/kWh (supercritical); ~2,450–2,550 (subcritical) | CERC per plant vintage + fuel type |
+| **Auxiliary Power Consumption (APC)** | ~5.5-7.5% of gross generation (coal); ~1-2% (hydro) | CERC norms |
+| **Plant Availability Factor (NAPAF)** | ~85% target; incentive above, under-recovery below | CERC |
+| **Return on renewable capacity (solar/wind)** | **bid-tariff-linked** (competitive reverse auctions) — not a cost-plus regime | SERC-approved PPAs |
+| **Working capital normative** | 2 months O&M + 2 months receivables + 15 days fuel | CERC |
+
+Rule: state the binding normative value for the plant vintage/fuel type BEFORE claiming incentive or penalty. An SHR of 2,400 is incentive-earning for a subcritical plant and penalty-earning for a supercritical one — same number, opposite conclusion.
+
 ### Regulated ROE Framework
 Regulated utilities earn a guaranteed ROE on equity invested in regulated assets. The actual return can exceed the base ROE through incentives:
 - **CERC base ROE**: currently 15.5% on equity portion of regulated assets
