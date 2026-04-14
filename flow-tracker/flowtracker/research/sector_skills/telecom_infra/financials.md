@@ -3,7 +3,7 @@
 ### Tenancy Ratio — The Core Economic Metric
 Tenancy ratio (tenants per tower) is the single most important driver of tower-co economics. A tower has roughly the same fixed cost regardless of how many tenants occupy it — ground lease, power backup, maintenance, security are all largely fixed. That means each incremental tenant drops ~85% to tower-co EBITDA. Extract from `get_company_context(section='concall_insights')` or `sector_kpis`:
 - Benchmark: tenancy starts at 1.0 at commissioning, reaches 1.7-2.2 at steady state, and 2.5+ is industry-leading
-- Rising tenancy = operating leverage working; falling tenancy typically signals telco consolidation (e.g., Jio absorbing BSNL spectrum, Voda-Idea site exits) or site decommissioning
+- Rising tenancy = operating leverage working; falling tenancy typically signals telco-customer consolidation (operator mergers, spectrum reallocation, weak-operator site exits) or site decommissioning
 - A flat tenancy ratio with growing tower count masks economics — always analyze both together
 
 ### Rental Per Tenant — The Pricing Metric
@@ -18,15 +18,15 @@ Churn (tenants exiting per year via site decommissioning) is the hidden erosion 
 Under IndAS 116, long-term rental contracts sit as Right-of-Use (ROU) assets with offsetting lease liabilities on the tower-co balance sheet. This inflates reported EBITDA by shifting ground-rental expense out of opex into depreciation + interest below the EBITDA line.
 - Reported IndAS EBITDA margins look 60%+; pre-IndAS comparable margins are ~45-50%
 - Pre-IndAS EBITDA = reported EBITDA − lease liability unwind (disclosed in notes)
-- Always use the pre-IndAS number for peer comparison with global tower-cos (American Tower, Cellnex) to avoid apples-to-oranges errors. `get_fundamentals(section='cost_structure')` may surface lease costs separately
+- Always use the pre-IndAS number for peer comparison with global tower-cos on different accounting regimes to avoid apples-to-oranges errors. `get_fundamentals(section='cost_structure')` may surface lease costs separately
 
 ### Energy Pass-Through — Revenue But Not Margin
 Diesel and power recovery from tenants is pass-through: cost in COGS, recovery in revenue. This inflates headline revenue without any margin contribution. Always compute EBITDA margin on core rental revenue (not total reported revenue) to get the true economic picture. Extract the energy revenue split from concall if disclosed — it's typically 20-30% of reported revenue.
 
 ### Receivables Concentration — Telco Payment Risk
-Tower-cos have just 3-5 customers (telcos) and the book is highly concentrated. If any one customer — historically Voda-Idea — stretches payment terms or negotiates retrospective discounts, it hits cash flow immediately. Extract from `get_fundamentals(section='balance_sheet_detail')`:
+Tower-cos have just 3-5 customers (telcos) and the book is highly concentrated. If any one customer — particularly a financially stressed operator — stretches payment terms or negotiates retrospective discounts, it hits cash flow immediately. Extract from `get_fundamentals(section='balance_sheet_detail')`:
 - Receivable days >120 = stressed customer book
-- Track one-time provisions for impaired receivables — Indus Towers has taken multiple such provisions for Voda-Idea
+- Track one-time provisions for impaired receivables from any single stressed counterparty; such provisions often cluster over multiple quarters against the same name
 - Customer-wise revenue concentration (if disclosed) matters more than for almost any other sector
 
 ### Cash Flow — Capex-Light, Distribution-Heavy

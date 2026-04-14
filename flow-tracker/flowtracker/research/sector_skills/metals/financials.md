@@ -22,7 +22,7 @@
 - If split unavailable, flag as open question
 
 ### Dividend Sustainability — Why It Matters for High-Yield Miners
-Metals companies often sport high dividend yields, but cyclical earnings mean today's yield can vanish quickly. Promoter-driven groups (e.g., Vedanta) may pay unsustainable dividends to extract cash upstream — the payout ratio alone won't reveal this.
+Metals companies often sport high dividend yields, but cyclical earnings mean today's yield can vanish quickly. Promoter-driven group structures may pay unsustainable dividends to extract cash upstream to the holdco — the payout ratio alone won't reveal this; check whether the trailing dividend is funded from FCF or from borrowings.
 - Call `get_events_actions(section='dividends')` for actual payout history
 - Compute Dividend / FCF coverage for 3+ years. Flag if >1.0x in any year (paying more than free cash flow)
 - For promoter-driven extraction, flag the cash-up mechanism explicitly

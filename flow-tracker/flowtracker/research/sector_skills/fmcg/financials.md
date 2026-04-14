@@ -15,7 +15,7 @@ This is how FMCG companies manage earnings — it's a deliberate lever:
 
 ### Working Capital (Negative WC = Strength)
 **AVAILABLE** from `get_quality_scores(section='sector_health')` for FMCG — returns WC trend.
-- Top Indian FMCG companies (HUL, ITC, Dabur) operate on **negative working capital** — advance collections from distributors + tight receivable management
+- Top-tier Indian FMCG companies operate on **negative working capital** — advance collections from distributors + tight receivable management
 - If WC turns positive or negative WC is shrinking, distributor leverage is breaking down — flag as structural deterioration
 - Use `get_fundamentals(section='working_capital')` for receivables/inventory/payables breakdown
 

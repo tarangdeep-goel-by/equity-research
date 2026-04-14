@@ -18,8 +18,8 @@ ARPU growth is irrelevant if network investment consumes all of it. The real que
 - Extract spectrum amortization separately from regular depreciation if available from concall_insights
 - Present EBITDA and EBITDAaL (after lease/spectrum) to show true cost of spectrum
 
-### Africa/International Segments
-For companies with international operations (e.g., Bharti Airtel Africa):
+### International Segments
+For operators with meaningful international operations (Africa, EMEA, SEA exposures):
 - Segment-level revenue and EBITDA from concall_insights
-- Currency translation impact on consolidated numbers (Africa currencies are volatile)
+- Currency translation impact on consolidated numbers (emerging-market currencies are often volatile against INR)
 - If segment data unavailable, flag as open question for SOTP valuation

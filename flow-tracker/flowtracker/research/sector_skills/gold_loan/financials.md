@@ -15,7 +15,7 @@ Standard GNPA/NNPA analysis misleads for gold NBFCs because the collateral is li
 Always read auction loss trend alongside gold price trend — losses spike when gold falls sharply. Extract from `concall_insights`.
 
 ### AUM Mix — Pure Gold vs Diversification
-Pure gold loan NBFCs (Muthoot Finance core book) run a narrow but deep niche: 25-30% NIMs and 4-5% ROA, a profile no other lending segment matches. Diversification into microfinance, personal loans, or affordable housing dilutes NIM but extends the growth runway beyond the structural ceiling of gold demand. Watch the concentration profile:
+Pure gold loan NBFCs — those with a monoline gold-backed lending book — run a narrow but deep niche: 25-30% NIMs and 4-5% ROA, a profile no other lending segment matches. Diversification into microfinance, personal loans, or affordable housing dilutes NIM but extends the growth runway beyond the structural ceiling of gold demand. Watch the concentration profile:
 - **>85% gold** — monoline concentration risk, single-asset beta
 - **60-85% gold** — balanced
 - **<60% gold** — execution risk in newer segments; watch credit cost trajectory of non-gold book

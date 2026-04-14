@@ -2,7 +2,7 @@
 
 ### ARPOB — The Pricing Power Metric
 ARPOB (Average Revenue Per Occupied Bed per day) is the hospital industry's equivalent of ARPU — it compresses case mix, payer mix, and facility pricing into one headline number. Rising ARPOB signals either a richer case mix (complex tertiary cases), better insurance realization, or facility upgrades. Declining ARPOB almost always reflects a payer mix shift toward government schemes (AB-PMJAY rates are materially lower) or competitive pricing pressure in a saturated micro-market. Extract from `get_company_context(section='concall_insights')` or `get_company_context(section='sector_kpis')`:
-- **ARPOB** — ₹35K-55K typical for tier-1 multispecialty; ₹70K-100K+ for tertiary flagship units (Apollo Main, Medanta Gurgaon)
+- **ARPOB** — ₹35K-55K typical for tier-1 multispecialty; ₹70K-100K+ for tertiary flagship units running high-acuity case mix (cardiac, oncology, transplant programs)
 - **ARPOB growth YoY** — isolate price vs case-mix drivers from concall commentary
 
 ### Occupancy — The Utilization Engine
@@ -14,7 +14,7 @@ Occupancy of 65-75% is a mature hospital at steady state. Above 80% indicates pr
 Cardiac surgery, oncology, neuro, and organ transplant run ARPOB 2-3x the house average and EBITDA margins roughly 2x. Ortho, general medicine, and OB-GYN are volume drivers but lower margin. Within each specialty, payer mix stacks cash/insurance > PMJAY > CGHS > ECHS in realization order. A hospital with >40% PMJAY/CGHS exposure is structurally margin-dilutive — flag this explicitly from concall disclosures.
 
 ### Doctor Fee Structure — Employment vs Retainer
-The employment model drives operating leverage: employed doctors earn fixed salaries, and the hospital captures the full margin above cost. The retainer/consultant model (typically 70-80% fee-share to the doctor) is variable-cost — the hospital earns on room charges, diagnostics, and pharmacy share instead. Apollo runs mostly on the retainer model; Max has a higher employed share. Ratio shifts over time are a direct predictor of margin trajectory.
+The employment model drives operating leverage: employed doctors earn fixed salaries, and the hospital captures the full margin above cost. The retainer/consultant model (typically 70-80% fee-share to the doctor) is variable-cost — the hospital earns on room charges, diagnostics, and pharmacy share instead. Operators run a spectrum from predominantly retainer-based to predominantly employed models; the ratio and its shift over time is a direct predictor of margin trajectory.
 
 ### New Bed Maturity Curve — Why Consolidated Margins Mislead
 A newly commissioned hospital loses money for 2-4 years while occupancy ramps, doctors are onboarded, and the brand is built in the micro-market. During active expansion phases, consolidated EBITDA margin is dragged down by loss-making new units — this is a feature, not a problem, but it must be called out. Mature hospital EBITDA margin at steady state is 22-28%; anything below that at a mature unit is a red flag.

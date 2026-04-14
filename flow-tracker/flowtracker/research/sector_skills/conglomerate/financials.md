@@ -21,10 +21,10 @@ When short-term debt is material (>30% of total borrowings) or Net Debt/EBITDA >
 - Use `get_fundamentals(section='balance_sheet_detail')` for cash and `get_fundamentals(section='cash_flow_quality')` for CFO run-rate
 
 ### Entity-Level vs Group-Level News — Attribution Discipline
-Conglomerates often operate under a common brand (Adani, Tata, Reliance) with multiple listed entities. Attribution mistakes are easy — and costly:
-- A cement sector acquisition announced by "Adani Group" may be executed by Ambuja Cements or ACC (separate listed entities), not by Adani Enterprises — even though all three appear under the Adani brand
-- Vedanta Ltd, Hindustan Zinc, and Cairn are distinct listed/unlisted entities — divestments and demergers in one do not mechanically flow to another
-- The Tata brand covers 20+ listed entities — a "Tata announcement" rarely applies to all of them
+Conglomerates typically operate under a common group brand across many separately listed entities. Attribution mistakes are easy — and costly:
+- A sector-level acquisition announced by "Group X" may be executed by a specific listed subsidiary under that brand, not the flagship listed entity you are analyzing — verify which exact legal entity bears the balance-sheet impact
+- Distinct listed or unlisted sister entities within the same group carry different cash flows, debt stacks, and contingent liabilities — divestments and demergers in one do not mechanically flow to another
+- A shared brand covering many listed entities means a "Group announcement" rarely applies uniformly; always confirm which specific listed entity the event attaches to
 - Before citing a major event as a direct balance sheet impact, verify it applies to THIS listed entity via `get_events_actions(section='corporate_actions')` or `get_company_context(doc_type='filings')` — don't trust group-brand associations
 
 ### Cross-Subsidization — Which Segments Are Funding Which
@@ -48,7 +48,7 @@ Consolidated leverage blends operating subs (which can service their own debt) w
 - Report the split explicitly; consolidated D/E alone is misleading for a holdco structure
 
 ### Core ROIC Excl. CWIP — For Incubation/Infrastructure Plays
-Conglomerates in incubation mode (Adani Enterprises, early-stage infra) carry massive **Capital Work-in-Progress (CWIP)** on the balance sheet — capital deployed but not yet generating returns. Standard ROCE dilutes the return of operating assets.
+Conglomerates in incubation mode — those building new infrastructure platforms — carry massive **Capital Work-in-Progress (CWIP)** on the balance sheet — capital deployed but not yet generating returns. Standard ROCE dilutes the return of operating assets.
 - When `CWIP / Net Block > 0.2` (rough heuristic for incubation phase), compute **Core ROIC** = EBIT / (Capital Employed − CWIP − Cash & Equivalents)
 - Core ROIC reflects the true return on operating assets; as CWIP commissions, headline ROCE should converge upward
 - Use `calculate` for the math; cite both headline ROCE and Core ROIC in the report so the reader can see the gap

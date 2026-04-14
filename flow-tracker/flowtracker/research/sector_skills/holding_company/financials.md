@@ -33,11 +33,11 @@ Dividend income received from subs is the only genuine cash flow a pure holdco g
 - Holdco dividend yield is effectively `sub-level dividends × stake × holdco payout ratio` — typically 2-4% gross. If yield drops sharply in a year, check whether subs cut payouts or whether the holdco retained more (and why)
 
 ### Segment-Level EBIT (Conglomerate-Type Holdcos Only)
-A subset of holdcos — Adani Enterprises, Reliance-type structures — run operating subs directly. For these:
+A subset of holdcos — those running operating subsidiaries directly rather than purely holding listed stakes — require segment-level analysis. For these:
 - Extract segment revenue and EBIT from `get_company_context(section='concall_insights')`
 - Evaluate segment margins separately — the consolidated number is blended noise across unrelated businesses and is analytically useless
 
-Pure investment holdcos (Bajaj Holdings, Tata Investment, Kama Holdings) don't have this — their standalone financials are just treasury income plus dividends received. Don't force a segment analysis where none exists.
+Pure investment holdcos (those whose sole activity is holding listed and unlisted stakes) don't have this — their standalone financials are just treasury income plus dividends received. Don't force a segment analysis where none exists.
 
 ### Holdco-Level Debt vs Sub-Level Debt
 Consolidated debt figures hide the critical distinction: is the debt at the holdco itself, or at operating subs? This matters because:

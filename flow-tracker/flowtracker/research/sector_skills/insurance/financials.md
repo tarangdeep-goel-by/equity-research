@@ -2,11 +2,11 @@
 
 ### Sub-Type Determines the Entire Analysis — Aggregator vs Underwriter
 First, determine the sub-type from company profile. These are completely different businesses with different economics, and applying one's metrics to the other produces garbage analysis:
-- **Aggregator/Platform** (PB Fintech/Policybazaar, InsuranceDekho): earns commissions on policies sold. Has Take Rate, unit economics, tech-platform P&L. Combined Ratio or VNB don't apply — aggregators don't bear underwriting risk or manufacture policies.
-- **Life Insurer** (HDFC Life, SBI Life, ICICI Pru Life): manufactures policies. Has VNB, APE, Embedded Value. Take Rate doesn't apply — insurers set premiums, they don't earn commissions on someone else's product.
-- **General Insurer** (ICICI Lombard, Star Health): underwrites risk. Has Combined Ratio, Claims Ratio. Life insurance metrics (VNB, APE, persistency) are structurally different because general insurance policies are annual, not long-duration.
+- **Aggregator / Insurtech platform**: earns commissions on policies sold on behalf of underwriters. Has Take Rate, unit economics, tech-platform P&L. Combined Ratio or VNB don't apply — aggregators don't bear underwriting risk or manufacture policies.
+- **Life Insurer**: manufactures long-duration policies. Has VNB, APE, Embedded Value. Take Rate doesn't apply — insurers set premiums, they don't earn commissions on someone else's product.
+- **General Insurer** (includes standalone health): underwrites risk on annual policies. Has Combined Ratio, Claims Ratio. Life insurance metrics (VNB, APE, persistency) are structurally different because general insurance policies are annual, not long-duration.
 
-### IF AGGREGATOR (e.g., Policybazaar):
+### IF AGGREGATOR:
 **Take Rate vs Gross Margin — different metrics that answer different questions:**
 - **Take Rate** = Revenue / Total Premium Distributed (typically 10-15%). Measures pricing power over insurance partners
 - **Gross Margin** = (Revenue - Direct Costs) / Revenue (typically 60-70%). Measures operational efficiency
