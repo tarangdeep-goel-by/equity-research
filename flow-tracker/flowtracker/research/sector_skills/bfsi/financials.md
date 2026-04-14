@@ -11,6 +11,8 @@ Asset quality is the most critical dimension for bank analysis — a single quar
 
 If concall data doesn't contain these, flag as open questions — fabricated asset quality numbers are worse than no numbers, since even small errors in NPA/slippage data can completely change the investment thesis.
 
+**Data-shape fallback:** if `get_sector_kpis(sub_section='gross_npa_pct'|'net_npa_pct'|'provision_coverage_ratio_pct'|'credit_cost_bps'|'fresh_slippages_cr')` returns `status='schema_valid_but_unavailable'`, the canonical KPI was not captured in concall operational_metrics for this bank. Fall back to narrative extraction: call `get_company_context(section='concall_insights', sub_section='management_commentary')` and `sub_section='opening_remarks'` and scan for numeric mentions of asset quality. Cite the value with the specific quarter it came from. This is honest analysis — it beats leaving asset quality as an open question when the data is in the prose.
+
 ### Available Structured BFSI Metrics
 `get_quality_scores(section='bfsi')` returns: NIM%, ROA%, Cost-to-Income%, P/B, Equity Multiplier, CD Ratio. Use these directly.
 

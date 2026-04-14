@@ -3,25 +3,25 @@
 ### Pharma Subtype Archetypes
 | Subtype | Promoter Profile | Institutional Dynamics | Illustrative Examples |
 | :--- | :--- | :--- | :--- |
-| **Founder-Family Big Pharma** | Family trusts (40-70%); multi-generational | FIIs track FDA cycles; MFs track domestic volume growth | e.g., SUNPHARMA, CIPLA, LUPIN, TORRENT |
-| **MNC India Subsidiary** | Foreign parent (50-75%); repatriation focus | Low float; defensive MF holding; dividend-yield focused | e.g., Abbott India, GSK Pharma, Pfizer India, Sanofi India |
-| **PE-Backed Pharma** | Private Equity anchor; exit-driven horizons | Liquidity overhang during PE stake-sale windows | e.g., Sequent Scientific, JB Chemicals |
-| **CRO / CDMO Specialist** | Technocrat founders; very low pledges | High MF / ESG conviction; index-fund favorites | e.g., DIVIS LAB, SYNGENE, LAURUS LABS |
-| **API / Intermediates** | Concentrated domestic holdings; cyclical | Lower FII presence; high retail churn on distress | e.g., GRANULES, AARTI DRUGS, Solara Active |
-| **Formulations + Specialty** | Family or institutional-backed; high R&D | FII spikes linked to biosimilar / FTF pipeline approvals | e.g., BIOCON, IPCALAB, ALKEMLAB |
-| **Hospital-Owning / Integrated** | Corporate / Family (capex-heavy) | Heavy overlap with healthcare / REIT funds | e.g., APOLLOHOSP, FORTIS, MAX Healthcare |
+| **Founder-Family Big Pharma** | Family trusts (40-70%); multi-generational | FIIs track FDA cycles; MFs track domestic volume growth | large-cap Indian generics majors |
+| **MNC India Subsidiary** | Foreign parent (50-75%); repatriation focus | Low float; defensive MF holding; dividend-yield focused | listed Indian subsidiaries of global pharma MNCs |
+| **PE-Backed Pharma** | Private Equity anchor; exit-driven horizons | Liquidity overhang during PE stake-sale windows | mid-cap pharma with PE-fund anchor shareholders |
+| **CRO / CDMO Specialist** | Technocrat founders; very low pledges | High MF / ESG conviction; index-fund favorites | pure-play CRO / CDMO and API-to-formulation outsourcing specialists |
+| **API / Intermediates** | Concentrated domestic holdings; cyclical | Lower FII presence; high retail churn on distress | domestic API / intermediate manufacturers |
+| **Formulations + Specialty** | Family or institutional-backed; high R&D | FII spikes linked to biosimilar / FTF pipeline approvals | biosimilar-platform players and specialty-formulation mid-caps |
+| **Hospital-Owning / Integrated** | Corporate / Family (capex-heavy) | Heavy overlap with healthcare / REIT funds | listed hospital chains and integrated healthcare operators |
 
 ### Multi-Generational Family Trusts & Pledge Anomalies
-Indian pharma is dominated by multi-generational founder-families holding 40-70% stakes. Ownership is rarely direct; it is routed via complex family-trust entities and unlisted investment vehicles (e.g., Shanghvi Finance and trusts for SUNPHARMA). Use `get_ownership(section='shareholder_detail')` to map ultimate beneficial ownership. Promoter pledging by Indian pharma families is historically rare (baseline <3%). Treat any sudden promoter pledge as an acute red flag signaling non-pharma group distress or catastrophic M&A funding gaps. Verify via `get_ownership(section='promoter_pledge')`.
+Indian pharma is dominated by multi-generational founder-families holding 40-70% stakes. Ownership is rarely direct; it is routed via complex family-trust entities and unlisted investment vehicles (promoter finance-arm trusts are standard for large-cap Indian generics majors). Use `get_ownership(section='shareholder_detail')` to map ultimate beneficial ownership. Promoter pledging by Indian pharma families is historically rare (baseline <3%). Treat any sudden promoter pledge as an acute red flag signaling non-pharma group distress or catastrophic M&A funding gaps. Verify via `get_ownership(section='promoter_pledge')`.
 
 ### USFDA Inspection Cycles & FII Flow Correlation
 Institutional flows in Indian generics are tethered to USFDA inspection cycles. Negative observations (Form 483s, OAI, Warning Letters) trigger 5-15% FII exits over 2-3 quarters. Voluntary Action Indicated (VAI) or clear Establishment Inspection Reports (EIR) drive FII re-entry. Map FII flow timing against the target's USFDA audit calendar via `get_company_context(section='concall_insights')` for management commentary and `get_company_context(section='filings')` for event-driven disclosures.
 
 ### Patent-Cliff Catalysts & Transient FII Spikes
-Blockbuster patent expirations in regulated markets (e.g., gRevlimid, gLialda, gCopaxone) drive event-driven FII concentration spikes. Offshore funds rotate into Indian formulators holding 180-day exclusivity or First-to-File (FTF) status. This ownership is highly transient — treat these spikes as cyclical momentum flows rather than permanent re-ratings. Anticipate sharp exits once generic pricing normalizes.
+Blockbuster patent expirations in regulated markets (large generic-launch opportunities in oncology, gastro, multiple-sclerosis and similar regulated-market chemistries) drive event-driven FII concentration spikes. Offshore funds rotate into Indian formulators holding 180-day exclusivity or First-to-File (FTF) status. This ownership is highly transient — treat these spikes as cyclical momentum flows rather than permanent re-ratings. Anticipate sharp exits once generic pricing normalizes.
 
 ### M&A Dilution Cycles & Specialty Transitions
-Big pharma frequently executes offshore equity-funded M&A to acquire US / European specialty assets (e.g., SUNPHARMA-Taro, LUPIN-Kyowa). This creates distinct ownership dilution cycles and goodwill-heavy balance sheets. Use `get_valuation(section='sotp')` and `filings` to assess offshore subsidiary ownership implications. As generic formulators shift to capital-intensive specialty / biosimilars (e.g., BIOCON), the investor base morphs — volume-focused domestic MFs rotate out, risk-tolerant global FIIs rotate in.
+Big pharma frequently executes offshore equity-funded M&A to acquire US / European specialty assets (Indian generics majors acquiring overseas specialty / branded-generic platforms is a recurring cycle). This creates distinct ownership dilution cycles and goodwill-heavy balance sheets. Use `get_valuation(section='sotp')` and `filings` to assess offshore subsidiary ownership implications. As generic formulators shift to capital-intensive specialty / biosimilars (biosimilar-platform pivots), the investor base morphs — volume-focused domestic MFs rotate out, risk-tolerant global FIIs rotate in.
 
 ### MNC Subsidiary Repatriation & FDI Regulations
 Foreign-parent promoters of MNC subs hold 50-75% and structurally use corporate actions for cash repatriation. Track unusual buyback timing and special-dividend events via `get_events_actions(section='corporate_actions')` as parent-cash-sweep signals. Under the Indian FDI Policy, **brownfield pharma FDI requires government approval**; greenfield is 100% automatic. This caps probability of spontaneous parent-led delistings or buyout math for established brownfield subsidiaries.

@@ -5,8 +5,8 @@
 
 | Subtype | Aggregate foreign-holding cap | Key statute / rule |
 |---|---|---|
-| **Public Sector (PSU) Banks** (SBI, PNB, BoB, Canara, Union, IOB, BoM, Central, Indian, UCO, PSB) | **20%** aggregate (FII + FDI + NRI combined) | **SBI Act 1955 s.3(3)** for SBI; **Banking Companies (Acquisition and Transfer of Undertakings) Acts 1970/1980** for other PSBs |
-| **Private Sector Banks** (HDFCBANK, ICICIBANK, AXISBANK, KOTAKBANK, IDFCFIRSTB, INDUSINDBK, FEDERALBNK, RBLBANK) | **74%** aggregate (FDI 49% auto + additional with govt approval; FII sub-limit 49%) | RBI Master Direction on FDI in banks |
+| **Public Sector (PSU) Banks** (bank-nationalisation-act banks) | **20%** aggregate (FII + FDI + NRI combined) | **SBI Act 1955 s.3(3)** for the state-bank-act entity; **Banking Companies (Acquisition and Transfer of Undertakings) Acts 1970/1980** for other PSBs |
+| **Private Sector Banks** (large private banks) | **74%** aggregate (FDI 49% auto + additional with govt approval; FII sub-limit 49%) | RBI Master Direction on FDI in banks |
 | **Insurance companies** (life, general, reinsurance) | **74%** aggregate foreign (Indian owned & controlled required) | **Insurance Act 1938 s.2(7A)** post 2021 amendment |
 | **NBFCs** | **100%** via automatic route (subject to sectoral caps) | FEMA NDI Rules 2019 |
 | **Asset Management Companies** | **100%** via automatic route | FEMA |
@@ -19,9 +19,9 @@ Open question candidates: "Is any individual FPI approaching its 10% per-entity 
 ### PSU Bank — Statutory Minimum Government Floor
 Under the SBI Act (and the equivalent bank-nationalisation acts for other PSBs), **government holding cannot fall below 51%**. This is a floor, not a ceiling — the SEBI 75% MPS cap is non-binding for PSU banks. Practical implications:
 
-- At SBIN's 55.5% government stake, there is ~4.5pp of "divestment headroom" before the 51% statutory floor. Any QIP/OFS beyond that requires a statute amendment (parliamentary act) — not a regulatory process change.
+- For a PSU bank with government stake around 55-56%, there is roughly 4-5pp of "divestment headroom" before the 51% statutory floor. Any QIP/OFS beyond that requires a statute amendment (parliamentary act) — not a regulatory process change.
 - Government divestment cycles are budget-driven. Check Finance Ministry budget documents (open question → web research) for announced disinvestment targets for the relevant fiscal year.
-- For bank-nationalisation-act banks (PNB, BoB, etc.), the floor is typically **51%**. Some restructured banks (Bank of Maharashtra, Central Bank) have temporarily gone below during bailouts — always verify current statutory floor.
+- For bank-nationalisation-act banks, the floor is typically **51%**. Some restructured banks have temporarily gone below during bailouts — always verify current statutory floor.
 
 ### PSU Bank Insider Transaction Framing
 PSU banks have **0% promoter-category insider buying culture** — executives (Chairman, MDs, EDs) are government-appointed IAS/banking-cadre officers compensated via scale pay, not ESOPs or stock options. There is no structural mechanism or incentive for open-market buying by management.
@@ -44,7 +44,7 @@ Government divestment is the largest single ownership-risk variable for PSU bank
 2. **Current headroom:** `(current government stake − 51% floor)` is the available OFS / QIP headroom without legislative action.
 3. **Absorption capacity:** QIP oversubscription ratio (from concall / `get_events_actions`) tells you whether the market has absorbed the last tranche cleanly. 3x+ oversubscribed = supply overhang neutralised; <1.5x = indigestion likely to weigh on price.
 
-For banks that recently completed a QIP (SBIN Sep 2025, PNB FY23, BOB FY23), state the **specific absorption metric** — 4.5x oversubscribed at ₹X price vs current ₹Y tells the story of post-dilution re-rating or pressure.
+For banks that recently completed a QIP (i.e. recent large PSU bank QIPs in the last 8 quarters), state the **specific absorption metric** — 4.5x oversubscribed at ₹X price vs current ₹Y tells the story of post-dilution re-rating or pressure.
 
 ### FPI Concentration Norms — Entity + Sector Sub-limits
 On top of the aggregate cap above, SEBI and RBI enforce concentration sub-limits:
@@ -59,22 +59,22 @@ For PSU banks at >18% aggregate foreign holding, flag as "approaching cap." For 
 When `get_market_context(delivery_analysis)` or `get_analytical_profile` returns a classified signal (e.g., `speculative_churn`, `distribution`, `accumulation`), do not override it with a narrative-level reclassification unless you cite **at least 2 independent data points** that support the alternative reading.
 
 - **Bad pattern:** "System flags speculative_churn, but the DII buying streak suggests accumulation under cover." (1 countervailing point, speculation disguised as analysis)
-- **Good pattern:** "System flags speculative_churn. However, (1) DII has bought on 28 consecutive days with cumulative net +₹X Cr, (2) promoter stake is stable at 55.5% with no pledge, (3) FII stake rose +77bps in the current quarter — three independent institutional cohorts are accumulating while retail churns. Reclassify as 'accumulation-under-cover pattern.'"
+- **Good pattern:** "System flags speculative_churn. However, (1) DII has bought on 28 consecutive days with cumulative net +₹X Cr, (2) promoter stake is stable at its historical level with no pledge, (3) FII stake rose +77bps in the current quarter — three independent institutional cohorts are accumulating while retail churns. Reclassify as 'accumulation-under-cover pattern.'"
 
 If you cannot cite 2+ hard data points, let the system signal stand and note the apparent tension in Open Questions.
 
 ### ADR / GDR Foreign Ownership — Mandatory Breakout for Large Private Banks
-Large Indian private banks (HDFCBANK, ICICIBANK, AXISBANK, INFY's holders via sponsored ADRs — less applicable to pure-BFSI) often have a material ADR/GDR (American / Global Depositary Receipt) programme. **ADRs count toward the aggregate foreign-holding cap** but sit outside direct FPI-registered holdings.
+Large Indian private banks often have a material ADR/GDR (American / Global Depositary Receipt) programme. **ADRs count toward the aggregate foreign-holding cap** but sit outside direct FPI-registered holdings.
 
 - Indian regulators (RBI + SEBI) combine (a) direct FPI holdings + (b) ADR/GDR outstanding + (c) NRI holdings into the aggregate foreign cap calculation.
-- For HDFCBANK specifically: the ADR (NYSE: HDB) typically represents **14-18% of paid-up capital** — subtracting this from the reported FII% can surface that effective foreign headroom is materially smaller than `74% − reported_FII%` implies.
+- Some large private banks run ADR programmes that typically represent **14-18% of paid-up capital** — subtracting this from the reported FII% can surface that effective foreign headroom is materially smaller than `74% − reported_FII%` implies.
 - When analyzing foreign headroom for any large private bank, explicitly check `get_company_context(filings)` or `concall_insights` for ADR outstanding. If no ADR data is available via tools, add to Open Questions: "What is the current ADR/GDR outstanding as a % of paid-up capital, and what is the combined direct-FPI + ADR + NRI holding vs the 74% cap?"
 - For PSU banks (20% cap): ADRs are rare but possible — still verify before computing headroom.
 
 ### Single-Period Ownership Jumps — Beware Reclassification Artifacts
 When you observe a **large single-quarter ownership change (>5pp)** in any category (FII, DII, MF, Promoter, Insurance), treat it FIRST as a **potential reclassification or corporate action artifact**, NOT as directional active buying/selling. Common causes:
 
-- **Corporate action reshuffles:** mergers (like HDFC Ltd → HDFC Bank 2023), demergers, restructurings create step-changes in share counts and cause mechanical category shifts
+- **Corporate action reshuffles:** mergers (e.g., holding-company-into-operating-subsidiary mergers), demergers, restructurings create step-changes in share counts and cause mechanical category shifts
 - **Category re-tagging by the exchange:** custodian reclassifies a foreign holder from FDI to FPI (or vice versa), moving the same shares between lines — no actual trading
 - **FPI deemed-promoter reclassification:** SEBI's 2019 rule treating beneficial FPIs in the same corporate group as "deemed promoter" has forced multiple ownership restatements
 - **Index reweighting surges:** MSCI EM / FTSE rebalances drive mechanical passive FII buying/selling concentrated in one quarter

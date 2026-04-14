@@ -1,5 +1,19 @@
 ## Merchant Power / IPP — Financials Agent
 
+### Regulatory & Contractual Boundaries — Mandatory Lookup
+**Before analyzing IPP economics, identify the regulatory regime each MW operates under. The same plant can earn very different economics depending on whether a MW is PPA-locked, merchant-exposed, or Section-11-dispatched.**
+
+| Regime | Binding rule | Economic effect |
+|---|---|---|
+| **Long-term PPA (cost-plus)** | CERC Tariff Regulations — 15.5% base ROE on equity + two-part tariff (fixed capacity charge + variable energy charge) | Annuity-like, inflation-escalated, capped |
+| **Long-term PPA (competitive bid)** | Bid-winning tariff (₹/kWh) + fuel pass-through where allowed | Margin compression risk if input costs outpace escalators |
+| **Merchant (IEX / PXIL spot)** | No regulatory cap or floor; cleared at Market Clearing Price | High upside in tight hours, brutal in off-season |
+| **Section 11 (Electricity Act)** | Government mandate to sell all generation into the grid at notified rates; invoked in power crises | Forces merchant producers to sell at below-market rates — material margin hit |
+| **Import coal blending mandate** | MoP directives force thermal generators to blend imported coal (USD-denominated cost) | Fuel cost passthrough lag hits margin |
+| **Renewable bid tariffs** | Competitive reverse auctions (SECI, state DISCOMs) fix ₹/kWh for 25 years | No cost-plus — pure revenue fixed at auction |
+
+Rule: state the MW-weighted regime mix BEFORE modeling earnings — a 2,000 MW plant with 1,500 MW PPA + 500 MW merchant is not the same asset as 500 MW PPA + 1,500 MW merchant.
+
 ### Merchant vs PPA Mix — The Volatility Dial
 The single most important variable for an IPP is the split between merchant sales (sold into IEX/power exchanges at spot rates) and long-term PPA revenue (25-year fixed-tariff contracts with discoms, with inflation escalators). Merchant slice provides huge upside in tight markets and brutal downside in off-season; PPA slice is annuity-like but capped. Most IPPs run a 60-80% PPA / 20-40% merchant blend, and the merchant layer is where the optionality lives. A company labelled "merchant power" in the consolidated narrative may in fact earn 70% of revenue from PPAs — always verify the mix before drawing conclusions.
 - Extract PPA vs merchant split from `get_company_context(section='concall_insights')` or `get_company_context(section='sector_kpis')`

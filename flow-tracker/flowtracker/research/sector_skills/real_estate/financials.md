@@ -1,5 +1,18 @@
 ## Real Estate — Financials Agent
 
+### Regulatory Boundaries — Mandatory Lookup Before Liquidity / Revenue Analysis
+**Before analyzing cash flow, free cash, or revenue trajectory, identify the binding regulatory constraints. Ignoring them will overstate financial flexibility by large multiples.**
+
+| Constraint | Binding rule | Economic effect |
+|---|---|---|
+| **RERA escrow lock-up** | **70% of customer collections** must be held in a project-specific escrow, released only for that project's construction | Headline cash overstates fungible cash; 70% is not available for debt reduction, dividends, or cross-project deployment |
+| **Ind-AS 115 revenue recognition** | Revenue booked only at substantial completion + possession — NOT at booking/collection | Reported revenue lags business momentum by 2-3 years |
+| **JDA revenue share** | 40-60% of project revenue is due to the land contributor under Joint Development Agreements | Developer's reported margin is lower than outright-land peers — NOT a profitability gap, just structure |
+| **Capitalized borrowing cost** | Interest on construction loans is capitalized into WIP inventory (IndAS 23) | P&L interest expense understates true debt burden; real ICR = EBIT / (P&L interest + capitalized interest) |
+| **Project-specific SPV ring-fencing** | Each project is typically housed in a separate SPV; project-SPV debt does not automatically cross-guarantee | Aggregate consolidated debt hides per-project distress concentration |
+
+Rule: state the RERA escrow balance and JDA share BEFORE claiming "free cash" or "net debt reduction capacity." Total cash ≠ fungible cash.
+
 ### P&L Revenue Is Backward-Looking — Why It Misleads
 Under Ind-AS 115 (project completion method), revenue is recognized only when the project is substantially complete and possession is given. This means:
 - **Reported revenue** reflects projects completed 2-3 years ago, not current business momentum
@@ -12,6 +25,8 @@ Because P&L revenue lags reality by years, the actual business metrics live in c
 - **Pre-sales Volume (mn sq ft)** — physical demand, strips out ASP inflation
 - **Collections (₹ Cr)** — cash actually received from customers. Compare to pre-sales for collection efficiency
 - **Net Debt** — the most important balance sheet metric. Track absolute reduction over time
+
+**Data-shape fallback:** if `get_sector_kpis(sub_section='pre_sales_value_cr'|'collections_cr'|'gdv_pipeline_cr'|'unsold_inventory_months')` returns `status='schema_valid_but_unavailable'`, the extractor has not captured that canonical KPI for this developer. Fall back to narrative extraction via `get_company_context(section='concall_insights', sub_section='management_commentary')` and `sub_section='operational_metrics'` — developers typically discuss quarterly pre-sales and collections prominently in opening remarks. Cite the specific quarter and verbatim figure source. Never omit pre-sales from a real-estate financials report because the structured tool lacked it — the narrative contains it.
 
 ### Cash Flow Is King
 - Compare **Operating Cash Flow** against **Collections**. OCF should track collections closely
