@@ -1,0 +1,68 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T17:04:57.230422+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "bfsi"
+  ],
+  "results": {
+    "bfsi": {
+      "agent": "ownership",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "B+",
+      "grade_numeric": 86,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides excellent narrative on the DII-to-FII handoff and PSU insider behavior, but misses deeper analysis of FII headroom constraints due to regulatory limits."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Conclusions generally follow data, but there is a leap in logic when dismissing a 'speculative churn' system signal as 'accumulation under cover' without hard evidence."
+        },
+        "completeness": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Covers all major stakeholder categories well, but completely misses the PSU-specific foreign ownership ceiling, a critical ownership metric for this specific stock."
+        },
+        "actionability": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Clear bullish/caution framework, though the thesis on continued FII accumulation is weakened by not recognizing the actual statutory ceiling."
+        },
+        "sector_framework": {
+          "grade": "C",
+          "numeric": 75,
+          "rationale": "Major flaw: Applies the 74% private bank FII limit to a PSU bank, which actually has a strict 20% foreign ownership cap under the SBI Act."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Good use of tool data and clear citations, but hallucinates the regulatory FII limit for the stock without verifying via a search or context tool."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Open Questions",
+          "issue": "The agent incorrectly applies the 74% private bank FII limit to a PSU bank (which has a 20% cap), fundamentally altering the FII headroom analysis.",
+          "suggestion": "Add a sector-specific instruction for the Ownership agent: 'For PSU Banks, evaluate FII headroom against the strict 20% statutory foreign ownership limit, not the 74% private bank limit.'"
+        }
+      ],
+      "strengths": [
+        "Excellent contextualization of insider trading for PSU banks, correctly noting that absence of buying is normal due to compensation structures.",
+        "Strong breakdown of the QIP impact, accurately identifying the institutional handoff from DIIs to FIIs as a bullish medium-term signal."
+      ],
+      "summary": "The report provides a highly readable and analytically sound narrative of SBIN's ownership, particularly regarding the QIP absorption and institutional handoff. However, it makes a critical sector framework error by applying the 74% private bank FII limit instead of the 20% PSU bank limit, which fundamentally alters the foreign headroom thesis.",
+      "report_length": 24935,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 39.90886241698172,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides excellent narrative on the DII-to-FII handoff and PSU insider behavior, but misses deeper analysis of FII headroom constraints due to regulatory limits.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Conclusions generally follow data, but there is a leap in logic when dismissing a 'speculative churn' system signal as 'accumulation under cover' without hard evidence.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Covers all major stakeholder categories well, but completely misses the PSU-specific foreign ownership ceiling, a critical ownership metric for this specific stock.\"\n    },\n    \"actionability\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Clear bullish/caution framework, though the thesis on continued FII accumulation is weakened by not recognizing the actual statutory ceiling.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"C\",\n      \"numeric\": 75,\n      \"rationale\": \"Major flaw: Applies the 74% private bank FII limit to a PSU bank, which actually has a strict 20% foreign ownership cap under the SBI Act.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Good use of tool data and clear citations, but hallucinates the regulatory FII limit for the stock without verifying via a search or context tool.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 86\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Open Questions\",\n      \"issue\": \"The agent incorrectly applies the 74% private bank FII limit to a PSU bank (which has a 20% cap), fundamentally altering the FII headroom analysis.\",\n      \"suggestion\": \"Add a sector-specific instruction for the Ownership agent: 'For PSU Banks, evaluate FII headroom against the strict 20% statutory foreign ownership limit, not the 74% private bank limit.'\"\n    }\n  ],\n  \"strengths\": [\n    \"Excellent contextualization of insider trading for PSU banks, correctly noting that absence of buying is normal due to compensation structures.\",\n    \"Strong breakdown of the QIP impact, accurately identifying the institutional handoff from DIIs to FIIs as a bullish medium-term signal.\"\n  ],\n  \"summary\": \"The report provides a highly readable and analytically sound narrative of SBIN's ownership, particularly regarding the QIP absorption and institutional handoff. However, it makes a critical sector framework error by applying the 74% private bank FII limit instead of the 20% PSU bank limit, which fundamentally alters the foreign headroom thesis.\"\n}\n```"
+    }
+  }
+}

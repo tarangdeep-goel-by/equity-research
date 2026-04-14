@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T18:17:47.284930+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "conglomerate": {
+      "agent": "ownership",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "A",
+      "grade_numeric": 94,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional depth in explaining the 'why' behind the data, particularly the insight that the lack of promoter buying is a legal constraint (SEBI MPS) rather than a lack of conviction. The margin call trigger calculation adds significant analytical value."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Conclusions are highly logical and perfectly aligned with the data. The deduction regarding the simultaneous FII drop and Promoter spike in Q2FY24 is correctly framed as an open question rather than a hallucinated assumption."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Covers almost all critical dimensions, but misses a granular breakdown of the 'Public' shareholding category (Retail vs. Corporate Bodies/HNIs), which is a highly sensitive and necessary metric for Adani Group stocks."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "The 'Institutional Verdict' section provides a crystal-clear, evidence-backed synthesis of bull and bear signals. The 'Open Questions' section is highly actionable for the next agent in the pipeline."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Applies the exact right frameworks for a controversial conglomerate: pledge levels, margin call risks, anchor vs. passive FIIs, and the potential for unlisted HoldCo encumbrances (NDUs)."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Excellent use of the calculator tool to convert percentages to \u20b9 Cr values. The agent transparently handles tool limitations (e.g., the `expr` mode failure and the AMFI data refresh quirk)."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Ownership Structure",
+          "issue": "The 'Public' shareholding category is grouped as a single 7.66% block without distinguishing between Retail (<2L) and Corporate Bodies/HNIs.",
+          "suggestion": "Update the prompt to explicitly require a breakdown of the 'Public' float into Retail vs. Corporate Bodies/HNIs, especially for conglomerates where shell company or concentrated corporate holdings are a historical risk factor."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "4. Mutual Fund Conviction",
+          "issue": "The agent correctly flagged that ICICI debt funds are likely holding Adani debt instruments rather than equity, but the tool fed this data into an equity ownership analysis.",
+          "suggestion": "Enhance the `get_ownership('mf_conviction')` tool to explicitly filter out or separately flag debt/liquid scheme holdings so they do not skew equity AUM and conviction metrics."
+        }
+      ],
+      "strengths": [
+        "Brilliant contextualization of the SEBI 75% Minimum Public Shareholding (MPS) rule to explain the plateau in promoter accumulation.",
+        "Excellent critical thinking in spotting the ICICI debt fund anomaly and calculating the exact margin call trigger price for the promoter pledge."
+      ],
+      "summary": "This is an institutional-grade ownership report that masterfully contextualizes raw data, particularly regarding regulatory constraints and the FII-to-DII handoff. The only notable gap is the lack of granularity in the 'Public' shareholding category, which is historically scrutinized for this specific conglomerate. Overall, the synthesis and critical thinking are top-tier.",
+      "report_length": 26263,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 58.682089125039056,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional depth in explaining the 'why' behind the data, particularly the insight that the lack of promoter buying is a legal constraint (SEBI MPS) rather than a lack of conviction. The margin call trigger calculation adds significant analytical value.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Conclusions are highly logical and perfectly aligned with the data. The deduction regarding the simultaneous FII drop and Promoter spike in Q2FY24 is correctly framed as an open question rather than a hallucinated assumption.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Covers almost all critical dimensions, but misses a granular breakdown of the 'Public' shareholding category (Retail vs. Corporate Bodies/HNIs), which is a highly sensitive and necessary metric for Adani Group stocks.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"The 'Institutional Verdict' section provides a crystal-clear, evidence-backed synthesis of bull and bear signals. The 'Open Questions' section is highly actionable for the next agent in the pipeline.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Applies the exact right frameworks for a controversial conglomerate: pledge levels, margin call risks, anchor vs. passive FIIs, and the potential for unlisted HoldCo encumbrances (NDUs).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Excellent use of the calculator tool to convert percentages to \u20b9 Cr values. The agent transparently handles tool limitations (e.g., the `expr` mode failure and the AMFI data refresh quirk).\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 94\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Ownership Structure\",\n      \"issue\": \"The 'Public' shareholding category is grouped as a single 7.66% block without distinguishing between Retail (<2L) and Corporate Bodies/HNIs.\",\n      \"suggestion\": \"Update the prompt to explicitly require a breakdown of the 'Public' float into Retail vs. Corporate Bodies/HNIs, especially for conglomerates where shell company or concentrated corporate holdings are a historical risk factor.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"4. Mutual Fund Conviction\",\n      \"issue\": \"The agent correctly flagged that ICICI debt funds are likely holding Adani debt instruments rather than equity, but the tool fed this data into an equity ownership analysis.\",\n      \"suggestion\": \"Enhance the `get_ownership('mf_conviction')` tool to explicitly filter out or separately flag debt/liquid scheme holdings so they do not skew equity AUM and conviction metrics.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant contextualization of the SEBI 75% Minimum Public"
+    }
+  }
+}

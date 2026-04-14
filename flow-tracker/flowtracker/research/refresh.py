@@ -541,13 +541,16 @@ def refresh_for_research(
                 spec = importlib.util.spec_from_file_location("compute_analytics", spec_path)
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
-                # Use a separate API + store to avoid "closed database" from nested contexts
+                # Use a separate API + store to avoid "closed database" from nested contexts.
+                # Write the snapshot THROUGH api._store (in-scope, guaranteed open) rather
+                # than the outer `store` — compute_stock has occasionally left `store` in a
+                # state that upserts fail with "Cannot operate on a closed database."
                 from flowtracker.research.data_api import ResearchDataAPI
                 from flowtracker.screener_engine import ScreenerEngine
                 with ResearchDataAPI() as api:
                     engine = ScreenerEngine(api._store)
                     row = mod.compute_stock(api, engine, symbol, None, skip_perf=True)
-                store.upsert_analytical_snapshot(row)
+                    api._store.upsert_analytical_snapshot(row)
                 _ok("analytical_snapshot", 1)
             else:
                 _skip("analytical_snapshot", "compute-analytics.py not found")

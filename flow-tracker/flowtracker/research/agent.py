@@ -133,11 +133,32 @@ AGENT_MAX_BUDGET: dict[str, float] = {
 # Claude Code built-ins that agents should NOT have access to.
 # MCP tools (our custom research tools) are registered separately via mcp_servers
 # and are always available regardless of this list.
+#
+# External MCP servers registered at the user-level (~/.claude/config) are
+# INHERITED by the bundled CLI subprocess. They leak into research agents
+# unless explicitly blocked. We've observed mcp__gemini-bridge__* and
+# mcp__pencil__* leak into ownership/business agents, wasting tokens on
+# arbitrary file reads. Block with explicit prefixes.
 _DISALLOWED_BUILTINS = [
     "Bash", "Write", "Edit", "Read", "Glob", "Grep",
-    "NotebookEdit", "Agent", "TodoWrite",
+    "NotebookEdit", "Agent", "TodoWrite", "AskUserQuestion",
     "Skill", "ReadMcpResourceTool", "ListMcpResourcesTool",
     "WebSearch", "WebFetch",  # only web_research/news agents get these
+    # External user-level MCP servers that leak into the subprocess
+    "mcp__gemini-bridge__gemini_chat_end",
+    "mcp__gemini-bridge__gemini_chat_list",
+    "mcp__gemini-bridge__gemini_chat_send",
+    "mcp__gemini-bridge__gemini_chat_start",
+    "mcp__gemini-bridge__gemini_query",
+    "mcp__pencil__batch_design", "mcp__pencil__batch_get",
+    "mcp__pencil__find_empty_space_on_canvas",
+    "mcp__pencil__get_editor_state", "mcp__pencil__get_guidelines",
+    "mcp__pencil__get_screenshot", "mcp__pencil__get_style_guide",
+    "mcp__pencil__get_style_guide_tags", "mcp__pencil__get_variables",
+    "mcp__pencil__open_document",
+    "mcp__pencil__replace_all_matching_properties",
+    "mcp__pencil__search_all_unique_properties",
+    "mcp__pencil__set_variables", "mcp__pencil__snapshot_layout",
 ]
 
 # Additional Claude Code built-ins that specific agents ARE allowed to use.

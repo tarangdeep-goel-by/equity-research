@@ -1,0 +1,80 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T18:28:53.710124+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "insurance"
+  ],
+  "results": {
+    "insurance": {
+      "agent": "ownership",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Successfully connects fundamental business inflection (PAT positive concall data) to the MF accumulation trend, but fails to investigate the composition of the exiting FIIs (e.g., early VC vs. public market funds)."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Illogically concludes that FIIs dumping nearly 10% of the company via open market (due to lack of block deals) is a 'positive signal'; in reality, open-market selling creates persistent overhead supply."
+        },
+        "completeness": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Completely misses ESOP trust holdings and total shareholder count trends, which are critical ownership dimensions for newly listed tech platforms."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear bull/bear framework and institutional verdict, but delegates too much critical analysis (SoftBank exits, founder holdings) to 'open questions' instead of attempting to resolve them."
+        },
+        "sector_framework": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Fails to fully apply the standard tech-platform ownership framework, which mandates tracking pre-IPO VC lock-in expiries, VC-to-Public transitions, and ESOP pool dilution."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Shows excellent self-awareness regarding the 4-AMC data limitation, but failed to call the available `mf_changes` section to track exact scheme-level momentum."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Insider Signals",
+          "issue": "Agent incorrectly interprets the lack of block deals during a massive FII exit as a 'positive signal'.",
+          "suggestion": "Update instructions to teach the agent that large institutional exits via open market (without block deals) often create persistent supply overhang and price friction, which is a negative technical dynamic."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Ownership Structure",
+          "issue": "Missing analysis of ESOP trusts and pre-IPO VC holdings, which are mandatory for 0% promoter tech platforms.",
+          "suggestion": "Add a sector-specific rule for 'Platform/Tech' stocks requiring the agent to explicitly look for ESOP trust holdings and track pre-IPO investor (e.g., SoftBank, InfoEdge) sell-downs in the shareholder detail."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "4. Mutual Fund Conviction",
+          "issue": "Agent did not call `get_ownership(section='mf_changes')` to see recent scheme-level buying/selling.",
+          "suggestion": "Instruct the agent to always call `mf_changes` alongside `mf_holdings` to capture the velocity and direction of specific fund allocations."
+        }
+      ],
+      "strengths": [
+        "Excellent identification and contextualization of the FII-to-MF handoff, linking it directly to the company's recent profitability inflection.",
+        "High transparency regarding data limitations (explicitly noting the 4-AMC coverage gap and adjusting the conviction thesis accordingly)."
+      ],
+      "summary": "This is a solid, highly readable report that correctly identifies the defining ownership narrative (FII-to-MF handoff) and links it to fundamental business improvements. However, it misses critical tech-sector ownership frameworks like ESOP dilution and misinterprets the market mechanics of open-market FII selling.",
+      "report_length": 25391,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 33.70952579204459,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Successfully connects fundamental business inflection (PAT positive concall data) to the MF accumulation trend, but fails to investigate the composition of the exiting FIIs (e.g., early VC vs. public market funds).\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Illogically concludes that FIIs dumping nearly 10% of the company via open market (due to lack of block deals) is a 'positive signal'; in reality, open-market selling creates persistent overhead supply.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Completely misses ESOP trust holdings and total shareholder count trends, which are critical ownership dimensions for newly listed tech platforms.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear bull/bear framework and institutional verdict, but delegates too much critical analysis (SoftBank exits, founder holdings) to 'open questions' instead of attempting to resolve them.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Fails to fully apply the standard tech-platform ownership framework, which mandates tracking pre-IPO VC lock-in expiries, VC-to-Public transitions, and ESOP pool dilution.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Shows excellent self-awareness regarding the 4-AMC data limitation, but failed to call the available `mf_changes` section to track exact scheme-level momentum.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Insider Signals\",\n      \"issue\": \"Agent incorrectly interprets the lack of block deals during a massive FII exit as a 'positive signal'.\",\n      \"suggestion\": \"Update instructions to teach the agent that large institutional exits via open market (without block deals) often create persistent supply overhang and price friction, which is a negative technical dynamic.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Ownership Structure\",\n      \"issue\": \"Missing analysis of ESOP trusts and pre-IPO VC holdings, which are mandatory for 0% promoter tech platforms.\",\n      \"suggestion\": \"Add a sector-specific rule for 'Platform/Tech' stocks requiring the agent to explicitly look for ESOP trust holdings and track pre-IPO investor (e.g., SoftBank, InfoEdge) sell-downs in the shareholder detail.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"4. Mutual Fund Conviction\",\n      \"issue\": \"Agent did not call `get_ownership(section='mf_changes')` to see recent scheme-level buying/selling.\",\n      \"suggestion\": \"Instruct the agent to always call `mf_changes` alongside `mf_holdings` to capture the velocity and direction of specific fund allocations"
+    }
+  }
+}

@@ -1400,11 +1400,25 @@ class FlowStore:
         return count
 
     def get_shareholding(self, symbol: str, limit: int = 8) -> list[ShareholdingRecord]:
-        """Get shareholding records for a symbol, most recent quarters first."""
+        """Get shareholding records for a symbol, most recent quarters first.
+
+        `limit` is the number of QUARTERS requested. Row budget is computed
+        dynamically from the actual distinct categories present for this
+        symbol — post-2023 Screener data has 7 categories (Promoter, FII, DII,
+        MF, Insurance, Public, AIF) while pre-2023 data has 4-6. Hard-coding
+        `limit*6` previously dropped ~1 quarter of data for symbols with 7
+        categories (e.g. HDFCBANK returned 11 quarters instead of 12).
+        """
+        cat_row = self._conn.execute(
+            "SELECT COUNT(DISTINCT category) FROM shareholding WHERE symbol = ?",
+            (symbol.upper(),),
+        ).fetchone()
+        cats_per_quarter = (cat_row[0] if cat_row and cat_row[0] else 7)
+        row_budget = limit * cats_per_quarter
         rows = self._conn.execute(
             "SELECT * FROM shareholding WHERE symbol = ? "
             "ORDER BY quarter_end DESC, category LIMIT ?",
-            (symbol.upper(), limit * 6),  # 6 categories per quarter
+            (symbol.upper(), row_budget),
         ).fetchall()
         return [ShareholdingRecord(
             symbol=r["symbol"], quarter_end=r["quarter_end"],

@@ -1143,7 +1143,7 @@ def _get_fundamentals_section(api, symbol, section, args):
 
 @tool(
     "get_fundamentals",
-    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']. Optional: quarters (default 12), years (default 10), sub_section.",
+    "Unified financial data. section: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital' | ['section1', 'section2']. Prefer calling with a specific section or a short list — section='all' returns ~70K+ chars and may be truncated by the MCP transport. Optional: quarters (default 12), years (default 10), sub_section.",
     {"symbol": str, "section": str},
     annotations=READ_ONLY,
 )
@@ -1155,6 +1155,11 @@ async def get_fundamentals(args):
             data = {s: _get_fundamentals_section(api, symbol, s, args) for s in section}
         elif section == "all":
             data = {
+                "_warning": (
+                    "section='all' returns ~70K+ chars and may be truncated by the "
+                    "MCP transport. Prefer calling with a specific section or a short "
+                    "list of 3-5 sections."
+                ),
                 "quarterly_results": api.get_quarterly_results(symbol, args.get("quarters", 12)),
                 "annual_financials": api.get_annual_financials(symbol, args.get("years", 10)),
                 "ratios": api.get_screener_ratios(symbol, args.get("years", 10)),
@@ -1327,30 +1332,44 @@ def _get_ownership_section(api, symbol, section, args):
 
 @tool(
     "get_ownership",
-    "Ownership & stakeholder data. section: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | ['section1', 'section2']. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).",
+    "Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction'. Heavy sections are capped (mf_holdings top 30 by value + tail summary; shareholder_detail top 20 holders) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).",
     {"symbol": str, "section": str},
     annotations=READ_ONLY,
 )
 async def get_ownership(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    # Default behavior when no section specified: return compact TOC.
+    # This prevents the 80-150K-char payload truncation seen when agents
+    # defaulted to fetching all sections at once (HDFCBANK hallucinated a
+    # 5-quarter shareholding gap because the middle of a truncated response
+    # is what the agent saw).
+    section_raw = args.get("section")
     with ResearchDataAPI() as api:
-        if isinstance(section, list):
-            data = {s: _get_ownership_section(api, symbol, s, args) for s in section}
-        elif section == "all":
-            data = {
-                "shareholding": api.get_shareholding(symbol, args.get("quarters", 12)),
-                "changes": api.get_shareholding_changes(symbol),
-                "insider": api.get_insider_transactions(symbol, args.get("days", 1825)),
-                "bulk_block": api.get_bulk_block_deals(symbol),
-                "mf_holdings": api.get_mf_holdings(symbol),
-                "mf_changes": api.get_mf_holding_changes(symbol),
-                "shareholder_detail": api.get_shareholder_detail(symbol, args.get("classification")),
-                "promoter_pledge": api.get_promoter_pledge(symbol),
-                "mf_conviction": api.get_mf_conviction(symbol),
-            }
+        if not section_raw or section_raw in ("toc", "summary"):
+            data = api.get_ownership_toc(symbol)
         else:
-            data = _get_ownership_section(api, symbol, section, args)
+            section = _parse_section(section_raw)
+            if isinstance(section, list):
+                data = {s: _get_ownership_section(api, symbol, s, args) for s in section}
+            elif section == "all":
+                data = {
+                    "_warning": (
+                        "section='all' returns 80-150K chars and may be truncated by the "
+                        "MCP transport. Prefer calling without section for a compact TOC "
+                        "first, then drilling into specific sections."
+                    ),
+                    "shareholding": api.get_shareholding(symbol, args.get("quarters", 12)),
+                    "changes": api.get_shareholding_changes(symbol),
+                    "insider": api.get_insider_transactions(symbol, args.get("days", 1825)),
+                    "bulk_block": api.get_bulk_block_deals(symbol),
+                    "mf_holdings": api.get_mf_holdings(symbol),
+                    "mf_changes": api.get_mf_holding_changes(symbol),
+                    "shareholder_detail": api.get_shareholder_detail(symbol, args.get("classification")),
+                    "promoter_pledge": api.get_promoter_pledge(symbol),
+                    "mf_conviction": api.get_mf_conviction(symbol),
+                }
+            else:
+                data = _get_ownership_section(api, symbol, section, args)
         if isinstance(data, dict) and "error" not in data:
             data = _add_freshness_meta(data, api, symbol)
     return _with_dedup("get_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
@@ -1740,31 +1759,73 @@ async def get_stock_news(args):
 
 @tool(
     "calculate",
-    "Financial calculator — use this for ALL math instead of computing in your head. "
-    "Operations (pass operation + a + b): "
-    "'shares_to_value_cr': a=shares (raw count), b=price (₹) → value in ₹ Cr. "
-    "'per_share_to_total_cr': a=per_share_value (₹), b=shares (raw count) → total in ₹ Cr. "
-    "'total_cr_to_per_share': a=total_cr (₹ Cr), b=shares (raw count) → per share (₹). "
-    "'pe_from_price_eps': a=price (₹), b=eps (₹) → PE ratio. "
-    "'eps_from_pat_shares': a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹). "
-    "'fair_value': a=pe_multiple, b=eps (₹) → fair value per share (₹). "
-    "'growth_rate': a=old value, b=new value → growth %. "
-    "'mcap_cr': a=price (₹), b=shares (raw count) → market cap in ₹ Cr. "
-    "'margin_of_safety': a=fair_value (₹), b=current_price (₹) → MoS %. "
-    "'annualize_quarterly': a=quarterly_value → annualized (×4). "
-    "'pct_of': a=part, b=whole → percentage. "
-    "'ratio': a=numerator, b=denominator → ratio. "
-    "'expr': a=arithmetic expression as string (e.g. '(623 * 0.25) / 114.4') → result. "
-    "Returns the result + the full calculation string so you can verify and cite it. "
-    "ALWAYS use this tool for any multiplication, division, or unit conversion. Never compute in your head.",
-    {"operation": str, "a": float, "b": float},
+    "Financial calculator — use for ALL math, never compute in your head. Returns result + full calculation string for citation. "
+    "Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574'). "
+    "\n\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n"
+    "  'shares_to_value_cr'     a=shares (raw count), b=price (₹) → value in ₹ Cr\n"
+    "  'per_share_to_total_cr'  a=per_share_value (₹), b=shares (raw count) → total ₹ Cr\n"
+    "  'total_cr_to_per_share'  a=total_cr (₹ Cr), b=shares (raw count) → per share (₹)\n"
+    "  'pe_from_price_eps'      a=price (₹), b=eps (₹) → PE ratio\n"
+    "  'eps_from_pat_shares'    a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹)\n"
+    "  'fair_value'             a=pe_multiple, b=eps (₹) → fair value / share (₹)\n"
+    "  'growth_rate'            a=old value, b=new value → growth %\n"
+    "  'mcap_cr'                a=price (₹), b=shares (raw count) → market cap ₹ Cr\n"
+    "  'margin_of_safety'       a=fair_value (₹), b=current_price (₹) → MoS %\n"
+    "  'annualize_quarterly'    a=quarterly_value → annualized (×4); leave b='0'\n"
+    "  'pct_of'                 a=part, b=whole → percentage\n"
+    "  'ratio'                  a=numerator, b=denominator → ratio\n"
+    "\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n"
+    "  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n"
+    "  Only numbers and + - * / ( ) are permitted in the expression.\n"
+    "\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.",
+    # Schema: a/b declared as str to allow the 'expr' operation to pass an expression
+    # string without MCP validation rejecting it. Numeric ops parse a/b via float().
+    # Previously schema was {a: float, b: float} which caused MCP to reject
+    # calculate(operation='expr', a='74 - 47.67') on BHARTIARTL ownership run.
+    {"operation": str, "a": str, "b": str},
     annotations=READ_ONLY,
 )
 async def calculate(args):
     import math
     op = args["operation"]
-    a = args.get("a", 0) or 0
-    b = args.get("b", 0) or 0
+    raw_a = args.get("a")
+    raw_b = args.get("b")
+
+    # For named numeric ops, require parseable numeric strings and surface a
+    # helpful error if the agent accidentally passed an expression string
+    # (e.g. a='74-47') — otherwise the op would compute silently on 0.0.
+    # For 'expr', a is an expression string and b is ignored.
+    def _parse_numeric(v, default=0.0):
+        """Returns (value, error). error is None on success."""
+        if v is None or v == "":
+            return default, None
+        try:
+            return float(v), None
+        except (TypeError, ValueError):
+            return default, f"'{v}' is not a valid numeric string"
+
+    if op == "expr":
+        # 'expr' path: a is an expression string; b is ignored (default '0').
+        a = 0.0
+        b = 0.0
+    else:
+        a, err_a = _parse_numeric(raw_a)
+        b, err_b = _parse_numeric(raw_b)
+        # annualize_quarterly only needs 'a' — b is optional
+        if op == "annualize_quarterly":
+            err_b = None
+        if err_a or err_b:
+            hint = (
+                f"Argument parse error for operation='{op}': "
+                f"{err_a or ''}{' ; ' if err_a and err_b else ''}{err_b or ''}. "
+                f"Named ops need numeric strings (e.g. a='1063.55', b='892459574'). "
+                f"If you need arithmetic like '74 - 47.67', use operation='expr' with the expression as `a` and b='0'."
+            )
+            return _with_dedup(
+                "calculate",
+                {"content": [{"type": "text", "text": json.dumps({"error": hint}, default=str)}]},
+                args,
+            )
 
     try:
         if op == "shares_to_value_cr":
@@ -1807,14 +1868,18 @@ async def calculate(args):
             result = {"ratio": round(a / b, 4) if b else 0, "unit": "x",
                       "calculation": f"{a:,.2f} ÷ {b:,.2f} = {a / b:,.4f}x" if b else "division by zero"}
         elif op == "expr":
-            # Safe arithmetic eval — only allow numbers and basic operators
-            expr_str = str(args.get("a", "0"))
+            # Safe arithmetic eval — only allow numbers and basic operators.
+            # raw_a is the original string from the agent (e.g. '74 - 47.67').
+            expr_str = str(raw_a if raw_a is not None else "0")
             allowed = set("0123456789.+-*/() eE")
-            if all(c in allowed for c in str(expr_str)):
-                val = eval(str(expr_str))  # noqa: S307
-                result = {"result": round(float(val), 4), "expression": str(expr_str)}
+            if all(c in allowed for c in expr_str):
+                val = eval(expr_str)  # noqa: S307
+                result = {"result": round(float(val), 4), "expression": expr_str}
             else:
-                result = {"error": "Only arithmetic expressions allowed (numbers, +, -, *, /, parentheses)"}
+                result = {
+                    "error": "Only arithmetic expressions allowed (numbers, +, -, *, /, parentheses). "
+                             f"Received: a='{expr_str}'"
+                }
         else:
             result = {"error": f"Unknown operation: {op}. See tool description for available operations."}
     except Exception as e:

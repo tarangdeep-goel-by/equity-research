@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T17:48:57.685680+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "private_bank": {
+      "agent": "ownership",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent synthesis of the FII-to-MF handoff, calculating exact \u20b9 Cr values to prove absorption, and astutely identifying LIC as 'structural floor capital'."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Contradicts itself slightly by confidently narrating a 15pp FII jump as 'aggressive dip buying' in the main text, but correctly questioning if it was just a mechanical reclassification in the Open Questions."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Misses the ADR/GDR component of ownership, which is a massive and critical bucket for HDFC Bank's foreign ownership structure and headroom calculations."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a very clear, evidence-backed bull/bear framework with specific catalysts (EM risk-off reversal) and actionable risks (governance flag)."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Perfectly applies the BFSI checklist, correctly identifying the 74% aggregate foreign cap, headroom, and the irrelevance of pledge risk due to 0% promoter holding."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Good tool usage and attribution, but the underlying `get_ownership` tool dropped 5 critical quarters of data, forcing the agent to guess the trend during a pivotal period."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "2. The Money Flow Story",
+          "issue": "The `get_ownership` tool (via Gemini extraction) failed to return 5 consecutive quarters of shareholding data (Mar 2024 to Jun 2025).",
+          "suggestion": "Review the Gemini extraction prompt/logic in the `get_ownership` tool to ensure it doesn't truncate or skip intermediate columns in wide shareholding tables."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "2. The Money Flow Story (Act 2)",
+          "issue": "Agent invents a definitive narrative ('foreign long-only funds were buying the dip aggressively') to explain a massive 15pp FII jump, despite acknowledging in the Open Questions it might be a mechanical reclassification.",
+          "suggestion": "Add an instruction: 'If you observe a massive, single-period jump in ownership (>5%), treat it primarily as a potential corporate action, merger, or reclassification artifact rather than assuming active open-market buying, and state this caveat clearly in the main text.'"
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Ownership Structure",
+          "issue": "Fails to break out ADRs/GDRs, which are a critical component of foreign ownership for large Indian private banks.",
+          "suggestion": "Update the BFSI ownership checklist prompt to explicitly require checking for and breaking out Depositary Receipts (ADRs/GDRs) when analyzing foreign ownership limits."
+        }
+      ],
+      "strengths": [
+        "Brilliant framing of the 'FII to MF handoff' with exact \u20b9 Cr absorption math to prove domestic funds are perfectly substituting foreign supply.",
+        "Excellent application of the BFSI mandatory checklist, particularly the insight that 0% promoter holding structurally eliminates pledge/margin-call tail risk."
+      ],
+      "summary": "A highly institutional and readable report that perfectly captures the FII-to-MF handoff dynamic currently defining Indian large-cap banks. The primary gap is a pipeline data failure that dropped 5 quarters of shareholding data, leading the agent to over-extrapolate a narrative for a massive FII jump. Additionally, the prompt should be updated to explicitly capture ADR/GDR holdings for large-cap private banks.",
+      "report_length": 24772,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 42.889443499967456,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent synthesis of the FII-to-MF handoff, calculating exact \u20b9 Cr values to prove absorption, and astutely identifying LIC as 'structural floor capital'.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Contradicts itself slightly by confidently narrating a 15pp FII jump as 'aggressive dip buying' in the main text, but correctly questioning if it was just a mechanical reclassification in the Open Questions.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Misses the ADR/GDR component of ownership, which is a massive and critical bucket for HDFC Bank's foreign ownership structure and headroom calculations.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a very clear, evidence-backed bull/bear framework with specific catalysts (EM risk-off reversal) and actionable risks (governance flag).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Perfectly applies the BFSI checklist, correctly identifying the 74% aggregate foreign cap, headroom, and the irrelevance of pledge risk due to 0% promoter holding.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Good tool usage and attribution, but the underlying `get_ownership` tool dropped 5 critical quarters of data, forcing the agent to guess the trend during a pivotal period.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"2. The Money Flow Story\",\n      \"issue\": \"The `get_ownership` tool (via Gemini extraction) failed to return 5 consecutive quarters of shareholding data (Mar 2024 to Jun 2025).\",\n      \"suggestion\": \"Review the Gemini extraction prompt/logic in the `get_ownership` tool to ensure it doesn't truncate or skip intermediate columns in wide shareholding tables.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2. The Money Flow Story (Act 2)\",\n      \"issue\": \"Agent invents a definitive narrative ('foreign long-only funds were buying the dip aggressively') to explain a massive 15pp FII jump, despite acknowledging in the Open Questions it might be a mechanical reclassification.\",\n      \"suggestion\": \"Add an instruction: 'If you observe a massive, single-period jump in ownership (>5%), treat it primarily as a potential corporate action, merger, or reclassification artifact rather than assuming active open-market buying, and state this caveat clearly in the main text.'\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Ownership Structure\",\n      \"issue\": \"Fails to break out ADRs/GDRs, which are a critical component of foreign ownership for large Indian private banks.\",\n      \"suggestion\": \"Update the BFSI ownership checklist prompt to explicitl"
+    }
+  }
+}

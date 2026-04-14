@@ -628,7 +628,7 @@ async def _call_claude(
         disallowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep",
                           "WebSearch", "WebFetch", "Agent", "Skill",
                           "NotebookEdit", "TodoWrite"],
-        stderr=lambda line: logger.debug("[cli-stderr] %s", line),
+        stderr=lambda line: logger.warning("[cli-stderr] %s", line),
         env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000"},
     )
     if output_format:

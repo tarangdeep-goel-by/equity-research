@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260414T174814.log
+AutoEval (agent-first): agent=ownership sectors=['private_bank']
+Target: grade_numeric >= 90
+
+--- ownership / HDFCBANK (private_bank) ---
+  Report: 24772 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A- (90) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260414T174857_all_for_ownership.json
+
+======================================================================
+AGENT SUMMARY: ownership
+======================================================================
+  private_bank        HDFCBANK      A-  (90)  [PASS]  prompt_fixes:2
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

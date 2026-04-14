@@ -457,20 +457,94 @@ class ResearchDataAPI:
             for r in rows
         ])
 
-    def get_insider_transactions(self, symbol: str, days: int = 1825) -> list[dict]:
-        """SAST insider buy/sell trades with person name, category, value."""
+    def get_insider_transactions(
+        self, symbol: str, days: int = 1825, top_n: int = 50,
+    ) -> list[dict]:
+        """SAST insider buy/sell trades with person name, category, value.
+
+        Capped to top_n transactions by absolute value (default 50). For
+        large-cap private banks with active ESOP vesting cycles, 5-year
+        insider history can reach 10,000+ rows and 600K+ chars of JSON,
+        which destroys the MCP tool-result transport. The remaining
+        transactions are aggregated into a tail summary row with net
+        buy/sell counts and net value.
+        """
         rows = self._store.get_insider_by_symbol(symbol, days=days)
-        return _clean([r.model_dump() for r in rows])
+        dumped = _clean([r.model_dump() for r in rows])
+        if top_n is None or len(dumped) <= top_n:
+            return dumped
+        # Rank by absolute value so the biggest transactions are preserved
+        def abs_val(r: dict) -> float:
+            return abs(float(r.get("value_cr") or r.get("value") or 0))
+        sorted_rows = sorted(dumped, key=abs_val, reverse=True)
+        kept = sorted_rows[:top_n]
+        tail = sorted_rows[top_n:]
+        buy_count = sum(
+            1 for r in tail
+            if (r.get("transaction_type") or "").lower() in ("buy", "market purchase", "purchase")
+        )
+        sell_count = sum(
+            1 for r in tail
+            if (r.get("transaction_type") or "").lower() in ("sell", "market sale", "sale")
+        )
+        tail_net_value = round(
+            sum(
+                (r.get("value_cr") or r.get("value") or 0)
+                * (1 if (r.get("transaction_type") or "").lower() in ("buy", "market purchase", "purchase") else -1)
+                for r in tail
+            ),
+            2,
+        )
+        kept.append({
+            "_is_tail_summary": True,
+            "summary": f"[TAIL — {len(tail)} smaller-value insider transactions combined]",
+            "tail_buy_count": buy_count,
+            "tail_sell_count": sell_count,
+            "tail_net_value_cr": tail_net_value,
+        })
+        return kept
 
     def get_bulk_block_deals(self, symbol: str) -> list[dict]:
         """BSE bulk/block deals — large institutional trades."""
         rows = self._store.get_deals_by_symbol(symbol)
         return _clean([r.model_dump() for r in rows])
 
-    def get_mf_holdings(self, symbol: str) -> list[dict]:
-        """MF scheme holdings — which schemes hold this stock, qty, % of NAV."""
+    def get_mf_holdings(self, symbol: str, top_n: int = 30) -> list[dict]:
+        """MF scheme holdings — which schemes hold this stock, qty, % of NAV.
+
+        Capped to top_n schemes by market_value_cr (default 30) to keep the
+        MCP tool-result payload under the ~30KB truncation threshold. The full
+        universe can have 100-200 schemes for large-cap banks, which produced
+        80-150K char tool responses that got truncated mid-response, causing
+        agents to hallucinate data gaps.
+
+        The tail (schemes beyond top_n) is summarized into a final synthetic
+        row with aggregate count + value so the agent has the full picture.
+        """
         rows = self._store.get_mf_stock_holdings(symbol)
-        return _clean([r.model_dump() for r in rows])
+        dumped = _clean([r.model_dump() for r in rows])
+        if top_n is None or len(dumped) <= top_n:
+            return dumped
+        # Sort by market_value_cr desc, keep top_n, summarize tail
+        sorted_rows = sorted(
+            dumped,
+            key=lambda r: (r.get("market_value_cr") or 0),
+            reverse=True,
+        )
+        kept = sorted_rows[:top_n]
+        tail = sorted_rows[top_n:]
+        tail_value = round(sum((r.get("market_value_cr") or 0) for r in tail), 2)
+        tail_qty = sum((r.get("quantity") or 0) for r in tail)
+        kept.append({
+            "scheme_name": f"[TAIL — {len(tail)} additional schemes combined]",
+            "amc": "MULTIPLE",
+            "stock_name": symbol.upper(),
+            "market_value_cr": tail_value,
+            "quantity": tail_qty,
+            "pct_of_nav": None,
+            "_is_tail_summary": True,
+        })
+        return kept
 
     def get_mf_holding_changes(self, symbol: str) -> list[dict]:
         """MF scheme-level month-over-month changes: which schemes added/trimmed this stock."""
@@ -542,15 +616,95 @@ class ResearchDataAPI:
 
         # Sort by absolute value change descending
         changes.sort(key=lambda x: abs(x.get("value_change_cr") or 0), reverse=True)
+        # Cap at top 30 by |value_change| + tail summary. Full universe can
+        # have 200+ schemes for large-cap BFSI names, producing 70K+ chars
+        # that contribute to MCP tool-result truncation.
+        top_n = 30
+        if len(changes) > top_n:
+            kept = changes[:top_n]
+            tail = changes[top_n:]
+            tail_net = round(sum((r.get("value_change_cr") or 0) for r in tail), 2)
+            tail_new = sum(1 for r in tail if r.get("change_type") == "new_entry")
+            tail_exited = sum(1 for r in tail if r.get("change_type") == "exited")
+            tail_incr = sum(1 for r in tail if r.get("change_type") == "increased")
+            tail_decr = sum(1 for r in tail if r.get("change_type") == "decreased")
+            kept.append({
+                "_is_tail_summary": True,
+                "summary": f"[TAIL — {len(tail)} smaller MF scheme changes combined]",
+                "tail_net_value_change_cr": tail_net,
+                "tail_new_entries": tail_new,
+                "tail_exits": tail_exited,
+                "tail_increased": tail_incr,
+                "tail_decreased": tail_decr,
+            })
+            changes = kept
         return _clean(changes)
 
+    @staticmethod
+    def _classify_scheme_type(scheme_name: str) -> str:
+        """Classify an MF scheme as equity / debt / hybrid / other based on the name.
+
+        AMFI scheme names follow recognisable conventions. A debt scheme holding
+        this company's BONDS will appear in `mf_scheme_holdings` alongside
+        equity schemes and — if we don't separate them — can materially distort
+        "MF conviction" metrics. Example failure mode observed on ADANIENT
+        (Gemini eval 2026-04-14): ICICI Prudential debt funds held Adani bonds
+        and the agent reported them as equity conviction.
+
+        Heuristic rules (broad matching, case-insensitive):
+          debt: 'debt', 'gilt', 'liquid', 'overnight', 'treasury', 'credit risk',
+                'banking psu', 'corporate bond', 'short term', 'dynamic bond',
+                'money market', 'floater', 'income fund'
+          hybrid: 'hybrid', 'balanced', 'asset allocator', 'multi asset', 'equity savings'
+          equity: everything else (flexi, largecap, midcap, smallcap, focused,
+                  value, dividend yield, sectoral, thematic, index/ETF)
+        """
+        if not scheme_name:
+            return "unknown"
+        s = scheme_name.lower()
+        debt_markers = (
+            "debt", "gilt", "liquid", "overnight", "treasury", "credit risk",
+            "banking psu", "corporate bond", "short term", "short duration",
+            "dynamic bond", "money market", "floater", "income fund",
+            "medium duration", "low duration", "ultra short",
+        )
+        hybrid_markers = (
+            "hybrid", "balanced", "asset allocator", "multi asset",
+            "equity savings", "conservative", "aggressive allocation",
+        )
+        # Check hybrid FIRST — "Equity & Debt Fund" contains 'debt' but is hybrid.
+        # Order: hybrid > debt > equity (default).
+        if any(m in s for m in hybrid_markers):
+            return "hybrid"
+        if "equity" in s and "debt" in s:
+            return "hybrid"  # catch-all for "Equity & Debt" style names
+        if any(m in s for m in debt_markers):
+            return "debt"
+        return "equity"
+
     def get_mf_conviction(self, symbol: str) -> dict:
-        """MF conviction breadth: how many schemes/AMCs hold and are adding this stock."""
+        """MF conviction breadth: how many schemes/AMCs hold and are adding this stock.
+
+        Segregates equity vs debt vs hybrid schemes. Debt schemes holding a
+        company's bonds should NOT be counted as equity conviction — confusing
+        the two was flagged by Gemini on ADANIENT where ICICI debt funds
+        appeared in the MF conviction narrative.
+
+        Returns a structured dict with equity/debt/hybrid sub-breakdowns plus
+        the legacy blended top-level fields (for backwards compatibility).
+        """
         current = self._store.get_mf_stock_holdings(symbol)
         if not current:
             return {"available": False, "reason": "No MF holdings data"}
 
-        # Current month stats
+        # Segregate by scheme type
+        by_type: dict[str, list] = {"equity": [], "debt": [], "hybrid": [], "unknown": []}
+        for r in current:
+            d = r.model_dump() if hasattr(r, "model_dump") else r
+            stype = self._classify_scheme_type(d.get("scheme_name", ""))
+            by_type.setdefault(stype, []).append(d)
+
+        # Top-level blended stats (preserve backwards compat)
         schemes: set[str] = set()
         amcs: set[str] = set()
         total_value = 0.0
@@ -560,13 +714,12 @@ class ResearchDataAPI:
             amcs.add(d.get("amc", ""))
             total_value += d.get("market_value_cr") or 0
 
-        # Get previous month for trend
+        # Previous month for trend (count distinct schemes)
         months = sorted(set(
             (r.month if hasattr(r, "month") else r.get("month", ""))
             for r in current
         ))
         curr_month = months[-1] if months else ""
-
         prev_count = 0
         if curr_month:
             y, m = int(curr_month[:4]), int(curr_month[5:7])
@@ -581,32 +734,248 @@ class ResearchDataAPI:
         scheme_count = len(schemes)
         trend = "adding" if scheme_count > prev_count else "trimming" if scheme_count < prev_count else "stable"
 
-        # Top schemes by value
-        sorted_holdings = sorted(
-            current,
-            key=lambda r: (r.market_value_cr if hasattr(r, "market_value_cr") else r.get("market_value_cr") or 0),
+        # Top 10 equity schemes (the metric that matters for ownership analysis)
+        equity_holdings = by_type.get("equity", [])
+        sorted_equity = sorted(
+            equity_holdings,
+            key=lambda d: (d.get("market_value_cr") or 0),
             reverse=True,
         )
-        top_schemes = []
-        for r in sorted_holdings[:10]:
-            d = r.model_dump() if hasattr(r, "model_dump") else r
-            top_schemes.append({
+        top_equity_schemes = [
+            {
                 "scheme": d.get("scheme_name", ""),
                 "amc": d.get("amc", ""),
                 "value_cr": round(d.get("market_value_cr") or 0, 2),
                 "pct_of_nav": d.get("pct_of_nav"),
-            })
+                "scheme_type": "equity",
+            }
+            for d in sorted_equity[:10]
+        ]
+
+        # Compact per-type breakdown (value + count)
+        def _agg(rows: list) -> dict:
+            if not rows:
+                return {"scheme_count": 0, "amc_count": 0, "total_value_cr": 0.0}
+            s, a = set(), set()
+            total = 0.0
+            for d in rows:
+                s.add(d.get("scheme_name", ""))
+                a.add(d.get("amc", ""))
+                total += d.get("market_value_cr") or 0
+            return {
+                "scheme_count": len(s),
+                "amc_count": len(a),
+                "total_value_cr": round(total, 2),
+            }
+
+        by_type_summary = {
+            "equity": _agg(by_type.get("equity", [])),
+            "debt": _agg(by_type.get("debt", [])),
+            "hybrid": _agg(by_type.get("hybrid", [])),
+            "unknown": _agg(by_type.get("unknown", [])),
+        }
+
+        # Top 3 debt schemes separately — named explicitly so the agent can
+        # cite them as debt (bond) holdings rather than equity conviction
+        debt_holdings = by_type.get("debt", [])
+        sorted_debt = sorted(
+            debt_holdings,
+            key=lambda d: (d.get("market_value_cr") or 0),
+            reverse=True,
+        )[:3]
+        top_debt_schemes = [
+            {
+                "scheme": d.get("scheme_name", ""),
+                "amc": d.get("amc", ""),
+                "value_cr": round(d.get("market_value_cr") or 0, 2),
+                "note": "DEBT scheme — likely holds bonds, NOT equity conviction",
+            }
+            for d in sorted_debt
+        ]
 
         return {
             "available": True,
             "month": curr_month,
+            # Legacy blended totals (backwards compat)
             "schemes_holding": scheme_count,
             "amcs_holding": len(amcs),
             "total_mf_value_cr": round(total_value, 2),
             "prev_month_schemes": prev_count,
             "scheme_trend": trend,
             "scheme_change": scheme_count - prev_count,
-            "top_schemes": top_schemes,
+            # NEW: segregated by scheme type
+            "by_scheme_type": by_type_summary,
+            "top_equity_schemes": top_equity_schemes,
+            "top_debt_schemes_if_any": top_debt_schemes,
+            # Legacy field — now equivalent to top_equity_schemes for backwards compat
+            "top_schemes": top_equity_schemes,
+            "_note": (
+                "Equity conviction = by_scheme_type.equity fields + top_equity_schemes. "
+                "DO NOT cite debt schemes (by_scheme_type.debt or top_debt_schemes_if_any) "
+                "as equity ownership — those holders bought bonds, not shares."
+            ),
+        }
+
+    def get_ownership_toc(self, symbol: str) -> dict:
+        """Compact table-of-contents for get_ownership — ~3-5KB summary.
+
+        Default response when the agent calls get_ownership without specifying
+        a section. Gives all the high-level signals needed to decide which
+        sections to drill into, without hitting the 80-150K-char payload that
+        caused MCP transport truncation on HDFCBANK/TCS ownership runs.
+
+        Includes:
+          - current_ownership: latest-quarter category breakdown
+          - qoq_changes_summary: pp-change by category (last quarter)
+          - quarters_available: how many historical quarters are on file
+          - top_holders_brief: top 10 named holders (name, class, pct)
+          - mf_summary: scheme count, total value, trend, top AMCs
+          - pledge_status: current pledge %, trend, margin-call risk
+          - insider_activity_365d: buy/sell counts and net value
+          - bulk_block_365d: deal count + latest date
+          - available_sections + hint: drill-down menu for next call
+        """
+        # Shareholding snapshot (12 quarters) for current + QoQ
+        sh_rows = self.get_shareholding(symbol, quarters=12)
+        by_q: dict[str, dict[str, float]] = {}
+        for r in sh_rows:
+            q = r.get("quarter_end", "")
+            by_q.setdefault(q, {})[r.get("category", "")] = r.get("percentage", 0.0)
+        quarters_sorted = sorted(by_q.keys(), reverse=True)
+        current_q = quarters_sorted[0] if quarters_sorted else None
+        prev_q = quarters_sorted[1] if len(quarters_sorted) > 1 else None
+
+        def pct(q: str | None, cat: str) -> float | None:
+            if not q:
+                return None
+            return by_q.get(q, {}).get(cat)
+
+        categories = ["Promoter", "FII", "DII", "MF", "Insurance", "AIF", "Public"]
+        current_ownership = {
+            "as_of_quarter": current_q,
+            **{cat.lower() + "_pct": pct(current_q, cat) for cat in categories},
+        }
+        qoq_changes = {}
+        if prev_q:
+            for cat in categories:
+                c = pct(current_q, cat)
+                p = pct(prev_q, cat)
+                if c is not None and p is not None:
+                    qoq_changes[cat.lower()] = round(c - p, 2)
+
+        # Top 10 named holders (latest quarter)
+        top_holders = self.get_shareholder_detail(symbol, top_n=10)
+        holders_brief = []
+        for h in top_holders[:10]:
+            # Extract latest-quarter pct value
+            latest_pct = None
+            for k, v in h.items():
+                if isinstance(v, (int, float)) and (k.startswith("q_") or k.startswith("Q") or k.endswith("_pct")):
+                    if latest_pct is None or v > latest_pct:
+                        latest_pct = v
+            holders_brief.append({
+                "name": h.get("name") or h.get("shareholder_name") or h.get("holder", ""),
+                "classification": h.get("classification", ""),
+                "latest_pct": round(latest_pct, 2) if latest_pct else None,
+            })
+
+        # MF summary from conviction
+        mf_conv = self.get_mf_conviction(symbol)
+        mf_summary = (
+            {
+                "scheme_count": mf_conv.get("schemes_holding"),
+                "amc_count": mf_conv.get("amcs_holding"),
+                "total_value_cr": mf_conv.get("total_mf_value_cr"),
+                "scheme_trend": mf_conv.get("scheme_trend"),
+                "top_3_amcs": [s.get("amc") for s in (mf_conv.get("top_schemes") or [])[:3]],
+            }
+            if mf_conv.get("available")
+            else {"available": False, "reason": mf_conv.get("reason", "no data")}
+        )
+
+        # Pledge status
+        pledge_rows = self.get_promoter_pledge(symbol)
+        pledge_status: dict
+        if isinstance(pledge_rows, dict) and "error" not in pledge_rows:
+            # structured dict from get_promoter_pledge
+            pledge_status = {
+                "current_pct": pledge_rows.get("latest_pledge_pct"),
+                "trend": pledge_rows.get("trend"),
+                "margin_call_risk": pledge_rows.get("margin_call_risk"),
+            }
+        elif isinstance(pledge_rows, list) and pledge_rows:
+            latest = pledge_rows[0]
+            pledge_status = {
+                "current_pct": latest.get("pledge_pct", latest.get("percentage")),
+                "trend": "see_drill",
+                "margin_call_risk": None,
+            }
+        else:
+            pledge_status = {"current_pct": None, "trend": "no_data", "margin_call_risk": None}
+
+        # Insider activity — 365d summary
+        insider_rows = self.get_insider_transactions(symbol, days=365)
+        buy_count = sum(
+            1 for r in insider_rows
+            if (r.get("transaction_type") or "").lower() in ("buy", "market purchase", "purchase")
+        )
+        sell_count = sum(
+            1 for r in insider_rows
+            if (r.get("transaction_type") or "").lower() in ("sell", "market sale", "sale")
+        )
+        net_value_cr = round(
+            sum(
+                (r.get("value_cr") or r.get("value") or 0)
+                * (1 if (r.get("transaction_type") or "").lower() in ("buy", "market purchase", "purchase") else -1)
+                for r in insider_rows
+            ),
+            2,
+        ) if insider_rows else 0
+
+        # Bulk/block 365d
+        from datetime import date as _date, timedelta as _td
+        cutoff = (_date.today() - _td(days=365)).isoformat()
+        deal_rows = self.get_bulk_block_deals(symbol)
+        deals_365d = [
+            d for d in deal_rows
+            if (d.get("date") or d.get("deal_date") or "") >= cutoff
+        ] if deal_rows else []
+        latest_deal_date = max(
+            (d.get("date") or d.get("deal_date") or "" for d in deals_365d),
+            default=None,
+        ) or None
+
+        return {
+            "symbol": symbol.upper(),
+            "current_ownership": current_ownership,
+            "qoq_changes_summary": qoq_changes,
+            "quarters_available": len(quarters_sorted),
+            "top_10_holders_brief": holders_brief,
+            "mf_summary": mf_summary,
+            "pledge_status": pledge_status,
+            "insider_activity_365d": {
+                "buy_count": buy_count,
+                "sell_count": sell_count,
+                "net_value_cr": net_value_cr,
+                "txn_count": len(insider_rows),
+            },
+            "bulk_block_365d": {
+                "count": len(deals_365d),
+                "latest_deal_date": latest_deal_date,
+            },
+            "available_sections": [
+                "shareholding", "changes", "shareholder_detail",
+                "mf_holdings", "mf_changes", "mf_conviction",
+                "insider", "bulk_block", "promoter_pledge",
+            ],
+            "hint": (
+                "This is a compact TOC. Call get_ownership(section='<name>') "
+                "to drill into any section. Heavy sections are capped: "
+                "mf_holdings returns top 30 schemes by value (+ tail summary); "
+                "shareholder_detail returns top 20 holders. Pass section=['s1','s2'] "
+                "for multiple targeted sections in one call — avoid section='all' "
+                "which can exceed the MCP tool-result transport limit."
+            ),
         }
 
     # --- Market Signals ---
@@ -1138,9 +1507,30 @@ class ResearchDataAPI:
         """Peer comparison: CMP, P/E, MCap, ROCE, etc. for sector peers."""
         return self._store.get_peers(symbol)
 
-    def get_shareholder_detail(self, symbol: str, classification: str | None = None) -> list[dict]:
-        """Individual shareholder names and quarterly %: Vanguard, LIC, etc."""
-        return self._store.get_shareholder_details(symbol, classification)
+    def get_shareholder_detail(
+        self, symbol: str, classification: str | None = None, top_n: int = 20,
+    ) -> list[dict]:
+        """Individual shareholder names and quarterly %: Vanguard, LIC, etc.
+
+        Capped to top_n holders (default 20) ranked by their LATEST-quarter
+        percentage. Large private banks can have 100+ disclosed holders above
+        the 1% reporting threshold; the raw payload hits 25-30KB which
+        contributes to the 80-150K truncation problem in get_ownership.
+        """
+        rows = self._store.get_shareholder_details(symbol, classification)
+        if top_n is None or len(rows) <= top_n:
+            return rows
+        # Pick top N by latest-quarter pct. Row schema: name + quarterly columns.
+        # Find the latest-quarter column by scanning for the max quarter key.
+        def latest_pct(row: dict) -> float:
+            qtr_vals = [
+                v for k, v in row.items()
+                if (k.startswith("q_") or k.startswith("Q") or k.endswith("_pct"))
+                and isinstance(v, (int, float))
+            ]
+            return max(qtr_vals) if qtr_vals else 0.0
+        sorted_rows = sorted(rows, key=latest_pct, reverse=True)
+        return sorted_rows[:top_n]
 
     def get_expense_breakdown(self, symbol: str, section: str = "profit-loss") -> list[dict]:
         """Schedule sub-item breakdowns (e.g., Expenses → Employee Cost, Raw Material).
@@ -1754,6 +2144,7 @@ class ResearchDataAPI:
                     data = json.loads(path.read_text(encoding="utf-8"))
                     data["_source_file"] = filename
                     # Trim verbose sections to keep payload manageable for agents
+                    quality_statuses: list[str] = []
                     for q in data.get("quarters", []):
                         # QA: keep questions + notable only, drop full management responses
                         trimmed_qa = []
@@ -1766,6 +2157,23 @@ class ResearchDataAPI:
                         q["qa_session"] = trimmed_qa
                         # Drop key_numbers_mentioned (redundant with operational_metrics)
                         q.pop("key_numbers_mentioned", None)
+                        # Track extraction quality per quarter
+                        quality_statuses.append(q.get("extraction_status", "complete"))
+                    # Surface extraction-quality warning at top level so the agent
+                    # can downweight analysis when concall extraction was degraded.
+                    # A quarter with "partial"/"recovered"/"failed" means the
+                    # model returned prose or errored — `_build_partial_extraction`
+                    # kicked in with regex-based number extraction only.
+                    degraded = [s for s in quality_statuses if s in ("partial", "recovered", "failed")]
+                    if degraded:
+                        data["_extraction_quality_warning"] = (
+                            f"Concall extraction was degraded for {len(degraded)}/"
+                            f"{len(quality_statuses)} quarters (statuses: {quality_statuses}). "
+                            "Management commentary, guidance, and narrative fields may be "
+                            "thin or missing. Treat concall-derived analysis as partial — "
+                            "cross-check key claims against get_fundamentals or filings, "
+                            "and note the data limitation in the report."
+                        )
                     return data
                 except (json.JSONDecodeError, OSError):
                     continue

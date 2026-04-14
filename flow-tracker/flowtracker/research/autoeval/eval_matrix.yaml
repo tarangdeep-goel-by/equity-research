@@ -21,6 +21,11 @@ sectors:
     type: PSU bank
     why: "PSU bank, high NPA history, government ownership, 0% promoter"
 
+  private_bank:
+    stock: HDFCBANK
+    type: Private bank
+    why: "Largest private bank, ~47% FII, 74% foreign-holding cap, ESOP-based compensation — tests BFSI ownership skill's PSU-vs-private discrimination"
+
   it_services:
     stock: TCS
     type: IT services
