@@ -1,0 +1,80 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-09T20:12:41.344244+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "bfsi"
+  ],
+  "results": {
+    "bfsi": {
+      "agent": "business",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent breakdown of the NPA recovery cycle and YONO-driven operating leverage. However, it lacks a deep dive into the loan book composition (Retail vs. Corporate vs. SME) and deposit mix."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Conclusions logically follow the data, particularly the insight that future growth must come from volume/NIMs rather than provision write-backs. Minor technical misunderstanding of bank operating cash flows in the F-Score section."
+        },
+        "completeness": {
+          "grade": "B",
+          "numeric": 84,
+          "rationale": "Significant gaps for a banking report: missing CASA ratio, GNPA/NNPA, Provision Coverage Ratio (PCR), and Tier 1 Capital Adequacy Ratio (CAR). Flagging them as 'open questions' does not excuse their absence."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear bull/bear framework and correctly identifies NIM trajectory and asset quality as the key swing factors. The Reverse DCF integration is highly actionable."
+        },
+        "sector_framework": {
+          "grade": "B",
+          "numeric": 86,
+          "rationale": "Applies NIM, ROA, and C/I correctly, but fails to decompose NIM into Yield on Advances (YoA) and Cost of Funds (CoF). Including ROCE in the peer table for banks is a cardinal sin, even with a disclaimer."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 86,
+          "rationale": "The agent gave up on `get_company_context` because the file was too large, rather than calling specific sub-sections (like `sector_kpis` or `concall_insights`) to find the missing asset quality and CASA data."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Data Sources / Tool Usage",
+          "issue": "Agent abandoned `get_company_context` due to token limits, resulting in missing critical banking KPIs (GNPA, CASA).",
+          "suggestion": "Instruct the agent to request specific sections (e.g., `section='sector_kpis'` or `section='concall_insights'`) if the full document exceeds token limits."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Peer Benchmarking",
+          "issue": "Used ROCE for comparing banks, which is fundamentally flawed due to the nature of bank balance sheets.",
+          "suggestion": "Instruct the agent to explicitly exclude ROCE for BFSI stocks and replace it with ROA, ROE, or P/B in peer comparison tables."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Money Machine",
+          "issue": "Failed to decompose Net Interest Margin (NIM) into its core drivers.",
+          "suggestion": "For BFSI, mandate the agent to analyze Yield on Advances (YoA) and Cost of Funds (CoF) alongside CASA ratio to explain NIM movements."
+        }
+      ],
+      "strengths": [
+        "Superb narrative framing of SBI as the 'banking infrastructure of the Indian state' and quantifying the structural NIM constraints of PSU mandates.",
+        "Brilliant identification of the employee cost reduction (21.2% to 14.3%) as a YONO-driven operating leverage story rather than impossible PSU headcount cuts."
+      ],
+      "summary": "A highly readable and structurally sound report that nails the overarching narrative of SBI's NPA turnaround and digital operating leverage. However, it falls short of institutional quality by missing foundational banking metrics like CASA, GNPA, and PCR, largely because the agent failed to creatively navigate tool token limits.",
+      "report_length": 26450,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 26.470654833014123,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent breakdown of the NPA recovery cycle and YONO-driven operating leverage. However, it lacks a deep dive into the loan book composition (Retail vs. Corporate vs. SME) and deposit mix.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Conclusions logically follow the data, particularly the insight that future growth must come from volume/NIMs rather than provision write-backs. Minor technical misunderstanding of bank operating cash flows in the F-Score section.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B\",\n      \"numeric\": 84,\n      \"rationale\": \"Significant gaps for a banking report: missing CASA ratio, GNPA/NNPA, Provision Coverage Ratio (PCR), and Tier 1 Capital Adequacy Ratio (CAR). Flagging them as 'open questions' does not excuse their absence.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear bull/bear framework and correctly identifies NIM trajectory and asset quality as the key swing factors. The Reverse DCF integration is highly actionable.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B\",\n      \"numeric\": 86,\n      \"rationale\": \"Applies NIM, ROA, and C/I correctly, but fails to decompose NIM into Yield on Advances (YoA) and Cost of Funds (CoF). Including ROCE in the peer table for banks is a cardinal sin, even with a disclaimer.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 86,\n      \"rationale\": \"The agent gave up on `get_company_context` because the file was too large, rather than calling specific sub-sections (like `sector_kpis` or `concall_insights`) to find the missing asset quality and CASA data.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Data Sources / Tool Usage\",\n      \"issue\": \"Agent abandoned `get_company_context` due to token limits, resulting in missing critical banking KPIs (GNPA, CASA).\",\n      \"suggestion\": \"Instruct the agent to request specific sections (e.g., `section='sector_kpis'` or `section='concall_insights'`) if the full document exceeds token limits.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Peer Benchmarking\",\n      \"issue\": \"Used ROCE for comparing banks, which is fundamentally flawed due to the nature of bank balance sheets.\",\n      \"suggestion\": \"Instruct the agent to explicitly exclude ROCE for BFSI stocks and replace it with ROA, ROE, or P/B in peer comparison tables.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Money Machine\",\n      \"issue\": \"Failed to decompose Net Interest Margin (NIM) into its core drivers.\",\n      \"suggestion\": \"For BFSI, mandate the agent to analyze Yield on Advances (YoA) and Cost of Funds (CoF) alongside CASA ratio to explain NIM movements.\"\n    }\n  ],\n  \"strengths\": [\n    \"Superb narrative "
+    }
+  }
+}

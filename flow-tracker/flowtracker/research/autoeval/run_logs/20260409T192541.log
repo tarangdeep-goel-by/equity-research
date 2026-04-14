@@ -1,0 +1,44 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260409T192541.log
+AutoEval (agent-first): agent=financials sectors=['bfsi', 'it_services', 'metals', 'platform', 'conglomerate', 'telecom', 'real_estate', 'pharma', 'regulated_power', 'insurance', 'broker', 'auto', 'chemicals', 'fmcg']
+Target: grade_numeric >= 90
+
+--- financials / SBIN (bfsi) ---
+  Running agent...
+  00:55:42 [INFO] flowtracker.research.refresh: [refresh] SBIN: started (max_age=6h)
+  00:55:42 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SBIN: started
+  00:55:42 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SBIN: done 0.0s, 0 peers fetched, 8 cached, 6 benchmarks
+  00:55:42 [INFO] flowtracker.research.concall_extractor: [concall_ensure] SBIN: extracting FY25-Q4
+  00:55:43 [INFO] flowtracker.research.concall_extractor: [concall_ensure] SBIN: extracting FY25-Q2
+  00:55:45 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  00:55:45 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  01:05:01 [WARNING] flowtracker.research.concall_extractor: [concall] rate limited: status=allowed_warning type=seven_day
+  01:05:06 [WARNING] flowtracker.research.concall_extractor: [concall] rate limited: status=allowed_warning type=seven_day
+  01:08:24 [WARNING] flowtracker.research.concall_extractor: Concall extraction for SBIN FY25-Q4 returned prose (28480 chars) — attempting JSON recovery
+  01:08:24 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  01:09:08 [WARNING] flowtracker.research.concall_extractor: Concall extraction for SBIN FY25-Q2 returned prose (35541 chars) — attempting JSON recovery
+  01:09:08 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  01:10:06 [ERROR] claude_agent_sdk._internal.query: Fatal error in message reader: Command failed with exit code 1 (exit code: 1)
+  Error output: Check stderr output for details
+  01:10:06 [WARNING] flowtracker.research.concall_extractor: _call_claude raised Exception after capturing content — proceeding
+  01:11:44 [ERROR] claude_agent_sdk._internal.query: Fatal error in message reader: Command failed with exit code 1 (exit code: 1)
+  Error output: Check stderr output for details
+  01:11:44 [WARNING] flowtracker.research.concall_extractor: _call_claude raised Exception after capturing content — proceeding
+  01:11:44 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+&consolidated= "HTTP/1.1 200 OK"
+  00:55:53 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  00:55:54 [INFO] flowtracker.research.refresh: [refresh] SBIN: schedules_balance-sheet ok 151 records
+  00:55:55 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  00:55:56 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  00:55:57 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3188/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  00:55:58 [INFO] flowtracker.research.refresh: [refresh] SBIN: schedules_cash-flow ok 276 records
+  00:55:58 [INFO] flowtracker.research.refresh: [refresh_business] SBIN: done 16.5s, 7 sources, 810 total records
+  00:55:58 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SBIN: started
+  00:55:58 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SBIN: done 0.0s, 0 peers fetched, 8 cached, 6 benchmarks
+  00:55:58 [INFO] flowtracker.research.concall_extractor: [concall_ensure] SBIN: extracting FY25-Q4
+  00:55:59 [INFO] flowtracker.research.concall_extractor: [concall_ensure] SBIN: extracting FY25-Q2
+  00:56:00 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  00:56:00 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  01:05:24 [WARNING] flowtracker.research.concall_extractor: [concall] rate limited: status=allowed_warning type=seven_day
+  01:05:57 [WARNING] flowtracker.research.concall_extractor: [concall] rate limited: status=allowed_warning type=seven_day
+  01:11:18 [WARNING] flowtracker.research.concall_extractor: Concall extraction for SBIN FY25-Q2 returned prose (46824 chars) — attempting JSON recovery
+  01:11:18 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
