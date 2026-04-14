@@ -38,3 +38,27 @@ Banks are regulated on **CRAR** (Capital to Risk-weighted Assets Ratio, Basel II
 ### NIM Analysis
 - NIM compression/expansion must be explained with CAUSE: deposit competition, rate cycle, CASA mix shift, bulk deposit reliance
 - Compare NIM to sector median from `get_peer_sector(section='benchmarks')`
+
+### SMA-1 / SMA-2 — The Leading Indicator That GNPA Misses
+GNPA and NNPA are **lagging** indicators — by the time a loan hits NPA (90+ DPD), the stress has already shown up in earlier buckets for 1-2 quarters. The real leading indicators are the **Special Mention Accounts (SMA)** buckets:
+- **SMA-0** (0-30 DPD), **SMA-1** (31-60 DPD), **SMA-2** (61-90 DPD)
+- **SMA-2 is the most predictive** — accounts here typically slip into NPA next quarter unless restructured/cured
+- Also track the **"BB & below" rated corporate book** — the weakest portion of standard assets that can slip in a credit cycle downturn
+- Extract from `get_company_context(section='concall_insights')` or management presentations. A bank that doesn't disclose SMA buckets in the quarterly deck is hiding the leading signal — flag that
+- Rising SMA-2 with flat GNPA means NPAs are coming next quarter; falling SMA-2 with high GNPA means the stress has peaked and resolution is under way
+
+### Bank DuPont — Decompose ROA, Not Just ROE
+Standard DuPont (Margin × Turnover × Leverage → ROE) is inadequate for banks because leverage is regulated and not a management choice in the normal sense. The bank-specific DuPont decomposes **ROA**:
+- **NII / Average Assets** — margin (replaces gross margin)
+- **Other Income / Average Assets** — fee income quality
+- **Opex / Average Assets** — operating efficiency
+- **Provisions / Average Assets** — credit cost drag
+- **Tax / Average Assets** — tax efficiency
+- → sums to ROA; ROE = ROA × Equity Multiplier
+This decomposition isolates which driver is carrying the ROE — critical because credit-cost tailwinds (provisions falling as legacy NPA resolves) are mean-reverting and should not be extrapolated. A bank whose ROA rose from 0.6% to 1.0% entirely via the provisions line is not as strong as one whose ROA rose via NII/Assets. Compute via `calculate` using data from `get_fundamentals(section='annual_financials')` and `ratios`.
+
+### Technical Write-Offs vs Cash Recoveries — The Real Slippage Story
+Banks use aggressive technical write-offs to scrub GNPA optically — the loan is written off against provisions but recovery efforts continue. This artificially improves headline GNPA without any real credit-quality improvement. The honest metric is **Net Slippage** = Gross Slippage − (Cash Recoveries + Upgrades). Separately, **Technical Write-Offs** reduce GNPA but do not reflect recovery.
+- Extract gross slippage, cash recoveries, upgrades, and technical write-offs as separate numbers from `get_company_context(section='concall_insights')`
+- A bank showing a falling GNPA% driven mostly by technical write-offs and minimal cash recoveries is **not cleaning its book** — it's just moving the same stress off the disclosed ratio
+- Always compute and present net slippage alongside GNPA/NNPA trends; the divergence between headline GNPA movement and net slippage is the forensic signal
