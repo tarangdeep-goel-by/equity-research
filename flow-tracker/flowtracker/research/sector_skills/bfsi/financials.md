@@ -23,6 +23,13 @@ Indian banks compete primarily on deposit cost, not lending rates (which are lar
 ### Operating Profit Quality
 Other Income for banks mixes core fee income (processing fees, insurance distribution, wealth management) with volatile treasury gains (bond MTM). If Other Income spiked in a quarter, the spike is likely treasury — don't extrapolate it. Flag when Other Income growth materially exceeds NII growth.
 
+### Capital Adequacy — Mandatory When Discussing Capital Actions
+Banks are regulated on **CRAR** (Capital to Risk-weighted Assets Ratio, Basel III minimum ~11.5% incl. CCB) and **CET1** (Common Equity Tier-1, minimum ~7-8%). These are non-negotiable regulatory floors; management decisions on lending growth, QIPs, and dividend payouts are constrained by them.
+- Whenever discussing an equity raise (QIP, rights issue), sub-debt issuance, or accelerated credit growth, cite the **pre- and post-action CRAR/CET1**
+- Canonical key via `get_sector_kpis(sub_section='capital_adequacy_ratio_pct')`
+- CET1 compression below ~10% in a growing bank is a warning — either dilution is imminent or growth slows
+- All forward BVPS or CRAR projections (BVPS × (1+g)^years) must go through the `calculate` tool — compound interest in your head produces errors that reviewers catch
+
 ### Valuation Basis
 - Use **P/B** (Price to Book) as the primary valuation metric, not PE
 - When computing implied core bank P/B (after stripping subsidiary value), use **standalone BVPS** — never consolidated BVPS. Consolidated book includes subsidiary goodwill/investments that distort the core bank multiple
