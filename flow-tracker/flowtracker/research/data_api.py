@@ -1862,6 +1862,10 @@ class ResearchDataAPI:
         kpi_defs = get_kpis_for_industry(industry)
         canonical_keys = {k["key"] for k in kpi_defs}
         key_labels = {k["key"]: k["label"] for k in kpi_defs}
+        # Alias table: canonical_key -> list of accepted source-field variants.
+        # Handles naming drift from the concall extractor (e.g. concall writes
+        # 'domestic_nim_pct' but schema canonical is 'net_interest_margin_pct').
+        key_aliases: dict[str, list[str]] = {k["key"]: list(k.get("aliases") or []) for k in kpi_defs}
 
         # Read concall extraction — pull operational_metrics directly via the
         # filtered path. get_concall_insights() now returns a TOC by default, so
@@ -1886,8 +1890,9 @@ class ResearchDataAPI:
             for canonical_key in canonical_keys:
                 value = None
                 context = None
+                matched_via = None
 
-                # Check operational_metrics (structured)
+                # 1. Direct match on canonical key in operational_metrics
                 if canonical_key in op_metrics:
                     entry = op_metrics[canonical_key]
                     if isinstance(entry, dict):
@@ -1895,12 +1900,29 @@ class ResearchDataAPI:
                         context = entry.get("context")
                     else:
                         value = entry
+                    if value is not None:
+                        matched_via = "canonical"
 
-                # Fallback: check key_numbers_mentioned (flat dict)
+                # 2. Alias match — handles concall extractor naming drift
+                if value is None:
+                    for alias in key_aliases.get(canonical_key, []):
+                        if alias in op_metrics:
+                            entry = op_metrics[alias]
+                            if isinstance(entry, dict):
+                                value = entry.get("value")
+                                context = entry.get("context")
+                            else:
+                                value = entry
+                            if value is not None:
+                                matched_via = f"alias:{alias}"
+                                break
+
+                # 3. key_numbers_mentioned fallback (legacy, usually empty)
                 if value is None and canonical_key in key_numbers:
                     value = key_numbers[canonical_key]
+                    matched_via = "key_numbers"
 
-                # Fuzzy match: try without unit suffix and common variations
+                # 4. Fuzzy match: try without unit suffix and common variations
                 if value is None:
                     base_key = canonical_key.rsplit("_", 1)[0]  # strip _pct, _cr, etc.
                     for src_key, src_val in {**op_metrics, **key_numbers}.items():
@@ -1911,12 +1933,15 @@ class ResearchDataAPI:
                                 context = src_val.get("context")
                             else:
                                 value = src_val
+                            matched_via = f"fuzzy:{src_key}"
                             break
 
                 if value is not None:
                     entry = {"quarter": quarter_label, "value": value}
                     if context:
                         entry["context"] = context
+                    if matched_via and matched_via != "canonical":
+                        entry["matched_via"] = matched_via
                     kpi_timeline[canonical_key].append(entry)
 
         # Build result with only KPIs that have at least one value

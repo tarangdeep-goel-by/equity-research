@@ -163,6 +163,58 @@ class TestSectorKPIsTOC:
         assert size < 2000, f"TOC should be <2KB, got {size}"
 
 
+class TestSectorKPIsAliasMatching:
+    """The concall extractor often writes non-canonical field names (e.g. the
+    extractor may emit 'domestic_nim_pct' while the schema canonical is
+    'net_interest_margin_pct'). The alias table in sector_kpis.py resolves this.
+    """
+
+    def test_alias_resolves_nim_from_domestic_nim_pct(self, api, vault_home, monkeypatch):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        # Quarter has NIM under the non-canonical alias 'domestic_nim_pct'
+        qs = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {
+                "domestic_nim_pct": {"value": "3.09%", "context": "Deposit repricing"},
+            },
+        }]
+        _write_concall(vault_home / "vault", "ALIASTEST", qs)
+
+        drill = api.get_sector_kpis("ALIASTEST", kpi_key="net_interest_margin_pct")
+        assert "kpi" in drill
+        v = drill["kpi"]["values"][0]
+        assert v["value"] == "3.09%"
+        assert v["matched_via"] == "alias:domestic_nim_pct"
+
+    def test_alias_resolves_pcr_from_short_form(self, api, vault_home, monkeypatch):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        qs = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {"pcr": {"value": "77.5%"}},
+        }]
+        _write_concall(vault_home / "vault", "ALIASTEST2", qs)
+
+        drill = api.get_sector_kpis("ALIASTEST2", kpi_key="provision_coverage_ratio_pct")
+        assert drill["kpi"]["values"][0]["matched_via"] == "alias:pcr"
+
+    def test_direct_match_takes_precedence_over_alias(self, api, vault_home, monkeypatch):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        # Both canonical and alias present — canonical wins, no matched_via annotation
+        qs = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {
+                "net_interest_margin_pct": {"value": "2.60%"},
+                "domestic_nim_pct": {"value": "3.09%"},
+            },
+        }]
+        _write_concall(vault_home / "vault", "ALIASTEST3", qs)
+
+        drill = api.get_sector_kpis("ALIASTEST3", kpi_key="net_interest_margin_pct")
+        v = drill["kpi"]["values"][0]
+        assert v["value"] == "2.60%"
+        assert "matched_via" not in v, "canonical match should not be annotated"
+
+
 class TestSectorKPIsDrill:
     def test_drill_with_valid_key_returns_full_timeline(self, api, vault_home, monkeypatch):
         monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
