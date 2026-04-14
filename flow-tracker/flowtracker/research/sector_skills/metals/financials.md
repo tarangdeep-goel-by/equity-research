@@ -30,3 +30,24 @@ Metals companies often sport high dividend yields, but cyclical earnings mean to
 ### Working Capital
 - Inventory days are critical — rising inventory in falling commodity prices = balance sheet risk
 - Receivables quality matters less (spot/short-term contracts)
+
+### Cost-Curve Quartile — Captive RM Integration Drives Cycle Survival
+The single biggest differentiator across global metals and mining operators is **position on the global cost curve** — not margin in the current quarter. A producer in the 1st quartile (lowest-cost 25%) stays profitable even at cycle troughs; a 4th-quartile producer loses money for years at a time. Cost-curve position is overwhelmingly determined by **captive raw material integration**:
+- **Steel**: captive iron ore + coking coal vs merchant buying. Captive ore can be 40-60% cheaper per tonne than merchant spot
+- **Aluminium**: captive bauxite + captive power (coal-fired or renewable) vs grid-bought. Power is ~35% of smelting cost
+- **Copper / Zinc**: captive mine supply vs concentrate purchased from third parties (TC/RC dependence)
+- Extract the integration profile from `get_company_context(section='concall_insights')` or investor presentations. Peers trading at similar multiples may sit in wildly different cost quartiles — always state the quartile view, not just absolute margin
+- Compare via `get_peer_sector(section='benchmarks')` where disclosed
+
+### Through-Cycle ROCE — 7-10 Year Average, Not Point-in-Time
+Peak-cycle ROCE of 25-40% in a metals producer can mask trough years of 0-5%. A single-period ROCE is therefore misleading; the capital-intensive nature of metals only reveals itself across a full cycle.
+- Compute **trailing 7-10Y average ROCE** using `get_fundamentals(section='cagr_table')` historical ROCE and `calculate`. This is the metric that should anchor valuation, not the current-year number
+- A producer whose through-cycle ROCE exceeds cost of capital (~11-13% in India) is a real value creator; one whose through-cycle ROCE is below COC is destroying value even if the current year looks exceptional
+- Flag companies where trough-year ROCE turns negative — these are pure price-takers with no moat
+
+### Conversion Spreads — The Only True Operational Metric
+Absolute commodity prices are noise — they move everyone at once. The real measure of operational efficiency is the **conversion spread** between the input RM cost and the product realization:
+- **Steel**: HRC (hot-rolled coil) price − (iron ore cost × tonnage ratio + coking coal cost × tonnage ratio). Widening conversion spread signals genuine pricing power or cost improvement; narrowing spread signals commoditization even when absolute prices look healthy
+- **Copper / Zinc smelters**: Treatment Charge / Refining Charge (TC/RC) spread vs concentrate cost. Industry-standard benchmark disclosed quarterly by smelter associations
+- **Aluminium**: LME price − (alumina cost + power cost + carbon cost)
+- Track QoQ and YoY; compare to peers via `get_peer_sector(section='benchmarks')`. Two producers with identical EBITDA margins can have very different conversion spread trajectories — only the latter predicts future margin direction
