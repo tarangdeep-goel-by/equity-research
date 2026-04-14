@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T17:57:03.103476+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "bfsi": {
+      "agent": "financials",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent breakdown of ROA composition (core vs. headline) and DuPont analysis. It successfully identifies the structural reliance on non-core income (AUCA/treasury) to maintain the 1% ROA floor."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "The narrative is highly consistent, linking NII deceleration to NIM compression and deposit costs. However, there is a notable mathematical flaw in the BVPS projection (15.3% CAGR on \u20b9545 does not reach \u20b9950+ in 3 years)."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers NIM, ROA, C/I, DuPont, and Liability Franchise comprehensively. However, it completely misses Capital Adequacy Ratios (CRAR / CET1), which is a critical gap when discussing a \u20b925,000 Cr QIP and equity dilution."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a very clear 'What to watch' section and explicitly highlights the fragility of the 3% NIM floor and 1% ROA floor, giving portfolio managers precise metrics to monitor."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Outstanding application of BFSI frameworks. Explicitly dismisses non-bank metrics (EBITDA, ROCE) and correctly contextualizes the Piotroski F-Score 'Accruals' failure as a banking artifact (loan growth consuming cash)."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent tool audit and transparent handling of missing structured data (GNPA/NNPA) by falling back to concall transcripts. However, the agent failed to use the `calculate` tool for its BVPS projection."
+        }
+      },
+      "issues": [
+        {
+          "type": "COMPUTATION",
+          "section": "Section 7 \u2014 Capital Architecture",
+          "issue": "Mathematical error in BVPS projection. \u20b9545.72 compounding at 15.3% for 3 years (FY26, FY27, FY28) equals ~\u20b9836, not '\u20b9950+'.",
+          "suggestion": "Force the agent to use the `calculate` tool for all forward projections and compound interest math."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 7 \u2014 Capital Architecture",
+          "issue": "Missing Capital Adequacy Ratio (CRAR / CET1) analysis. The report discusses a \u20b925,000 Cr QIP and equity dilution but fails to mention the pre/post CET1 ratios.",
+          "suggestion": "Update the BFSI financial agent prompt to explicitly require CRAR and CET1 analysis when evaluating capital architecture and equity raises."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Section 5 \u2014 Asset Quality",
+          "issue": "Structured tools returned `schema_valid_but_unavailable` for canonical bank KPIs like GNPA%, NNPA%, and PCR.",
+          "suggestion": "Investigate the `sector_kpis` extraction pipeline for BFSI to ensure standard asset quality metrics are reliably parsed from filings/Screener."
+        }
+      ],
+      "strengths": [
+        "Exceptional handling of BFSI-specific nuances, particularly the dismissal of ROCE/FCF and the contextualization of the F-Score accruals artifact.",
+        "Deep, critical analysis of earnings quality, correctly identifying that the 1% ROA floor is increasingly dependent on volatile treasury gains and AUCA recoveries."
+      ],
+      "summary": "The report is highly sophisticated in its application of BFSI frameworks, offering institutional-grade insights into SBI's margin mechanics and earnings quality. However, it misses a dedicated analysis of Capital Adequacy (CET1/CRAR) and contains a mathematical error in its BVPS forward projection due to skipping the calculator tool.",
+      "report_length": 47508,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 49.16325270803645,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent breakdown of ROA composition (core vs. headline) and DuPont analysis. It successfully identifies the structural reliance on non-core income (AUCA/treasury) to maintain the 1% ROA floor.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"The narrative is highly consistent, linking NII deceleration to NIM compression and deposit costs. However, there is a notable mathematical flaw in the BVPS projection (15.3% CAGR on \u20b9545 does not reach \u20b9950+ in 3 years).\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers NIM, ROA, C/I, DuPont, and Liability Franchise comprehensively. However, it completely misses Capital Adequacy Ratios (CRAR / CET1), which is a critical gap when discussing a \u20b925,000 Cr QIP and equity dilution.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a very clear 'What to watch' section and explicitly highlights the fragility of the 3% NIM floor and 1% ROA floor, giving portfolio managers precise metrics to monitor.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Outstanding application of BFSI frameworks. Explicitly dismisses non-bank metrics (EBITDA, ROCE) and correctly contextualizes the Piotroski F-Score 'Accruals' failure as a banking artifact (loan growth consuming cash).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent tool audit and transparent handling of missing structured data (GNPA/NNPA) by falling back to concall transcripts. However, the agent failed to use the `calculate` tool for its BVPS projection.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"Section 7 \u2014 Capital Architecture\",\n      \"issue\": \"Mathematical error in BVPS projection. \u20b9545.72 compounding at 15.3% for 3 years (FY26, FY27, FY28) equals ~\u20b9836, not '\u20b9950+'.\",\n      \"suggestion\": \"Force the agent to use the `calculate` tool for all forward projections and compound interest math.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 7 \u2014 Capital Architecture\",\n      \"issue\": \"Missing Capital Adequacy Ratio (CRAR / CET1) analysis. The report discusses a \u20b925,000 Cr QIP and equity dilution but fails to mention the pre/post CET1 ratios.\",\n      \"suggestion\": \"Update the BFSI financial agent prompt to explicitly require CRAR and CET1 analysis when evaluating capital architecture and equity raises.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Section 5 \u2014 Asset Quality\",\n      \"issue\": \"Structured tools returned `schema_valid_but_unavailable` for canonical bank KPIs like GNPA%, NNPA%, and PCR.\",\n      \"suggestion\": \"Investigate the `sector_kpis` extraction pipeline for BFSI to ensur"
+    }
+  }
+}
