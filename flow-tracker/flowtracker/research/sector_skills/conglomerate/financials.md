@@ -52,3 +52,30 @@ Conglomerates in incubation mode — those building new infrastructure platforms
 - When `CWIP / Net Block > 0.2` (rough heuristic for incubation phase), compute **Core ROIC** = EBIT / (Capital Employed − CWIP − Cash & Equivalents)
 - Core ROIC reflects the true return on operating assets; as CWIP commissions, headline ROCE should converge upward
 - Use `calculate` for the math; cite both headline ROCE and Core ROIC in the report so the reader can see the gap
+
+### Historical Holdco Discount — The Mean-Reversion Signal
+Conglomerate market caps trade at persistent 20-55% discounts to estimated NAV (SOTP of listed stakes at market value + unlisted at last-round + net cash − holdco debt). The **trajectory** of this discount is the core mean-reversion signal that blended P/E or EV/EBITDA on consolidated financials entirely miss:
+- Compute point-in-time discount: (NAV − Market Cap) / NAV. Track 3-5 year history
+- **Narrowing discount** typically precedes or confirms corporate action — demerger, buyback, stake monetization, simplification of cross-holdings
+- **Widening discount** signals governance concerns or capital misallocation that the market is pricing in before earnings reflect it
+- The valuation agent owns the SOTP computation; the financials agent must extract the inputs (sub dividend streams, standalone cash & debt) and flag the discount trend
+- Use `get_valuation(section='sotp')` when available and `get_peer_sector(section='benchmarks')` for peer discount ranges
+
+### Minority Interest Drag on Parent-Attributable PAT
+Consolidated EBITDA aggregates 100% of every subsidiary's contribution, but parent-attributable PAT is only what's left after minorities. For conglomerates with multiple partially-owned fast-growing subs, this creates a persistent gap between apparent earnings growth and shareholder returns:
+- Extract **Minority Interest / Consolidated PAT** trajectory from `get_fundamentals(section='annual_financials')` — rising MI share means parent shareholders see a shrinking cut of the growth
+- **Parent-attributable PAT** (reported PAT − Minority Interest) is the correct numerator for shareholder-level metrics like EPS and P/E
+- Flag when MI leakage > 15% of consolidated PAT — valuation models that use consolidated EBITDA × enterprise multiple will overstate equity value by 15%+ unless MI is stripped via the minority share of attributable book value
+
+### Off-Balance-Sheet Corporate Guarantees & Contingent Liabilities
+Group structures routinely route corporate guarantees from cash-generating listed entities to weaker group entities (promoter-held, unlisted, or distressed subs). These don't show up in Net Debt or leverage ratios — until the guarantee is invoked, at which point it becomes a direct claim on the parent's cash flow.
+- Extract **contingent liabilities** and **corporate guarantees extended** from `get_company_context(section='filings', sub_section='notes_to_accounts')`
+- Flag when contingent liabilities + outstanding guarantees > 20% of net worth — this is latent leverage that isn't in the D/E calculation
+- Cross-reference related-party disclosure and pledge data (from the ownership agent's domain) — concentration of related-party guarantees in weaker group entities is a red flag even when the guarantee has never been invoked
+
+### Ind-AS Equity-Accounting Distortion on JVs / Associates
+Under Ind-AS 28, investments in JVs and associates (20-50% ownership) are reported via equity method: only the investor's share of the JV's net income appears on the parent's P&L as a single line. The JV's revenue, EBITDA, and margins are **excluded** from the parent's consolidated financials entirely.
+- A conglomerate with material equity-accounted JVs (e.g., a 40% stake in a large operating business) has **consolidated EBITDA that understates economic EBITDA** — EV/EBITDA multiples look artificially expensive relative to a peer that owns the same business via a majority stake
+- When JV stakes are material, compute **Look-Through EBITDA** = Consolidated EBITDA + (Investor's share × JV EBITDA). Cite both multiples
+- Extract JV financials from `get_company_context(section='filings', sub_section='notes_to_accounts')` — equity-method disclosures usually contain the JV's summary P&L
+- Note: the same applies inversely for JVs that are loss-making — equity-method reporting cleanly isolates the loss as a single line rather than polluting consolidated margins

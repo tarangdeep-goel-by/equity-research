@@ -46,3 +46,28 @@ Real estate is structurally leveraged (project loans, construction finance, leas
 - Compute **weighted average cost of debt** = interest expense / average total borrowings. Extract interest expense from `get_fundamentals(section='annual_financials')`; borrowings from `balance_sheet_detail`
 - Track 3-year trajectory — rising rate environment compresses margins; post-RBI-cut cycle typically compresses funding cost by 50-100 bps with a 6-12 month lag
 - Compare to sector peers via `get_peer_sector(section='benchmarks')`
+
+### Borrowing Costs Capitalized Into WIP Inventory
+Under IndAS, interest on construction loans is capitalized into **Work-in-Progress inventory** rather than hitting the P&L. This legally understates reported interest expense while the true debt burden sits on the balance sheet as inventory cost to be released when flats are sold and revenue is recognized.
+- **P&L interest expense** is a lower-bound, not the total interest burden — the real number is P&L interest + capitalized interest
+- Extract capitalized borrowing cost from `get_company_context(section='filings', sub_section='notes_to_accounts')` — typically disclosed in inventory notes or finance cost notes
+- Headline **Interest Coverage Ratio** (EBIT / interest expense) looks artificially healthy when large amounts are being capitalized; compute an **adjusted Interest Coverage** = EBIT / (P&L interest + capitalized interest) to get the real picture
+- A developer with rising capitalized interest while P&L interest looks flat is masking interest-burden growth — flag this
+
+### JDA vs Outright Land — Structurally Different Economics
+Indian real estate projects follow two structures with opposite financial signatures, and peer comparisons that don't adjust for this are meaningless:
+- **Outright land purchase** — developer owns 100% of project economics, margins are higher (25-35% EBITDA), but ROCE is compressed because capital sits in land for 3-5 years
+- **Joint Development Agreement (JDA)** — land owner contributes land in exchange for a revenue share (typically 40-60%); developer's capital requirement is slashed, ROCE jumps, but reported margins compress because the land-share is booked as cost
+- A JDA-heavy developer showing lower margin than an outright-land peer is not less profitable — just asset-light. Peer margin/ROCE comparisons must adjust for this mix
+- Extract project-structure mix from `get_company_context(section='concall_insights')` — management often discloses JDA % of launches or pipeline
+
+### RERA Escrow Lock-Ups — Total Cash ≠ Fungible Cash
+Under RERA, **70% of customer collections** must sit in a **project-specific escrow account**, released only for that project's construction. This is not available for debt reduction, dividends, or cross-project deployment. Consolidated cash balances therefore materially overstate financial flexibility:
+- Separate **RERA-escrowed cash** from **free cash** when analyzing liquidity. Disclosed in `get_fundamentals(section='balance_sheet_detail')` and project-level notes in filings
+- Net Debt reduction potential is limited to free cash, not total cash — a developer with ₹5,000 Cr headline cash of which ₹4,000 Cr is escrowed has only ₹1,000 Cr to deploy against debt
+
+### Related-Party Advances / Unconsolidated JV Land Entities
+Promoter-owned land-holding SPVs, unconsolidated joint ventures for land aggregation, and related-party advances are recurring governance leakage points in Indian real estate. Capital flows out to these entities disguised as "securing land rights" and may never return to minority shareholders on market terms.
+- Check `get_company_context(section='filings', sub_section='related_party_transactions')` for advances to promoter entities and unconsolidated JVs
+- Loans & advances spikes in standalone balance sheet often originate here — cross-reference with `get_fundamentals(section='balance_sheet_detail')`
+- Flag when related-party exposures > 5% of net worth or when these balances grow faster than consolidated assets — both are governance signals, not operational growth
