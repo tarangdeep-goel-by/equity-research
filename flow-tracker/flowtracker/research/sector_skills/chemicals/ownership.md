@@ -3,22 +3,22 @@
 ### Chemicals Archetype
 | Subtype | Promoter Profile | Institutional Behavior | Valuation & Ownership Signal |
 | :--- | :--- | :--- | :--- |
-| **Specialty Chemicals** (e.g., PIDILITIND, SRF, NAVIN Fluorine, CLEAN Science, VINATI) | Multi-gen family; 50-75% | High FII / DII structural accumulation | Premium multiples; brand / IP moat |
-| **Commodity / Petrochem** (e.g., DEEPAK NITRITE, DCM SHRIRAM, TATA CHEMICALS) | Conglomerate or family | Cyclical churn; macro-driven | Feedstock-spread sensitivity; low margin |
-| **Agrichemicals** (e.g., UPL, PI INDUSTRIES, DHANUKA, RALLIS) | Family / global sub-structures | Seasonal MF flows | Monsoon correlation; regulatory approvals |
-| **Paints** (e.g., ASIAN PAINTS, BERGER, KANSAI NEROLAC, AKZO NOBEL INDIA) | Oligopoly family / MNC split | Stable anchor DII / FII; low turnover | Branded-goods pricing power; high stability |
-| **Pigments & Dyes** (e.g., SUDARSHAN CHEMICAL, BODAL) | Mid-cap family promoters | Export-dependent accumulation | Global textile / auto demand sensitivity |
-| **MNC Subsidiaries** (e.g., 3M INDIA, BASF INDIA) | Foreign parent 50-75% | Defensive / yield-focused DIIs | Royalty repatriation; high dividend payout |
-| **Fluorochemicals** (e.g., GUJARAT FLUORO, SRF F-division) | Family promoters | Strategic FII capital | China+1 capex pipeline execution |
+| **Specialty Chemicals** | Multi-gen family; 50-75% | High FII / DII structural accumulation | Premium multiples; brand / IP moat |
+| **Commodity / Petrochem** | Conglomerate or family | Cyclical churn; macro-driven | Feedstock-spread sensitivity; low margin |
+| **Agrichemicals** | Family / global sub-structures | Seasonal MF flows | Monsoon correlation; regulatory approvals |
+| **Paints** | Oligopoly family / MNC split | Stable anchor DII / FII; low turnover | Branded-goods pricing power; high stability |
+| **Pigments & Dyes** | Mid-cap family promoters | Export-dependent accumulation | Global textile / auto demand sensitivity |
+| **MNC Subsidiaries** | Foreign parent 50-75% | Defensive / yield-focused DIIs | Royalty repatriation; high dividend payout |
+| **Fluorochemicals** | Family promoters | Strategic FII capital | China+1 capex pipeline execution |
 
 ### Family Dominance & Near-Zero Pledge Rule
-Indian specialty and paint sectors are defined by multi-generational family-promoter dominance (e.g., PIDILITIND, SRF, Asian Paints). Baseline promoter holding is stable at 50-75%. Execute `get_ownership(section='shareholder_detail')` to map cross-holdings via family trusts. Sector-wide baseline for promoter pledge is near zero (<3%). Any pledge spike above this is a severe anomaly signaling liquidity stress outside the core chemical business. Verify baseline via `get_ownership(section='promoter_pledge')`.
+Indian specialty chemicals and paint sectors are defined by multi-generational family-promoter dominance. Baseline promoter holding is stable at 50-75%. Execute `get_ownership(section='shareholder_detail')` to map cross-holdings via family trusts. Sector-wide baseline for promoter pledge is near zero (<3%). Any pledge spike above this is a severe anomaly signaling liquidity stress outside the core chemical business. Verify baseline via `get_ownership(section='promoter_pledge')`.
 
 ### Paints Oligopoly Stability & Price Discipline
-The Indian paints sector is a concentrated oligopoly commanding ~70% market share collectively. Institutional ownership is characterized by anchor DII / FII stability and low turnover. Promoter-holding stability alongside coordinated price discipline (1-2 lead-and-follow price hike rounds annually) is the defining ownership tell of the oligopoly. Monitor `mf_changes` for structural shifts or defensive reallocation triggered by entry of heavily capitalized new competitors (e.g., Grasim Paints).
+The Indian paints sector is a concentrated oligopoly commanding ~70% market share collectively. Institutional ownership is characterized by anchor DII / FII stability and low turnover. Promoter-holding stability alongside coordinated price discipline (1-2 lead-and-follow price hike rounds annually) is the defining ownership tell of the oligopoly. Monitor `mf_changes` for structural shifts or defensive reallocation triggered by entry of heavily capitalized new competitors from adjacent diversified-conglomerate capex announcements.
 
 ### MNC Subsidiaries — Repatriation Architecture
-MNC chemical subs (e.g., 3M INDIA, BASF INDIA) operate with rigid 50-75% foreign-parent holding. Institutional ownership skews toward yield-seeking defensive domestic funds. Analyze extraction architecture: higher-than-peer dividend payouts and rising royalty-to-revenue percentages signal parent-level capital repatriation. Execute `get_events_actions(section='corporate_actions')` to monitor unusual buybacks (rare but highly signaling) and special dividends.
+MNC chemical subsidiaries operate with rigid 50-75% foreign-parent holding. Institutional ownership skews toward yield-seeking defensive domestic funds. Analyze extraction architecture: higher-than-peer dividend payouts and rising royalty-to-revenue percentages signal parent-level capital repatriation. Execute `get_events_actions(section='corporate_actions')` to monitor unusual buybacks (rare but highly signaling) and special dividends.
 
 ### China+1 FII Cycle & FDI Regulations
 Fluorochemicals and fine chemicals are structural beneficiaries of global supply-chain diversification. FII accumulation in these subtypes correlates with the China+1 narrative. Anticipate aggressive FII rotation out when China-reopening or chemical-dumping narratives gain traction; use `concall_insights` to track management commentary on Chinese dumping. Per FEMA NDI Rules, FDI is permitted up to 100% under the automatic route for most chemicals. Dual-use, defence-adjacent, or strategic chemicals may trigger restrictive government approval routes.
@@ -30,7 +30,7 @@ Pollution Control Board (CPCB / SPCB) compliance is a binary ownership filter. E
 Specialty chemical players frequently execute QIPs during multi-year capex cycles to fund new capacity. Institutional absorption quality of QIPs is a prime cycle indicator. Use `corporate_actions` to evaluate QIP allocations. Agrichemical institutional flows exhibit monsoon-linked seasonality; execute `mf_changes` + `mf_conviction` to track pre-monsoon MF accumulation. Agrichem commands lower structural FII weightage than specialty chemicals due to weather dependency and regulatory hurdles.
 
 ### Listed Subsidiaries & SOTP Complexity
-Conglomerate chemical entities frequently utilize complex cross-holdings or publicly listed subsidiaries (e.g., TATA CHEMICALS holds Rallis India; UPL's complex global sub-structure). Execute `get_valuation(section='sotp')` to properly attribute ownership stakes and isolate the core chemical business valuation from the holding-company discount applied to listed-subsidiary stakes.
+Conglomerate chemical entities frequently utilize complex cross-holdings or publicly listed subsidiaries (e.g., a commodity-chemical parent holding a listed agrichem subsidiary; multi-country global sub-structures in agrichem MNCs). Execute `get_valuation(section='sotp')` to properly attribute ownership stakes and isolate the core chemical business valuation from the holding-company discount applied to listed-subsidiary stakes.
 
 ### Mandatory Checklist
 - [ ] Verify promoter pledge at sector baseline (<3%) via `promoter_pledge`
