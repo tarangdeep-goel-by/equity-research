@@ -21,3 +21,24 @@ Regulated utilities earn a guaranteed ROE on equity invested in regulated assets
 - Regulated capex earns guaranteed returns — more capex = more regulated equity base = more profit
 - Track capex pipeline (MW under construction) from concall_insights
 - Green/renewable capacity additions vs thermal — the transition trajectory
+
+### Regulatory Deferral Account Balances — PAT Can Outrun Cash
+Under IndAS 114, disputed tariff claims (truing-up, change-in-law, fuel surcharge under-recoveries pending CERC/SERC approval) are booked as **Regulatory Deferral Account (RDA)** debit balances — revenue is recognized today even though cash collection is years out and subject to regulatory ruling. This creates a real EPS vs CFO divergence that consolidated ratios mask:
+- Extract RDA debit balance and YoY movement from `get_fundamentals(section='balance_sheet_detail')` and notes in `get_company_context(section='filings')`
+- Growing RDA balance alongside flat CFO means a rising share of reported profit is not cash — earnings quality is degrading even if headline PAT grows
+- Call out any RDA balance > 10% of annual revenue as a material forward cash risk, and flag any specific disputed regulatory order that underpins a large RDA slab
+- Cross-check CFO/PAT via `get_fundamentals(section='cash_flow_quality')` — persistent sub-80% conversion for a regulated utility is RDA buildup until proven otherwise
+
+### CWIP / Gross Block Ratio + Commercial Operation Date (COD)
+**CWIP earns zero ROE until the plant achieves COD and enters the regulated asset base.** Regulated utilities often carry large CWIP balances during build phases; each month of delay accumulates Interest During Construction (IDC) and destroys equity IRR on the project.
+- Compute **CWIP / Gross Block** — rising ratio means capital parked outside the earning base; falling ratio means commissioning is running
+- Track **COD slippage** from `get_company_context(section='concall_insights')` — commissioning delays of 6+ months against original timeline warrant flagging. For a ₹10,000 Cr project, a one-year delay at 11% WACC can burn 300-500 bps of project equity IRR
+- Capitalized borrowing cost during CWIP (IDC) inflates the asset value that eventually enters the regulated base — rechecked at truing-up, so aggressive capitalization can be disallowed later
+- Pipeline of MW under construction is the real forward-growth signal; a utility with zero CWIP is in harvesting mode, not growth mode
+
+### SHR / APC / SFOC Benchmarking — The Normative Efficiency Parameters
+Regulated tariffs include normative operating parameters for thermal plants: **Station Heat Rate (SHR)** — kcal/kWh, **Auxiliary Power Consumption (APC)** — % of gross generation, **Specific Fuel Oil Consumption (SFOC)** — ml/kWh, and **Plant Availability Factor (PAF)**. Performance **above** normative earns incentive; performance **below** normative triggers non-recoverable cost leakage — the operator eats the inefficiency.
+- Extract actual SHR, APC, SFOC, PAF, NAPAF from `get_company_context(section='concall_insights')` or regulatory filings
+- Compare against normative (disclosed by CERC per plant vintage and fuel type) — any breach below normative is a structural margin drag, not a one-time event
+- Benchmark against peer plants via `get_peer_sector(section='benchmarks')` — a plant running 2 kcal/kWh above peer SHR is thermodynamically less efficient and structurally disadvantaged
+- PAF shortfalls specifically cause under-recovery of fixed charges, which compound quarterly — always model the downside on base ROE, not just the upside from PAF incentives

@@ -37,3 +37,22 @@ For specialty chemicals, R&D of 2-4% of sales is healthy and signals a live pipe
 The PE band is wide across the sector: specialty names trade 40-60x, commodity 12-20x, and the peer group must match the product mix. EV/EBITDA is generally cleaner than PE because heavy depreciation from capex cycles distorts reported earnings.
 - Call `get_valuation(section='band', metric='pe')` and `get_valuation(section='band', metric='ev_ebitda')` for historical context
 - Anchor the multiple to the peer set identified in `_shared.md` — a consumer-adjacent specialty chemical doesn't deserve commodity multiples, and vice versa
+
+### Molecule / Client Concentration in CSM & Specialty Books
+Contract-manufacturing (CSM) and CDMO-style specialty chemicals often report healthy margins that ride on 1-2 innovator molecules or 1-3 global innovator clients. When a patent cliff hits, a molecule de-stocks, or a client insources — the entire margin profile craters regardless of the company's moat narrative.
+- Extract **top molecule / top client revenue share** from `get_company_context(section='concall_insights')` — management occasionally discloses; filings sometimes carry it
+- Benchmarks: top-1 molecule > 25% of segment revenue is high concentration; top-3 clients > 50% of CSM revenue is a single-event-risk book
+- Combine this with commercial-scale vs development-phase revenue split — a specialty book that looks diversified by client count but is 40% loaded on one Phase-III molecule that may not commercialize is not diversified
+- Flag explicitly; the margin narrative is meaningless without the concentration context
+
+### Fixed Asset Turnover Peak Ceiling — The "Specialty" Sanity Check
+Real complex synthesis — multi-step specialty molecules, regulatory-approved intermediates, exotic materials — peaks at **Fixed Asset Turnover (FAT) of 1.5-2.0x** (Revenue / Gross Block). FAT materially above 3x is a strong signal that the business is not truly specialty — it's low-capital-intensity blending, formulation, or trading masquerading as specialty. The market eventually re-rates these to commodity multiples once the misclassification is spotted.
+- Compute FAT = Revenue / Gross Block via `calculate` using data from `get_fundamentals(section='ratios')` or `balance_sheet_detail`
+- Benchmark against peers via `get_peer_sector(section='benchmarks')` — the **peer FAT range** anchors the correct archetype
+- If reported margins are specialty-range (EBITDA 20-30%) but FAT is commodity-range (>3x), this is either (a) genuinely asset-light formulation that deserves a distinct peer group, or (b) a product-mix misclassification. Either way, flag it — don't apply specialty-peer multiples on commodity FAT
+
+### Peer Capacity Overhang — Model the Industry, Not Just the Company
+Chemicals capex is visible 18-24 months in advance because plants of this scale can't be hidden. Modeling 20-25% ROCE on new capacity is fatal when 3-4 peers commission identical capacity in the same quarter — the guaranteed result is a price war that compresses gross margins for 3-5 years.
+- Extract **industry-wide capacity additions** across peers via `get_peer_sector(section='benchmarks')` and `get_company_context(section='concall_insights')` for each major peer
+- Flag whenever a company's own capacity additions coincide with 2+ peers commissioning comparable capacity in the same 12-month window — utilization ramp assumptions must be haircut in this case
+- Historically, sub-sector cycles of this kind (fluorochem, bromine derivatives, certain agrochem actives) have destroyed 40-60% of peak EBITDA when peer capacity floods the market — the company's ROCE modeling is only as good as the peer-supply side of the equation

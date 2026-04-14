@@ -36,3 +36,29 @@ Standard P&L financials are **distorted by actuarial accounting** — reported p
   - Break it down: **Claims Ratio** (underwriting quality) vs **Expense Ratio** (efficiency) — they tell different stories
 - **Investment income yield** — float deployment quality
 - **Solvency ratio** — regulatory minimum 150%. Compare buffer above minimum against peer median
+
+### Product Mix Drives VNB (Life Insurers) / Combined Ratio (General)
+For life insurers, headline VNB growth is entirely mix-driven. Product categories have radically different margin profiles:
+- **Non-Par / Guaranteed-Return / Protection (term)**: 60-90% VNB margins — highest-value mix
+- **Participating (Par)**: 15-25% VNB margins — mid-tier
+- **ULIP (market-linked)**: 10-18% VNB margins, equity-market sensitive, lower quality
+- A life insurer growing premium strongly in ULIPs while VNB margin compresses is reporting vanity growth. Mix trajectory (Protection / Non-Par share %, QoQ) is the real forward signal
+- Extract product-mix % from `get_company_context(section='concall_insights')` or `sector_kpis`
+
+For general insurers, the blended Combined Ratio masks toxic segments. Motor Third-Party (regulated tariff) routinely runs 130%+ combined (pure loss), Retail Health runs 90-95% (profitable), Group Health runs 100-110% (loss-leader for cross-sell). A CR improvement that is mix-driven (pulling back from Motor TP) is different from one that is pricing/claims-driven — only the latter compounds.
+- Extract segment-wise CR from `get_company_context(section='concall_insights', sub_section='financial_metrics')` and call out mix vs claims-driven moves separately
+
+### Distribution Channel Mix — Banca vs Agency vs Direct vs Broker
+Distribution channel mix determines both cost structure and counterparty risk. Each channel has different implications:
+- **Bancassurance** — low-cost, high-volume; but parent-bank renegotiation risk. Bank-sponsored insurers carry renewal risk on the distribution agreement itself
+- **Agency (tied agents)** — higher-cost (commissions 20-35%), better persistency control, slower growth
+- **Direct (digital + own branches)** — cheapest at scale, but requires tech and customer-acquisition investment in build years
+- **Third-party brokers / corporate agents** — flexible, but thinner margins and lower persistency
+- Extract channel mix % from `get_company_context(section='sector_kpis')` or concall — track trajectory. Heavy banca reliance is a structural vulnerability even when near-term VNB margin is strong
+
+### Operating RoEV — The True Capital-Compounding Metric
+Reported EV growth blends three effects: (1) operating performance, (2) mark-to-market of investments, (3) economic assumption changes. Only (1) reflects management execution.
+- **Operating RoEV** = (Opening EV × expected return + VNB added + expected unwind + operating variance) / Opening EV — strips out MTM noise
+- **Total RoEV** is the reported number but includes MTM swings that can swing 300-500 bps in a bad equity year
+- Life insurers with consistent 18-22% Operating RoEV are genuinely compounding; those whose RoEV is being carried by equity-market MTM will underperform in a flat market
+- Extract Operating vs Total RoEV split from `get_company_context(section='concall_insights')` — most life insurers disclose both. If only total RoEV is available, flag that the reported number includes MTM noise
