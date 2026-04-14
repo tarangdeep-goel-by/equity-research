@@ -14,7 +14,7 @@ from __future__ import annotations
 
 SECTOR_KPI_CONFIG: dict[str, dict] = {
     "banks": {
-        "industries": ["Private Sector Bank", "Public Sector Bank", "Other Bank"],
+        "industries": ["Private Sector Bank", "Public Sector Bank", "Other Bank", "Banks - Regional", "Banks - Diversified", "Banks"],
         "kpis": [
             {"key": "casa_ratio_pct", "label": "CASA Ratio %", "unit": "pct", "description": "Current Account and Savings Account deposits as % of total deposits"},
             {"key": "gross_npa_pct", "label": "Gross NPA %", "unit": "pct", "description": "Gross non-performing assets as % of gross advances"},
@@ -30,7 +30,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "nbfcs": {
-        "industries": ["Non Banking Financial Company (NBFC)"],
+        "industries": ["Non Banking Financial Company (NBFC)", "Credit Services", "Financial - Capital Markets", "Financial - Credit Services"],
         "kpis": [
             {"key": "aum_cr", "label": "AUM", "unit": "cr", "description": "Total Assets Under Management in crores"},
             {"key": "disbursements_cr", "label": "Disbursements", "unit": "cr", "description": "Total loans disbursed during the quarter in crores"},
@@ -45,7 +45,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "insurance": {
-        "industries": ["Life Insurance", "General Insurance"],
+        "industries": ["Life Insurance", "General Insurance", "Insurance - Life", "Insurance - Diversified", "Insurance - Property & Casualty"],
         "kpis": [
             {"key": "annualized_premium_equivalent_cr", "label": "APE", "unit": "cr", "description": "(Life) Annualized Premium Equivalent in crores"},
             {"key": "value_of_new_business_cr", "label": "VNB", "unit": "cr", "description": "(Life) Value of New Business in crores"},
@@ -60,7 +60,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "it_services": {
-        "industries": ["IT - Software", "IT - Services"],
+        "industries": ["IT - Software", "IT - Services", "Information Technology Services", "Software - Application", "Software - Infrastructure"],
         "kpis": [
             {"key": "tcv_deal_wins_usd_mn", "label": "TCV / Deal Wins", "unit": "usd_mn", "description": "Total Contract Value of new deal wins in USD Millions"},
             {"key": "constant_currency_revenue_growth_pct", "label": "CC Growth %", "unit": "pct", "description": "Revenue growth adjusted for exchange rate fluctuations"},
@@ -74,7 +74,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "pharma": {
-        "industries": ["Pharmaceuticals", "Healthcare"],
+        "industries": ["Pharmaceuticals", "Healthcare", "Drug Manufacturers - Specialty & Generic", "Drug Manufacturers - General", "Biotechnology"],
         "kpis": [
             {"key": "us_revenue_usd_mn", "label": "US Revenue", "unit": "usd_mn", "description": "Total US market sales in USD Millions"},
             {"key": "india_formulations_revenue_cr", "label": "India Formulations Revenue", "unit": "cr", "description": "Domestic branded generics sales in crores"},
@@ -87,7 +87,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "fmcg": {
-        "industries": ["FMCG", "Consumer Food"],
+        "industries": ["FMCG", "Consumer Food", "Household & Personal Products", "Packaged Foods", "Beverages - Non-Alcoholic"],
         "kpis": [
             {"key": "underlying_volume_growth_pct", "label": "Volume Growth %", "unit": "pct", "description": "YoY growth in actual units sold, stripping out price/mix"},
             {"key": "price_led_growth_pct", "label": "Price/Mix Growth %", "unit": "pct", "description": "Revenue growth from price hikes or premiumization"},
@@ -100,7 +100,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "auto": {
-        "industries": ["Automobile", "Auto Components"],
+        "industries": ["Automobile", "Auto Components", "Auto - Manufacturers", "Auto Manufacturers", "Auto Parts", "Auto & Truck Dealerships"],
         "kpis": [
             {"key": "wholesale_volumes_number", "label": "Wholesale Volumes", "unit": "number", "description": "Total units dispatched to dealers"},
             {"key": "retail_volumes_number", "label": "Retail Volumes", "unit": "number", "description": "Total units sold to end customers"},
@@ -113,7 +113,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "cement": {
-        "industries": ["Cement & Cement Products"],
+        "industries": ["Cement & Cement Products", "Building Materials"],
         "kpis": [
             {"key": "sales_volume_mn_tons", "label": "Sales Volume", "unit": "mn_tons", "description": "Total cement + clinker sales volume in MMT"},
             {"key": "capacity_utilization_pct", "label": "Capacity Utilization %", "unit": "pct", "description": "Production as % of installed capacity"},
@@ -126,7 +126,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "metals_and_mining": {
-        "industries": ["Iron & Steel", "Non-Ferrous Metals", "Mining & Mineral products"],
+        "industries": ["Iron & Steel", "Non-Ferrous Metals", "Mining & Mineral products", "Steel", "Copper", "Aluminum", "Other Industrial Metals & Mining"],
         "kpis": [
             {"key": "production_volume_kt", "label": "Production Volume", "unit": "kt", "description": "Total production in Kilo Tonnes"},
             {"key": "sales_volume_kt", "label": "Sales Volume", "unit": "kt", "description": "Total volume sold in Kilo Tonnes"},
@@ -138,7 +138,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "real_estate": {
-        "industries": ["Realty", "Construction"],
+        "industries": ["Realty", "Construction", "Real Estate - Development", "Real Estate Services"],
         "kpis": [
             {"key": "pre_sales_value_cr", "label": "Pre-Sales Value", "unit": "cr", "description": "Value of new units booked in crores"},
             {"key": "pre_sales_volume_mn_sqft", "label": "Pre-Sales Volume", "unit": "mn_sqft", "description": "Area of new units booked in Mn Sq Ft"},
@@ -152,7 +152,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "telecom": {
-        "industries": ["Telecom - Services"],
+        "industries": ["Telecom - Services", "Telecom Services", "Communication Services"],
         "kpis": [
             {"key": "arpu_rs", "label": "ARPU", "unit": "rs", "description": "Average Revenue Per User per month"},
             {"key": "total_subscriber_base_mn", "label": "Total Subscribers", "unit": "mn", "description": "Active wireless subscriber base in Millions"},
@@ -164,7 +164,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "chemicals": {
-        "industries": ["Chemicals", "Specialty Chemicals", "Agrochemicals"],
+        "industries": ["Chemicals", "Specialty Chemicals", "Agrochemicals", "Chemicals - Specialty"],
         "kpis": [
             {"key": "volume_growth_pct", "label": "Volume Growth %", "unit": "pct", "description": "YoY growth in tonnage sold"},
             {"key": "price_and_mix_growth_pct", "label": "Price/Mix Growth %", "unit": "pct", "description": "Revenue growth from pricing/product mix"},
@@ -176,7 +176,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "power_and_utilities": {
-        "industries": ["Power Generation", "Power Distribution", "Gas Distribution"],
+        "industries": ["Power Generation", "Power Distribution", "Gas Distribution", "Utilities - Regulated Electric", "Utilities - Independent Power Producers", "Utilities - Diversified"],
         "kpis": [
             {"key": "plant_load_factor_pct", "label": "PLF %", "unit": "pct", "description": "Actual generation as % of max possible"},
             {"key": "plant_availability_factor_pct", "label": "PAF %", "unit": "pct", "description": "Plant availability (determines capacity charge recovery)"},
@@ -188,7 +188,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "oil_and_gas": {
-        "industries": ["Refineries", "Oil Exploration", "Petrochemicals"],
+        "industries": ["Refineries", "Oil Exploration", "Petrochemicals", "Refineries & Marketing", "Oil & Gas Refining & Marketing", "Oil & Gas Integrated", "Oil & Gas E&P"],
         "kpis": [
             {"key": "gross_refining_margin_usd_per_bbl", "label": "GRM", "unit": "usd_per_bbl", "description": "Gross Refining Margin per barrel of crude"},
             {"key": "refinery_throughput_mmt", "label": "Throughput", "unit": "mmt", "description": "Crude oil processed in Million Metric Tonnes"},
