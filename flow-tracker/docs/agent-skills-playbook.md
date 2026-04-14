@@ -125,11 +125,16 @@ Every agent's briefing JSON must include these fields (plus agent-specific field
 
 Domain-specific rules that also must be present per agent:
 
-**Financials (`FINANCIAL_SYSTEM_V2`)** — Rules 13-16 cross-cutting earnings-quality lenses:
-- Capitalization vs expensing discipline
-- Cash conversion lie-detector (OCF/EBITDA, FCF/PAT, accrual ratio)
-- IndAS 116 lease distortion
-- Segment-level peer benchmarking
+**Financials (`FINANCIAL_SYSTEM_V2`)** — Rules 13-20:
+- Rule 13: Capitalization vs expensing discipline
+- Rule 14: Cash conversion lie-detector (OCF/EBITDA, FCF/PAT, accrual ratio)
+- Rule 15: IndAS 116 lease distortion
+- Rule 16: Segment-level peer benchmarking
+- Rule 17: Structural signal absence ≠ informational (I-7 adapted)
+- Rule 18: Hard-evidence rule for overriding system-classified signals (I-3)
+- Rule 19: Triangulate major conclusions with 2-3 independent signals
+- Rule 20: Aggregate across accounting buckets (standalone + consolidated + JV equity-accounted) before concluding enterprise metrics
+- Rule 6 extended: Buyback + ESOP net dilution analysis (real capital return ≠ gross buyback)
 
 **Ownership (`OWNERSHIP_SYSTEM_V2`)** — already has 15 tenets; invariants include:
 - Foreign-holding cap aggregation (FPI + ADR/GDR + NRI)
