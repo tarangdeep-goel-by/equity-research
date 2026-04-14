@@ -39,3 +39,16 @@ Conglomerates frequently have related-party loans, inter-corporate deposits, or 
 - Check `get_fundamentals(section='balance_sheet_detail')` for inter-corporate items
 - If material (>5% of net worth), flag — these can indicate cash siphoning or support for weaker group entities
 - Pledge data (from ownership agent's domain) cross-references this — high promoter pledge + large related-party exposure = governance concern
+
+### Standalone vs Consolidated Debt — The Holdco Risk Metric
+Consolidated leverage blends operating subs (which can service their own debt) with the parent (which depends on sub dividends). For conglomerates, always isolate:
+- **Standalone (holdco) debt** — servicable only from dividends received, asset monetization, or equity raises. If standalone debt > 2× annual sub dividends received = refinancing dependency
+- **Subsidiary debt** — operationally serviced. Less of a holdco risk, but matters if the sub is loss-making (cross-guarantee exposure)
+- Extract both via `get_fundamentals(section='balance_sheet_detail')` — standalone and consolidated financials are usually both available
+- Report the split explicitly; consolidated D/E alone is misleading for a holdco structure
+
+### Core ROIC Excl. CWIP — For Incubation/Infrastructure Plays
+Conglomerates in incubation mode (Adani Enterprises, early-stage infra) carry massive **Capital Work-in-Progress (CWIP)** on the balance sheet — capital deployed but not yet generating returns. Standard ROCE dilutes the return of operating assets.
+- When `CWIP / Net Block > 0.2` (rough heuristic for incubation phase), compute **Core ROIC** = EBIT / (Capital Employed − CWIP − Cash & Equivalents)
+- Core ROIC reflects the true return on operating assets; as CWIP commissions, headline ROCE should converge upward
+- Use `calculate` for the math; cite both headline ROCE and Core ROIC in the report so the reader can see the gap

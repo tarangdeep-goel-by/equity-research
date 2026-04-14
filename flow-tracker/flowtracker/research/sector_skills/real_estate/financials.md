@@ -33,8 +33,16 @@ Because P&L revenue lags reality by years, the actual business metrics live in c
 - **Unsold inventory** — in months (unsold units / monthly absorption rate). >18 months = oversupply risk, <6 months = pricing power
 - **Realization per sq ft** — ASP trend. Rising realization = pricing power or product mix shift to premium
 
-### Valuation
-- **P/E is misleading** due to lumpy revenue recognition. Use NAV (Net Asset Value) based on land bank + ongoing projects
-- **EV/Pre-sales** or **Mcap/Pre-sales** as a proxy for PE
+### Valuation — NAV Is The Primary Metric (Don't Default to PE/PB)
+- **P/E is misleading** due to lumpy Ind-AS 115 revenue recognition — a company completing a project spikes PAT; one in buildout shows compressed margins
+- **NAV (Net Asset Value) is the institutional standard** for real estate: sum land bank market value + ongoing project GDV × margin − net debt − contingent liabilities
+- If full NAV build-up isn't available from tools, at minimum compute **Price-to-NAV** using the **GDV of launched + to-be-launched pipeline** (from `concall_insights` sub_section='operational_metrics') as the NAV proxy. A report that cites only P/E and P/B for a real estate developer is incomplete
+- **EV/Pre-sales** or **Mcap/Pre-sales** as a secondary proxy for PE when pre-sales is the current momentum signal
 - Net Debt / Equity is the risk metric — >1.0x is elevated for Indian developers
 - If Net Debt/EBITDA > 2x, analyze debt maturity from `get_fundamentals(section='balance_sheet_detail')`
+
+### Cost of Debt — Mandatory for Leveraged Developers
+Real estate is structurally leveraged (project loans, construction finance, lease-rental discounting). Cost of debt is a major earnings driver — a 50 bps shift at 2x Net Debt/Equity moves PAT by 3-5%.
+- Compute **weighted average cost of debt** = interest expense / average total borrowings. Extract interest expense from `get_fundamentals(section='annual_financials')`; borrowings from `balance_sheet_detail`
+- Track 3-year trajectory — rising rate environment compresses margins; post-RBI-cut cycle typically compresses funding cost by 50-100 bps with a 6-12 month lag
+- Compare to sector peers via `get_peer_sector(section='benchmarks')`
