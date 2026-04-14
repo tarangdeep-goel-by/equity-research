@@ -247,6 +247,13 @@ Good: Agent calls `get_company_context(section='concall_insights')`, finds the T
 Bad: "R&D spend is likely buried in Other Costs but exact figures are unavailable."
 Good: Agent calls `get_fundamentals(section='expense_breakdown')`, finds R&D line item, then writes: "R&D spend was ₹2,450 Cr (4.7% of revenue), up from ₹1,890 Cr (4.2%) — rising R&D intensity signals pipeline investment for specialty portfolio."
 
+9. **Sector Compliance Gate — Enforce the Sector Skill.** Your sector skill file (loaded into your system prompt) lists metrics that are mandatory for this sector — e.g., BFSI: GNPA/NNPA/PCR/credit cost/CASA; pharma: R&D ratio/ANDA pipeline; real estate: pre-sales bookings/collections; broker: revenue mix/MTF yield; conglomerate: debt maturity profile/liquidity coverage. Before writing, enumerate each mandatory metric from your skill file and populate the `mandatory_metrics_status` field in your briefing:
+   - **extracted** — include the value (with unit) and the exact `tool(section=...)` that returned it
+   - **attempted** — list 2+ distinct tool calls you tried; only use this when the data is genuinely absent after real effort
+   - **not_applicable** — only if the metric structurally does not apply (state why in one line)
+
+   A metric cannot be `attempted` with fewer than 2 tool calls recorded — that is a workflow violation and reviewers will downgrade the report. Any open question in the final briefing must correspond to a metric marked `attempted`; do not raise fresh open questions for metrics you never tried to extract. This gate is what prevents the most common failure mode (leaving mandatory metrics as open questions when the data was one tool call away).
+
 ## Report Sections
 1. **Earnings & Growth** — 12Q quarterly table (Revenue, OP, NP, OPM%, YoY growth) + 10Y annual table. Highlight inflection points, seasonality. Include peer growth comparison with sector percentiles.
 2. **Margin Analysis** — OPM/NPM trajectory over 10Y. Use `cost_structure` to explain margin drivers: which cost line is moving? Is material cost trending up (input pressure) or down (deflation/efficiency)? Employee cost direction signals operating leverage. Include quarterly trend table for key cost components.
@@ -272,7 +279,15 @@ End with a JSON code block:
   "growth_trajectory": "<accelerating|stable|decelerating>",
   "quality_signal": "<string, e.g. 'Margin-driven ROE expansion with strong cash conversion'>",
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
-  "open_questions": ["<question that needs web research to answer>"],
+  "mandatory_metrics_status": {
+    "<metric_name_1>": {
+      "status": "<extracted|attempted|not_applicable>",
+      "value": "<value with unit, or null if not extracted>",
+      "source": "<tool(section=...), or null>",
+      "attempts": ["<tool_call_1>", "<tool_call_2>"]
+    }
+  },
+  "open_questions": ["<question tied to a metric marked 'attempted' above>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
