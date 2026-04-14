@@ -2121,7 +2121,18 @@ class ResearchDataAPI:
             "source": "yahoo_recommendations",
         }
 
-    def get_concall_insights(self, symbol: str) -> dict:
+    # Top-level concall quarter sections that can be requested via sub_section
+    _CONCALL_SECTIONS = (
+        "opening_remarks",
+        "operational_metrics",
+        "financial_metrics",
+        "management_commentary",
+        "subsidiaries",
+        "qa_session",
+        "flags",
+    )
+
+    def get_concall_insights(self, symbol: str, section_filter: str | None = None) -> dict:
         """Get pre-extracted concall insights from the vault.
 
         Returns structured concall data covering the last 4 quarters:
@@ -2129,62 +2140,125 @@ class ResearchDataAPI:
         subsidiary updates, flags, and cross-quarter narrative themes.
         Falls back to v1 extraction if v2 doesn't exist.
 
-        QA sessions are trimmed to questions + notable flags only (full
-        management responses dropped) to keep payload under ~30K chars.
-        key_numbers_mentioned is dropped (redundant with operational_metrics).
+        When called WITHOUT section_filter: returns a compact table of contents
+        (quarters + which sections are populated + cross-quarter narrative) — NO
+        per-quarter payload. Keeps first-call response under ~4KB.
+
+        When called WITH section_filter (e.g. 'operational_metrics'): returns that
+        section's content across all quarters. Each section is ~5-15KB — well
+        within the agent's readable window.
+
+        QA sessions are trimmed to questions + notable flags only. key_numbers_mentioned
+        is dropped (redundant with operational_metrics).
         """
         import json
         from pathlib import Path
 
         vault = Path.home() / "vault" / "stocks" / symbol.upper() / "fundamentals"
+        data = None
         for filename in ["concall_extraction_v2.json", "concall_extraction.json"]:
             path = vault / filename
             if path.exists():
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
                     data["_source_file"] = filename
-                    # Trim verbose sections to keep payload manageable for agents
-                    quality_statuses: list[str] = []
-                    for q in data.get("quarters", []):
-                        # QA: keep questions + notable only, drop full management responses
-                        trimmed_qa = []
-                        for qa in q.get("qa_session", []):
-                            trimmed_qa.append({
-                                "analyst": qa.get("analyst", ""),
-                                "questions": qa.get("questions", []),
-                                "notable": qa.get("notable", ""),
-                            })
-                        q["qa_session"] = trimmed_qa
-                        # Drop key_numbers_mentioned (redundant with operational_metrics)
-                        q.pop("key_numbers_mentioned", None)
-                        # Track extraction quality per quarter
-                        quality_statuses.append(q.get("extraction_status", "complete"))
-                    # Surface extraction-quality warning at top level so the agent
-                    # can downweight analysis when concall extraction was degraded.
-                    # A quarter with "partial"/"recovered"/"failed" means the
-                    # model returned prose or errored — `_build_partial_extraction`
-                    # kicked in with regex-based number extraction only.
-                    degraded = [s for s in quality_statuses if s in ("partial", "recovered", "failed")]
-                    if degraded:
-                        data["_extraction_quality_warning"] = (
-                            f"Concall extraction was degraded for {len(degraded)}/"
-                            f"{len(quality_statuses)} quarters (statuses: {quality_statuses}). "
-                            "Management commentary, guidance, and narrative fields may be "
-                            "thin or missing. Treat concall-derived analysis as partial — "
-                            "cross-check key claims against get_fundamentals or filings, "
-                            "and note the data limitation in the report."
-                        )
-                    return data
+                    break
                 except (json.JSONDecodeError, OSError):
                     continue
-        return {"error": f"No concall extraction found for {symbol}", "hint": "Run concall pipeline first"}
+        if data is None:
+            return {"error": f"No concall extraction found for {symbol}", "hint": "Run concall pipeline first"}
 
-    def get_sector_kpis(self, symbol: str) -> dict:
+        # Trim verbose sections universally (these trims are always safe) + track quality
+        quality_statuses: list[str] = []
+        for q in data.get("quarters", []):
+            trimmed_qa = []
+            for qa in q.get("qa_session", []):
+                trimmed_qa.append({
+                    "analyst": qa.get("analyst", ""),
+                    "questions": qa.get("questions", []),
+                    "notable": qa.get("notable", ""),
+                })
+            q["qa_session"] = trimmed_qa
+            q.pop("key_numbers_mentioned", None)
+            quality_statuses.append(q.get("extraction_status", "complete"))
+
+        # Build extraction-quality warning (applied to both TOC and drill-down responses).
+        # A quarter with "partial"/"recovered"/"failed" means the concall extraction model
+        # returned prose or errored — `_build_partial_extraction` kicked in with regex-only
+        # number extraction, so narrative fields are thin. Surfaces so the agent downweights.
+        degraded = [s for s in quality_statuses if s in ("partial", "recovered", "failed")]
+        extraction_quality_warning = (
+            f"Concall extraction was degraded for {len(degraded)}/{len(quality_statuses)} "
+            f"quarters (statuses: {quality_statuses}). Management commentary, guidance, "
+            "and narrative fields may be thin or missing. Treat concall-derived analysis "
+            "as partial — cross-check key claims against get_fundamentals or filings, "
+            "and note the data limitation in the report."
+        ) if degraded else None
+
+        # Targeted drill-down: return only the requested section across all quarters
+        if section_filter:
+            if section_filter not in self._CONCALL_SECTIONS:
+                return {
+                    "error": f"Unknown section '{section_filter}'",
+                    "valid_sections": list(self._CONCALL_SECTIONS),
+                }
+            slices = []
+            for q in data.get("quarters", []):
+                slices.append({
+                    "fy_quarter": q.get("fy_quarter", q.get("label", "")),
+                    "period_ended": q.get("period_ended"),
+                    section_filter: q.get(section_filter),
+                })
+            result = {
+                "symbol": symbol.upper(),
+                "section": section_filter,
+                "quarters": slices,
+                "cross_quarter_narrative": data.get("cross_quarter_narrative", {}) if section_filter == "management_commentary" else None,
+            }
+            if extraction_quality_warning:
+                result["_extraction_quality_warning"] = extraction_quality_warning
+            return result
+
+        # Default: compact table of contents — no per-quarter payload
+        toc_quarters = []
+        for q in data.get("quarters", []):
+            populated = [
+                s for s in self._CONCALL_SECTIONS
+                if q.get(s) and (len(q[s]) > 0 if isinstance(q[s], (list, dict, str)) else True)
+            ]
+            toc_quarters.append({
+                "fy_quarter": q.get("fy_quarter", q.get("label", "")),
+                "period_ended": q.get("period_ended"),
+                "sections_populated": populated,
+            })
+        # Narrative keys only (drop full prose). Agent requests 'management_commentary'
+        # via sub_section if they need the full cross-quarter narrative.
+        cross = data.get("cross_quarter_narrative", {}) or {}
+        narrative_keys = list(cross.keys()) if isinstance(cross, dict) else []
+        toc = {
+            "symbol": symbol.upper(),
+            "_source_file": data.get("_source_file"),
+            "quarters": toc_quarters,
+            "cross_quarter_narrative_keys": narrative_keys,
+            "available_sections": list(self._CONCALL_SECTIONS),
+            "hint": "Call again with sub_section='<section>' for full content. Example: sub_section='operational_metrics' or 'management_commentary'. Valid sections listed in available_sections.",
+        }
+        if extraction_quality_warning:
+            toc["_extraction_quality_warning"] = extraction_quality_warning
+        return toc
+
+    def get_sector_kpis(self, symbol: str, kpi_key: str | None = None) -> dict:
         """Extract sector-specific KPIs from concall data using canonical field names.
 
         Reads the concall extraction JSON, identifies the company's sector, and
         pulls out KPIs matching the canonical keys defined in sector_kpis.py.
-        Returns per-quarter values + trends for the sector-relevant metrics.
+
+        When called WITHOUT kpi_key: returns a compact table of contents listing
+        available KPIs + coverage — no per-quarter payload. This is ~2KB and lets
+        the agent discover canonical keys before drilling in.
+
+        When called WITH kpi_key: returns ONLY that KPI's full per-quarter timeline.
+        Use this to avoid the 50+KB payload that full dumps produce.
         """
         from flowtracker.research.sector_kpis import (
             get_kpis_for_industry,
@@ -2199,30 +2273,37 @@ class ResearchDataAPI:
         kpi_defs = get_kpis_for_industry(industry)
         canonical_keys = {k["key"] for k in kpi_defs}
         key_labels = {k["key"]: k["label"] for k in kpi_defs}
+        # Alias table: canonical_key -> list of accepted source-field variants.
+        # Handles naming drift from the concall extractor (e.g. concall writes
+        # 'domestic_nim_pct' but schema canonical is 'net_interest_margin_pct').
+        key_aliases: dict[str, list[str]] = {k["key"]: list(k.get("aliases") or []) for k in kpi_defs}
 
-        # Read concall extraction
-        concall = self.get_concall_insights(symbol)
-        if "error" in concall:
-            return {"error": concall["error"], "sector": sector, "kpis_expected": [k["key"] for k in kpi_defs]}
+        # Read concall extraction — pull operational_metrics directly via the
+        # filtered path. get_concall_insights() now returns a TOC by default, so
+        # we explicitly request the section we need.
+        op_slice = self.get_concall_insights(symbol, section_filter="operational_metrics")
+        if isinstance(op_slice, dict) and "error" in op_slice:
+            return {"error": op_slice["error"], "sector": sector, "kpis_expected": [k["key"] for k in kpi_defs]}
 
-        quarters = concall.get("quarters", [])
+        quarters = op_slice.get("quarters", [])
         if not quarters:
             return {"error": "No quarterly data in concall extraction", "sector": sector}
 
-        # Extract KPIs from each quarter's operational_metrics + key_numbers_mentioned
+        # Extract KPIs from each quarter's operational_metrics
         kpi_timeline: dict[str, list[dict]] = {k: [] for k in canonical_keys}
 
         for q in quarters:
             quarter_label = q.get("fy_quarter", q.get("label", ""))
-            op_metrics = q.get("operational_metrics", {})
-            key_numbers = q.get("key_numbers_mentioned", {})
+            op_metrics = q.get("operational_metrics") or {}
+            key_numbers = {}  # key_numbers_mentioned dropped in trimming; fuzzy match falls back to op_metrics only
 
             # Direct match on canonical keys
             for canonical_key in canonical_keys:
                 value = None
                 context = None
+                matched_via = None
 
-                # Check operational_metrics (structured)
+                # 1. Direct match on canonical key in operational_metrics
                 if canonical_key in op_metrics:
                     entry = op_metrics[canonical_key]
                     if isinstance(entry, dict):
@@ -2230,12 +2311,29 @@ class ResearchDataAPI:
                         context = entry.get("context")
                     else:
                         value = entry
+                    if value is not None:
+                        matched_via = "canonical"
 
-                # Fallback: check key_numbers_mentioned (flat dict)
+                # 2. Alias match — handles concall extractor naming drift
+                if value is None:
+                    for alias in key_aliases.get(canonical_key, []):
+                        if alias in op_metrics:
+                            entry = op_metrics[alias]
+                            if isinstance(entry, dict):
+                                value = entry.get("value")
+                                context = entry.get("context")
+                            else:
+                                value = entry
+                            if value is not None:
+                                matched_via = f"alias:{alias}"
+                                break
+
+                # 3. key_numbers_mentioned fallback (legacy, usually empty)
                 if value is None and canonical_key in key_numbers:
                     value = key_numbers[canonical_key]
+                    matched_via = "key_numbers"
 
-                # Fuzzy match: try without unit suffix and common variations
+                # 4. Fuzzy match: try without unit suffix and common variations
                 if value is None:
                     base_key = canonical_key.rsplit("_", 1)[0]  # strip _pct, _cr, etc.
                     for src_key, src_val in {**op_metrics, **key_numbers}.items():
@@ -2246,12 +2344,15 @@ class ResearchDataAPI:
                                 context = src_val.get("context")
                             else:
                                 value = src_val
+                            matched_via = f"fuzzy:{src_key}"
                             break
 
                 if value is not None:
                     entry = {"quarter": quarter_label, "value": value}
                     if context:
                         entry["context"] = context
+                    if matched_via and matched_via != "canonical":
+                        entry["matched_via"] = matched_via
                     kpi_timeline[canonical_key].append(entry)
 
         # Build result with only KPIs that have at least one value
@@ -2270,19 +2371,73 @@ class ResearchDataAPI:
             else:
                 missing_kpis.append(key)
 
-        # Cross-quarter metric trajectories (if available)
-        cross = concall.get("cross_quarter_narrative", {})
-        trajectories = cross.get("metric_trajectories", {})
+        # Cross-quarter metric trajectories — pull from the raw concall file since
+        # op_slice only has operational_metrics. Read directly, inexpensive.
+        import json as _json
+        from pathlib import Path as _Path
+        trajectories = {}
+        for _fn in ("concall_extraction_v2.json", "concall_extraction.json"):
+            _p = _Path.home() / "vault" / "stocks" / symbol.upper() / "fundamentals" / _fn
+            if _p.exists():
+                try:
+                    _raw = _json.loads(_p.read_text(encoding="utf-8"))
+                    trajectories = _raw.get("cross_quarter_narrative", {}).get("metric_trajectories", {})
+                    break
+                except (OSError, _json.JSONDecodeError):
+                    pass
 
+        # Targeted drill-down: return ONLY the requested KPI's timeline
+        if kpi_key:
+            match = next((k for k in found_kpis if k["key"] == kpi_key), None)
+            if match:
+                return {
+                    "symbol": symbol.upper(),
+                    "sector": sector,
+                    "kpi": match,
+                    "trajectory": trajectories.get(kpi_key),
+                    "quarters_analyzed": len(quarters),
+                }
+            # Requested KPI exists in schema but has no values, or doesn't exist at all
+            valid_keys = [k["key"] for k in kpi_defs]
+            if kpi_key in valid_keys:
+                return {
+                    "symbol": symbol.upper(),
+                    "sector": sector,
+                    "kpi": kpi_key,
+                    "status": "schema_valid_but_unavailable",
+                    "reason": f"'{kpi_key}' is a canonical {sector} KPI but no quarter reported it",
+                    "quarters_analyzed": len(quarters),
+                }
+            return {
+                "symbol": symbol.upper(),
+                "sector": sector,
+                "kpi": kpi_key,
+                "status": "unknown_key",
+                "reason": f"'{kpi_key}' is not a canonical KPI for sector '{sector}'",
+                "valid_keys": valid_keys,
+            }
+
+        # Default: compact table-of-contents (no full per-quarter timelines)
+        # Agent drills in with sub_section='<kpi_key>' for full data.
+        toc = []
+        for k in found_kpis:
+            latest = k["values"][-1] if k["values"] else None
+            toc.append({
+                "key": k["key"],
+                "label": k["label"],
+                "unit": k["unit"],
+                "coverage": f"{len(k['values'])}/{len(quarters)} quarters",
+                "latest_value": latest.get("value") if isinstance(latest, dict) else latest,
+            })
         return {
             "symbol": symbol.upper(),
             "sector": sector,
             "industry": industry,
-            "kpis_found": found_kpis,
+            "available_kpis": toc,
             "kpis_missing": missing_kpis,
-            "coverage": f"{len(found_kpis)}/{len(kpi_defs)} KPIs found in concall data",
-            "metric_trajectories": trajectories,
+            "coverage": f"{len(found_kpis)}/{len(kpi_defs)} canonical KPIs have values",
             "quarters_analyzed": len(quarters),
+            "hint": "Call again with sub_section='<kpi_key>' for full per-quarter timeline + context. Example: sub_section='gross_npa_pct'",
         }
 
     # --- Analytical Profile (pre-computed) ---
@@ -2743,14 +2898,17 @@ class ResearchDataAPI:
         n = len(annual)
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
 
+        # EBITDA and FCF are meaningless for BFSI (interest is core revenue/cost, not opex;
+        # no inventory/receivables/capex cycle). Suppress entirely — the agent shouldn't
+        # see these rows at all. Including them has caused hallucinations ("EBITDA as NII
+        # proxy") in past eval runs.
         metric_defs = [
             ("revenue", lambda d, _: _get(d, "revenue")),
-            ("ebitda", lambda d, _: _ebitda(d)),
             ("net_income", lambda d, _: _get(d, "net_income")),
             ("eps", lambda d, _: _get(d, "eps")),
         ]
-        # FCF is meaningless for BFSI — suppress entirely, not even with caveats
         if not is_bfsi:
+            metric_defs.insert(1, ("ebitda", lambda d, _: _ebitda(d)))
             metric_defs.append(("fcf", lambda d, prev: _fcf(d, prev)))
 
         metrics = {}
@@ -4788,7 +4946,73 @@ class ResearchDataAPI:
 
             years_data.append(entry)
 
-        return {"is_bfsi": True, "years": years_data}
+        # --- Asset quality from concall (banks only — NBFCs use stage_3_assets via sector_kpis) ---
+        asset_quality = self._extract_bfsi_asset_quality(symbol)
+
+        result = {"is_bfsi": True, "years": years_data}
+        if asset_quality:
+            result["asset_quality"] = asset_quality
+        return result
+
+    # Canonical asset quality keys in the concall schema (see sector_kpis.py 'banks' block).
+    _BFSI_ASSET_QUALITY_KEYS = (
+        "gross_npa_pct",
+        "net_npa_pct",
+        "provision_coverage_ratio_pct",
+        "fresh_slippages_cr",
+        "credit_cost_bps",
+    )
+
+    def _extract_bfsi_asset_quality(self, symbol: str) -> dict | None:
+        """Lift asset quality metrics from concall operational_metrics into the
+        BFSI structured response. Returns None if no concall or no asset quality
+        fields present. If present but sparse, returns what exists + status hint
+        (so the agent's compliance gate can mark 'attempted' honestly instead of
+        punting to open questions).
+        """
+        try:
+            concall = self.get_concall_insights(symbol)
+        except Exception:
+            return None
+        if not isinstance(concall, dict) or "error" in concall:
+            return None
+
+        # After our refactor, unfiltered get_concall_insights returns a TOC only.
+        # Pull the full operational_metrics slice explicitly for the lift.
+        op_slice = self.get_concall_insights(symbol, section_filter="operational_metrics")
+        if not isinstance(op_slice, dict) or "quarters" not in op_slice:
+            return None
+
+        per_quarter: dict[str, list[dict]] = {k: [] for k in self._BFSI_ASSET_QUALITY_KEYS}
+        for q in op_slice.get("quarters", []):
+            quarter_label = q.get("fy_quarter", "")
+            op_metrics = q.get("operational_metrics", {}) or {}
+            if not isinstance(op_metrics, dict):
+                continue
+            for key in self._BFSI_ASSET_QUALITY_KEYS:
+                if key in op_metrics:
+                    raw = op_metrics[key]
+                    if isinstance(raw, dict):
+                        per_quarter[key].append({
+                            "quarter": quarter_label,
+                            "value": raw.get("value"),
+                            "context": raw.get("context"),
+                        })
+                    elif raw is not None:
+                        per_quarter[key].append({"quarter": quarter_label, "value": raw})
+
+        found = {k: v for k, v in per_quarter.items() if v}
+        if not found:
+            return {
+                "status": "not_captured_in_concall_extraction",
+                "hint": "Call get_sector_kpis(sub_section='gross_npa_pct') or inspect concall narrative via get_concall_insights(sub_section='management_commentary') — asset quality may be in prose rather than structured metrics for this filing.",
+                "canonical_keys_expected": list(self._BFSI_ASSET_QUALITY_KEYS),
+            }
+        return {
+            "source": "concall operational_metrics",
+            "metrics": found,
+            "missing_keys": [k for k in self._BFSI_ASSET_QUALITY_KEYS if k not in found],
+        }
 
     # --- Insurance Metrics ---
 

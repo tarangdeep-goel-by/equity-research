@@ -14,23 +14,23 @@ from __future__ import annotations
 
 SECTOR_KPI_CONFIG: dict[str, dict] = {
     "banks": {
-        "industries": ["Private Sector Bank", "Public Sector Bank", "Other Bank"],
+        "industries": ["Private Sector Bank", "Public Sector Bank", "Other Bank", "Banks - Regional", "Banks - Diversified", "Banks"],
         "kpis": [
-            {"key": "casa_ratio_pct", "label": "CASA Ratio %", "unit": "pct", "description": "Current Account and Savings Account deposits as % of total deposits"},
-            {"key": "gross_npa_pct", "label": "Gross NPA %", "unit": "pct", "description": "Gross non-performing assets as % of gross advances"},
-            {"key": "net_npa_pct", "label": "Net NPA %", "unit": "pct", "description": "Net non-performing assets as % of net advances"},
-            {"key": "net_interest_margin_pct", "label": "NIM %", "unit": "pct", "description": "Net interest income divided by average total assets"},
-            {"key": "provision_coverage_ratio_pct", "label": "PCR %", "unit": "pct", "description": "Provision coverage ratio (excl. technical write-offs)"},
-            {"key": "fresh_slippages_cr", "label": "Fresh Slippages", "unit": "cr", "description": "New additions to NPAs during the quarter in crores"},
-            {"key": "credit_cost_bps", "label": "Credit Cost", "unit": "bps", "description": "Annualized loan loss provisions as % of average advances, in basis points"},
-            {"key": "capital_adequacy_ratio_pct", "label": "CRAR %", "unit": "pct", "description": "Total Capital Adequacy Ratio (Basel III)"},
-            {"key": "liquidity_coverage_ratio_pct", "label": "LCR %", "unit": "pct", "description": "Liquidity Coverage Ratio"},
-            {"key": "cost_to_income_ratio_pct", "label": "Cost to Income %", "unit": "pct", "description": "Operating expenses divided by net total income"},
-            {"key": "roau_pct", "label": "ROA %", "unit": "pct", "description": "Annualized net profit divided by average total assets"},
+            {"key": "casa_ratio_pct", "label": "CASA Ratio %", "unit": "pct", "description": "Current Account and Savings Account deposits as % of total deposits", "aliases": ["casa_pct", "casa"]},
+            {"key": "gross_npa_pct", "label": "Gross NPA %", "unit": "pct", "description": "Gross non-performing assets as % of gross advances", "aliases": ["gnpa_pct", "gnpa", "gross_npa", "gross_npa_ratio"]},
+            {"key": "net_npa_pct", "label": "Net NPA %", "unit": "pct", "description": "Net non-performing assets as % of net advances", "aliases": ["nnpa_pct", "nnpa", "net_npa", "net_npa_ratio"]},
+            {"key": "net_interest_margin_pct", "label": "NIM %", "unit": "pct", "description": "Net interest income divided by average total assets", "aliases": ["nim_pct", "nim", "domestic_nim_pct", "global_nim_pct", "consolidated_nim_pct"]},
+            {"key": "provision_coverage_ratio_pct", "label": "PCR %", "unit": "pct", "description": "Provision coverage ratio (excl. technical write-offs)", "aliases": ["pcr_pct", "pcr", "provision_coverage"]},
+            {"key": "fresh_slippages_cr", "label": "Fresh Slippages", "unit": "cr", "description": "New additions to NPAs during the quarter in crores", "aliases": ["slippages_cr", "slippage_ratio_pct", "fresh_slippage_cr", "slippages"]},
+            {"key": "credit_cost_bps", "label": "Credit Cost", "unit": "bps", "description": "Annualized loan loss provisions as % of average advances, in basis points", "aliases": ["credit_cost_pct", "credit_cost_pp", "credit_cost", "credit_cost_ratio"]},
+            {"key": "capital_adequacy_ratio_pct", "label": "CRAR %", "unit": "pct", "description": "Total Capital Adequacy Ratio (Basel III)", "aliases": ["crar_pct", "crar", "car_pct", "car", "capital_adequacy"]},
+            {"key": "liquidity_coverage_ratio_pct", "label": "LCR %", "unit": "pct", "description": "Liquidity Coverage Ratio", "aliases": ["lcr_pct", "lcr"]},
+            {"key": "cost_to_income_ratio_pct", "label": "Cost to Income %", "unit": "pct", "description": "Operating expenses divided by net total income", "aliases": ["c_to_i_pct", "cost_income_ratio", "c_i_ratio"]},
+            {"key": "roau_pct", "label": "ROA %", "unit": "pct", "description": "Annualized net profit divided by average total assets", "aliases": ["roa_pct", "roa", "return_on_assets_pct"]},
         ],
     },
     "nbfcs": {
-        "industries": ["Non Banking Financial Company (NBFC)"],
+        "industries": ["Non Banking Financial Company (NBFC)", "Credit Services", "Financial - Capital Markets", "Financial - Credit Services"],
         "kpis": [
             {"key": "aum_cr", "label": "AUM", "unit": "cr", "description": "Total Assets Under Management in crores"},
             {"key": "disbursements_cr", "label": "Disbursements", "unit": "cr", "description": "Total loans disbursed during the quarter in crores"},
@@ -45,7 +45,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "insurance": {
-        "industries": ["Life Insurance", "General Insurance"],
+        "industries": ["Life Insurance", "General Insurance", "Insurance - Life", "Insurance - Diversified", "Insurance - Property & Casualty"],
         "kpis": [
             {"key": "annualized_premium_equivalent_cr", "label": "APE", "unit": "cr", "description": "(Life) Annualized Premium Equivalent in crores"},
             {"key": "value_of_new_business_cr", "label": "VNB", "unit": "cr", "description": "(Life) Value of New Business in crores"},
@@ -60,7 +60,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "it_services": {
-        "industries": ["IT - Software", "IT - Services"],
+        "industries": ["IT - Software", "IT - Services", "Information Technology Services", "Software - Application", "Software - Infrastructure"],
         "kpis": [
             {"key": "tcv_deal_wins_usd_mn", "label": "TCV / Deal Wins", "unit": "usd_mn", "description": "Total Contract Value of new deal wins in USD Millions"},
             {"key": "constant_currency_revenue_growth_pct", "label": "CC Growth %", "unit": "pct", "description": "Revenue growth adjusted for exchange rate fluctuations"},
@@ -74,20 +74,20 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "pharma": {
-        "industries": ["Pharmaceuticals", "Healthcare"],
+        "industries": ["Pharmaceuticals", "Healthcare", "Drug Manufacturers - Specialty & Generic", "Drug Manufacturers - General", "Biotechnology"],
         "kpis": [
-            {"key": "us_revenue_usd_mn", "label": "US Revenue", "unit": "usd_mn", "description": "Total US market sales in USD Millions"},
-            {"key": "india_formulations_revenue_cr", "label": "India Formulations Revenue", "unit": "cr", "description": "Domestic branded generics sales in crores"},
-            {"key": "r_and_d_spend_pct", "label": "R&D Spend %", "unit": "pct", "description": "R&D expenditure as % of total sales"},
-            {"key": "anda_filed_number", "label": "ANDAs Filed", "unit": "number", "description": "ANDA filings with US FDA this quarter"},
-            {"key": "anda_approved_number", "label": "ANDAs Approved", "unit": "number", "description": "ANDA approvals from US FDA this quarter"},
-            {"key": "us_price_erosion_pct", "label": "US Price Erosion %", "unit": "pct", "description": "YoY price erosion in US base business"},
+            {"key": "us_revenue_usd_mn", "label": "US Revenue", "unit": "usd_mn", "description": "Total US market sales in USD Millions", "aliases": ["us_sales_usd_mn", "us_revenue", "us_sales"]},
+            {"key": "india_formulations_revenue_cr", "label": "India Formulations Revenue", "unit": "cr", "description": "Domestic branded generics sales in crores", "aliases": ["india_formulations_cr", "india_branded_generics_cr", "domestic_formulations_cr"]},
+            {"key": "r_and_d_spend_pct", "label": "R&D Spend %", "unit": "pct", "description": "R&D expenditure as % of total sales", "aliases": ["rd_spend_pct", "rnd_spend_pct", "research_development_pct", "r_and_d_pct", "rd_pct"]},
+            {"key": "anda_filed_number", "label": "ANDAs Filed", "unit": "number", "description": "ANDA filings with US FDA this quarter", "aliases": ["anda_filings_number", "anda_filed", "andas_filed"]},
+            {"key": "anda_approved_number", "label": "ANDAs Approved", "unit": "number", "description": "ANDA approvals from US FDA this quarter", "aliases": ["anda_approvals_number", "anda_approved", "andas_approved"]},
+            {"key": "us_price_erosion_pct", "label": "US Price Erosion %", "unit": "pct", "description": "YoY price erosion in US base business", "aliases": ["price_erosion_pct", "us_erosion_pct"]},
             {"key": "api_revenue_cr", "label": "API Revenue", "unit": "cr", "description": "Active Pharmaceutical Ingredients revenue in crores"},
             {"key": "mr_productivity_lakhs_per_month", "label": "MR Productivity", "unit": "lakhs", "description": "Monthly revenue per Medical Representative in India"},
         ],
     },
     "fmcg": {
-        "industries": ["FMCG", "Consumer Food"],
+        "industries": ["FMCG", "Consumer Food", "Household & Personal Products", "Packaged Foods", "Beverages - Non-Alcoholic"],
         "kpis": [
             {"key": "underlying_volume_growth_pct", "label": "Volume Growth %", "unit": "pct", "description": "YoY growth in actual units sold, stripping out price/mix"},
             {"key": "price_led_growth_pct", "label": "Price/Mix Growth %", "unit": "pct", "description": "Revenue growth from price hikes or premiumization"},
@@ -100,7 +100,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "auto": {
-        "industries": ["Automobile", "Auto Components"],
+        "industries": ["Automobile", "Auto Components", "Auto - Manufacturers", "Auto Manufacturers", "Auto Parts", "Auto & Truck Dealerships"],
         "kpis": [
             {"key": "wholesale_volumes_number", "label": "Wholesale Volumes", "unit": "number", "description": "Total units dispatched to dealers"},
             {"key": "retail_volumes_number", "label": "Retail Volumes", "unit": "number", "description": "Total units sold to end customers"},
@@ -113,7 +113,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "cement": {
-        "industries": ["Cement & Cement Products"],
+        "industries": ["Cement & Cement Products", "Building Materials"],
         "kpis": [
             {"key": "sales_volume_mn_tons", "label": "Sales Volume", "unit": "mn_tons", "description": "Total cement + clinker sales volume in MMT"},
             {"key": "capacity_utilization_pct", "label": "Capacity Utilization %", "unit": "pct", "description": "Production as % of installed capacity"},
@@ -126,7 +126,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "metals_and_mining": {
-        "industries": ["Iron & Steel", "Non-Ferrous Metals", "Mining & Mineral products"],
+        "industries": ["Iron & Steel", "Non-Ferrous Metals", "Mining & Mineral products", "Steel", "Copper", "Aluminum", "Other Industrial Metals & Mining"],
         "kpis": [
             {"key": "production_volume_kt", "label": "Production Volume", "unit": "kt", "description": "Total production in Kilo Tonnes"},
             {"key": "sales_volume_kt", "label": "Sales Volume", "unit": "kt", "description": "Total volume sold in Kilo Tonnes"},
@@ -138,7 +138,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "real_estate": {
-        "industries": ["Realty", "Construction"],
+        "industries": ["Realty", "Construction", "Real Estate - Development", "Real Estate Services"],
         "kpis": [
             {"key": "pre_sales_value_cr", "label": "Pre-Sales Value", "unit": "cr", "description": "Value of new units booked in crores"},
             {"key": "pre_sales_volume_mn_sqft", "label": "Pre-Sales Volume", "unit": "mn_sqft", "description": "Area of new units booked in Mn Sq Ft"},
@@ -152,7 +152,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "telecom": {
-        "industries": ["Telecom - Services"],
+        "industries": ["Telecom - Services", "Telecom Services", "Communication Services"],
         "kpis": [
             {"key": "arpu_rs", "label": "ARPU", "unit": "rs", "description": "Average Revenue Per User per month"},
             {"key": "total_subscriber_base_mn", "label": "Total Subscribers", "unit": "mn", "description": "Active wireless subscriber base in Millions"},
@@ -164,7 +164,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "chemicals": {
-        "industries": ["Chemicals", "Specialty Chemicals", "Agrochemicals"],
+        "industries": ["Chemicals", "Specialty Chemicals", "Agrochemicals", "Chemicals - Specialty"],
         "kpis": [
             {"key": "volume_growth_pct", "label": "Volume Growth %", "unit": "pct", "description": "YoY growth in tonnage sold"},
             {"key": "price_and_mix_growth_pct", "label": "Price/Mix Growth %", "unit": "pct", "description": "Revenue growth from pricing/product mix"},
@@ -176,7 +176,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "power_and_utilities": {
-        "industries": ["Power Generation", "Power Distribution", "Gas Distribution"],
+        "industries": ["Power Generation", "Power Distribution", "Gas Distribution", "Utilities - Regulated Electric", "Utilities - Independent Power Producers", "Utilities - Diversified"],
         "kpis": [
             {"key": "plant_load_factor_pct", "label": "PLF %", "unit": "pct", "description": "Actual generation as % of max possible"},
             {"key": "plant_availability_factor_pct", "label": "PAF %", "unit": "pct", "description": "Plant availability (determines capacity charge recovery)"},
@@ -188,7 +188,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "oil_and_gas": {
-        "industries": ["Refineries", "Oil Exploration", "Petrochemicals"],
+        "industries": ["Refineries", "Oil Exploration", "Petrochemicals", "Refineries & Marketing", "Oil & Gas Refining & Marketing", "Oil & Gas Integrated", "Oil & Gas E&P"],
         "kpis": [
             {"key": "gross_refining_margin_usd_per_bbl", "label": "GRM", "unit": "usd_per_bbl", "description": "Gross Refining Margin per barrel of crude"},
             {"key": "refinery_throughput_mmt", "label": "Throughput", "unit": "mmt", "description": "Crude oil processed in Million Metric Tonnes"},

@@ -31,3 +31,23 @@ For companies with >30% revenue from exports, currency swings directly impact ma
 ### Specialty vs Generics
 - If the company has a specialty portfolio (patented/complex generics/biosimilars), separate this from base generics
 - Specialty commands premium valuation (higher margins, lower competition, longer lifecycle)
+
+### Gross-to-Net Adjustments — The US Revenue Quality Check
+US pharma revenue is reported **net** of rebates, chargebacks, shelf-stock accruals, failure-to-supply penalties, and return reserves. These Gross-to-Net (GTN) adjustments are management-estimated — and are a well-known earnings-smoothing lever. A small tweak to GTN estimates (20-50 bps of gross sales) materially flatters or flatters EPS.
+- Track **GTN reserve / gross revenue** trajectory where disclosed in filings or concall — typical range is 45-60% of gross for US generics
+- A sudden step-down in GTN accruals signals either real channel improvement or accrual release (pulling revenue forward) — check `get_company_context(section='filings', sub_section='notes_to_accounts')` for the US revenue reserve walk
+- Rising returns / stability issues (recalls, failure-to-supply) show up here first — a company that expands US launches while GTN accruals don't scale proportionally is hiding near-term provisioning
+- Flag the risk even when data isn't granular — US revenue recognition is where pharma earnings quality issues most often emerge
+
+### Facility Utilization / Fixed Asset Turnover — The Idle-Plant Drag
+Pharma manufacturing plants are capex-heavy (₹500-2,000 Cr for a mid-size USFDA-compliant facility) and must clear FDA inspections before they can supply regulated markets. A plant under an FDA warning letter, import alert, or OAI status can sit idle for 2-4 years while remediation runs — during which fixed costs continue to bleed.
+- Compute **Fixed Asset Turnover** = Revenue / Gross Block via `calculate` using `get_fundamentals(section='ratios')`. Compare against peer median via `get_peer_sector(section='benchmarks')`
+- A FAT 30-40% below peer median signals idle capacity — either under-utilized plants or an FDA-halted facility still on the books earning zero return
+- Cross-reference FDA status from `get_company_context(section='concall_insights')` — any mentioned warning letter, 483 observations, or OAI classification on a material facility is a structural ROCE drag until cleared
+- Flag capacity utilization explicitly; a pharma report that ignores FDA compliance on manufacturing facilities is missing a binary risk
+
+### API Backward Integration / KSM Sourcing
+Gross margin resilience during supply shocks hinges on **Key Starting Material (KSM)** and API backward integration. Indian pharma historically sources 60-70% of KSMs from China; any disruption (pandemic, export curbs, logistics crunch) hits margin directly, and the lag before domestic or alternative-country sourcing catches up is 12-18 months.
+- Extract API/KSM sourcing mix from `get_company_context(section='concall_insights')` — management often discloses "% of KSM imported from China" or "% of API produced in-house"
+- A vertically integrated producer (captive API for own formulations) carries materially lower gross-margin volatility through supply disruptions than a pure formulator
+- China+1 sourcing strategies and India-specific PLI benefits for bulk drugs are live policy tailwinds — note if the company is positioned to capture them

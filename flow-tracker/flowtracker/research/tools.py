@@ -757,8 +757,8 @@ async def get_sector_benchmarks(args):
 
 get_concall_insights = tool(
     "get_concall_insights",
-    "Get pre-extracted concall insights from the vault: 4 quarters of operational metrics, financial metrics, management commentary, subsidiary updates, risk flags, and cross-quarter narrative themes. This is structured data already extracted from concall transcripts — much richer and faster than reading raw PDFs.",
-    {"symbol": str},
+    "Get pre-extracted concall insights from the vault: 4 quarters of operational metrics, financial metrics, management commentary, subsidiary updates, risk flags, and cross-quarter narrative themes. First call returns a compact table of contents (quarters + populated sections). Pass sub_section to drill into one section across all quarters ('operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks').",
+    {"symbol": str, "sub_section": str},
     annotations=READ_ONLY,
 )
 
@@ -766,7 +766,7 @@ get_concall_insights = tool(
 @get_concall_insights
 async def get_concall_insights(args):
     with ResearchDataAPI() as api:
-        data = api.get_concall_insights(args["symbol"])
+        data = api.get_concall_insights(args["symbol"], section_filter=args.get("sub_section"))
     return _with_dedup("get_concall_insights", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1029,13 +1029,15 @@ async def get_price_performance(args):
     "Sector-specific operational KPIs extracted from concall transcripts. "
     "Uses canonical field names per sector (14 sectors covered: banks, NBFCs, insurance, IT, pharma, "
     "FMCG, auto, cement, metals, real estate, telecom, chemicals, power, oil & gas). "
-    "Returns per-quarter values + trends. Requires concall extraction to exist.",
-    {"symbol": str},
+    "First call returns a table of contents (available KPI keys + coverage + latest values). "
+    "Pass sub_section='<kpi_key>' to drill into one KPI's full per-quarter timeline with context. "
+    "Example canonical keys: 'gross_npa_pct', 'casa_ratio_pct', 'r_and_d_spend_pct', 'anda_filed_number'.",
+    {"symbol": str, "sub_section": str},
     annotations=READ_ONLY,
 )
 async def get_sector_kpis(args):
     with ResearchDataAPI() as api:
-        data = api.get_sector_kpis(args["symbol"])
+        data = api.get_sector_kpis(args["symbol"], kpi_key=args.get("sub_section"))
     return _with_dedup("get_sector_kpis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1648,9 +1650,9 @@ def _get_company_context_section(api, symbol, section, args):
         path = Path.home() / "vault" / "stocks" / symbol.upper() / "profile.md"
         return path.read_text() if path.exists() else ""
     elif section == "concall_insights":
-        return api.get_concall_insights(symbol)
+        return api.get_concall_insights(symbol, section_filter=args.get("sub_section"))
     elif section == "sector_kpis":
-        return api.get_sector_kpis(symbol)
+        return api.get_sector_kpis(symbol, kpi_key=args.get("sub_section"))
     elif section == "filings":
         return api.get_recent_filings(symbol, args.get("limit", 10))
     else:
@@ -1659,8 +1661,8 @@ def _get_company_context_section(api, symbol, section, args):
 
 @tool(
     "get_company_context",
-    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']",
-    {"symbol": str, "section": str, "doc_type": str, "limit": int},
+    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
+    {"symbol": str, "section": str, "doc_type": str, "limit": int, "sub_section": str},
     annotations=READ_ONLY,
 )
 async def get_company_context(args):
@@ -1675,8 +1677,8 @@ async def get_company_context(args):
                 "profile": api.get_company_profile(symbol),
                 "documents": api.get_company_documents(symbol, args.get("doc_type")),
                 "business_profile": _get_company_context_section(api, symbol, "business_profile", args),
-                "concall_insights": api.get_concall_insights(symbol),
-                "sector_kpis": api.get_sector_kpis(symbol),
+                "concall_insights": api.get_concall_insights(symbol, section_filter=args.get("sub_section")),
+                "sector_kpis": api.get_sector_kpis(symbol, kpi_key=args.get("sub_section")),
                 "filings": api.get_recent_filings(symbol, args.get("limit", 10)),
             }
         else:

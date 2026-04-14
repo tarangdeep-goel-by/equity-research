@@ -1,0 +1,149 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T18:42:57.137993+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "real_estate": {
+      "agent": "financials",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent deconstruction of Ind-AS 115 distortions and the Beneish M-score false positive. However, it lacks a deeper analysis of construction cost inflation and its potential impact on the margins of the massive WIP inventory."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Highly consistent narrative regarding the lag between cash and P&L. The only minor contradiction is praising the FY25 QIP for deleveraging while simultaneously noting that Sep-25 debt is already approaching the management's absolute cap."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers most critical bases, but completely misses an analysis of the weighted average cost of debt (WACD) trajectory, which is paramount for a developer with ~\u20b916,000 Cr in borrowings."
+        },
+        "actionability": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Provides a clear bullish signal and identifies the valuation gap (P/B). However, it fails to provide a target valuation range or NAV-based price target, relying too heavily on relative P/B and PE multiples."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Outstanding application of real estate frameworks (Pre-sales -> Collections -> OCF) and correctly dismissing GAAP CFO/WC days. The only missing piece is a Net Asset Value (NAV) framework, which is the gold standard for RE valuation."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Great use of the calculate tool and clear citations. However, the exact derivation of the ABVPS (\u20b9574.81) is slightly opaque, and it failed to locate the FY25 ASP which is usually discussed in concalls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 12: Peer Benchmarking / Valuation",
+          "issue": "Relies on P/E and P/B for valuation without discussing Net Asset Value (NAV).",
+          "suggestion": "Update agent instructions for Real Estate to explicitly require an assessment of NAV (Net Asset Value) or Price-to-NAV, or at least a discussion of why NAV is the preferred valuation method over P/E."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 5: Balance Sheet",
+          "issue": "Missing analysis of the Cost of Debt.",
+          "suggestion": "Instruct the financials agent to extract and analyze the weighted average cost of debt and its historical trend for highly leveraged sectors like Real Estate and Infrastructure."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Mandatory Sector Alert / KPIs",
+          "issue": "Unsold inventory / months of inventory is marked as 'not applicable' because it's missing from the tools.",
+          "suggestion": "Enhance the `get_company_context(sector_kpis)` tool to extract 'unsold_inventory_mn_sqft' and 'months_of_inventory' from investor presentations for real estate developers."
+        }
+      ],
+      "strengths": [
+        "Exceptional handling of Ind-AS 115 revenue recognition distortions, correctly re-orienting the reader to cash-based metrics.",
+        "Brilliant contextualization of the Beneish M-Score false positive, demonstrating deep sector-specific accounting knowledge.",
+        "Strong subsidiary analysis highlighting the inflection point where SPVs transitioned from a drag to a major profit contributor."
+      ],
+      "summary": "This is an institutional-quality report that perfectly captures the nuances of Indian real estate accounting under Ind-AS 115. The primary gap is the absence of a Net Asset Value (NAV) framework and cost of debt analysis, which are critical for a complete real estate valuation. Nevertheless, the focus on pre-sales, collections, and management OCF makes this highly actionable and accurate.",
+      "report_length": 41608,
+      "run_duration_s": 887.6914200420724,
+      "eval_duration_s": 27.831539459060878,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent deconstruction of Ind-AS 115 distortions and the Beneish M-score false positive. However, it lacks a deeper analysis of construction cost inflation and its potential impact on the margins of the massive WIP inventory.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Highly consistent narrative regarding the lag between cash and P&L. The only minor contradiction is praising the FY25 QIP for deleveraging while simultaneously noting that Sep-25 debt is already approaching the management's absolute cap.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers most critical bases, but completely misses an analysis of the weighted average cost of debt (WACD) trajectory, which is paramount for a developer with ~\u20b916,000 Cr in borrowings.\"\n    },\n    \"actionability\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Provides a clear bullish signal and identifies the valuation gap (P/B). However, it fails to provide a target valuation range or NAV-based price target, relying too heavily on relative P/B and PE multiples.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Outstanding application of real estate frameworks (Pre-sales -> Collections -> OCF) and correctly dismissing GAAP CFO/WC days. The only missing piece is a Net Asset Value (NAV) framework, which is the gold standard for RE valuation.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Great use of the calculate tool and clear citations. However, the exact derivation of the ABVPS (\u20b9574.81) is slightly opaque, and it failed to locate the FY25 ASP which is usually discussed in concalls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 12: Peer Benchmarking / Valuation\",\n      \"issue\": \"Relies on P/E and P/B for valuation without discussing Net Asset Value (NAV).\",\n      \"suggestion\": \"Update agent instructions for Real Estate to explicitly require an assessment of NAV (Net Asset Value) or Price-to-NAV, or at least a discussion of why NAV is the preferred valuation method over P/E.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 5: Balance Sheet\",\n      \"issue\": \"Missing analysis of the Cost of Debt.\",\n      \"suggestion\": \"Instruct the financials agent to extract and analyze the weighted average cost of debt and its historical trend for highly leveraged sectors like Real Estate and Infrastructure.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Mandatory Sector Alert / KPIs\",\n      \"issue\": \"Unsold inventory / months of inventory is marked as 'not applicable' because it's missing from the tools.\",\n      \"suggestion\": \"Enhance the `get_company_context(sector"
+    },
+    "conglomerate": {
+      "agent": "financials",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptional decomposition of the DuPont metrics and 'other income' distortions, correctly identifying the mathematical signature of capital incubation. However, it could have explored the spread between the cost of debt and the zero incremental ROCE more deeply."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly consistent narrative explaining why seemingly contradictory signals (high ROE vs falling asset turnover, clean earnings quality vs failed accruals) make sense for an incubator. A minor gap exists in reconciling the high standalone profitability with the consolidated zero incremental ROCE."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers almost all critical financial dimensions and handles missing data gracefully. However, it lacks a breakdown of standalone (Holdco) debt versus subsidiary debt, which is a critical omission for conglomerate risk assessment."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Clearly defines the 'hope trade' and provides excellent open questions for the web research agent. It falls slightly short by not defining specific financial thresholds (e.g., margin targets) that would signal the successful graduation of incubating assets."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Correctly identifies the company as an incubator rather than a standard operating company, utilizing CWIP/Net Block and Standalone vs Consol splits perfectly. It missed calculating ROIC excluding CWIP, which is the best way to judge the actual operating assets of an incubator."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent transparency regarding the concall data failure and clear citations for all metrics. It relies slightly too heavily on pre-computed profile metrics (like sustainable growth rate) without showing the raw inputs."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Tool Audit / Mandatory Metrics Status",
+          "issue": "Concall data extraction failed completely (API overload / BSE cover letters returned instead of transcripts), depriving the report of critical segment-level EBITDA and capex commentary.",
+          "suggestion": "Fix the `get_company_context` concall parser to correctly identify and extract actual transcript text rather than exchange cover letters, and implement retry logic for API overloads."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "4. Balance Sheet & Cash Flow",
+          "issue": "The report analyzes consolidated D/E but fails to isolate standalone (Holdco) debt versus subsidiary debt, which is vital for assessing conglomerate financing risk.",
+          "suggestion": "Update instructions for conglomerate/holdco analysis to explicitly require fetching both standalone and consolidated balance sheets to isolate holdco-level debt and interest coverage."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Business Quality \u2014 DuPont Decomposition",
+          "issue": "The report notes ROCE is depressed by massive CWIP, but fails to calculate ROIC excluding CWIP to evaluate the true return of the currently operating assets.",
+          "suggestion": "Instruct the agent to calculate 'Core ROIC' (EBIT / (Capital Employed - CWIP - Cash)) when analyzing infrastructure or incubation companies with CWIP/Net Block > 0.2."
+        }
+      ],
+      "strengths": [
+        "Brilliant structural framing of the company as an 'incubation mothership', correctly discarding standard PE/EV-EBITDA metrics in favor of capital allocation and SOTP frameworks.",
+        "Masterful dissection of the P&L to isolate 'other income' from true operating income, preventing the reader from being fooled by volatile net profit figures.",
+        "Excellent interpretation of the DuPont analysis, correctly identifying that falling asset turnover is a feature of the incubation model (assets arriving before revenue) rather than business deterioration."
+      ],
+      "summary": "This is an institutional-quality financial deep-dive that perfectly captures the complex, capital-heavy reality of Adani Enterprises' incubation model. The primary gap is the lack of a standalone vs. subsidiary debt breakdown, which is critical for assessing holdco risk. Despite pipeline failures with concall data, the agent pivoted beautifully to extract maximum signal from the standalone vs. consolidated financial splits.",
+      "report_length": 32770,
+      "run_duration_s": 1093.9086559170391,
+      "eval_duration_s": 32.768477458972484,
+      "run_skipped": false,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptional decomposition of the DuPont metrics and 'other income' distortions, correctly identifying the mathematical signature of capital incubation. However, it could have explored the spread between the cost of debt and the zero incremental ROCE more deeply.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly consistent narrative explaining why seemingly contradictory signals (high ROE vs falling asset turnover, clean earnings quality vs failed accruals) make sense for an incubator. A minor gap exists in reconciling the high standalone profitability with the consolidated zero incremental ROCE.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers almost all critical financial dimensions and handles missing data gracefully. However, it lacks a breakdown of standalone (Holdco) debt versus subsidiary debt, which is a critical omission for conglomerate risk assessment.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Clearly defines the 'hope trade' and provides excellent open questions for the web research agent. It falls slightly short by not defining specific financial thresholds (e.g., margin targets) that would signal the successful graduation of incubating assets.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Correctly identifies the company as an incubator rather than a standard operating company, utilizing CWIP/Net Block and Standalone vs Consol splits perfectly. It missed calculating ROIC excluding CWIP, which is the best way to judge the actual operating assets of an incubator.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent transparency regarding the concall data failure and clear citations for all metrics. It relies slightly too heavily on pre-computed profile metrics (like sustainable growth rate) without showing the raw inputs.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Tool Audit / Mandatory Metrics Status\",\n      \"issue\": \"Concall data extraction failed completely (API overload / BSE cover letters returned instead of transcripts), depriving the report of critical segment-level EBITDA and capex commentary.\",\n      \"suggestion\": \"Fix the `get_company_context` concall parser to correctly identify and extract actual transcript text rather than exchange cover letters, and implement retry logic for API overloads.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"4. Balance Sheet & Cash Flow\",\n      \"issue\": \"The report analyzes consolidated D/E but fails to isolate standalone (Holdco) debt versus subsidiary debt, which is vital for assessing conglomerate financing risk.\",\n      \"suggesti"
+    }
+  }
+}

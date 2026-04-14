@@ -1,0 +1,161 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T17:21:54.358760+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "bfsi"
+  ],
+  "results": {
+    "bfsi": {
+      "agent": "financials",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before operation could complete.', 'status': 'UNAVAILABLE'}}",
+      "report_length": 31240,
+      "run_duration_s": 729.821676166961,
+      "eval_duration_s": 1199.794995791046,
+      "run_skipped": false,
+      "raw_gemini_response": "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before operation could complete.', 'status': 'UNAVAILABLE'}}"
+    },
+    "pharma": {
+      "agent": "financials",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional second-level thinking. The decomposition of DuPont (flat ROE masking massive deleveraging + margin expansion) and the subsidiary analysis (India standalone is <50% of value) are institutional-grade insights."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Highly consistent narrative. The explanation of the FY23 CFO anomaly (working capital absorption) and the tax rate normalization headwind logically connect historical data to future earnings trajectory."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers all standard financial dimensions thoroughly, but misses a deep dive into R&D accounting (capitalization vs expensing) and forex impact on subsidiary translation, which are critical for Indian Pharma."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides clear, evidence-backed takeaways for a PM, particularly regarding the Taro buyout consolidation and the impending tax rate headwind. The reverse DCF frames the valuation expectations perfectly."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "The agent attempted to use the correct pharma frameworks (R&D/Sales, ANDA pipeline, specialty mix) but was thwarted by tool truncation. It correctly identified these as missing, but the report still lacks these hard numbers."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent use of the calculate tool to verify growth rates and margins. The agent handled tool failures (truncation) gracefully by documenting them in the audit and JSON rather than hallucinating."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Structured Briefing (mandatory_metrics_status)",
+          "issue": "The `get_company_context(section='sector_kpis')` tool returned a truncated payload (59.1KB), causing the agent to miss critical pharma metrics like R&D spend, ANDA filings, and US price erosion.",
+          "suggestion": "Increase the token/character limit for the `get_company_context` tool output, or implement pagination so the agent can access the full sector KPIs."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "4.1 Balance Sheet Structure",
+          "issue": "The agent flagged a massive \u20b914,025 Cr jump in intangibles in H1 FY26 but left it as an open question without investigating further.",
+          "suggestion": "Instruct the agent to automatically query `get_events_actions(section='material_events')` or `get_company_context(section='filings')` when it detects a >20% unexplained jump in a major balance sheet line item."
+        }
+      ],
+      "strengths": [
+        "Brilliant subsidiary analysis highlighting that the India standalone business is less than half the story, and correctly framing the Taro buyout as a major catalyst.",
+        "Superb interpretation of the DuPont analysis, recognizing that a 'flat' ROE actually represented a massive improvement in earnings quality due to simultaneous deleveraging.",
+        "Excellent identification of the tax rate anomaly and its forward-looking implication (a 300-500bps headwind to future PAT growth vs EBITDA growth)."
+      ],
+      "summary": "This is a highly sophisticated, institutional-quality financials report that correctly identifies Sun Pharma's underlying margin expansion, subsidiary consolidation, and balance sheet transformation. The primary gap is the lack of hard data on R&D spend and ANDA pipelines, which was caused by a tool truncation issue rather than an analytical failure. With the data pipeline fixed, this agent is performing at a PM-ready level.",
+      "report_length": 38783,
+      "run_duration_s": 811.5386804169975,
+      "eval_duration_s": 396.55958999996074,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional second-level thinking. The decomposition of DuPont (flat ROE masking massive deleveraging + margin expansion) and the subsidiary analysis (India standalone is <50% of value) are institutional-grade insights.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Highly consistent narrative. The explanation of the FY23 CFO anomaly (working capital absorption) and the tax rate normalization headwind logically connect historical data to future earnings trajectory.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers all standard financial dimensions thoroughly, but misses a deep dive into R&D accounting (capitalization vs expensing) and forex impact on subsidiary translation, which are critical for Indian Pharma.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides clear, evidence-backed takeaways for a PM, particularly regarding the Taro buyout consolidation and the impending tax rate headwind. The reverse DCF frames the valuation expectations perfectly.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"The agent attempted to use the correct pharma frameworks (R&D/Sales, ANDA pipeline, specialty mix) but was thwarted by tool truncation. It correctly identified these as missing, but the report still lacks these hard numbers.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent use of the calculate tool to verify growth rates and margins. The agent handled tool failures (truncation) gracefully by documenting them in the audit and JSON rather than hallucinating.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Structured Briefing (mandatory_metrics_status)\",\n      \"issue\": \"The `get_company_context(section='sector_kpis')` tool returned a truncated payload (59.1KB), causing the agent to miss critical pharma metrics like R&D spend, ANDA filings, and US price erosion.\",\n      \"suggestion\": \"Increase the token/character limit for the `get_company_context` tool output, or implement pagination so the agent can access the full sector KPIs.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"4.1 Balance Sheet Structure\",\n      \"issue\": \"The agent flagged a massive \u20b914,025 Cr jump in intangibles in H1 FY26 but left it as an open question without investigating further.\",\n      \"suggestion\": \"Instruct the agent to automatically query `get_events_actions(section='material_events')` or `get_company_context(section='filings')` when it detects a >20% unexplained jump in a major balance sheet line item.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant subsidiary analysis highlighting that the India standalone business is "
+    },
+    "broker": {
+      "agent": "financials",
+      "stock": "GROWW",
+      "sector": "Fintech broker",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent normalization of FY24 PAT and brilliant decomposition of the CFO distortion (advance tax + MTF book build). However, the agent failed to use the calculator tool for complex Gordon Growth Model math, relying on its internal weights."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Narrative logic is highly consistent, but there are unit errors in the written formulas (e.g., 'EPS \u20b92.76 \u00d7 627.36 crore shares / 100 = \u20b91,731 Cr' \u2014 dividing by 100 here is mathematically incorrect if the base is already in crores)."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Covers all major bases including margins, DuPont, cash flow, and growth. Missed calling the 'bfsi' section in the quality scores tool, which is specifically designed for financial sector stocks."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear bullish signal with well-defined catalysts (MTF scaling, operating leverage). Leaves the intangible write-down as an 'unresolved' high-priority flag without bounding the potential risk scenario."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Top-tier application of broker-specific frameworks. Correctly identifies that client payables are ring-fenced float (not debt) and accurately treats MTF book expansion as capital deployment rather than a working capital drag."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 84,
+          "rationale": "Good citation of tools used, but blatantly ignored the strict instruction to ALWAYS use the 'calculate' tool for math, performing multiple complex calculations manually."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Multiple Sections (Growth Trajectory, Margin Analysis)",
+          "issue": "Agent performed complex math (Gordon Growth P/B, incremental margins, TTM PAT) manually without calling the 'calculate' tool, violating explicit system instructions.",
+          "suggestion": "Reinforce the system prompt to strictly mandate the use of the 'calculate' tool for ANY arithmetic, including formulaic derivations like Gordon Growth or incremental margins."
+        },
+        {
+          "type": "COMPUTATION",
+          "section": "5. Growth Trajectory (Forward Earnings Context)",
+          "issue": "The formula written for TTM PAT contains a unit error: 'EPS \u20b92.76 \u00d7 627.36 crore shares / 100 = \u20b91,731 Cr'. 627.36 * 2.76 is already 1,731.5. The '/ 100' makes the formula mathematically incorrect.",
+          "suggestion": "Use the calculate tool to handle unit conversions (lakhs to crores) to prevent hallucinated formula strings."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Quality Deep-Dive",
+          "issue": "Agent failed to call get_quality_scores with the 'bfsi' section, which is highly relevant for a financial broker.",
+          "suggestion": "Update the agent's routing logic to always include 'bfsi' in get_quality_scores when analyzing brokers, AMCs, or wealth management firms."
+        }
+      ],
+      "strengths": [
+        "Exceptional adjustment of the Cash Flow from Operations (CFO) to reflect the economic reality of a broker (adding back MTF book expansion and advance taxes).",
+        "Strong normalization of the FY24 exceptional item, preventing a distorted view of the company's historical earnings trajectory.",
+        "Excellent DuPont analysis that correctly identifies ROE as margin-driven rather than leverage-driven, properly contextualizing the inflated asset base due to client float."
+      ],
+      "summary": "This is a highly sophisticated, institutional-quality financial analysis that correctly applies broker-specific accounting adjustments to reveal the true economic engine of the business. The primary gap is procedural: the agent completely ignored the calculator tool, leading to minor unit typos in its written formulas, though the underlying analytical logic remains exceptionally strong.",
+      "report_length": 36554,
+      "run_duration_s": 709.8128030830994,
+      "eval_duration_s": 42.40405004192144,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent normalization of FY24 PAT and brilliant decomposition of the CFO distortion (advance tax + MTF book build). However, the agent failed to use the calculator tool for complex Gordon Growth Model math, relying on its internal weights.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Narrative logic is highly consistent, but there are unit errors in the written formulas (e.g., 'EPS \u20b92.76 \u00d7 627.36 crore shares / 100 = \u20b91,731 Cr' \u2014 dividing by 100 here is mathematically incorrect if the base is already in crores).\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Covers all major bases including margins, DuPont, cash flow, and growth. Missed calling the 'bfsi' section in the quality scores tool, which is specifically designed for financial sector stocks.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear bullish signal with well-defined catalysts (MTF scaling, operating leverage). Leaves the intangible write-down as an 'unresolved' high-priority flag without bounding the potential risk scenario.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Top-tier application of broker-specific frameworks. Correctly identifies that client payables are ring-fenced float (not debt) and accurately treats MTF book expansion as capital deployment rather than a working capital drag.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 84,\n      \"rationale\": \"Good citation of tools used, but blatantly ignored the strict instruction to ALWAYS use the 'calculate' tool for math, performing multiple complex calculations manually.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Multiple Sections (Growth Trajectory, Margin Analysis)\",\n      \"issue\": \"Agent performed complex math (Gordon Growth P/B, incremental margins, TTM PAT) manually without calling the 'calculate' tool, violating explicit system instructions.\",\n      \"suggestion\": \"Reinforce the system prompt to strictly mandate the use of the 'calculate' tool for ANY arithmetic, including formulaic derivations like Gordon Growth or incremental margins.\"\n    },\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"5. Growth Trajectory (Forward Earnings Context)\",\n      \"issue\": \"The formula written for TTM PAT contains a unit error: 'EPS \u20b92.76 \u00d7 627.36 crore shares / 100 = \u20b91,731 Cr'. 627.36 * 2.76 is already 1,731.5. The '/ 100' makes the formula mathematically incorrect.\",\n      \"suggestion\": \"Use the calculate tool to handle unit conversions (lakhs to crores) to prevent hallucinated formula strings.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Quality Deep-Dive\",\n      \""
+    }
+  }
+}

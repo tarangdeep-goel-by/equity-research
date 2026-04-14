@@ -25,6 +25,6 @@ This is a telecom operator. Spectrum amortization and heavy capex distort standa
 - **Data usage per subscriber**: engagement and monetization potential
 - **4G/5G mix**: technology migration progress
 
-**SOTP Note:** For conglomerates (e.g., Bharti Airtel = mobile India + Africa + towers + broadband + enterprise + payments), SOTP analysis is appropriate but requires segment-level data from investor presentations. If segment data is not available from tools, state this limitation explicitly rather than estimating segment values.
+**SOTP Note:** For diversified telecom operators running multiple verticals (mobile domestic + international geographies + towers + broadband + enterprise + digital payments), SOTP analysis is appropriate but requires segment-level data from investor presentations. If segment data is not available from tools, state this limitation explicitly rather than estimating segment values.
 
-**Emphasize:** ARPU growth trajectory, subscriber market share, 5G monetization timeline, spectrum holding adequacy, tower-sharing economics, and Africa/international segment contribution (for Bharti).
+**Emphasize:** ARPU growth trajectory, subscriber market share, 5G monetization timeline, spectrum holding adequacy, tower-sharing economics, and international segment contribution when the operator has cross-border exposure.
