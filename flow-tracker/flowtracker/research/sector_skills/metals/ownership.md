@@ -56,3 +56,16 @@ For family diversified groups, SEBI reports pledges per-entity. The true risk me
 - For PSUs, does the current GoI fiscal deficit mandate an accelerated OFS timeline for this specific asset?
 - Are recent expansions funded by dilutive equity issuance, or is the promoter maintaining their stake via warrants?
 - How much effective control is ceded to the government via statutory nominee directors under the MMDR Act?
+
+### LTV Computation for Foreign-Debt-Servicing Vehicles
+When pledge data surfaces encumbered shares for a foreign-debt-servicing vehicle (Vedanta Resources for VEDL, similar structures for Hindalco/NALCO parents, Adani group foreign-debt vehicles), ALWAYS compute Loan-to-Value:
+
+`LTV = foreign_debt_usd × USDINR / (encumbered_shares × current_price)`
+
+Typical covenant threshold: margin call triggers when `LTV × 1.3` breached (i.e., collateral value falls 23%). Inputs:
+- `foreign_debt_usd` — from `get_company_context(section='concall_insights')` or filings search
+- `USDINR` — from `get_macro_context` (currency rate)
+- `encumbered_shares` — from `get_ownership(section='promoter_pledge')`
+- `current_price` — from `get_analytical_profile`
+
+Use `calculate` to derive LTV. Do NOT leave margin-call risk as an open question — all inputs are in your tools. Report headroom to margin call in the Risk Signals section, not as a question.

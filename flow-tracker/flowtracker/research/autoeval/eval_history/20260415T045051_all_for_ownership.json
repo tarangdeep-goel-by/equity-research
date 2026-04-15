@@ -1,0 +1,217 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T04:50:51.029482+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "pharma": {
+      "agent": "ownership",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptional depth in calculating absorption ratios and explaining the structural reasons for zero insider buying (family trust holdco). However, it misses analyzing the historical correlation of FII flows with past FDA warning letter cycles (e.g., Halol in 2015/2022) to contextualize the current exit."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Brilliantly reconciles the apparent contradiction between quarterly DII absorption and short-term speculative delivery churn. The minor flaw is assuming the FII exit is macro-driven simply because DIIs are buying market-wide, without proving the stock's specific FII flow beta."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers all mandatory bases (pledge, MF conviction, insider, delivery) thoroughly. The notable gap is the omission of absolute retail shareholder count trends (number of folios), which is a critical metric for confirming retail capitulation beyond just the percentage held."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear bull/bear framework and identifies specific catalysts (M&A wildcard, MF trim acceleration). The 'Mixed/Bullish' verdict, however, slightly muddies the waters for a PM\u2014it lacks a definitive trigger for portfolio action (e.g., 'add on dips below X' or 'wait for M&A clarity')."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Correctly identifies specialty pharma pipeline milestones and FDA warning letters as key drivers. However, it fails to apply the classic Indian Pharma ownership framework: mapping FII vs DII flow preferences to the shifting US vs Domestic revenue mix."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent citation of tools, dates, and explicit flagging of data limitations. The only weakness is that the agent accepted the lack of named FII holders from the tool without attempting to infer major passive/active holders from alternative sector flow data."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Section 1: Ownership Structure",
+          "issue": "The `shareholder_detail` tool failed to return named foreign institutional investors, limiting the ability to decompose FII flows into active vs. passive.",
+          "suggestion": "Enhance the `get_ownership` tool to ensure FPI/FII named holders are extracted from exchange filings, or provide a fallback to global fund holdings data."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 2: The Money Flow Story",
+          "issue": "Missing analysis of absolute retail shareholder counts (number of folios) to confirm retail capitulation.",
+          "suggestion": "Update the ownership agent prompt to explicitly request the trend in the absolute number of retail shareholders, not just the percentage of equity held."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 6: Institutional Verdict",
+          "issue": "Fails to connect institutional flows to the US vs Domestic revenue mix, which is the standard framework for Indian Pharma.",
+          "suggestion": "Add sector-specific instructions for Pharma: 'Correlate FII/DII ownership shifts with changes in the US Generics vs Domestic Chronic revenue mix.'"
+        }
+      ],
+      "strengths": [
+        "Superb contextualization of 'zero insider buying' by correctly identifying the Shanghvi family trust holdco structure, avoiding a false negative signal.",
+        "Excellent use of the calculator tool to derive the 96.4% institutional absorption ratio and quantify the exact monetary value of the FII to Insurance handoff."
+      ],
+      "summary": "This is a highly sophisticated, institutional-grade report that excels in structural analysis, particularly regarding family trust dynamics and institutional absorption ratios. Its primary gap is missing the classic pharma framework of mapping these institutional flows to the underlying US vs. Domestic revenue cycles, but it remains an exceptionally strong piece of research.",
+      "report_length": 29305,
+      "run_duration_s": 410.70614416594617,
+      "eval_duration_s": 27.85162141697947,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptional depth in calculating absorption ratios and explaining the structural reasons for zero insider buying (family trust holdco). However, it misses analyzing the historical correlation of FII flows with past FDA warning letter cycles (e.g., Halol in 2015/2022) to contextualize the current exit.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Brilliantly reconciles the apparent contradiction between quarterly DII absorption and short-term speculative delivery churn. The minor flaw is assuming the FII exit is macro-driven simply because DIIs are buying market-wide, without proving the stock's specific FII flow beta.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers all mandatory bases (pledge, MF conviction, insider, delivery) thoroughly. The notable gap is the omission of absolute retail shareholder count trends (number of folios), which is a critical metric for confirming retail capitulation beyond just the percentage held.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear bull/bear framework and identifies specific catalysts (M&A wildcard, MF trim acceleration). The 'Mixed/Bullish' verdict, however, slightly muddies the waters for a PM\u2014it lacks a definitive trigger for portfolio action (e.g., 'add on dips below X' or 'wait for M&A clarity').\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Correctly identifies specialty pharma pipeline milestones and FDA warning letters as key drivers. However, it fails to apply the classic Indian Pharma ownership framework: mapping FII vs DII flow preferences to the shifting US vs Domestic revenue mix.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent citation of tools, dates, and explicit flagging of data limitations. The only weakness is that the agent accepted the lack of named FII holders from the tool without attempting to infer major passive/active holders from alternative sector flow data.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Section 1: Ownership Structure\",\n      \"issue\": \"The `shareholder_detail` tool failed to return named foreign institutional investors, limiting the ability to decompose FII flows into active vs. passive.\",\n      \"suggestion\": \"Enhance the `get_ownership` tool to ensure FPI/FII named holders are extracted from exchange filings, or provide a fallback to global fund holdings data.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 2: The Money Flow Story\",\n      \"issue\": \"Missing analysis of absolute retail shareholder counts (number of folios) to confirm retail capitulation.\",\n      \"suggestion"
+    },
+    "private_bank": {
+      "agent": "ownership",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptional decomposition of the merger artifact and passive vs. active MF holdings. However, it assumes the Mar 2024 FII exit was purely 'housing-finance FIIs unwinding' without verifying if FIIs were selling Indian banks broadly during that specific quarter."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong overall logic and absorption ratio derivation. However, calculating the historical FII exit value (-6.26pp) using the *current* market cap (\u20b978,429 Cr) is a structural flow-math error, even with the caveat provided."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers most bases well, but gave up on finding ADR outstanding after only checking management commentary and shareholder details, missing potential filings data. Also missed the 5% RBI prior-approval threshold."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear 'disciplined accumulation' verdict tied to governance catalysts, but lacks specific flow-based price triggers for when the DII absorption creates a definitive floor."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Correctly applies the 74% FDI cap, ESOP insider framing, and 0% promoter baseline for private banks. Missing the 5% RBI approval rule for major shareholding keeps it from a perfect score."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent use of the `calculate` tool and clear citations. Correctly identified the pipeline limitation regarding FII names and MF velocity, framing them as open questions rather than hallucinating."
+        }
+      },
+      "issues": [
+        {
+          "type": "COMPUTATION",
+          "section": "2. The Money Flow Story",
+          "issue": "Calculated historical FII exit value (-6.26pp) using the current market cap, which distorts the actual quantum of capital that flowed out during historical periods.",
+          "suggestion": "Instruct the agent to either calculate historical flows using the average market cap of the respective quarter, or strictly report the change in percentage points without converting to current INR value."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "7. Open Questions",
+          "issue": "Missed the 5% RBI prior approval threshold for major shareholding in banks, mentioning only the 10% FPI sub-limit.",
+          "suggestion": "Update the BFSI ownership prompt checklist to explicitly require checking/mentioning the 5% RBI prior approval threshold for any single entity acquiring bank shares."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "BFSI Mandatory Ownership Checklist",
+          "issue": "Agent failed to find ADR data because it only checked concall commentary and shareholder details.",
+          "suggestion": "Instruct the agent to check `get_company_context(section='filings')` or `get_fundamentals(section='balance_sheet_detail')` when searching for ADR/GDR outstanding shares."
+        }
+      ],
+      "strengths": [
+        "Exceptional handling of the HDFC merger artifact, correctly identifying the +20.55pp FII jump as a corporate action rather than active buying.",
+        "Nuanced breakdown of MF conviction by separating passive ETF mechanical holdings from active fund manager conviction, providing a much more accurate picture of institutional sentiment."
+      ],
+      "summary": "This is a highly sophisticated ownership report that correctly contextualizes the complex post-merger shareholding dynamics of HDFC Bank. The primary gaps are a minor flow-math calculation error (using current mcap for historical flows) and the omission of the 5% RBI prior-approval threshold, but the analytical narrative is institutional-grade.",
+      "report_length": 29979,
+      "run_duration_s": 367.6725482919719,
+      "eval_duration_s": 32.35816204105504,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptional decomposition of the merger artifact and passive vs. active MF holdings. However, it assumes the Mar 2024 FII exit was purely 'housing-finance FIIs unwinding' without verifying if FIIs were selling Indian banks broadly during that specific quarter.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong overall logic and absorption ratio derivation. However, calculating the historical FII exit value (-6.26pp) using the *current* market cap (\\u20b978,429 Cr) is a structural flow-math error, even with the caveat provided.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers most bases well, but gave up on finding ADR outstanding after only checking management commentary and shareholder details, missing potential filings data. Also missed the 5% RBI prior-approval threshold.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear 'disciplined accumulation' verdict tied to governance catalysts, but lacks specific flow-based price triggers for when the DII absorption creates a definitive floor.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Correctly applies the 74% FDI cap, ESOP insider framing, and 0% promoter baseline for private banks. Missing the 5% RBI approval rule for major shareholding keeps it from a perfect score.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent use of the `calculate` tool and clear citations. Correctly identified the pipeline limitation regarding FII names and MF velocity, framing them as open questions rather than hallucinating.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"2. The Money Flow Story\",\n      \"issue\": \"Calculated historical FII exit value (-6.26pp) using the current market cap, which distorts the actual quantum of capital that flowed out during historical periods.\",\n      \"suggestion\": \"Instruct the agent to either calculate historical flows using the average market cap of the respective quarter, or strictly report the change in percentage points without converting to current INR value.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"7. Open Questions\",\n      \"issue\": \"Missed the 5% RBI prior approval threshold for major shareholding in banks, mentioning only the 10% FPI sub-limit.\",\n      \"suggestion\": \"Update the BFSI ownership prompt checklist to explicitly require checking/mentioning the 5% RBI prior approval threshold for any single entity acquiring bank shares.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"BFSI Mandatory Ownership Checklist\",\n      \"issue\": \"Agent failed to find ADR data because it only checked c"
+    },
+    "insurance": {
+      "agent": "ownership",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "A",
+      "grade_numeric": 93,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional deduction of ESOP float dynamics and stripping out arbitrage funds from MF conviction. However, it assumes the Q4 FY23 AIF drop was a reclassification without attempting to verify this via historical news or the 'changes' tool."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Brilliantly reconciles the short-term delivery softening with the medium-term MF accumulation trend. The only minor leap in logic is definitively stating the FII exit was distributed via open market solely because block deals were zero in the last 365 days (misses potential block deals from 12-18 months ago when the exit started)."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major ownership dimensions comprehensively. However, it leaves the ESOP pool size as an 'open question' without attempting to use the `get_company_context(section='filings'/'documents')` tool to find the actual disclosed ESOP pool size."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a very clear bull/bear framework centered on the institutional handoff. To be perfect, it should have provided specific delivery % or volume thresholds to monitor that would signal the exhaustion of the FII supply overhang."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Correctly applies platform-specific frameworks (ESOP float expansion) and notes the unique 0% promoter structure. It correctly identifies the IRDAI vs RBI FDI limit ambiguity but fails to resolve which actually applies to the PB Fintech holdco."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent transparency regarding tool limitations (missing MF baseline, missing FII names). However, calculating historical FII exit values (\u20b97,420 Cr) using the *current* market cap distorts the actual historical capital outflow."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 4 \u2014 Mutual Fund Conviction / Open Questions",
+          "issue": "Agent identified ESOP trust overhang as a critical missing piece but failed to search company filings to quantify it.",
+          "suggestion": "Instruct the agent to use `get_company_context(section='filings' or 'documents')` to search for 'ESOP' or 'Employee Stock Option' to quantify the pool size when analyzing new-age tech companies, rather than just leaving it as an open question."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Section 1 \u2014 Ownership Structure",
+          "issue": "The `shareholder_detail` tool does not return FII (Foreign Portfolio Investor) names, preventing archetype analysis (passive vs active).",
+          "suggestion": "Enhance the `get_ownership` tool to surface FII names if available in the XBRL data, or integrate an alternative institutional ownership feed."
+        },
+        {
+          "type": "COMPUTATION",
+          "section": "Section 2 \u2014 The Money Flow Story",
+          "issue": "Agent calculates the value of an 18-month historical FII exit (10.81pp) using the current market cap (\u20b968,641 Cr), which inaccurately estimates the actual historical flow value.",
+          "suggestion": "Instruct the agent to explicitly caveat that flow values are approximations based on current market cap, or ideally, use average market caps during the distribution periods."
+        }
+      ],
+      "strengths": [
+        "Outstanding analytical deduction in stripping out the ICICI Equity Arbitrage Fund to calculate true directional equity conviction.",
+        "Excellent synthesis of the '0% promoter' structure, correctly identifying both the benefits (no MPS overhang) and the risks (no buyer of last resort).",
+        "Masterful contextualization of the stock-specific delivery softening against the macro-level FII selling streak and sector-level MF inflows."
+      ],
+      "summary": "This is an institutional-grade ownership report that brilliantly dissects a textbook FII-to-DII handoff while correctly identifying the structural nuances of a 0% promoter tech platform. The primary gap is the agent's failure to use document/filing tools to quantify the ESOP pool size after correctly identifying it as a critical overhang risk. Minor data pipeline limitations regarding FII names were handled transparently.",
+      "report_length": 29139,
+      "run_duration_s": 443.82852191699203,
+      "eval_duration_s": 28.828849958023056,
+      "run_skipped": false,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional deduction of ESOP float dynamics and stripping out arbitrage funds from MF conviction. However, it assumes the Q4 FY23 AIF drop was a reclassification without attempting to verify this via historical news or the 'changes' tool.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Brilliantly reconciles the short-term delivery softening with the medium-term MF accumulation trend. The only minor leap in logic is definitively stating the FII exit was distributed via open market solely because block deals were zero in the last 365 days (misses potential block deals from 12-18 months ago when the exit started).\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major ownership dimensions comprehensively. However, it leaves the ESOP pool size as an 'open question' without attempting to use the `get_company_context(section='filings'/'documents')` tool to find the actual disclosed ESOP pool size.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a very clear bull/bear framework centered on the institutional handoff. To be perfect, it should have provided specific delivery % or volume thresholds to monitor that would signal the exhaustion of the FII supply overhang.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Correctly applies platform-specific frameworks (ESOP float expansion) and notes the unique 0% promoter structure. It correctly identifies the IRDAI vs RBI FDI limit ambiguity but fails to resolve which actually applies to the PB Fintech holdco.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent transparency regarding tool limitations (missing MF baseline, missing FII names). However, calculating historical FII exit values (\u20b97,420 Cr) using the *current* market cap distorts the actual historical capital outflow.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 93\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 4 \u2014 Mutual Fund Conviction / Open Questions\",\n      \"issue\": \"Agent identified ESOP trust overhang as a critical missing piece but failed to search company filings to quantify it.\",\n      \"suggestion\": \"Instruct the agent to use `get_company_context(section='filings' or 'documents')` to search for 'ESOP' or 'Employee Stock Option' to quantify the pool size when analyzing new-age tech companies, rather than just leaving it as an open question.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Section 1 \u2014 Ownership Structure\",\n      \"issue\": \"The `shareholder_detail` tool does not return FII (Foreign Portfolio Investor) names, preventing archetype analysis (passive vs active).\",\n      \"suggestion\": \"Enhance the `get_ownership` too"
+    }
+  }
+}

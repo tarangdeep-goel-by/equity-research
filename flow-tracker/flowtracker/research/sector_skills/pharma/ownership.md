@@ -43,3 +43,16 @@ PE-backed players face severe equity supply overhangs during exit windows — wh
 - Are minor upticks in family promoter pledges indicating hidden off-balance-sheet group distress or private ventures?
 - How does the target's strategic shift from generic formulations to biosimilars / specialty alter its targeted institutional investor base and capital intensity?
 - Will pending government approvals under brownfield FDI rules deter MNC-parent consolidation or open-market creeping acquisitions?
+
+### Family Trust Structural Framing (Shanghvi / promoter-family holdcos)
+Sun Pharma's Shanghvi family holds 54.48% via a family trust structure (not direct personal holdings). Zero open-market promoter activity is STRUCTURAL for family-trust holdcos, not informational. Do not infer low conviction from flat promoter pledge trajectory. The correct signal to track is any NEW pledging event (indicates family leverage), trust-internal reclassification (e.g. intra-family transfers), or unusual insider SELLING by non-promoter key managerial personnel — not the absence of routine open-market buying. This rule generalizes to any Indian pharma/manufacturing promoter using a family trust / HUF / multiple-related-party structure (Dr. Reddy's, Lupin, Cipla family holdings).
+
+### US Generics vs Domestic Chronic Revenue Mix — Mandatory Institutional-Flow Cross-Reference
+For Indian pharma, institutional positioning shifts MUST be correlated with the underlying US Generics vs Domestic Chronic vs Specialty/Biosimilar revenue mix — this is the classic framework Indian pharma analysts use, and skipping it produces a hollow ownership read. Extract the segment mix from `get_company_context(section='concall_insights', sub_section='financial_metrics')` (most pharma cos disclose US %, Domestic %, RoW % in opening remarks). Then map institutional flows to mix-shift events:
+
+- **FII accumulation + rising US Specialty %** → high-conviction long-cycle bet on the specialty pipeline (Sun Pharma's Ilumya/Cequa/Winlevi trajectory, Dr. Reddy's biosimilars, Cipla's inhalers in US).
+- **FII trim + falling Domestic Chronic %** → defensive rotation; Domestic Chronic (cardio, diabetes, derma) is the stable-yield bucket; FIIs leaving when chronic % drops signal earnings-quality concerns.
+- **DII accumulation + rising US Generics %** → contrarian bet on FDA-recovery / patent-cliff opportunities; DIIs typically more comfortable with US generics cyclicality than FIIs.
+- **MF rotation in the AuroraPharma/Aurobindo style names** when Domestic % rises = MF prefer the predictable cash-flow profile.
+
+Cite the mix shift in the Money Flow Story (Section 2) — "FIIs added 3.2pp coincident with US Specialty growing from 18% → 27% over FY23-FY25" is institutional-grade analysis. "FIIs added 3.2pp" alone is descriptive, not analytical.

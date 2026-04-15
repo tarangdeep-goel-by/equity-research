@@ -41,3 +41,6 @@ VC-backed D2C brands map directly to platform-sector mechanics (apply `platform/
 - How are FIIs rotating between 4-5% yield tobacco conglomerates and 2-3% yield MNC personal-care subs in response to tax-regime shifts?
 - For D2C FMCG, how much of the pre-IPO VC cap table remains locked, and can institutional volume absorb the impending float expansion?
 - Are state-level excise shocks in Alcobev forcing MNC parents to reassess their Indian-subsidiary capitalization structures?
+
+### MNC-Subsidiary Insider Transaction Framing
+**MNC-subsidiary archetype:** For HINDUNILVR (Unilever 61.9%), NESTLEIND (Nestle parent ~63%), COLPAL (Colgate parent ~51%), GILLETTE (P&G parent ~75%), insider SALES are ESOP-routine and tax-clearance-driven — NOT informational. Track insider BUYING instead for signal (which is almost non-existent in MNC-sub structures — when it happens, pay attention). Also track parent-share transactions at the holding company level (Unilever PLC transactions in Dutch/UK filings) for dividend / buyback policy shifts that feed through to Indian sub dividend policy.
