@@ -27,6 +27,13 @@ For listed insurtech platforms (POLICYBZR / PB Fintech, STARHEALTH's employee tr
 - For insurtech / broker / platform businesses, the ESOP trust distribution is a **multi-year overhang** on stock price — continuous supply at the margin unless offset by buybacks or strong institutional absorption
 - Narrate in the main report: pool size, current trust-held %, historical quarterly distribution rate, and implied months-to-clear at current absorption
 
+#### Quantifying the ESOP Pool — Apply Tenet 14 Search Sequence
+When the ESOP narrative is required, you MUST actively quantify the pool size — not leave it as an Open Question. Run the canonical 5-source search sequence (Tenet 14) with insurtech-specific queries:
+- `query='ESOP'` OR `'Employee Stock Option'` OR `'Employees Welfare Trust'` (the named-trust pattern; e.g. "PB Fintech Employees Welfare Trust" appears in `shareholder_detail`)
+- AGM notices and DRHP (in `filings`) almost always disclose the AGM-approved pool ceiling and current grant balance — primary source for insurtech listings.
+
+Identifying ESOP overhang and then asking "how big is it?" without running the sequence is the workflow gap Gemini flagged in the POLICYBZR smoke run.
+
 ### Embedded Value (EV) Growth as Institutional-Conviction Proxy (Life Insurers)
 For listed life insurers (SBILIFE, HDFCLIFE, ICICIPRULI, MAXFIN-LIFE), institutional conviction correlates with **EV growth trajectory**, not P/E. Reported P/E can look expanded (30-60x trailing) while EV is compounding at 18-22% with VNB margin expansion.
 - When mutual funds add during an EV-growth acceleration coincident with rising VNB margin commentary in the concall, read as **high-conviction accumulation** even against a superficially expensive P/E

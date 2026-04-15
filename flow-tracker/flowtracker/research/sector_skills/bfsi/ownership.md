@@ -98,9 +98,13 @@ Before drafting the Institutional Verdict, explicitly confirm each row. A missin
 Prefer these over generic regulatory questions:
 
 - "Is the current FII % approaching the per-FPI 10% entity-level sub-limit for any individual foreign holder?"
+- "Is any single shareholder (institution or otherwise) approaching the **5% RBI prior-approval threshold**? (RBI Master Direction requires explicit approval for any holding ≥5% of paid-up in a bank)"
 - "What disinvestment target did the Finance Ministry set for PSU bank stake sales in the current fiscal?"
 - "Is any RBI prompt-corrective-action (PCA) framework trigger active for this bank?" (for weaker PSBs)
 - "Are there pending SEBI circulars that would tighten the aggregate foreign-holding cap formula?"
+
+### 5% RBI Prior-Approval Threshold (All Banks)
+Distinct from the FPI 10% per-entity sub-limit, RBI Master Direction on Acquisition of Shares requires **prior RBI approval** for any single shareholder acquiring 5% or more of paid-up capital in any bank (private or PSU). For PSU banks the practical constraint is rare because government holds the majority, but for any non-government holder approaching 5%, this rule applies. For private banks, mid-size names (RBLBANK, FEDERALBNK, IDFCFIRSTB, CSBBANK) routinely have institutional holders 4-7% — the 5% threshold is a binding regulatory check, not an academic one. Always state the regulatory framework explicitly when discussing top holder positions; omitting the 5% rule is a checklist gap.
 
 ### Timeframe Alignment for Historical FII Analysis
 When analyzing an FII exit or ownership shift older than 12 months (e.g., an FII rolloff that started 10-22 months ago), pass `days=1825` to `get_ownership(section='bulk_block')`. The default 365-day window will miss the supply distribution. This is especially important for large-cap banks (SBIN, HDFCBANK, ICICIBANK) where FII rebalancing often plays out over multiple quarters. Cross-reference with quarterly shareholding %pt drops from `shareholding` — if the bulk_block deals don't explain the %pt move, supply was distributed via continuous open-market trades (Tenet 10).

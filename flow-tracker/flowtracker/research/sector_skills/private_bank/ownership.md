@@ -21,7 +21,10 @@ The statutory ceiling on foreign ownership in large private banks is **74% aggre
 - **ICICIBANK**: ADR listing on NYSE. Same retrieval path (SEC 20-F)
 - **KOTAKBANK**: Historically ran GDR programme pre-HDFC merger era — retrieve from LSE / RBI ECB filings
 - **Aggregation formula**: `true_foreign_holding_% = (direct_FPI_shares + ADR_underlying_shares + NRI_shares + FDI_shares) / total_India_equity`
-- Not typically in `shareholder_detail` — `get_company_context(filings)` or concall_insights may have partial disclosure. If gap, add Open Question: "What is the current ADR/GDR outstanding as % of paid-up, and what is the combined FPI + ADR + NRI + FDI vs the 74% cap?"
+- **Where to search for ADR/GDR outstanding:** apply the canonical Tenet 14 search sequence with private-bank-specific queries — `query='ADR'`, `'depositary receipts'`, `'Form 20-F'`. Stopping at the first empty result and pleading missing data — as agents have done in prior runs — is a workflow violation.
+- If still genuinely absent after the canonical search, add Open Question: "What is the current ADR/GDR outstanding as % of paid-up, and what is the combined FPI + ADR + NRI + FDI vs the 74% cap?"
+
+(See `bfsi/ownership.md` for the 5% RBI prior-approval threshold rule — applies to all banks.)
 
 ### Institutional Holder Archetypes — Private Bank Specific
 Decompose "FII" into archetypes rather than narrating a single aggregate line (Tenet 17, SYSTEM prompt):
@@ -62,6 +65,7 @@ Before drafting the Institutional Verdict, explicitly confirm each row:
 - [ ] Insider transactions framed as ESOP-driven (selling clusters = signal, absence of buying = neutral)
 - [ ] Any single-quarter ownership change >5pp verified against corporate actions / reclassification triggers
 - [ ] Per-FPI 10% entity sub-limit checked if any individual FPI is large
+- [ ] **5% RBI prior-approval threshold** — any single shareholder (institution, individual, foreign) approaching 5% of paid-up flagged (see `bfsi/ownership.md` for the cross-bank rule)
 
 ### Open Questions — Private-Bank-Specific
 - "What is the current ADR/GDR outstanding as % of paid-up, and combined direct-FPI + ADR + NRI + FDI vs 74% cap?"
