@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T17:43:04.415285+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "platform": {
+      "agent": "valuation",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Brilliant contextualization of the M-Score flag (linking it to the 1P inventory transition) and excellent premium decomposition vs Swiggy. However, it explicitly identifies EV/GMV as a primary multiple in the intro but fails to actually calculate or analyze it."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Superb logic in rejecting the automated PE band and DCF signals with clear mathematical justifications. The only inconsistency is using trailing FY25 metrics for the SOTP while using forward FY26E metrics for the consolidated EV/Revenue valuation."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers relative valuation, SOTP, and consensus well. However, it misses calculating EV/GMV or EV/GOV, which is a critical omission for a platform company where revenue is distorted by 1P vs 3P accounting."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a very clear bear/base/bull framework with specific margin triggers and highlights the upcoming earnings call as a binary catalyst. There is a slight disconnect between the 'UNDERVALUED' JSON signal and the heavy textual emphasis on severe negative estimate momentum."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Correctly pivots away from PE/DCF to EV/Revenue and SOTP for an early-profitability platform. However, the true sector standard for normalizing the exact 1P/3P accounting distortion the agent identified is EV/GMV, which was not applied."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent handling of tool limitations (gracefully managing the empty DCF return and the 15-day PE band). The only minor gap is not using the calculate tool to manually derive EV/GMV from concall GMV disclosures."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Fair Value Triangle & 6. Relative Valuation",
+          "issue": "The agent correctly notes that revenue is distorted by Blinkit's 1P accounting transition and states EV/GMV is the correct primary multiple, but then completely fails to calculate or use EV/GMV in the valuation models or peer comparisons.",
+          "suggestion": "Update the prompt to explicitly require the agent to extract GMV/GOV from concall transcripts or sector KPIs and calculate EV/GMV manually for Quick Commerce/Food Delivery platforms, especially when 1P/3P accounting differences exist."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Fair Value Triangle (Method E: SOTP)",
+          "issue": "The SOTP uses trailing FY25 revenue/PAT for its base, while the consolidated EV/Revenue valuation uses forward FY26E revenue, creating a duration mismatch in the valuation triangulation.",
+          "suggestion": "Instruct the agent to align the temporal basis (trailing vs forward) across all valuation methods in the Fair Value Triangle, or explicitly project forward segment financials for the SOTP."
+        }
+      ],
+      "strengths": [
+        "Exceptional critical thinking in rejecting the automated 'Deep Value' PE band signal and the DCF output, explaining exactly why they fail for this specific company.",
+        "Top-tier analytical depth in linking the Beneish M-Score 'Likely Manipulator' flag to the legitimate accounting transition (3P to 1P inventory model) at Blinkit."
+      ],
+      "summary": "This is a highly intelligent, institutional-grade report that correctly overrides flawed automated valuation signals (PE band, DCF) with deep fundamental logic. Its primary flaw is identifying EV/GMV as the solution to revenue accounting distortions but failing to actually execute an EV/GMV valuation.",
+      "report_length": 32617,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 130.53577462490648,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Brilliant contextualization of the M-Score flag (linking it to the 1P inventory transition) and excellent premium decomposition vs Swiggy. However, it explicitly identifies EV/GMV as a primary multiple in the intro but fails to actually calculate or analyze it.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Superb logic in rejecting the automated PE band and DCF signals with clear mathematical justifications. The only inconsistency is using trailing FY25 metrics for the SOTP while using forward FY26E metrics for the consolidated EV/Revenue valuation.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers relative valuation, SOTP, and consensus well. However, it misses calculating EV/GMV or EV/GOV, which is a critical omission for a platform company where revenue is distorted by 1P vs 3P accounting.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a very clear bear/base/bull framework with specific margin triggers and highlights the upcoming earnings call as a binary catalyst. There is a slight disconnect between the 'UNDERVALUED' JSON signal and the heavy textual emphasis on severe negative estimate momentum.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Correctly pivots away from PE/DCF to EV/Revenue and SOTP for an early-profitability platform. However, the true sector standard for normalizing the exact 1P/3P accounting distortion the agent identified is EV/GMV, which was not applied.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent handling of tool limitations (gracefully managing the empty DCF return and the 15-day PE band). The only minor gap is not using the calculate tool to manually derive EV/GMV from concall GMV disclosures.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Fair Value Triangle & 6. Relative Valuation\",\n      \"issue\": \"The agent correctly notes that revenue is distorted by Blinkit's 1P accounting transition and states EV/GMV is the correct primary multiple, but then completely fails to calculate or use EV/GMV in the valuation models or peer comparisons.\",\n      \"suggestion\": \"Update the prompt to explicitly require the agent to extract GMV/GOV from concall transcripts or sector KPIs and calculate EV/GMV manually for Quick Commerce/Food Delivery platforms, especially when 1P/3P accounting differences exist.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Fair Value Triangle (Method E: SOTP)\",\n      \"issue\": \"The SOTP uses trailing FY25 revenue/PAT for its base, while the consolidated EV/Revenue valuation uses forward FY26E revenue, creating a duration mis"
+    }
+  }
+}

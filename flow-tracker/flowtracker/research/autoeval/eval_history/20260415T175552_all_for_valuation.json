@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T17:55:52.951931+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "broker": {
+      "agent": "valuation",
+      "stock": "GROWW",
+      "sector": "Fintech broker",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent override of the tool's 'Deep Value' signal and strong explanation of the trailing vs forward PE anomaly via F&O base effects. However, the exact percentages in the peer premium decomposition (e.g., ~40-50% for ROCE) appear heuristic and lack a stated mathematical derivation."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Highly logical in discarding the 11-day PE band and FCFF models for a newly listed broker. There is a minor mathematical phrasing error in Section 3 where it writes 'bear \u20b9302... \u00d7 forward EPS \u20b94.70' instead of 'PE multiple \u00d7 EPS'."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers standard valuation multiples, WACC, and SOTP well. However, it misses critical broker-specific valuation drivers like ADTV (Average Daily Turnover), ARPU, and market share trends because it failed to query sector KPIs."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear, evidence-backed 'Fair Value to Mildly Expensive' conclusion with specific catalyst dates and a solid bull/bear framework. Actionability is only slightly constrained by the missing active client data."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Correctly applies broker-mode rules by discarding FCF/CFO due to client float and focusing on P/E and P/B. However, it fails to analyze the MTF book's funding spread or regulatory capital requirements in depth."
+        },
+        "data_sourcing": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Good attribution of tool data and clear flagging of missing data (e.g., empty DCF). However, the agent failed to call `get_company_context(sector_kpis)` to find the missing client data, and performed mental math instead of using the `calculate` tool."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "8. Key Analytical Flags for Broker-Mode",
+          "issue": "Agent flagged 'Active client growth' as 'Not quantified in available tool data' but never called `get_company_context(section='sector_kpis')` which is explicitly designed to fetch canonical KPIs like active clients and ADTV.",
+          "suggestion": "Update agent instructions to mandate calling `get_company_context(section='sector_kpis')` when evaluating platform or broker companies to ensure core unit economic data is retrieved."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Fair Value Triangle",
+          "issue": "Agent calculated the 70.3% EPS growth and the blended fair value averages in its head, bypassing the `calculate` tool.",
+          "suggestion": "Reinforce the system prompt constraint: 'never compute in your head. Use the calculate tool for ALL math, including simple percentages and averages.'"
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "3. Fair Value Triangle",
+          "issue": "Confusing mathematical phrasing: '(bear \u20b9302/base \u20b9324/bull \u20b9340 \u00d7 forward EPS \u20b94.70)' implies multiplying a Rupee fair value by an EPS Rupee value, rather than multiplying a PE multiple by EPS.",
+          "suggestion": "Minor LLM hallucination in sentence construction; no pipeline fix required."
+        }
+      ],
+      "strengths": [
+        "Brilliant critical thinking in overriding the tool's 'DEEP VALUE' signal by recognizing the structural flaw of an 11-day post-IPO PE band.",
+        "Excellent application of sector-specific accounting rules (ignoring FCFF/CFO for brokers due to client settlement float distortion).",
+        "Strong contextualization of the forward vs. trailing PE anomaly, correctly attributing it to SEBI F&O regulatory base-effects rather than a data error."
+      ],
+      "summary": "This is a highly intelligent and analytically rigorous report that successfully navigates the complexities of valuing a newly listed, high-growth broker by overriding flawed automated signals. The primary gap is the absence of core operating metrics (active clients, ADTV) because the agent failed to utilize the sector_kpis tool. Despite this omission, the analyst's judgment and sector-calibrated fair value framework make this an institutional-quality read.",
+      "report_length": 28267,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.4616434170166,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent override of the tool's 'Deep Value' signal and strong explanation of the trailing vs forward PE anomaly via F&O base effects. However, the exact percentages in the peer premium decomposition (e.g., ~40-50% for ROCE) appear heuristic and lack a stated mathematical derivation.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Highly logical in discarding the 11-day PE band and FCFF models for a newly listed broker. There is a minor mathematical phrasing error in Section 3 where it writes 'bear \u20b9302... \u00d7 forward EPS \u20b94.70' instead of 'PE multiple \u00d7 EPS'.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers standard valuation multiples, WACC, and SOTP well. However, it misses critical broker-specific valuation drivers like ADTV (Average Daily Turnover), ARPU, and market share trends because it failed to query sector KPIs.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear, evidence-backed 'Fair Value to Mildly Expensive' conclusion with specific catalyst dates and a solid bull/bear framework. Actionability is only slightly constrained by the missing active client data.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Correctly applies broker-mode rules by discarding FCF/CFO due to client float and focusing on P/E and P/B. However, it fails to analyze the MTF book's funding spread or regulatory capital requirements in depth.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Good attribution of tool data and clear flagging of missing data (e.g., empty DCF). However, the agent failed to call `get_company_context(sector_kpis)` to find the missing client data, and performed mental math instead of using the `calculate` tool.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"8. Key Analytical Flags for Broker-Mode\",\n      \"issue\": \"Agent flagged 'Active client growth' as 'Not quantified in available tool data' but never called `get_company_context(section='sector_kpis')` which is explicitly designed to fetch canonical KPIs like active clients and ADTV.\",\n      \"suggestion\": \"Update agent instructions to mandate calling `get_company_context(section='sector_kpis')` when evaluating platform or broker companies to ensure core unit economic data is retrieved.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Fair Value Triangle\",\n      \"issue\": \"Agent calculated the 70.3% EPS growth and the blended fair value averages in its head, bypassing the `calculate` tool.\",\n      \"suggestion\": \"Reinforce the system prompt constraint: 'never compute in your head. Use the calculate tool for ALL math, including "
+    }
+  }
+}

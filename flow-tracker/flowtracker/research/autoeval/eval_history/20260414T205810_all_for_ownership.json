@@ -1,0 +1,66 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T20:58:10.906625+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "metals": {
+      "agent": "ownership",
+      "stock": "VEDL",
+      "sector": "Diversified metals",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent deconstruction of the pledge-to-NDU reclassification trap and institutional absorption ratios. However, it missed a basic analytical layup: it had VRL's debt ($4.8B) and the encumbered equity value (\u20b91.65L Cr) but failed to estimate the implied LTV (~24%), leaving it as an 'open question' instead."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly sound, but the FII headroom calculation (87.85%) is practically flawed. While theoretically correct based on the 100% sector cap, it ignores the fact that the promoter holds 56.38%, meaning the actual available free float for FIIs is mathematically capped much lower."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers almost all bases including MF conviction and delivery signals. The main gap is the failure to properly investigate the 16% 'Public' float; the agent didn't attempt to use the `classification` parameter in the `get_ownership` tool to hunt for corporate bodies or HNIs."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "The signal scorecard and the framing of the demerger/encumbrance tail risks are highly actionable for a PM. The only minor weakness is the slightly hedged final verdict ('mixed - structurally cautious bullish') which tries to blend fundamental views into an ownership conclusion."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Correctly identifies the offshore holdco structure typical of some mining conglomerates and the 100% FDI limit. However, it fails to overlay the 10-quarter institutional handoff against the underlying LME commodity cycle, which is the primary driver of cyclical metals ownership."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Superb tool audit, clear caveats on data freshness, and excellent use of the calculate tool for absorption ratios. However, it skipped calling `get_valuation(section='sotp')` for the HZL stake due to 'budget constraints', which indicates poor tool-call planning."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "8. Open Questions (Question 2)",
+          "issue": "Agent asks for the LTV ratio of the encumbered shares as an open question, despite having both the numerator ($4.8B debt) and denominator (\u20b91,65,802 Cr collateral) in its context.",
+          "suggestion": "Instruct the agent to always attempt to estimate LTV and margin call trigger prices using available debt and collateral value data before defaulting to an open question."
+        }
+      ],
+      "strengths": [
+        "Brilliant identification and explanation of the SEBI pledge-to-NDU reclassification trap, ensuring the PM understands the true economic risk.",
+        "Strong quantitative framing of the institutional handoff (LIC to MFs) using a calculated 2.06x absorption ratio."
+      ],
+      "summary": "This is a highly sophisticated, institutional-grade ownership report that correctly identifies the critical encumbrance risks and the structural LIC-to-MF handoff. To reach an A+, the agent needs to tighten its practical float logic (FII headroom) and proactively calculate derived metrics like LTV rather than leaving them as open questions.",
+      "report_length": 32874,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 33.7874387500342,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent deconstruction of the pledge-to-NDU reclassification trap and institutional absorption ratios. However, it missed a basic analytical layup: it had VRL's debt ($4.8B) and the encumbered equity value (\u20b91.65L Cr) but failed to estimate the implied LTV (~24%), leaving it as an 'open question' instead.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly sound, but the FII headroom calculation (87.85%) is practically flawed. While theoretically correct based on the 100% sector cap, it ignores the fact that the promoter holds 56.38%, meaning the actual available free float for FIIs is mathematically capped much lower.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers almost all bases including MF conviction and delivery signals. The main gap is the failure to properly investigate the 16% 'Public' float; the agent didn't attempt to use the `classification` parameter in the `get_ownership` tool to hunt for corporate bodies or HNIs.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"The signal scorecard and the framing of the demerger/encumbrance tail risks are highly actionable for a PM. The only minor weakness is the slightly hedged final verdict ('mixed - structurally cautious bullish') which tries to blend fundamental views into an ownership conclusion.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Correctly identifies the offshore holdco structure typical of some mining conglomerates and the 100% FDI limit. However, it fails to overlay the 10-quarter institutional handoff against the underlying LME commodity cycle, which is the primary driver of cyclical metals ownership.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Superb tool audit, clear caveats on data freshness, and excellent use of the calculate tool for absorption ratios. However, it skipped calling `get_valuation(section='sotp')` for the HZL stake due to 'budget constraints', which indicates poor tool-call planning.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"8. Open Questions (Question 2)\",\n      \"issue\": \"Agent asks for the LTV ratio of the encumbered shares as an open question, despite having both the numerator ($4.8B debt) and denominator (\u20b91,65,802 Cr collateral) in its context.\",\n      \"suggestion\": \"Instruct the agent to always attempt to estimate LTV and margin call trigger prices using available debt and collateral value data before defaulting to an open question.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant identification and explanation of the SEBI pledge-to-NDU reclassification trap, ensuring the PM understands the true econom"
+    }
+  }
+}

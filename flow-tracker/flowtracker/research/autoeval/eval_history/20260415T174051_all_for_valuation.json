@@ -1,0 +1,27 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T17:40:51.806306+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "it_services"
+  ],
+  "results": {
+    "it_services": {
+      "agent": "valuation",
+      "stock": "TCS",
+      "sector": "IT services",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before operation could complete.', 'status': 'UNAVAILABLE'}}",
+      "report_length": 36574,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 1200.953578375047,
+      "run_skipped": true,
+      "raw_gemini_response": "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before operation could complete.', 'status': 'UNAVAILABLE'}}"
+    }
+  }
+}

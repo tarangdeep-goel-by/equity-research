@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T20:49:11.020140+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "private_bank": {
+      "agent": "financials",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "A",
+      "grade_numeric": 93,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Deep analysis of NIM mechanics and the merger's impact on ROE. However, it could have explicitly broken down the yield on advances versus cost of funds spread rather than just analyzing the blended NIM."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 92,
+          "rationale": "Highly consistent narrative linking the CD ratio constraint to suppressed loan growth. A minor flaw is the slight ambiguity left when reconciling the 11.5% consensus growth with the \u20b957.10 forward EPS."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers almost all critical bank metrics, but notably misses a dedicated analysis of Non-Interest Income / Core Fee Income, which is a vital component of HDFC Bank's ROA expansion strategy."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 92,
+          "rationale": "Provides clear catalysts (CD ratio normalization, deposit repricing) and flags specific risks. However, the upcoming HDB Financial IPO (noted in open questions) should have been integrated into the main capital/valuation narrative."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect score justified. The agent flawlessly applies BFSI frameworks, explicitly rejects irrelevant manufacturing metrics (EBITDA, FCF), adapts the Piotroski score for banks, and manually corrects the tool's rate sensitivity logic for duration mismatches."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Meticulous handling of the 1:1 bonus issue and merger base effects with clear citations. The only minor gap is relying on management's verbally cited 'operating ROA' without fully reconciling it against the statutory reported ROA in the text."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Business Quality: Bank DuPont / Margin Analysis",
+          "issue": "The report misses a breakdown of Non-Interest Income (fee income vs treasury), which is critical for understanding a bank's operating profitability.",
+          "suggestion": "Update the prompt to explicitly require an analysis of the Non-Interest Income / Core Fee profile when analyzing BFSI entities."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Open Questions",
+          "issue": "The agent asks about the HDB Financial IPO valuation but failed to call the `get_valuation(section='sotp')` tool which is specifically designed to provide listed subsidiary data for SOTP valuation.",
+          "suggestion": "Instruct the agent to always check `get_valuation(section='sotp')` if a company has known subsidiaries or if subsidiary value is a potential catalyst."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "4. Asset Quality & Credit Metrics",
+          "issue": "Net NPA and PCR were not captured in the concall extraction, leaving a gap in standard asset quality reporting.",
+          "suggestion": "Ensure the `get_quality_scores(section='bfsi')` or `get_fundamentals` tools reliably extract NNPA and PCR from standard quarterly filings if they are missing from concall narratives."
+        }
+      ],
+      "strengths": [
+        "Exceptional application of BFSI-specific frameworks, including the explicit rejection of irrelevant metrics like FCF and EBITDA.",
+        "Superb handling of complex corporate actions (1:1 bonus) and structural breaks (HDFC merger) to find the true organic growth and margin trajectory.",
+        "High analytical intelligence demonstrated by identifying a flaw in the rate sensitivity tool's logic and manually calculating the correct net economic impact for a bank."
+      ],
+      "summary": "This is an institutional-quality financials report that expertly navigates the noise of HDFC Bank's recent mega-merger and bonus issue. The agent's ability to override standard manufacturing metrics and correct tool-level rate sensitivity logic demonstrates advanced sector expertise. The only notable gap is the absence of a deep dive into the non-interest/fee income profile, which is a key driver of the bank's ROA.",
+      "report_length": 39584,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 35.78372899990063,
+      "run_skipped": true,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Deep analysis of NIM mechanics and the merger's impact on ROE. However, it could have explicitly broken down the yield on advances versus cost of funds spread rather than just analyzing the blended NIM.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 92,\n      \"rationale\": \"Highly consistent narrative linking the CD ratio constraint to suppressed loan growth. A minor flaw is the slight ambiguity left when reconciling the 11.5% consensus growth with the \u20b957.10 forward EPS.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers almost all critical bank metrics, but notably misses a dedicated analysis of Non-Interest Income / Core Fee Income, which is a vital component of HDFC Bank's ROA expansion strategy.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides clear catalysts (CD ratio normalization, deposit repricing) and flags specific risks. However, the upcoming HDB Financial IPO (noted in open questions) should have been integrated into the main capital/valuation narrative.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect score justified. The agent flawlessly applies BFSI frameworks, explicitly rejects irrelevant manufacturing metrics (EBITDA, FCF), adapts the Piotroski score for banks, and manually corrects the tool's rate sensitivity logic for duration mismatches.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Meticulous handling of the 1:1 bonus issue and merger base effects with clear citations. The only minor gap is relying on management's verbally cited 'operating ROA' without fully reconciling it against the statutory reported ROA in the text.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 93\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Business Quality: Bank DuPont / Margin Analysis\",\n      \"issue\": \"The report misses a breakdown of Non-Interest Income (fee income vs treasury), which is critical for understanding a bank's operating profitability.\",\n      \"suggestion\": \"Update the prompt to explicitly require an analysis of the Non-Interest Income / Core Fee profile when analyzing BFSI entities.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Open Questions\",\n      \"issue\": \"The agent asks about the HDB Financial IPO valuation but failed to call the `get_valuation(section='sotp')` tool which is specifically designed to provide listed subsidiary data for SOTP valuation.\",\n      \"suggestion\": \"Instruct the agent to always check `get_valuation(section='sotp')` if a company has known subsidiaries or if subsidiary value is a potential catalyst.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"4. Asset Quality & Credit Metrics\",\n      \"issue\": \"Net NPA and P"
+    }
+  }
+}

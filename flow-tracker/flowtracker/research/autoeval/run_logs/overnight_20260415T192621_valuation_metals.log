@@ -1,0 +1,237 @@
+  19:26:23 [INFO] flowtracker.research.refresh: [refresh] VEDL: started (max_age=6h)
+  19:26:24 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  19:26:24 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  19:26:24 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  19:26:24 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/VEDL/consolidated/ "HTTP/1.1 200 OK"
+  19:26:24 [INFO] flowtracker.research.refresh: [refresh] VEDL: company_profile ok 1 records
+  19:26:24 [INFO] flowtracker.research.refresh: [refresh] VEDL: company_documents ok 82 records
+  19:26:25 [INFO] httpx: HTTP Request: GET https://www.vedantalimited.com/InvestorReports/Vedanta-Earnings-Transcript_Nov14-2019.pdf "HTTP/1.1 404 Not Found"
+  19:26:25 [INFO] httpx: HTTP Request: GET https://www.vedantalimited.com/InvestorReports/Vedanta-Earnings-Nov06-2020.pdf "HTTP/1.1 404 Not Found"
+  19:26:25 [INFO] flowtracker.research.refresh: [refresh] VEDL: quarterly_results ok 13 records
+  19:26:25 [INFO] flowtracker.research.refresh: [refresh] VEDL: screener_ratios ok 12 records
+  19:26:25 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/VEDL/consolidated/ "HTTP/1.1 200 OK"
+  19:26:25 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/6598623/ "HTTP/1.1 200 OK"
+  19:26:25 [INFO] flowtracker.research.refresh: [refresh] VEDL: annual_financials ok 10 records
+  19:26:25 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/VEDL/ "HTTP/1.1 200 OK"
+  19:26:26 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/3525/ "HTTP/1.1 200 OK"
+  19:26:26 [INFO] flowtracker.research.refresh: [refresh] VEDL: standalone_financials ok 10 records
+  19:26:26 [INFO] flowtracker.research.refresh: [refresh] VEDL: screener_ids ok 1 records
+  19:26:26 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/chart/?q=Price+to+Earning-Median+PE-EPS&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  19:26:26 [INFO] flowtracker.research.refresh: [refresh] VEDL: chart_pe ok 1185 records
+  19:26:27 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  19:26:27 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.1s
+  19:26:28 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  19:26:28 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.3s
+  19:26:31 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  19:26:31 [WARNING] flowtracker.screener_client: Screener request failed (attempt 3/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 4.9s
+  19:26:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  19:26:36 [WARNING] flowtracker.research.refresh: [refresh] VEDL: chart_price skipped: Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/2943/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
+  19:26:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6598623/peers/ "HTTP/1.1 429 Too Many Requests"
+  19:26:36 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/6598623/peers/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.1s
+  19:26:37 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6598623/peers/ "HTTP/1.1 429 Too Many Requests"
+  19:26:37 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/6598623/peers/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.1s
+  19:26:39 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6598623/peers/ "HTTP/1.1 200 OK"
+  19:26:39 [INFO] flowtracker.research.refresh: [refresh] VEDL: peers ok 6 records
+  19:26:39 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/promoters/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  19:26:39 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/2943/investors/promoters/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.3s
+  19:26:40 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/promoters/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  19:26:40 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/2943/investors/promoters/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.4s
+  19:26:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/promoters/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  19:26:43 [WARNING] flowtracker.screener_client: Screener request failed (attempt 3/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/2943/investors/promoters/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 4.4s
+  19:26:47 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/promoters/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  19:26:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/foreign_institutions/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  19:26:48 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/2943/investors/foreign_institutions/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.2s
+  19:26:50 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/foreign_institutions/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  19:26:50 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/2943/investors/foreign_institutions/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.5s
+  19:26:52 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/foreign_institutions/quarterly/ "HTTP/1.1 200 OK"
+  19:26:53 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/domestic_institutions/quarterly/ "HTTP/1.1 200 OK"
+  19:26:54 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2943/investors/public/quarterly/ "HTTP/1.1 200 OK"
+  19:26:55 [INFO] flowtracker.research.refresh: [refresh] VEDL: shareholders ok 32 records
+  19:26:55 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 429 Too Many Requests"
+  19:26:55 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/2943/schedules/?parent=Sales&section=quarters&consolidated='
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.0s
+  19:26:57 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 429 Too Many Requests"
+  19:26:57 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/2943/schedules/?parent=Sales&section=quarters&consolidated='
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.9s
+  19:27:00 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:27:01 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:27:02 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:27:03 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  19:27:04 [INFO] flowtracker.research.refresh: [refresh] VEDL: schedules_quarters ok 156 records
+  19:27:04 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:27:05 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:27:06 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:27:07 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  19:27:08 [INFO] flowtracker.research.refresh: [refresh] VEDL: schedules_profit-loss ok 168 records
+  19:27:08 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:27:09 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:27:11 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:27:12 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  19:27:13 [INFO] flowtracker.research.refresh: [refresh] VEDL: schedules_balance-sheet ok 325 records
+  19:27:13 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  19:27:14 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  19:27:15 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2943/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  19:27:16 [INFO] flowtracker.research.refresh: [refresh] VEDL: schedules_cash-flow ok 324 records
+  19:27:44 [INFO] flowtracker.research.refresh: [refresh] VEDL: valuation_snapshot ok 1 records
+  19:27:50 [INFO] flowtracker.research.refresh: [refresh] VEDL: consensus_estimate ok 1 records
+  /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/yfinance/scrapers/fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+    warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+  19:27:53 [INFO] flowtracker.research.refresh: [refresh] VEDL: earnings_surprises ok 4 records
+  19:28:00 [INFO] flowtracker.research.refresh: [refresh] VEDL: corporate_actions ok 53 records
+  19:28:00 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/companies-listing/corporate-filings-insider-trading "HTTP/1.1 200 OK"
+  19:28:00 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/corporates-pit?from_date=15-01-2026&to_date=15-04-2026&symbol=VEDL "HTTP/1.1 200 OK"
+  19:28:00 [WARNING] flowtracker.research.refresh: [refresh] VEDL: insider_transactions skipped: no data
+  19:28:00 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_08042026.csv "HTTP/1.1 200 OK"
+  19:28:00 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-08: 2451 records (total: 2451, day 0/7)
+  19:28:01 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_09042026.csv "HTTP/1.1 200 OK"
+  19:28:01 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-09: 2451 records (total: 4902, day 1/7)
+  19:28:02 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_10042026.csv "HTTP/1.1 200 OK"
+  19:28:02 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-10: 2452 records (total: 7354, day 2/7)
+  19:28:02 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_13042026.csv "HTTP/1.1 200 OK"
+  19:28:02 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-13: 2456 records (total: 9810, day 5/7)
+  19:28:03 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_14042026.csv "HTTP/1.1 200 OK"
+  19:28:03 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-14: 2456 records (total: 12266, day 6/7)
+  19:28:03 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_15042026.csv "HTTP/1.1 200 OK"
+  19:28:03 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-15: 2456 records (total: 14722, day 7/7)
+  19:28:04 [INFO] flowtracker.bhavcopy_client: Backfill complete: 6 trading days, 14722 records
+  19:28:04 [INFO] flowtracker.research.refresh: [refresh] VEDL: delivery_data ok 6 records
+  19:28:04 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/market-data/live-equity-market "HTTP/1.1 200 OK"
+  19:28:05 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/snapshot-capital-market-largedeal "HTTP/1.1 200 OK"
+  19:28:05 [INFO] flowtracker.research.refresh: [refresh] VEDL: bulk_block_deals ok 0 records
+  19:28:19 [INFO] httpx: HTTP Request: GET https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields "HTTP/1.1 200 OK"
+  19:28:19 [INFO] flowtracker.research.refresh: [refresh] VEDL: macro ok 6 records
+  19:28:19 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/reports/fii-dii "HTTP/1.1 200 OK"
+  19:28:19 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/fiidiiTradeReact "HTTP/1.1 200 OK"
+  19:28:19 [INFO] flowtracker.research.refresh: [refresh] VEDL: fii_dii_flows ok 2 records
+  19:28:19 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/PeerSmartSearch/w?Type=SS&text=VEDL "HTTP/1.1 200 OK"
+  19:28:20 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=1&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:21 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=2&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:23 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=3&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:24 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=4&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:25 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=5&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:26 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=6&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:27 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=7&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:28 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=8&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:30 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=9&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:31 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=10&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:32 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=11&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:34 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=12&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:35 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=13&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:36 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=14&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:37 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=15&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:40 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=16&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:42 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=17&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:43 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=18&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500295&strType=C "HTTP/1.1 200 OK"
+  19:28:43 [INFO] flowtracker.research.refresh: [refresh] VEDL: filings ok 874 records
+  19:28:45 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/discounted-cash-flow/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  19:28:45 [WARNING] flowtracker.fmp_client: FMP request failed: /discounted-cash-flow/VEDL.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/discounted-cash-flow/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:45 [WARNING] flowtracker.research.refresh: [refresh] VEDL: fmp_dcf skipped: no data
+  19:28:45 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14 "HTTP/1.1 403 Forbidden"
+  19:28:45 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/VEDL.NS {'type': 'rsi', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:46 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50 "HTTP/1.1 403 Forbidden"
+  19:28:46 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/VEDL.NS {'type': 'sma', 'period': 50} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:47 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200 "HTTP/1.1 403 Forbidden"
+  19:28:47 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/VEDL.NS {'type': 'sma', 'period': 200} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:47 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14 "HTTP/1.1 403 Forbidden"
+  19:28:47 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/VEDL.NS {'type': 'macd', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:48 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14 "HTTP/1.1 403 Forbidden"
+  19:28:48 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/VEDL.NS {'type': 'adx', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:48 [WARNING] flowtracker.research.refresh: [refresh] VEDL: fmp_technicals skipped: no data
+  19:28:48 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/key-metrics/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  19:28:48 [WARNING] flowtracker.fmp_client: FMP request failed: /key-metrics/VEDL.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/key-metrics/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:48 [WARNING] flowtracker.research.refresh: [refresh] VEDL: fmp_key_metrics skipped: no data
+  19:28:49 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/financial-growth/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  19:28:49 [WARNING] flowtracker.fmp_client: FMP request failed: /financial-growth/VEDL.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/financial-growth/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:49 [WARNING] flowtracker.research.refresh: [refresh] VEDL: fmp_growth skipped: no data
+  19:28:49 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/grade/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  19:28:49 [WARNING] flowtracker.fmp_client: FMP request failed: /grade/VEDL.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/grade/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:49 [WARNING] flowtracker.research.refresh: [refresh] VEDL: fmp_grades skipped: no data
+  19:28:49 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/price-target/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  19:28:49 [WARNING] flowtracker.fmp_client: FMP request failed: /price-target/VEDL.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/price-target/VEDL.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  19:28:49 [WARNING] flowtracker.research.refresh: [refresh] VEDL: fmp_targets skipped: no data
+  19:28:56 [INFO] flowtracker.research.snapshot_builder: [snapshot] VEDL: built (10 screener, 18 yfinance, 2 ownership fields)
+  19:28:56 [INFO] flowtracker.research.refresh: [refresh] VEDL: company_snapshot ok 1 records
+  19:28:57 [INFO] httpx: HTTP Request: GET https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/VEDL.NS "HTTP/1.1 200 OK"
+  19:28:57 [INFO] flowtracker.research.refresh: [refresh] VEDL: yahoo_peers ok 5 records
+  19:28:57 [WARNING] flowtracker.research.refresh: [refresh] VEDL: analytical_snapshot skipped: Cannot operate on a closed database.
+  19:28:57 [INFO] flowtracker.research.refresh: [refresh] VEDL: done 153.7s, 34 sources, 3278 total records
+  19:28:57 [INFO] flowtracker.research.peer_refresh: [peer_refresh] VEDL: started
+  19:28:57 [INFO] flowtracker.research.peer_refresh: [peer_refresh] VEDL: done 0.0s, 0 peers fetched, 10 cached, 6 benchmarks
+  19:28:57 [INFO] httpx: HTTP Request: GET https://www.vedantalimited.com/InvestorReports/Vedanta-Earnings-Transcript_Nov14-2019.pdf "HTTP/1.1 404 Not Found"
+  19:28:57 [INFO] flowtracker.research.concall_extractor: [concall_ensure] VEDL: all 2 quarters cached
+  19:29:00 [INFO] httpx: HTTP Request: GET https://news.google.com/rss/search?q=Vedanta%20Limited%20VEDL%20stock%20India&hl=en-IN&gl=IN&ceid=IN:en "HTTP/1.1 200 OK"
+  19:29:30 [WARNING] flowtracker.research.data_api: yfinance news fetch failed for VEDL: Failed to perform, curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+  19:29:30 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  19:29:49 [INFO] flowtracker.research.agent: [valuation] tool_call: ToolSearch({"query": "select:mcp__valuation__get_analytical_profile,mcp__valuation__get_quality_sco...", "max_results": "5"})
+  19:29:49 [WARNING] flowtracker.research.agent: [valuation] rate limited: status=allowed type=five_hour resets_at=1776261600
+  19:29:53 [INFO] flowtracker.research.agent: [valuation] tool_call: ToolSearch({"query": "select:mcp__valuation__get_fundamentals,mcp__valuation__get_valuation,mcp__va...", "max_results": "10"})
+  19:29:57 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_analytical_profile({"symbol": "VEDL"})
+  19:29:58 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_quality_scores({"symbol": "VEDL", "section": "[\"dupont\", \"subsidiary\", \"metals\", \"fcf_yield\"]"})
+  19:29:58 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_company_context({"symbol": "VEDL", "section": "concall_insights", "doc_type": "", "limit": "4", "sub_section": ""})
+  19:29:59 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_fundamentals({"symbol": "VEDL", "section": "[\"cash_flow_quality\", \"capital_allocation\"]"})
+  19:30:43 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_valuation({"symbol": "VEDL", "section": "[\"snapshot\", \"band\", \"pe_history\", \"wacc\", \"sotp\"]"})
+  19:30:44 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_fair_value_analysis({"symbol": "VEDL", "section": "[\"combined\", \"dcf\", \"dcf_history\", \"reverse_dcf\", \"projections\"]"})
+  19:30:45 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_estimates({"symbol": "VEDL", "section": "[\"consensus\", \"revisions\", \"momentum\", \"revenue\", \"growth\", \"analyst_grades\",..."})
+  19:30:45 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_peer_sector({"symbol": "VEDL", "section": "[\"benchmarks\", \"valuation_matrix\", \"peer_metrics\", \"peer_growth\"]"})
+  19:30:46 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_events_actions({"symbol": "VEDL", "section": "[\"catalysts\", \"material_events\", \"dividends\", \"dividend_policy\"]"})
+  19:30:47 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_company_context({"symbol": "VEDL", "section": "concall_insights", "doc_type": "", "limit": "4", "sub_section": "management_commentary"})
+  19:32:57 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__render_chart({"symbol": "VEDL", "chart_type": "pe"})
+  19:32:57 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__render_chart({"symbol": "VEDL", "chart_type": "fair_value_range"})
+  19:32:57 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__render_chart({"symbol": "VEDL", "chart_type": "dividend_history"})
+  19:32:57 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "margin_of_safety", "a": "828", "b": "766.05"})
+  19:32:58 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "growth_rate", "a": "36.05", "b": "75.89"})
+  19:32:59 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "159187 / 299385", "b": "0"})
+  19:33:00 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "159187 * 0.80 / 39081.71", "b": "0"})
+  19:33:00 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "81284 / 44543", "b": "0"})
+  19:33:00 [WARNING] flowtracker.research.agent: [valuation] rate limited: status=allowed type=five_hour resets_at=1776279600
+  19:38:59 [ERROR] claude_agent_sdk._internal.query: Fatal error in message reader: Command failed with exit code 1 (exit code: 1)
+  Error output: Check stderr output for details
+  19:38:59 [WARNING] flowtracker.research.agent: Agent 'valuation' for VEDL raised Exception after producing content — proceeding with partial output
+  19:38:59 [INFO] flowtracker.research.agent: Agent 'valuation' VEDL: TextBlocks (33292 chars) >> ResultMessage (0 chars), using TextBlocks
+  19:38:59 [INFO] flowtracker.research.agent: [valuation] unused_tools: SdkMcpTool(name='calculate', description="Financial calculator — use for ALL math, never compute in your head. Returns result + full calculation string for citation. Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574'). \n\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n  'shares_to_value_cr'     a=shares (raw count), b=price (₹) → value in ₹ Cr\n  'per_share_to_total_cr'  a=per_share_value (₹), b=shares (raw count) → total ₹ Cr\n  'total_cr_to_per_share'  a=total_cr (₹ Cr), b=shares (raw count) → per share (₹)\n  'pe_from_price_eps'      a=price (₹), b=eps (₹) → PE ratio\n  'eps_from_pat_shares'    a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹)\n  'fair_value'             a=pe_multiple, b=eps (₹) → fair value / share (₹)\n  'growth_rate'            a=old value, b=new value → growth %\n  'mcap_cr'                a=price (₹), b=shares (raw count) → market cap ₹ Cr\n  'margin_of_safety'       a=fair_value (₹), b=current_price (₹) → MoS %\n  'annualize_quarterly'    a=quarterly_value → annualized (×4); leave b='0'\n  'pct_of'                 a=part, b=whole → percentage\n  'ratio'                  a=numerator, b=denominator → ratio\n\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n  Only numbers and + - * / ( ) are permitted in the expression.\n\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.", input_schema={'operation': <class 'str'>, 'a': <class 'str'>, 'b': <class 'str'>}, handler=<function calculate at 0x10c8e68e0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_analytical_profile', description='Pre-computed analytical profile (updated weekly). Returns ALL metrics in ONE call: composite score (0-100), Piotroski F-Score (0-9), Beneish M-Score, earnings quality, Bernstein reverse DCF (implied growth + implied margin + 5x5 sensitivity matrix), capex cycle phase, common size P&L, BFSI metrics (NIM/ROA if bank), price performance (1M/3M/6M/1Y vs Nifty + sector). CALL THIS FIRST — drill into individual tools only for full 10Y history.', input_schema={'symbol': <class 'str'>}, handler=<function get_analytical_profile at 0x10c8e59e0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_chart_data', description="Get Screener chart time series. chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function get_chart_data at 0x10c8dfd80>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_company_context', description="Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>, 'doc_type': <class 'str'>, 'limit': <class 'int'>, 'sub_section': <class 'str'>}, handler=<function get_company_context at 0x10c8e6660>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_estimates', description="Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_estimates at 0x10c8e63e0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_events_actions', description="Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']. Optional: years (default 10), quarters (default 12), days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_events_actions at 0x10c8e67a0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_fair_value_analysis', description="Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_fair_value_analysis at 0x10c8e6160>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_market_context', description="Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']. Optional: days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_market_context at 0x10c8e6520>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_peer_sector', description="Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the 9 sections + 3 recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers'. Do NOT call section='all' — the ~50KB payload across 9 sections may truncate. Optional: metric (for specific valuation metric).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_peer_sector at 0x10c8e62a0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_quality_scores', description="Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'forensic_checks' | 'improvement_metrics' | 'capital_discipline' | 'incremental_roce' | 'altman_zscore' | 'working_capital' | 'operating_leverage' | 'fcf_yield' | 'tax_rate_analysis' | 'receivables_quality' | 'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | ['section1', 'section2']. BFSI routing: 'all' auto-skips non-applicable. 'incremental_roce' = marginal return on new capital. 'altman_zscore' = EM distress predictor. 'working_capital' = CCC trend + channel stuffing flags. 'operating_leverage' = DOL earnings sensitivity. 'fcf_yield' = FCF/EV vs risk-free. 'tax_rate_analysis' = ETR anomalies. 'receivables_quality' = revenue recognition risk.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_quality_scores at 0x10c8e5da0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_valuation', description="Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']. Optional: metric (for band, default 'pe_trailing'), days (default 2500), years (default 10).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_valuation at 0x10c8e6020>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_yahoo_peers', description="Get Yahoo Finance recommended peer companies with fundamentals snapshots. Returns subject + peer company snapshots (valuation, profitability, growth, ownership) with similarity scores. Better peer selection than Screener — uses Yahoo's recommendation engine.", input_schema={'symbol': <class 'str'>}, handler=<function get_yahoo_peers at 0x10c8dfec0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='render_chart', description="Generate a PNG chart and return the file path for embedding in your report. Use the embed_markdown value directly in your report to show the chart. chart_type options: STOCK CHARTS: 'price' (price + SMA50/200, 7yr), 'pe' (PE ratio history, 7yr), 'delivery' (delivery % + volume bars, 90 days), 'revenue_profit' (10yr annual revenue & profit bars), 'quarterly' (12-quarter revenue & profit bars), 'margin_trend' (10yr OPM & NPM lines), 'roce_trend' (10yr ROCE bars, color-coded by quality), 'dupont' (DuPont decomposition: margin × turnover × leverage → ROE), 'cashflow' (10yr operating & free cash flow bars), 'shareholding' (12-quarter ownership trend lines), 'fair_value_range' (bear/base/bull vs current price horizontal bar), 'expense_pie' (expense breakdown pie chart), 'composite_radar' (8-factor quality score spider chart), 'dividend_history' (dividend payout ratio & DPS over time). SECTOR CHARTS: 'sector_mcap' (all sector stocks by market cap), 'sector_growth_bars' (sector peer revenue growth bars), 'sector_profitability_bars' (sector peer ROCE bars), 'sector_pe_distribution' (sector PE histogram with subject marked), 'sector_valuation_scatter' (PE vs ROCE scatter — bargain/avoid quadrants), 'sector_ownership_flow' (MF ownership changes — accumulation/exit). COMPARISON CHARTS (use comma-separated symbols, e.g. symbol='HDFCBANK,ICICIBANK'): 'comparison_revenue' (indexed revenue trajectories), 'comparison_pe' (PE history overlay), 'comparison_shareholding' (FII/MF ownership trends overlay), 'comparison_radar' (quality score radars overlaid), 'comparison_margins' (OPM/NPM trends overlay). Returns: {path, embed_markdown}.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function render_chart at 0x10c8e4e00>, annotations=None)
+  19:38:59 [INFO] flowtracker.research.agent: [valuation] done: success 33046 chars, 20 calls, 12/13 tools used, 569s, $0.77
+  [ERROR] Gemini eval failed for valuation/VEDL: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260415T135622.log
+AutoEval (agent-first): agent=valuation sectors=['metals']
+Target: grade_numeric >= 90
+
+--- valuation / VEDL (metals) ---
+  Running agent...
+  Agent completed in 756.8s (success=True)
+  Report: 33046 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: ERR (0) [FAIL]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260415T140910_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  metals              VEDL          ERR ( 0)  [FAIL]  prompt_fixes:0
+======================================================================
+passing:0  failing:1  total:1
+======================================================================

@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260415T190211.log
+AutoEval (agent-first): agent=valuation sectors=['auto']
+Target: grade_numeric >= 90
+
+--- valuation / OLAELEC (auto) ---
+  Report: 26756 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: B+ (89) [FAIL]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260415T190246_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  auto                OLAELEC       B+  (89)  [FAIL]  prompt_fixes:2
+======================================================================
+passing:0  failing:1  total:1
+======================================================================

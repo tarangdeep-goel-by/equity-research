@@ -1,0 +1,73 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T17:54:12.871015+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "pharma": {
+      "agent": "valuation",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional insight into ETR normalization (14.1% to 25%) and reverse DCF margin expansion (identifying the embedded 44.5% EBITDA margin assumption), though the SOTP analysis lacks rigorous margin assumptions for the specialty segment."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Highly consistent narrative that correctly overrides naive tool signals (reclassifying 'Deep Value' to 'GARP'), but the SOTP table mixes standalone India PAT with estimated US PAT without clear reconciliation."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Covers all required valuation dimensions comprehensively, including a brilliant premium decomposition, but lacks a precise historical median PE anchor due to a data workaround."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides clear, catalyst-driven scenarios and explicitly corrects the tool's misclassification, though the final JSON signal ('bullish') feels slightly more optimistic than the highly cautious text regarding margin expectations."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Perfectly applies pharma frameworks (specialty vs generics mix, FDA warning letters, pipeline catalysts), but could have briefly touched upon R&D capitalization policies which impact pharma earnings multiples."
+        },
+        "data_sourcing": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Transparently handles broken DCF and narrow PE band data, but failed to use alternative parameters (e.g., `years=5` in `get_valuation`) to fetch the missing historical PE median, relying instead on a manual estimate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Relative Valuation (SOTP Note)",
+          "issue": "The illustrative SOTP derives a \u20b93,500 Cr PAT for US Specialty based on a $313M/qtr revenue run-rate without stating the implied net margin (~34%), mixing standalone and consolidated figures loosely.",
+          "suggestion": "Instruct the agent to explicitly state margin assumptions when deriving segment PAT from revenue run-rates, and ensure segment PATs cleanly reconcile to consolidated PAT."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Historical Valuation Band",
+          "issue": "Agent noted the `get_valuation(section='band')` tool only returned 4 weeks of data, but failed to call `get_valuation(section='pe_history', years=5)` to get the actual historical median, relying on a manual '35x' base estimate.",
+          "suggestion": "Update agent instructions to retry with different parameters (e.g., `years=5` or `years=10`) if a time-series tool returns an artificially narrow window."
+        }
+      ],
+      "strengths": [
+        "Brilliant identification of the 14.1% ETR anomaly and its impact on the trailing PE, correctly calculating a normalized PE of 42.8x.",
+        "Excellent use of the reverse DCF to extract the market's embedded assumption of a 1300bps EBITDA margin expansion, perfectly tying it to the execution risk of the specialty portfolio.",
+        "Highly sophisticated decomposition of the 62% peer PE premium into fundamental drivers (scale, balance sheet) vs. execution bets."
+      ],
+      "summary": "This is an institutional-quality valuation report that demonstrates deep sector expertise, particularly in its analysis of ETR normalization and the margin expansion implied by the reverse DCF. The primary gap is a slight analytical leap in the illustrative SOTP math and a missed opportunity to fetch a precise 5-year historical PE median when the primary tool returned a narrow window. Overall, the critical thinking applied to override naive tool signals (reclassifying 'Deep Value' to 'GARP') is exactly what is expected from a senior analyst.",
+      "report_length": 34678,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 62.945074832998216,
+      "run_skipped": true,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional insight into ETR normalization (14.1% to 25%) and reverse DCF margin expansion (identifying the embedded 44.5% EBITDA margin assumption), though the SOTP analysis lacks rigorous margin assumptions for the specialty segment.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Highly consistent narrative that correctly overrides naive tool signals (reclassifying 'Deep Value' to 'GARP'), but the SOTP table mixes standalone India PAT with estimated US PAT without clear reconciliation.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Covers all required valuation dimensions comprehensively, including a brilliant premium decomposition, but lacks a precise historical median PE anchor due to a data workaround.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides clear, catalyst-driven scenarios and explicitly corrects the tool's misclassification, though the final JSON signal ('bullish') feels slightly more optimistic than the highly cautious text regarding margin expectations.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Perfectly applies pharma frameworks (specialty vs generics mix, FDA warning letters, pipeline catalysts), but could have briefly touched upon R&D capitalization policies which impact pharma earnings multiples.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Transparently handles broken DCF and narrow PE band data, but failed to use alternative parameters (e.g., `years=5` in `get_valuation`) to fetch the missing historical PE median, relying instead on a manual estimate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Relative Valuation (SOTP Note)\",\n      \"issue\": \"The illustrative SOTP derives a \u20b93,500 Cr PAT for US Specialty based on a $313M/qtr revenue run-rate without stating the implied net margin (~34%), mixing standalone and consolidated figures loosely.\",\n      \"suggestion\": \"Instruct the agent to explicitly state margin assumptions when deriving segment PAT from revenue run-rates, and ensure segment PATs cleanly reconcile to consolidated PAT.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Historical Valuation Band\",\n      \"issue\": \"Agent noted the `get_valuation(section='band')` tool only returned 4 weeks of data, but failed to call `get_valuation(section='pe_history', years=5)` to get the actual historical median, relying on a manual '35x' base estimate.\",\n      \"suggestion\": \"Update agent instructions to retry with different parameters (e.g., `years=5` or `years=10`) if a time-series tool returns an artificially narrow window.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant identi"
+    }
+  }
+}

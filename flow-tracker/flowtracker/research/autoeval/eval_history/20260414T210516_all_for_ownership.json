@@ -1,0 +1,73 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-14T21:05:16.844177+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "real_estate": {
+      "agent": "ownership",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional depth in segregating Equity vs. Debt MF holdings using ISINs and calculating the FII-to-DII absorption ratio. However, it leaves the Gamnat/GIC relationship as an open question rather than synthesizing that Gamnat is a known GIC investment vehicle."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong narrative flow connecting the QIP to subsequent ownership shifts. Minor phrasing/logic errors exist, such as referring to the 75% maximum promoter limit as the 'Minimum Public Shareholding cap' and slight discrepancies in the post-QIP promoter stake percentage (46.48% vs 46.50%)."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers most critical dimensions (FII, DII, Promoter, Pledge, Delivery). However, it completely misses actual insider trading and bulk/block deal analysis because the agent failed to call those specific tool sections."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a highly actionable 'Bullish with caution' verdict. It effectively balances the cleared QIP dilution overhang against the RE-specific DII cycle-top warning."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Outstanding application of RE-specific heuristics. Contextualizing the zero promoter pledge against industry norms (where 30-60% is common for SPV construction loans) and applying the 5-8% MF breakthrough zone as a cycle-top indicator are institutional-grade insights."
+        },
+        "data_sourcing": {
+          "grade": "B",
+          "numeric": 84,
+          "rationale": "Excellent use of the calculator tool for absorption ratios. However, the agent hallucinated the claim 'No block/bulk deals in the last 365 days' and '0 insider transactions' without ever calling the `bulk_block` or `insider` sections of the `get_ownership` tool."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "5. Risk Signals: Pledge & Delivery / 6. Institutional Verdict",
+          "issue": "Agent claims 'No block/bulk deals in the last 365 days' and '0 insider transactions' but the execution log shows it never called `get_ownership(section='bulk_block')` or `get_ownership(section='insider')`.",
+          "suggestion": "Update the system prompt to strictly forbid claiming zero activity for data endpoints (like insider or bulk deals) unless the specific tool/section was explicitly called and returned empty."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "1. Ownership Structure",
+          "issue": "Agent writes 'Promoter at 47.17% is well below the SEBI 75% Minimum Public Shareholding cap'. This conflates the 75% maximum promoter holding limit with the 25% Minimum Public Shareholding (MPS) rule.",
+          "suggestion": "Minor LLM phrasing quirk; no pipeline fix required, though prompt could remind the model of correct SEBI terminology."
+        }
+      ],
+      "strengths": [
+        "Brilliant use of ISINs to segregate genuine Equity MF conviction from Debt/Bond holdings, preventing a misleading headline conviction number.",
+        "Excellent contextualization of the QIP event (Tenet 11) as the primary driver of the ownership structure shift, rather than misinterpreting it as organic buying/selling.",
+        "Strong application of Real Estate sector-specific frameworks, particularly regarding promoter pledge norms and DII cycle-top indicators."
+      ],
+      "summary": "A highly insightful and structurally sound ownership report that brilliantly contextualizes the recent QIP and segregates debt from equity in MF holdings. The primary flaw is a hallucination regarding the absence of insider and bulk deals, stemming from the agent's failure to call those specific data tools before drawing a conclusion.",
+      "report_length": 25590,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 29.43582224997226,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional depth in segregating Equity vs. Debt MF holdings using ISINs and calculating the FII-to-DII absorption ratio. However, it leaves the Gamnat/GIC relationship as an open question rather than synthesizing that Gamnat is a known GIC investment vehicle.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong narrative flow connecting the QIP to subsequent ownership shifts. Minor phrasing/logic errors exist, such as referring to the 75% maximum promoter limit as the 'Minimum Public Shareholding cap' and slight discrepancies in the post-QIP promoter stake percentage (46.48% vs 46.50%).\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers most critical dimensions (FII, DII, Promoter, Pledge, Delivery). However, it completely misses actual insider trading and bulk/block deal analysis because the agent failed to call those specific tool sections.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a highly actionable 'Bullish with caution' verdict. It effectively balances the cleared QIP dilution overhang against the RE-specific DII cycle-top warning.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Outstanding application of RE-specific heuristics. Contextualizing the zero promoter pledge against industry norms (where 30-60% is common for SPV construction loans) and applying the 5-8% MF breakthrough zone as a cycle-top indicator are institutional-grade insights.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B\",\n      \"numeric\": 84,\n      \"rationale\": \"Excellent use of the calculator tool for absorption ratios. However, the agent hallucinated the claim 'No block/bulk deals in the last 365 days' and '0 insider transactions' without ever calling the `bulk_block` or `insider` sections of the `get_ownership` tool.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"5. Risk Signals: Pledge & Delivery / 6. Institutional Verdict\",\n      \"issue\": \"Agent claims 'No block/bulk deals in the last 365 days' and '0 insider transactions' but the execution log shows it never called `get_ownership(section='bulk_block')` or `get_ownership(section='insider')`.\",\n      \"suggestion\": \"Update the system prompt to strictly forbid claiming zero activity for data endpoints (like insider or bulk deals) unless the specific tool/section was explicitly called and returned empty.\"\n    },\n    {\n      \"type\": \"NOT_OUR_PROBLEM\",\n      \"section\": \"1. Ownership Structure\",\n      \"issue\": \"Agent writes 'Promoter at 47.17% is well below the SEBI 75% Minimum Public Shareholding cap'. This conflates the 75% maximum promoter holding limit with the 25% Minimum Public Shareholding (MPS) rule.\",\n "
+    }
+  }
+}
