@@ -816,6 +816,81 @@ class ResearchDataAPI:
             ),
         }
 
+    def get_fundamentals_toc(self, symbol: str) -> dict:
+        """Compact table-of-contents for get_fundamentals — ~1-2 KB summary.
+
+        Default response when the agent calls get_fundamentals without specifying
+        a section. Tells the agent what sections exist, their rough size class,
+        their purpose, and the recommended wave-call composition to stay under
+        the 30-40 KB MCP truncation ceiling.
+
+        Static menu (not per-stock) — the same 14 sections and 4 waves apply to
+        every equity. Per-stock availability is discovered as the agent calls
+        each section; empty sections simply return an empty structure.
+        """
+        is_bfsi = self._is_bfsi(symbol) if hasattr(self, "_is_bfsi") else False
+        sections = [
+            {"key": "quarterly_results",       "size": "med",   "purpose": "12Q Revenue/OP/NP — the core P&L quarterly trend"},
+            {"key": "annual_financials",       "size": "med",   "purpose": "10Y P&L annual rows"},
+            {"key": "ratios",                  "size": "small", "purpose": "10Y margin, ROE, ROCE, D/E from Screener"},
+            {"key": "quarterly_balance_sheet", "size": "small", "purpose": "8Q BS snapshots (sparse for some)"},
+            {"key": "quarterly_cash_flow",     "size": "small", "purpose": "8Q CF (empty for banks + many NSE listed)"},
+            {"key": "expense_breakdown",       "size": "med",   "purpose": "Line items (R&D, employee, material, other) — drill for R&D / pharma / 'Other Cost' decomposition"},
+            {"key": "growth_rates",            "size": "small", "purpose": "TTM revenue/PAT growth %"},
+            {"key": "capital_allocation",      "size": "small", "purpose": "5Y dividend, buyback, capex, net-debt trajectory"},
+            {"key": "rate_sensitivity",        "size": "small", "purpose": "BFSI only — asset-liability repricing sensitivity"},
+            {"key": "cagr_table",              "size": "small", "purpose": "Pre-computed 1/3/5/10Y CAGRs (Revenue, EBITDA, NI, EPS, FCF) + trajectory class"},
+            {"key": "cost_structure",          "size": "med",   "purpose": "Material/employee/other as % of revenue — explains margin moves"},
+            {"key": "balance_sheet_detail",    "size": "med",   "purpose": "Borrowing structure (ST/LT), asset composition, net debt, capitalized interest notes"},
+            {"key": "cash_flow_quality",       "size": "med",   "purpose": "CFO decomposition, FCF trajectory, accrual ratio, earnings-quality forensics"},
+            {"key": "working_capital",         "size": "small", "purpose": "Receivables/inventory/payables days, CCC trend"},
+        ]
+        waves = [
+            {
+                "wave": 1,
+                "label": "P&L + ratios — start here (~15 KB)",
+                "sections": ["quarterly_results", "annual_financials", "ratios", "cagr_table"],
+                "purpose": "Establish the top-line trajectory, 12Q trend, and pre-computed CAGRs. Run first.",
+            },
+            {
+                "wave": 2,
+                "label": "Margin decomposition (~8 KB)",
+                "sections": ["cost_structure", "growth_rates"],
+                "purpose": "Explains which cost line is driving margin moves identified in Wave 1.",
+            },
+            {
+                "wave": 3,
+                "label": "Balance sheet + cash flow (~15 KB)",
+                "sections": ["balance_sheet_detail", "cash_flow_quality", "working_capital", "capital_allocation"],
+                "purpose": "Leverage, cash conversion quality, WC cycle, capital-return history.",
+            },
+            {
+                "wave": 4,
+                "label": "On-demand — call only when needed",
+                "sections": ["expense_breakdown", "rate_sensitivity", "quarterly_balance_sheet", "quarterly_cash_flow"],
+                "purpose": (
+                    "expense_breakdown when 'Other Cost' >20% of revenue or for R&D extraction; "
+                    "rate_sensitivity for BFSI; quarterly BS/CF when the 8Q granularity matters."
+                ),
+            },
+        ]
+        # Mark BFSI-inapplicable sections
+        if is_bfsi:
+            for s in sections:
+                if s["key"] in ("quarterly_cash_flow", "cash_flow_quality", "working_capital"):
+                    s["purpose"] += " — typically empty/not-meaningful for banks"
+        return {
+            "symbol": symbol.upper(),
+            "is_bfsi": is_bfsi,
+            "available_sections": sections,
+            "recommended_waves": waves,
+            "warnings": {
+                "truncation": "Do NOT call get_fundamentals(section='all') — the 70+ KB payload is truncated mid-response by the MCP transport, causing partial data and hallucinated gaps.",
+                "singular_bloat": "Do NOT pass 10+ sections in one call — same truncation risk. Use the recommended waves above.",
+            },
+            "hint": "Call get_fundamentals(section=[<wave sections>]) with one of recommended_waves, or with a single section for targeted drill-down. This TOC is ~1-2 KB; wave calls are 8-15 KB each; all well within the 30-40 KB readable window.",
+        }
+
     def get_ownership_toc(self, symbol: str) -> dict:
         """Compact table-of-contents for get_ownership — ~3-5KB summary.
 
