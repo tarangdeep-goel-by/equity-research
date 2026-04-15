@@ -318,6 +318,45 @@ class TestBFSIAssetQualityLift:
 # Extended industry → sector mappings
 # ---------------------------------------------------------------------------
 
+class TestFundamentalsTOC:
+    """get_fundamentals_toc returns the static section menu + recommended waves
+    so the agent can plan TOC-then-drill calls without triggering MCP truncation.
+    """
+
+    def test_toc_returns_compact_static_menu(self, api):
+        toc = api.get_fundamentals_toc("SBIN")
+        size = len(json.dumps(toc, default=str))
+        assert size < 5000, f"TOC must be <5KB, got {size}"
+        assert "available_sections" in toc
+        assert len(toc["available_sections"]) == 14
+        # Required keys per section
+        for s in toc["available_sections"]:
+            assert {"key", "size", "purpose"}.issubset(s.keys())
+
+    def test_toc_recommends_4_waves(self, api):
+        toc = api.get_fundamentals_toc("SBIN")
+        assert "recommended_waves" in toc
+        assert len(toc["recommended_waves"]) == 4
+        # Wave 1 must include the core P&L sections
+        wave1_sections = set(toc["recommended_waves"][0]["sections"])
+        assert {"quarterly_results", "annual_financials", "ratios", "cagr_table"}.issubset(wave1_sections)
+
+    def test_toc_marks_bfsi_inapplicable_sections(self, api, monkeypatch):
+        monkeypatch.setattr(api, "_is_bfsi", lambda s: True)
+        toc = api.get_fundamentals_toc("SBIN")
+        assert toc["is_bfsi"] is True
+        # Cash-flow sections should be flagged as BFSI-inapplicable
+        cfq = next(s for s in toc["available_sections"] if s["key"] == "cash_flow_quality")
+        assert "bank" in cfq["purpose"].lower() or "empty" in cfq["purpose"].lower()
+
+    def test_toc_includes_truncation_warning(self, api):
+        toc = api.get_fundamentals_toc("SBIN")
+        assert "warnings" in toc
+        assert "truncation" in toc["warnings"]
+        # Warning must mention the dangerous default
+        assert "all" in toc["warnings"]["truncation"].lower()
+
+
 class TestIndustryMappings:
     """Additive mapping coverage — ensures yfinance-style strings resolve to
     the right sector KPI framework without breaking existing Screener strings.
