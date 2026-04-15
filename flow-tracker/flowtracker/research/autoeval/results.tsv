@@ -86,3 +86,37 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-15T04:36:18Z	0	ownership	SUNPHARMA	pharma	A-	91	29305	410.7	27.9	2	This is a highly sophisticated, institutional-grade report that excels in structural analysis, parti
 2026-04-15T04:42:58Z	0	ownership	HDFCBANK	private_bank	A-	91	29979	367.7	32.4	2	This is a highly sophisticated ownership report that correctly contextualizes the complex post-merge
 2026-04-15T04:50:51Z	0	ownership	POLICYBZR	insurance	A	93	29139	443.8	28.8	1	This is an institutional-grade ownership report that brilliantly dissects a textbook FII-to-DII hand
+2026-04-15T13:48:57Z	0	ownership	SBIN	bfsi	ERR	0	33375	487.1	31.0	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:02:34Z	0	ownership	POLICYBZR	insurance	ERR	0	30401	601.5	9.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:03:12Z	0	financials	SBIN	bfsi	ERR	0	43528	714.9	2.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:03:52Z	0	business	SBIN	bfsi	ERR	0	35345	725.3	32.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:07:39Z	0	ownership	SBIN	bfsi	ERR	0	28641	474.1	442.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:14:01Z	0	ownership	GROWW	broker	ERR	0	30538	604.2	83.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:17:55Z	0	ownership	HDFCBANK	private_bank	ERR	0	33837	464.8	150.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:22:22Z	0	ownership	ADANIENT	conglomerate	ERR	0	31457	630.8	1169.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:22:54Z	0	ownership	OLAELEC	auto	ERR	0	31846	520.3	12.0	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:26:08Z	0	ownership	TCS	it_services	ERR	0	30691	459.1	33.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:28:06Z	0	ownership	BHARTIARTL	telecom	ERR	0	29096	340.4	2.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:30:40Z	0	ownership	PIDILITIND	chemicals	ERR	0	30249	460.8	5.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:34:30Z	0	ownership	GODREJPROP	real_estate	ERR	0	30162	377.8	6.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:36:05Z	0	ownership	VEDL	metals	ERR	0	32328	592.2	4.6	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:36:13Z	0	ownership	HINDUNILVR	fmcg	ERR	0	27543	331.5	1.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:41:30Z	0	ownership	SUNPHARMA	pharma	ERR	0	31315	409.0	10.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:42:02Z	0	ownership	NTPC	regulated_power	ERR	0	138	28.7	3.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T14:42:08Z	0	ownership	ETERNAL	platform	ERR	0	28668	362.0	1.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-15T19:01:58Z	0	ownership	SBIN	bfsi	A-	92	28641	0.0	30.5	0	This is a highly sophisticated, institutional-grade ownership report that perfectly applies PSU bank
+2026-04-15T19:02:44Z	0	ownership	SBIN	bfsi	A	94	28641	0.0	30.7	1	This is an institutional-quality ownership report that perfectly contextualizes data within the stri
+2026-04-15T19:03:15Z	0	ownership	HDFCBANK	private_bank	A	94	33837	0.0	30.5	0	This is an institutional-grade ownership report that brilliantly synthesizes a complex FII-to-MF han
+2026-04-15T19:03:53Z	0	ownership	TCS	it_services	B+	86	30691	0.0	37.6	2	This is a solid, highly readable report that correctly identifies the structural FII-to-DII handoff 
+2026-04-15T19:04:19Z	0	ownership	VEDL	metals	A+	96	32328	0.0	26.7	0	This is an institutional-quality ownership report that perfectly dissects a complex, high-debt HoldC
+2026-04-15T19:04:46Z	0	ownership	ETERNAL	platform	B+	89	28668	0.0	26.8	1	A strong, highly readable report that correctly identifies the massive FII-to-DII handoff and strips
+2026-04-15T19:05:20Z	0	ownership	ADANIENT	conglomerate	A-	91	31457	0.0	34.0	2	A highly sophisticated and institutional-grade ownership report that correctly identifies the struct
+2026-04-15T19:05:48Z	0	ownership	BHARTIARTL	telecom	B+	88	29096	0.0	27.5	2	This is a highly analytical and well-reasoned report that correctly identifies the core Bharti Airte
+2026-04-15T19:06:19Z	0	ownership	GODREJPROP	real_estate	A-	91	30162	0.0	31.2	1	A highly sophisticated, institutional-grade ownership report that excels in data anomaly detection (
+2026-04-15T19:06:51Z	0	ownership	SUNPHARMA	pharma	A-	90	31315	0.0	31.9	2	This is a highly sophisticated, institutional-grade report that brilliantly connects ownership flows
+2026-04-15T19:07:06Z	0	ownership	NTPC	regulated_power	F	50	138	0.0	14.9	1	The report failed to generate entirely due to a fatal API 500 Internal Server Error. The agent did n
+2026-04-15T19:07:41Z	0	ownership	POLICYBZR	insurance	A-	90	30401	0.0	35.3	1	This is a highly sophisticated ownership report that correctly applies the new-age tech platform fra
+2026-04-15T19:08:16Z	0	ownership	GROWW	broker	A-	90	30538	0.0	34.5	2	This is a highly intelligent and well-reasoned report that correctly identifies the nuances of a new
+2026-04-15T19:08:56Z	0	ownership	OLAELEC	auto	B+	89	31846	0.0	40.4	2	A strong, highly readable report that excellently synthesizes market data to build a clear bearish t
+2026-04-15T19:09:15Z	0	ownership	PIDILITIND	chemicals	A	93	30249	0.0	19.1	1	This is an institutional-quality ownership report that expertly weaves disparate data points into a 
+2026-04-15T19:09:45Z	0	ownership	HINDUNILVR	fmcg	A	93	27543	0.0	29.8	2	This is an institutional-quality ownership report that expertly applies MNC and FMCG frameworks to i
