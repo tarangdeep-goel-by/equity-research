@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T17:54:46.964864+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "regulated_power": {
+      "agent": "valuation",
+      "stock": "NTPC",
+      "sector": "Regulated utility",
+      "grade": "A",
+      "grade_numeric": 95,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Exceptional depth in explaining pass-through distortions and PE divergence, though the SOTP analysis relies on an unverified 89% stake assumption for NGEL."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly logical override of the mechanical 'Deep Value' signal, but inconsistently applies the flawed 11.55% WACC to the reverse DCF after proving the underlying credit rating assumption was wrong."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Covers almost all bases including SOTP, DuPont, and relative valuation, but the absence of a true intrinsic DCF (due to tool failure) leaves a slight gap in absolute valuation."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Provides clear, conditional fair value ranges and catalysts, though the overlapping price targets in the summary slightly dilute the base-case conviction."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Masterful application of P/B vs Regulated ROE and Div Yield vs G-sec, though it stops short of calculating the actual regulated equity base (30% of capitalized assets)."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent handling and citation of tool gaps, but mixes two different forward EPS estimates (\u20b926.89 from yfinance vs \u20b923.77 from projections) across sections without fully standardizing."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Section 5 \u2014 SOTP: NTPC Green Energy (NTPCGREEN)",
+          "issue": "The SOTP tool returned 'No listed subsidiaries found' despite NTPCGREEN being a major recent IPO.",
+          "suggestion": "Update the subsidiary mapping database to include recent IPOs like NTPCGREEN for accurate automated SOTP extraction."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Section 2 \u2014 Historical Valuation Band",
+          "issue": "The PE band tool only returned 4 weeks of data (14 observations), rendering the automated fair value band mechanically flawed.",
+          "suggestion": "Investigate the Screener/DB data pipeline for the PE band tool to ensure it pulls the full 3Y/5Y history rather than just the latest month."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Section 4 \u2014 Fair Value Triangle",
+          "issue": "Agent correctly identifies that the WACC model uses a flawed BB credit rating (overstating WACC), but still uses that 11.55% WACC to interpret the reverse DCF.",
+          "suggestion": "Instruct the agent: 'If you override the WACC or cost of capital assumptions, you must manually recalculate the reverse DCF implied growth using the corrected discount rate.'"
+        }
+      ],
+      "strengths": [
+        "Outstanding application of sector-specific frameworks, specifically the Damodaran P/B vs Regulated ROE model and the Dividend Yield vs G-sec spread.",
+        "Brilliant critical thinking in overriding the tool's mechanical 'DEEP VALUE' signal, correctly identifying that it was based on a truncated, elevated 4-week PE band.",
+        "Excellent manual SOTP calculation to isolate the core thermal business multiple (16.1x) from the consolidated multiple, compensating perfectly for a tool failure."
+      ],
+      "summary": "This is an institutional-quality valuation report that demonstrates exceptional critical thinking by overriding flawed tool data (narrow PE bands, incorrect credit ratings) with sound fundamental logic. The application of utility-specific frameworks (P/B vs ROE, pass-through margin distortions) is masterful. The only minor areas for improvement are standardizing the forward EPS base across all calculations and recalculating the reverse DCF with the corrected WACC.",
+      "report_length": 35488,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 31.400263541960157,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Exceptional depth in explaining pass-through distortions and PE divergence, though the SOTP analysis relies on an unverified 89% stake assumption for NGEL.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly logical override of the mechanical 'Deep Value' signal, but inconsistently applies the flawed 11.55% WACC to the reverse DCF after proving the underlying credit rating assumption was wrong.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Covers almost all bases including SOTP, DuPont, and relative valuation, but the absence of a true intrinsic DCF (due to tool failure) leaves a slight gap in absolute valuation.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Provides clear, conditional fair value ranges and catalysts, though the overlapping price targets in the summary slightly dilute the base-case conviction.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Masterful application of P/B vs Regulated ROE and Div Yield vs G-sec, though it stops short of calculating the actual regulated equity base (30% of capitalized assets).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent handling and citation of tool gaps, but mixes two different forward EPS estimates (\u20b926.89 from yfinance vs \u20b923.77 from projections) across sections without fully standardizing.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 95\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Section 5 \u2014 SOTP: NTPC Green Energy (NTPCGREEN)\",\n      \"issue\": \"The SOTP tool returned 'No listed subsidiaries found' despite NTPCGREEN being a major recent IPO.\",\n      \"suggestion\": \"Update the subsidiary mapping database to include recent IPOs like NTPCGREEN for accurate automated SOTP extraction.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Section 2 \u2014 Historical Valuation Band\",\n      \"issue\": \"The PE band tool only returned 4 weeks of data (14 observations), rendering the automated fair value band mechanically flawed.\",\n      \"suggestion\": \"Investigate the Screener/DB data pipeline for the PE band tool to ensure it pulls the full 3Y/5Y history rather than just the latest month.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Section 4 \u2014 Fair Value Triangle\",\n      \"issue\": \"Agent correctly identifies that the WACC model uses a flawed BB credit rating (overstating WACC), but still uses that 11.55% WACC to interpret the reverse DCF.\",\n      \"suggestion\": \"Instruct the agent: 'If you override the WACC or cost of capital assumptions, you must manually recalculate the reverse DCF implied growth using the corrected discount rate.'\"\n    }\n  ],\n  \"strengths\": [\n    \"Outstanding application o"
+    }
+  }
+}

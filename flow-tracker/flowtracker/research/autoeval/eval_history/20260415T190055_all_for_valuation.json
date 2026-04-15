@@ -1,0 +1,87 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T19:00:55.687281+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "it_services"
+  ],
+  "results": {
+    "it_services": {
+      "agent": "valuation",
+      "stock": "TCS",
+      "sector": "IT services",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent decomposition of the PE discount and DuPont drivers, but relies heavily on a 'sovereign AI data center' narrative that slightly overshadows core IT services deal-win/TCV conversion analysis."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Generally strong, but contradicts itself by claiming 'no haircut applied to forward EPS' while simultaneously accepting a tool-generated base revenue growth (5.8%) that is significantly below consensus (8.4%)."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers most bases well, but critically misses FCF yield analysis, which is a paramount valuation anchor for mature, cash-rich IT services firms."
+        },
+        "actionability": {
+          "grade": "B",
+          "numeric": 83,
+          "rationale": "The final weighted fair value is weak because it relies 50% on a PE band the agent explicitly identified as flawed (27-day range) and 50% on analyst consensus, rather than constructing a robust historical or peer-based multiple."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Applies appropriate metrics like PEG, EV/EBITDA, and Reverse DCF, but the omission of FCF yield and Book-to-Bill/TCV conversion multiples prevents a perfect score."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptionally transparent about tool failures (PE band, DCF) and correctly excludes anomalous yfinance EV/EBITDA data for peers, though it missed calling the FCF yield tool."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Fair Value Triangle",
+          "issue": "Agent used a known-flawed 27-day PE band to calculate its primary fair value scenarios instead of substituting a historical median or peer multiple.",
+          "suggestion": "Instruct the agent to discard flawed/narrow PE bands entirely and substitute historical median multiples (derived visually or from peers) for fair value calculations."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Throughout",
+          "issue": "Agent failed to analyze FCF Yield, a critical valuation metric for IT services.",
+          "suggestion": "Update the sector-specific prompt instructions to mandate calling `get_quality_scores(section='fcf_yield')` for mature IT services companies."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Historical Valuation Band",
+          "issue": "`get_valuation(section='band')` returned only 27 days of data instead of a 5-year history.",
+          "suggestion": "Fix the backend yfinance/DB query for PE band history to ensure 5Y+ data is returned."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Fair Value Triangle",
+          "issue": "`get_fair_value_analysis(section='dcf')` returned an empty object.",
+          "suggestion": "Investigate FMP integration for Indian equities to ensure DCF data populates correctly."
+        }
+      ],
+      "strengths": [
+        "Superb handling of data anomalies, explicitly flagging the 27-day PE band issue and excluding broken EV/EBITDA peer data.",
+        "Excellent qualitative decomposition of the PE discount vs. peers, breaking down the penalty for size, revenue deceleration, and capex risk.",
+        "Strong use of Reverse DCF to ground the valuation in market-implied growth expectations (10.5%) vs. historical reality."
+      ],
+      "summary": "The report provides a highly articulate and nuanced view of TCS's valuation, particularly in its decomposition of the peer discount and DuPont metrics. However, the final fair value conclusion is structurally weak because it relies on a flawed 27-day PE band and analyst consensus rather than a robust intrinsic or historical multiple approach. Additionally, the omission of FCF yield analysis leaves a notable gap in the IT services valuation framework.",
+      "report_length": 36574,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 40.139241665950976,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent decomposition of the PE discount and DuPont drivers, but relies heavily on a 'sovereign AI data center' narrative that slightly overshadows core IT services deal-win/TCV conversion analysis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Generally strong, but contradicts itself by claiming 'no haircut applied to forward EPS' while simultaneously accepting a tool-generated base revenue growth (5.8%) that is significantly below consensus (8.4%).\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers most bases well, but critically misses FCF yield analysis, which is a paramount valuation anchor for mature, cash-rich IT services firms.\"\n    },\n    \"actionability\": {\n      \"grade\": \"B\",\n      \"numeric\": 83,\n      \"rationale\": \"The final weighted fair value is weak because it relies 50% on a PE band the agent explicitly identified as flawed (27-day range) and 50% on analyst consensus, rather than constructing a robust historical or peer-based multiple.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Applies appropriate metrics like PEG, EV/EBITDA, and Reverse DCF, but the omission of FCF yield and Book-to-Bill/TCV conversion multiples prevents a perfect score.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptionally transparent about tool failures (PE band, DCF) and correctly excludes anomalous yfinance EV/EBITDA data for peers, though it missed calling the FCF yield tool.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Fair Value Triangle\",\n      \"issue\": \"Agent used a known-flawed 27-day PE band to calculate its primary fair value scenarios instead of substituting a historical median or peer multiple.\",\n      \"suggestion\": \"Instruct the agent to discard flawed/narrow PE bands entirely and substitute historical median multiples (derived visually or from peers) for fair value calculations.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Throughout\",\n      \"issue\": \"Agent failed to analyze FCF Yield, a critical valuation metric for IT services.\",\n      \"suggestion\": \"Update the sector-specific prompt instructions to mandate calling `get_quality_scores(section='fcf_yield')` for mature IT services companies.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Historical Valuation Band\",\n      \"issue\": \"`get_valuation(section='band')` returned only 27 days of data instead of a 5-year history.\",\n      \"suggestion\": \"Fix the backend yfinance/DB query for PE band history to ensure 5Y+ data is returned.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Fair Value Triangle\",\n      \"issue\": \"`get_fair_value_analysis(section='dcf')`"
+    }
+  }
+}

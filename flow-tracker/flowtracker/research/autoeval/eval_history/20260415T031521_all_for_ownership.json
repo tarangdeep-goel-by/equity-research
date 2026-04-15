@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T03:15:21.475849+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "regulated_power": {
+      "agent": "ownership",
+      "stock": "NTPC",
+      "sector": "Regulated utility",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional breakdown of the FII-to-DII handoff and the distinction between passive ETF trimming and active thematic accumulation. Goes beyond surface-level data to explain the 'why' behind the flows."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Narrative logic is strong, but calculating historical FII outflow values by multiplying past percentage point changes by the *current* market cap is mathematically flawed, as market cap fluctuated over those 5 quarters."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Covers all major institutional categories, insider trends, and delivery metrics. Misses a deeper dive into the exact composition of the 'Public' float (e.g., HNI vs retail), even if small."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear, evidence-backed bullish verdict with specific catalysts and risks. However, leaving the existence of an ADR program as an 'open question' reduces immediate actionability."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Perfectly applies PSU and regulated utility frameworks, correctly contextualizing the 51% GoI floor, zero insider trading norms, and the bond-proxy appeal to insurance/pension funds."
+        },
+        "data_sourcing": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Good use of the calculate tool and clear citations. However, relying on Sep 2025 named holder data for an April 2026 report indicates a data lag that should have been explicitly flagged as a limitation."
+        }
+      },
+      "issues": [
+        {
+          "type": "COMPUTATION",
+          "section": "2. The Money Flow Story",
+          "issue": "Calculating historical FII exit value (\u20b98,839 Cr) by multiplying the historical 2.36pp change by the *current* market cap.",
+          "suggestion": "Prompt the agent to explicitly label this as '\u20b9X Cr at current market cap' or use historical average market caps for flow calculations."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "7. Open Questions",
+          "issue": "Agent lists ADR/GDR presence as an open question, but this is standard disclosure in NSE shareholding patterns.",
+          "suggestion": "Instruct the agent to check the 'shareholding' data for 'Shares underlying DRs' before declaring it an unknown."
+        }
+      ],
+      "strengths": [
+        "Brilliant contextualization of PSU-specific ownership traits (51% statutory floor, zero pledge, zero insider trading).",
+        "Excellent differentiation between mechanical ETF trimming and high-conviction active thematic buying (ICICI Energy Fund)."
+      ],
+      "summary": "This is a highly insightful ownership report that perfectly captures the structural nuances of an Indian PSU utility. The analysis of the FII-to-DII handoff and the bond-proxy appeal to insurers is institutional grade. The primary flaw is a mathematical error in calculating historical flow values using the current market cap, alongside a minor failure to verify ADR holdings in the provided data.",
+      "report_length": 30663,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 31.26496841700282,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional breakdown of the FII-to-DII handoff and the distinction between passive ETF trimming and active thematic accumulation. Goes beyond surface-level data to explain the 'why' behind the flows.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Narrative logic is strong, but calculating historical FII outflow values by multiplying past percentage point changes by the *current* market cap is mathematically flawed, as market cap fluctuated over those 5 quarters.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Covers all major institutional categories, insider trends, and delivery metrics. Misses a deeper dive into the exact composition of the 'Public' float (e.g., HNI vs retail), even if small.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear, evidence-backed bullish verdict with specific catalysts and risks. However, leaving the existence of an ADR program as an 'open question' reduces immediate actionability.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Perfectly applies PSU and regulated utility frameworks, correctly contextualizing the 51% GoI floor, zero insider trading norms, and the bond-proxy appeal to insurance/pension funds.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Good use of the calculate tool and clear citations. However, relying on Sep 2025 named holder data for an April 2026 report indicates a data lag that should have been explicitly flagged as a limitation.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"2. The Money Flow Story\",\n      \"issue\": \"Calculating historical FII exit value (\u20b98,839 Cr) by multiplying the historical 2.36pp change by the *current* market cap.\",\n      \"suggestion\": \"Prompt the agent to explicitly label this as '\u20b9X Cr at current market cap' or use historical average market caps for flow calculations.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"7. Open Questions\",\n      \"issue\": \"Agent lists ADR/GDR presence as an open question, but this is standard disclosure in NSE shareholding patterns.\",\n      \"suggestion\": \"Instruct the agent to check the 'shareholding' data for 'Shares underlying DRs' before declaring it an unknown.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant contextualization of PSU-specific ownership traits (51% statutory floor, zero pledge, zero insider trading).\",\n    \"Excellent differentiation between mechanical ETF trimming and high-conviction active thematic buying (ICICI Energy Fund).\"\n  ],\n  \"summary\": \"This is a highly insightful ownership report that perfectly captures the structural nuances of an Indian PSU utility."
+    }
+  }
+}

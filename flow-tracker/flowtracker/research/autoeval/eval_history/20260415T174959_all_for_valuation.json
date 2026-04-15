@@ -1,0 +1,80 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T17:49:59.785485+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "telecom"
+  ],
+  "results": {
+    "telecom": {
+      "agent": "valuation",
+      "stock": "BHARTIARTL",
+      "sector": "Telecom operator",
+      "grade": "B",
+      "grade_numeric": 85,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional qualitative analysis. The agent correctly identifies the DTA distortion in trailing PE, explains why the 5-year PE band is broken, and deeply analyzes the reverse DCF growth gap."
+        },
+        "logical_consistency": {
+          "grade": "C-",
+          "numeric": 70,
+          "rationale": "Critical mathematical contradictions. In the EV/EBITDA table, it subtracts Net Debt to find Target MCap, but then uses Target EV to calculate the per-share Fair Value. It also hallucinates the final weighted average math."
+        },
+        "completeness": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Covers all major valuation methodologies. However, it leaves Indus Towers as an 'open question' in the SOTP despite it being a well-known listed entity that could have been queried manually."
+        },
+        "actionability": {
+          "grade": "B-",
+          "numeric": 80,
+          "rationale": "The directional thesis (GARP) and catalyst identification are excellent. However, the mathematical errors in the primary valuation method compromise the reliability of the specific price targets."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Flawless application of telecom-specific frameworks. Correctly prioritizes EV/EBITDA over PE, focuses on OpFCF trajectory, and highlights spectrum amortization and ARPU metrics."
+        },
+        "data_sourcing": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Effectively uses available data and correctly identifies when the SOTP tool fails. However, it failed to use the market context tools to manually look up the missing subsidiary tickers."
+        }
+      },
+      "issues": [
+        {
+          "type": "COMPUTATION",
+          "section": "3. Fair Value Triangle (Method 1 & Summary)",
+          "issue": "The agent calculates Fair Value using `(Current Price \u00d7 Target EV / Current MCap)`. It should have used `Target MCap` in the numerator. This inflates the Base Fair Value from \u20b92,720 to \u20b92,966. It also miscalculates the final Weighted Fair Value averages.",
+          "suggestion": "Force the agent to use the `calculate` tool for all intermediate steps, specifically ensuring it divides Target MCap (not EV) by shares outstanding to get per-share value."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "5. Relative Valuation (SOTP Analysis)",
+          "issue": "The agent left Indus Towers out of the SOTP analysis because the automated SOTP tool failed, listing it as an 'open question'.",
+          "suggestion": "Instruct the agent: 'If the SOTP tool fails or misses known listed subsidiaries, manually query their market caps using the get_valuation or get_market_context tools using their specific ticker symbols.'"
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "5. Relative Valuation (SOTP Analysis)",
+          "issue": "The `get_valuation(sotp)` tool returned 'No listed subsidiaries found' despite Bharti Airtel owning ~70% of listed Bharti Hexacom (BHARTIHEXA).",
+          "suggestion": "Update the SOTP tool's backend mapping to correctly identify BHARTIHEXA and INDUSTOWER as Bharti Airtel subsidiaries."
+        }
+      ],
+      "strengths": [
+        "Superb sector-specific adjustments, explicitly activating 'Telecom Mode' to bypass misleading PE ratios distorted by DTA credits and spectrum amortization.",
+        "Deep analytical reasoning on the reverse DCF, correctly identifying the implied growth gap and attributing it to Nxtra monetization and pending tariff hikes."
+      ],
+      "summary": "This report demonstrates institutional-grade qualitative understanding of the Indian telecom sector, correctly identifying earnings distortions and anchoring on EV/EBITDA and OpFCF. However, severe mathematical errors in the valuation models\u2014specifically using Enterprise Value instead of Market Cap to calculate per-share targets\u2014significantly undermine the final price outputs. Fixing these calculation errors and ensuring the agent manually fetches missing subsidiary data would elevate this to an A-tier report.",
+      "report_length": 35204,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 71.04176608403213,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional qualitative analysis. The agent correctly identifies the DTA distortion in trailing PE, explains why the 5-year PE band is broken, and deeply analyzes the reverse DCF growth gap.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"C-\",\n      \"numeric\": 70,\n      \"rationale\": \"Critical mathematical contradictions. In the EV/EBITDA table, it subtracts Net Debt to find Target MCap, but then uses Target EV to calculate the per-share Fair Value. It also hallucinates the final weighted average math.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Covers all major valuation methodologies. However, it leaves Indus Towers as an 'open question' in the SOTP despite it being a well-known listed entity that could have been queried manually.\"\n    },\n    \"actionability\": {\n      \"grade\": \"B-\",\n      \"numeric\": 80,\n      \"rationale\": \"The directional thesis (GARP) and catalyst identification are excellent. However, the mathematical errors in the primary valuation method compromise the reliability of the specific price targets.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Flawless application of telecom-specific frameworks. Correctly prioritizes EV/EBITDA over PE, focuses on OpFCF trajectory, and highlights spectrum amortization and ARPU metrics.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Effectively uses available data and correctly identifies when the SOTP tool fails. However, it failed to use the market context tools to manually look up the missing subsidiary tickers.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B\",\n    \"grade_numeric\": 85\n  },\n  \"issues\": [\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"3. Fair Value Triangle (Method 1 & Summary)\",\n      \"issue\": \"The agent calculates Fair Value using `(Current Price \u00d7 Target EV / Current MCap)`. It should have used `Target MCap` in the numerator. This inflates the Base Fair Value from \u20b92,720 to \u20b92,966. It also miscalculates the final Weighted Fair Value averages.\",\n      \"suggestion\": \"Force the agent to use the `calculate` tool for all intermediate steps, specifically ensuring it divides Target MCap (not EV) by shares outstanding to get per-share value.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"5. Relative Valuation (SOTP Analysis)\",\n      \"issue\": \"The agent left Indus Towers out of the SOTP analysis because the automated SOTP tool failed, listing it as an 'open question'.\",\n      \"suggestion\": \"Instruct the agent: 'If the SOTP tool fails or misses known listed subsidiaries, manually query their market caps using the get_valuation or get_market_context tools using their specific ticker symbols.'\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"5. Relative Valuation (SOTP Analysis)\",\n      \"issue\": \"The `get_valu"
+    }
+  }
+}

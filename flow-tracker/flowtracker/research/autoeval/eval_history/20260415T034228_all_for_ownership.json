@@ -1,0 +1,86 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T03:42:28.420040+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "pharma"
+  ],
+  "results": {
+    "pharma": {
+      "agent": "ownership",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong synthesis of the FII-to-DII handoff, including a calculated 115% absorption ratio. However, attributing a 4-week delivery cliff entirely to a 3-day M&A news event is analytically slightly stretched."
+        },
+        "logical_consistency": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Contains a glaring chronological error in the pledge section: it notes a transition 'between Mar 2025 and Jun 2025' but then says it 'appeared in Q1 FY25 (at 2.05%)'. The table clearly shows the peak was Mar 2024."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 86,
+          "rationale": "Covers most bases well, but explicitly skipped calling the `mf_changes` tool, which is a critical omission for an ownership report meant to track institutional velocity."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear bull/bear framework and a definitive composite signal. Actionability is only slightly diluted by the unresolved open questions regarding the true nature of the FII exit."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent application of pharma-specific context, correctly linking FDA warning letters to FII exits and identifying the stock's defensive nature as the magnet for LIC's accumulation."
+        },
+        "data_sourcing": {
+          "grade": "B-",
+          "numeric": 82,
+          "rationale": "The agent hallucinated its tool usage. It claims in the Data Sources table to have used the `calculate` tool for 'All monetary derivations', but the execution log explicitly shows this tool was NEVER called."
+        }
+      },
+      "issues": [
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "5a. Promoter Pledge",
+          "issue": "Chronological hallucination: The text confuses Mar 2024 (Q4 FY24) with Mar 2025, stating the pledge appeared in Q1 FY25 but referencing the Mar 2025 - Jun 2025 period.",
+          "suggestion": "LLM reasoning error with dates; ensure the model double-checks chronological statements against the generated tables."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit & 4. Mutual Fund Conviction",
+          "issue": "Agent skipped calling `get_ownership(section='mf_changes')`, relying only on a static trend proxy. This misses critical velocity data for institutional flows.",
+          "suggestion": "Update the prompt to make `mf_changes` a mandatory tool call for the Ownership agent to properly assess institutional momentum."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Data Sources",
+          "issue": "Agent hallucinated calling the `calculate` tool for monetary derivations, despite the execution log showing it was never invoked.",
+          "suggestion": "Add a strict instruction: 'Do not claim to have used tools in your audit or sourcing tables that you did not actually execute.'"
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "4. Mutual Fund Conviction",
+          "issue": "The `mf_conviction` tool only returned data for 2 AMCs (SBI and ICICI), missing a massive portion of the mutual fund universe (e.g., HDFC, Nippon).",
+          "suggestion": "Investigate the AMFI data pipeline for the `mf_conviction` endpoint to ensure it is pulling all available AMC data, not just a subset."
+        }
+      ],
+      "strengths": [
+        "Brilliant framing of the FII-to-DII handoff, complete with an absorption ratio (115%) that clearly illustrates domestic strength.",
+        "Excellent contextualization of the promoter's 0% open-market activity, correctly attributing it to the family trust structure rather than a lack of conviction."
+      ],
+      "summary": "A solid, highly readable report that correctly identifies the core ownership narrative (FII exit absorbed by LIC/DIIs) and applies excellent pharma sector context. However, it is held back by a skipped tool call for MF changes, a chronological mix-up in the pledge analysis, and a hallucinated calculator tool citation.",
+      "report_length": 25439,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 31.4677328329999,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong synthesis of the FII-to-DII handoff, including a calculated 115% absorption ratio. However, attributing a 4-week delivery cliff entirely to a 3-day M&A news event is analytically slightly stretched.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Contains a glaring chronological error in the pledge section: it notes a transition 'between Mar 2025 and Jun 2025' but then says it 'appeared in Q1 FY25 (at 2.05%)'. The table clearly shows the peak was Mar 2024.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 86,\n      \"rationale\": \"Covers most bases well, but explicitly skipped calling the `mf_changes` tool, which is a critical omission for an ownership report meant to track institutional velocity.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear bull/bear framework and a definitive composite signal. Actionability is only slightly diluted by the unresolved open questions regarding the true nature of the FII exit.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent application of pharma-specific context, correctly linking FDA warning letters to FII exits and identifying the stock's defensive nature as the magnet for LIC's accumulation.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B-\",\n      \"numeric\": 82,\n      \"rationale\": \"The agent hallucinated its tool usage. It claims in the Data Sources table to have used the `calculate` tool for 'All monetary derivations', but the execution log explicitly shows this tool was NEVER called.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"NOT_OUR_PROBLEM\",\n      \"section\": \"5a. Promoter Pledge\",\n      \"issue\": \"Chronological hallucination: The text confuses Mar 2024 (Q4 FY24) with Mar 2025, stating the pledge appeared in Q1 FY25 but referencing the Mar 2025 - Jun 2025 period.\",\n      \"suggestion\": \"LLM reasoning error with dates; ensure the model double-checks chronological statements against the generated tables.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit & 4. Mutual Fund Conviction\",\n      \"issue\": \"Agent skipped calling `get_ownership(section='mf_changes')`, relying only on a static trend proxy. This misses critical velocity data for institutional flows.\",\n      \"suggestion\": \"Update the prompt to make `mf_changes` a mandatory tool call for the Ownership agent to properly assess institutional momentum.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Data Sources\",\n      \"issue\": \"Agent hallucinated calling the `calculate` tool for monetary derivations, despite the execution log showing it was never invoked.\",\n      \"suggestion\": \"Add a strict instruction: 'Do not claim to have used tools in your audit or sour"
+    }
+  }
+}

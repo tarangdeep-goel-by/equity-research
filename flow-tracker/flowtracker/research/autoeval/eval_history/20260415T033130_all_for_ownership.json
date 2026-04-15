@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T03:31:30.431964+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "auto": {
+      "agent": "ownership",
+      "stock": "OLAELEC",
+      "sector": "EV manufacturer",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Deep analysis of pledge and HFT distribution, but relies on an assumption that the \u20b92000 Cr fundraise caused the exact 2.19% promoter drop without reverse-engineering the exact share issuance via the calculate tool."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Conclusions are highly logical, though comparing a 4-day bulk sell volume (313M) directly against a single day's total volume (378M) slightly muddles the liquidity impact assessment."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Covers core dimensions well, but entirely skips investigating the massive relative surge in AIF holdings (0.05% to 1.65%), missing a potential alternative fund narrative."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides clear margin call triggers and overhang bands, but leaves the exact size of the remaining VC lock-in overhang ambiguous, making timing difficult for a PM."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Correctly applies the EV pure-play vs legacy auto framework for pledges, but could have benchmarked the 34.59% promoter holding against other recent new-age tech IPOs rather than just stating it's 'structurally low'."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent tool usage and citations, but failed to call `get_ownership(section='mf_changes')` to check for early filings from untracked AMCs, relying solely on the TOC."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Ownership Structure / 2. The Money Flow Story",
+          "issue": "The report notes a significant relative surge in AIF holdings (from 0.05% to 1.65%) but fails to investigate or contextualize who these alternative investment funds might be.",
+          "suggestion": "Update instructions to require a drill-down into any ownership category that grows by more than 100% relatively, even if the absolute percentage is small."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "3. Insider Signals",
+          "issue": "Compares a cumulative 4-day bulk sell volume (313M shares) to a single day's headline volume (378M shares on April 14), which is an apples-to-oranges comparison for assessing daily liquidity absorption.",
+          "suggestion": "LLM phrasing quirk; ideally, it should compare the 313M bulk volume to the cumulative total volume over those specific 4 days."
+        }
+      ],
+      "strengths": [
+        "Exceptional synthesis of bulk deal data (HFT sellers) with delivery % (speculative churn) to disprove the 'accumulation' narrative during a price surge.",
+        "Brilliant connection of the Krutrim AI 0% promoter group listing to the escalating 8.25% promoter pledge, identifying cross-venture contamination risk."
+      ],
+      "summary": "The report identifies a massive VC exit overhang but leaves the residual VC holding in the 'Public' bucket unquantified, missing a deeper dive into the notable AIF accumulation. Overall, this is an outstanding, institutional-grade piece of analysis that brilliantly connects HFT bulk selling, low delivery percentages, and cross-venture promoter pledges to build a highly compelling bearish thesis.",
+      "report_length": 31419,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 34.382432125043124,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Deep analysis of pledge and HFT distribution, but relies on an assumption that the \u20b92000 Cr fundraise caused the exact 2.19% promoter drop without reverse-engineering the exact share issuance via the calculate tool.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Conclusions are highly logical, though comparing a 4-day bulk sell volume (313M) directly against a single day's total volume (378M) slightly muddles the liquidity impact assessment.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Covers core dimensions well, but entirely skips investigating the massive relative surge in AIF holdings (0.05% to 1.65%), missing a potential alternative fund narrative.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides clear margin call triggers and overhang bands, but leaves the exact size of the remaining VC lock-in overhang ambiguous, making timing difficult for a PM.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Correctly applies the EV pure-play vs legacy auto framework for pledges, but could have benchmarked the 34.59% promoter holding against other recent new-age tech IPOs rather than just stating it's 'structurally low'.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent tool usage and citations, but failed to call `get_ownership(section='mf_changes')` to check for early filings from untracked AMCs, relying solely on the TOC.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Ownership Structure / 2. The Money Flow Story\",\n      \"issue\": \"The report notes a significant relative surge in AIF holdings (from 0.05% to 1.65%) but fails to investigate or contextualize who these alternative investment funds might be.\",\n      \"suggestion\": \"Update instructions to require a drill-down into any ownership category that grows by more than 100% relatively, even if the absolute percentage is small.\"\n    },\n    {\n      \"type\": \"NOT_OUR_PROBLEM\",\n      \"section\": \"3. Insider Signals\",\n      \"issue\": \"Compares a cumulative 4-day bulk sell volume (313M shares) to a single day's headline volume (378M shares on April 14), which is an apples-to-oranges comparison for assessing daily liquidity absorption.\",\n      \"suggestion\": \"LLM phrasing quirk; ideally, it should compare the 313M bulk volume to the cumulative total volume over those specific 4 days.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional synthesis of bulk deal data (HFT sellers) with delivery % (speculative churn) to disprove the 'accumulation' narrative during a price surge.\",\n    \"Brilliant connection of the Krutrim AI 0% promoter group listing to the escalating 8."
+    }
+  }
+}

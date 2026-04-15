@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T03:38:05.961976+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "chemicals": {
+      "agent": "ownership",
+      "stock": "PIDILITIND",
+      "sector": "Specialty chemicals",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent narrative construction around the LIC-to-MF handoff, calculating a 113% absorption ratio. However, it slightly over-extrapolates the lack of a buyback as a governance red flag without deeper capital allocation context."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Mostly sound, but contradicts itself by claiming the LIC exit caused 'no visible price distress' in Section 2, while later attributing current 'persistent order-book pressure' to distributed supply in Section 5."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Thorough on domestic institutions (MFs, LIC) and thematic mapping, but treats the 12% FII block as a monolith without investigating sovereign vs. passive vs. active composition."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Provides a clear 'Mixed-Bullish' verdict and highlights specific monitorables like ICICI AMC concentration. The near-term actionable takeaway is slightly blurred by conflating recent delivery drops with historical LIC selling."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Correctly identifies promoter stability and ESG/pollution board risks (in open questions) as key for chemicals. Could have improved by actively checking if current FII holders are ESG-mandated funds rather than just asking the question."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Superb use of the `calculate` tool to size the LIC exit and absorption ratios. Correctly flags data limitations (like the missing public float breakdown) rather than hallucinating, though it missed querying FII details."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "2. The Money Flow Story vs 5. Risk Signals",
+          "issue": "Contradiction regarding price impact: Section 2 states LIC supply was 'fully absorbed with no visible price distress', but Section 5 claims distributed supply is 'creating persistent order-book pressure'.",
+          "suggestion": "Instruct the agent to reconcile different time horizons (quarterly shareholding vs. 4-week delivery trends) to avoid contradicting its own market impact assessments."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Ownership Structure",
+          "issue": "FII ownership is treated as a monolith (12.00%) without breaking down top foreign holders to assess quality (e.g., Sovereign Wealth vs. Passive ETFs vs. Hedge Funds).",
+          "suggestion": "Update instructions to require the agent to analyze top FII names from the `shareholder_detail` payload, similar to how it analyzes MF schemes."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "1. Ownership Structure",
+          "issue": "The agent notes that `shareholder_detail` only returned DII named entities, making it impossible to break down the 9.41% Public bucket into retail vs. HNI vs. corporate bodies.",
+          "suggestion": "Ensure the `get_ownership` tool payload includes non-institutional public shareholders (like HNIs or corporate bodies holding >1%) if available in XBRL filings."
+        }
+      ],
+      "strengths": [
+        "Brilliant conceptualization of the 'Institutional Handoff' (Insurance to MF/FII) backed by a calculated 113% absorption ratio.",
+        "Deep dive into Mutual Fund thematic positioning (Bharat Consumption, Innovation) to explain *why* institutions are holding the stock.",
+        "Excellent transparency regarding tool limitations and data gaps, explicitly raising them as 'Open Questions' rather than guessing."
+      ],
+      "summary": "This is a highly analytical, institutional-grade ownership report that successfully translates raw shareholding data into a compelling 'money flow' narrative. The primary gap is the monolithic treatment of FIIs and a minor logical contradiction regarding the market impact of recent supply. Overall, the use of calculated absorption ratios and AMC concentration risk makes this highly actionable for a portfolio manager.",
+      "report_length": 24716,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 30.758355790982023,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent narrative construction around the LIC-to-MF handoff, calculating a 113% absorption ratio. However, it slightly over-extrapolates the lack of a buyback as a governance red flag without deeper capital allocation context.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Mostly sound, but contradicts itself by claiming the LIC exit caused 'no visible price distress' in Section 2, while later attributing current 'persistent order-book pressure' to distributed supply in Section 5.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Thorough on domestic institutions (MFs, LIC) and thematic mapping, but treats the 12% FII block as a monolith without investigating sovereign vs. passive vs. active composition.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Provides a clear 'Mixed-Bullish' verdict and highlights specific monitorables like ICICI AMC concentration. The near-term actionable takeaway is slightly blurred by conflating recent delivery drops with historical LIC selling.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Correctly identifies promoter stability and ESG/pollution board risks (in open questions) as key for chemicals. Could have improved by actively checking if current FII holders are ESG-mandated funds rather than just asking the question.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Superb use of the `calculate` tool to size the LIC exit and absorption ratios. Correctly flags data limitations (like the missing public float breakdown) rather than hallucinating, though it missed querying FII details.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2. The Money Flow Story vs 5. Risk Signals\",\n      \"issue\": \"Contradiction regarding price impact: Section 2 states LIC supply was 'fully absorbed with no visible price distress', but Section 5 claims distributed supply is 'creating persistent order-book pressure'.\",\n      \"suggestion\": \"Instruct the agent to reconcile different time horizons (quarterly shareholding vs. 4-week delivery trends) to avoid contradicting its own market impact assessments.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Ownership Structure\",\n      \"issue\": \"FII ownership is treated as a monolith (12.00%) without breaking down top foreign holders to assess quality (e.g., Sovereign Wealth vs. Passive ETFs vs. Hedge Funds).\",\n      \"suggestion\": \"Update instructions to require the agent to analyze top FII names from the `shareholder_detail` payload, similar to how it analyzes MF schemes.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"1. Ownership Structur"
+    }
+  }
+}

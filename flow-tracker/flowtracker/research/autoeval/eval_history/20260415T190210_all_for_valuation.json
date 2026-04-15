@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T19:02:10.264551+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "insurance": {
+      "agent": "valuation",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional critical thinking displayed by overriding the tool's mechanistic PE band and negative EPS projections. The identification of the tax rate anomaly (ETR normalizing from 12.7% to 25%) and its impact on future EPS is institutional-grade analysis."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Highly consistent. The agent correctly reconciles the high trailing PE with the lower forward PE, and logically reclassifies the tool's 'Deep Value' signal to 'GARP' based on absolute multiples. The justification for the 70x base multiple is slightly heuristic, however."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 91,
+          "rationale": "Covers all major valuation dimensions (DCF limitations, consensus, forward PE triangulation). However, it leaves global peer comparisons as an 'open question' rather than attempting to solve it with available tools."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides a clear weighted fair value and specific catalyst milestones (e.g., Q4 PAT needs to hit \u20b9120-150Cr to validate the FY27 target). The final recommendation could be slightly more definitive on current entry levels."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Correctly applies platform/fintech frameworks (EV/Revenue, renewal flywheel ARR) and explicitly rejects traditional insurance metrics. However, it misses core marketplace unit economics like CAC vs LTV or conversion rates."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Data is well-cited and tool limitations are clearly documented. However, the agent failed to call `get_yahoo_peers` to find global comparables despite noting the domestic peer set was inadequate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "5. Relative Valuation \u2014 Peer Context",
+          "issue": "Agent noted the domestic peer set (Paytm, PineLabs) was too thin and asked about global peers in 'Open Questions', but failed to call `get_yahoo_peers` which was available in the registry to solve this exact problem.",
+          "suggestion": "Update agent instructions: 'If the domestic peer set is too thin or lacks direct business model comparables, you MUST call `get_yahoo_peers` to find global or alternative comparables before leaving it as an open question.'"
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "6. Forward Projections & Management Guidance Cross-Check",
+          "issue": "The projection tool mechanically applied a 3-year average EBITDA margin (0.3%) that included heavy loss years, resulting in negative EPS projections for a company that is now solidly profitable.",
+          "suggestion": "Update the `get_fair_value_analysis(projections)` tool logic to use recent TTM or forward consensus margins rather than a naive 3-year historical average for turnaround/newly profitable companies."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Sector Framework",
+          "issue": "Missing core insurtech marketplace unit economics (CAC, LTV, premium per enquiry).",
+          "suggestion": "Add to sector framework instructions: 'For marketplace/platform companies, explicitly request and analyze unit economics (CAC, LTV, take rates) via the company context tool.'"
+        }
+      ],
+      "strengths": [
+        "Outstanding critical override of flawed tool outputs (rejecting the 1-month PE band and the negative EPS projections).",
+        "Excellent identification of the 'hidden' tax rate anomaly (ETR normalization) and its future impact on consensus EPS.",
+        "Strong use of reverse DCF to quantify exactly what growth and margin expansion the market is currently pricing in."
+      ],
+      "summary": "This is a highly sophisticated, institutional-quality report that demonstrates excellent critical thinking by overriding flawed mechanistic tool outputs. The primary gap is the failure to utilize available tools (`get_yahoo_peers`) to resolve a stated lack of comparable peers, but the analytical depth regarding the company's profitability transition and tax anomalies is superb.",
+      "report_length": 30943,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 28.844318417017348,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional critical thinking displayed by overriding the tool's mechanistic PE band and negative EPS projections. The identification of the tax rate anomaly (ETR normalizing from 12.7% to 25%) and its impact on future EPS is institutional-grade analysis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Highly consistent. The agent correctly reconciles the high trailing PE with the lower forward PE, and logically reclassifies the tool's 'Deep Value' signal to 'GARP' based on absolute multiples. The justification for the 70x base multiple is slightly heuristic, however.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 91,\n      \"rationale\": \"Covers all major valuation dimensions (DCF limitations, consensus, forward PE triangulation). However, it leaves global peer comparisons as an 'open question' rather than attempting to solve it with available tools.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides a clear weighted fair value and specific catalyst milestones (e.g., Q4 PAT needs to hit \u20b9120-150Cr to validate the FY27 target). The final recommendation could be slightly more definitive on current entry levels.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Correctly applies platform/fintech frameworks (EV/Revenue, renewal flywheel ARR) and explicitly rejects traditional insurance metrics. However, it misses core marketplace unit economics like CAC vs LTV or conversion rates.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Data is well-cited and tool limitations are clearly documented. However, the agent failed to call `get_yahoo_peers` to find global comparables despite noting the domestic peer set was inadequate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"5. Relative Valuation \u2014 Peer Context\",\n      \"issue\": \"Agent noted the domestic peer set (Paytm, PineLabs) was too thin and asked about global peers in 'Open Questions', but failed to call `get_yahoo_peers` which was available in the registry to solve this exact problem.\",\n      \"suggestion\": \"Update agent instructions: 'If the domestic peer set is too thin or lacks direct business model comparables, you MUST call `get_yahoo_peers` to find global or alternative comparables before leaving it as an open question.'\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"6. Forward Projections & Management Guidance Cross-Check\",\n      \"issue\": \"The projection tool mechanically applied a 3-year average EBITDA margin (0.3%) that included heavy loss years, resulting in negative EPS projections for a company that is now solidly profitable.\",\n      \"suggestion\": \"Update the `get_fai"
+    }
+  }
+}

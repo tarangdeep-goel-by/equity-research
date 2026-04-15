@@ -1,0 +1,193 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260415T170118.log
+AutoEval (agent-first): agent=valuation sectors=['chemicals']
+Target: grade_numeric >= 90
+
+--- valuation / PIDILITIND (chemicals) ---
+  Running agent...
+  22:31:19 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: started (max_age=6h)
+  22:31:19 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  22:31:19 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  22:31:19 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  22:31:19 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/PIDILITIND/consolidated/ "HTTP/1.1 200 OK"
+  22:31:20 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: company_profile ok 1 records
+  22:31:20 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: company_documents ok 147 records
+  22:31:20 [INFO] httpx: HTTP Request: GET https://www.pidilite.com/wp-content/uploads/2018/08/SE-Intimation_Transcript-of-Earings-Call_Q1-2018-19.pdf "HTTP/1.1 404 Not Found"
+  22:31:20 [INFO] httpx: HTTP Request: GET https://www.pidilite.com/wp-content/uploads/2017/08/SE-_Transcript-of-Earnings-Call-Q1-FY1718.pdf "HTTP/1.1 404 Not Found"
+  22:31:20 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: quarterly_results ok 13 records
+  22:31:20 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: screener_ratios ok 12 records
+  22:31:20 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/PIDILITIND/consolidated/ "HTTP/1.1 200 OK"
+  22:31:21 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/6597863/ "HTTP/1.1 200 OK"
+  22:31:21 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: annual_financials ok 10 records
+  22:31:21 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/PIDILITIND/ "HTTP/1.1 200 OK"
+  22:31:21 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/3564/ "HTTP/1.1 200 OK"
+  22:31:21 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: standalone_financials ok 10 records
+  22:31:21 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: screener_ids ok 1 records
+  22:31:22 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/chart/?q=Price+to+Earning-Median+PE-EPS&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  22:31:22 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: chart_pe ok 1189 records
+  22:31:23 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  22:31:23 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: chart_price ok 5495 records
+  22:31:24 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6597863/peers/ "HTTP/1.1 200 OK"
+  22:31:24 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: peers ok 8 records
+  22:31:24 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2478/investors/promoters/quarterly/ "HTTP/1.1 200 OK"
+  22:31:25 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2478/investors/foreign_institutions/quarterly/ "HTTP/1.1 200 OK"
+  22:31:26 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2478/investors/domestic_institutions/quarterly/ "HTTP/1.1 200 OK"
+  22:31:27 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/2478/investors/public/quarterly/ "HTTP/1.1 200 OK"
+  22:31:28 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: shareholders ok 631 records
+  22:31:28 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  22:31:29 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  22:31:30 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  22:31:31 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  22:31:32 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_quarters ok 143 records
+  22:31:32 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  22:31:34 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  22:31:35 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  22:31:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  22:31:37 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_profit-loss ok 168 records
+  22:31:37 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  22:31:38 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  22:31:39 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  22:31:40 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  22:31:41 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_balance-sheet ok 288 records
+  22:31:41 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  22:31:42 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  22:31:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/2478/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  22:31:44 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: schedules_cash-flow ok 288 records
+  22:31:45 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: valuation_snapshot ok 1 records
+  22:31:45 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: consensus_estimate ok 1 records
+  /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/yfinance/scrapers/fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+    warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+  22:31:46 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: earnings_surprises ok 4 records
+  22:31:46 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: corporate_actions ok 28 records
+  22:31:46 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/companies-listing/corporate-filings-insider-trading "HTTP/1.1 200 OK"
+  22:31:46 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/corporates-pit?from_date=15-01-2026&to_date=15-04-2026&symbol=PIDILITIND "HTTP/1.1 200 OK"
+  22:31:46 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: insider_transactions skipped: no data
+  22:31:47 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_08042026.csv "HTTP/1.1 200 OK"
+  22:31:47 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-08: 2451 records (total: 2451, day 0/7)
+  22:31:47 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_09042026.csv "HTTP/1.1 200 OK"
+  22:31:47 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-09: 2451 records (total: 4902, day 1/7)
+  22:31:48 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_10042026.csv "HTTP/1.1 200 OK"
+  22:31:48 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-10: 2452 records (total: 7354, day 2/7)
+  22:31:49 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_13042026.csv "HTTP/1.1 200 OK"
+  22:31:49 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-13: 2456 records (total: 9810, day 5/7)
+  22:31:49 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_14042026.csv "HTTP/1.1 200 OK"
+  22:31:49 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-14: 2456 records (total: 12266, day 6/7)
+  22:31:50 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_15042026.csv "HTTP/1.1 200 OK"
+  22:31:50 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-15: 2456 records (total: 14722, day 7/7)
+  22:31:50 [INFO] flowtracker.bhavcopy_client: Backfill complete: 6 trading days, 14722 records
+  22:31:51 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: delivery_data ok 6 records
+  22:31:51 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/market-data/live-equity-market "HTTP/1.1 200 OK"
+  22:31:52 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/snapshot-capital-market-largedeal "HTTP/1.1 200 OK"
+  22:31:52 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: bulk_block_deals ok 0 records
+  22:31:53 [INFO] httpx: HTTP Request: GET https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields "HTTP/1.1 200 OK"
+  22:31:53 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: macro ok 6 records
+  22:31:53 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/reports/fii-dii "HTTP/1.1 200 OK"
+  22:31:54 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/fiidiiTradeReact "HTTP/1.1 200 OK"
+  22:31:54 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: fii_dii_flows ok 2 records
+  22:31:54 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/PeerSmartSearch/w?Type=SS&text=PIDILITIND "HTTP/1.1 200 OK"
+  22:31:54 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=1&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:31:55 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=2&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:31:57 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=3&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:31:59 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=4&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:00 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=5&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:01 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=6&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:02 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=7&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:04 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=8&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:05 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=9&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:06 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=10&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:07 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=11&strCat=-1&subcategory=-1&strPrevDate=20230416&strToDate=20260415&strSearch=P&strscrip=500331&strType=C "HTTP/1.1 200 OK"
+  22:32:07 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: filings ok 541 records
+  22:32:08 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/discounted-cash-flow/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  22:32:08 [WARNING] flowtracker.fmp_client: FMP request failed: /discounted-cash-flow/PIDILITIND.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/discounted-cash-flow/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:08 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: fmp_dcf skipped: no data
+  22:32:08 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14 "HTTP/1.1 403 Forbidden"
+  22:32:08 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/PIDILITIND.NS {'type': 'rsi', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:09 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50 "HTTP/1.1 403 Forbidden"
+  22:32:09 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/PIDILITIND.NS {'type': 'sma', 'period': 50} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:10 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200 "HTTP/1.1 403 Forbidden"
+  22:32:10 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/PIDILITIND.NS {'type': 'sma', 'period': 200} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:11 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14 "HTTP/1.1 403 Forbidden"
+  22:32:11 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/PIDILITIND.NS {'type': 'macd', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:12 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14 "HTTP/1.1 403 Forbidden"
+  22:32:12 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/PIDILITIND.NS {'type': 'adx', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:12 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: fmp_technicals skipped: no data
+  22:32:13 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/key-metrics/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  22:32:13 [WARNING] flowtracker.fmp_client: FMP request failed: /key-metrics/PIDILITIND.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/key-metrics/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:13 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: fmp_key_metrics skipped: no data
+  22:32:13 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/financial-growth/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  22:32:13 [WARNING] flowtracker.fmp_client: FMP request failed: /financial-growth/PIDILITIND.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/financial-growth/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:13 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: fmp_growth skipped: no data
+  22:32:13 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/grade/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  22:32:13 [WARNING] flowtracker.fmp_client: FMP request failed: /grade/PIDILITIND.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/grade/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:13 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: fmp_grades skipped: no data
+  22:32:14 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/price-target/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  22:32:14 [WARNING] flowtracker.fmp_client: FMP request failed: /price-target/PIDILITIND.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/price-target/PIDILITIND.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  22:32:14 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: fmp_targets skipped: no data
+  22:32:14 [INFO] flowtracker.research.snapshot_builder: [snapshot] PIDILITIND: built (10 screener, 18 yfinance, 2 ownership fields)
+  22:32:14 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: company_snapshot ok 1 records
+  22:32:15 [INFO] httpx: HTTP Request: GET https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/PIDILITIND.NS "HTTP/1.1 200 OK"
+  22:32:15 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: yahoo_peers ok 5 records
+  22:32:15 [WARNING] flowtracker.research.refresh: [refresh] PIDILITIND: analytical_snapshot skipped: Cannot operate on a closed database.
+  22:32:15 [INFO] flowtracker.research.refresh: [refresh] PIDILITIND: done 56.1s, 34 sources, 8999 total records
+  22:32:15 [INFO] flowtracker.research.peer_refresh: [peer_refresh] PIDILITIND: started
+  22:32:15 [INFO] flowtracker.research.peer_refresh: [peer_refresh] PIDILITIND: done 0.0s, 0 peers fetched, 13 cached, 6 benchmarks
+  22:32:15 [INFO] flowtracker.research.concall_extractor: [concall_ensure] PIDILITIND: all 4 quarters cached
+  22:32:16 [INFO] httpx: HTTP Request: GET https://news.google.com/rss/search?q=Pidilite%20Industries%20Limited%20PIDILITIND%20stock%20India&hl=en-IN&gl=IN&ceid=IN:en "HTTP/1.1 200 OK"
+  22:32:16 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  22:32:28 [INFO] flowtracker.research.agent: [valuation] tool_call: ToolSearch({"query": "select:mcp__valuation__get_analytical_profile,mcp__valuation__get_quality_sco...", "max_results": "5"})
+  22:32:28 [INFO] flowtracker.research.agent: [valuation] tool_call: ToolSearch({"query": "select:mcp__valuation__get_valuation,mcp__valuation__get_fair_value_analysis,...", "max_results": "5"})
+  22:32:28 [WARNING] flowtracker.research.agent: [valuation] rate limited: status=allowed type=five_hour resets_at=1776279600
+  22:32:31 [INFO] flowtracker.research.agent: [valuation] tool_call: ToolSearch({"query": "select:mcp__valuation__get_events_actions,mcp__valuation__render_chart,mcp__v...", "max_results": "5"})
+  22:32:33 [INFO] flowtracker.research.agent: [valuation] tool_call: ToolSearch({"query": "select:mcp__valuation__get_fundamentals", "max_results": "2"})
+  22:32:40 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_analytical_profile({"symbol": "PIDILITIND"})
+  22:32:41 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_quality_scores({"symbol": "PIDILITIND", "section": "[\"dupont\", \"subsidiary\"]"})
+  22:32:42 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_company_context({"symbol": "PIDILITIND", "section": "concall_insights", "doc_type": "concall", "limit": "4", "sub_section": "management_commentary"})
+  22:32:42 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_valuation({"symbol": "PIDILITIND", "section": "[\"snapshot\", \"band\", \"pe_history\", \"wacc\", \"sotp\"]"})
+  22:32:43 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_fair_value_analysis({"symbol": "PIDILITIND", "section": "[\"combined\", \"dcf\", \"reverse_dcf\", \"projections\"]"})
+  22:32:43 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_estimates({"symbol": "PIDILITIND", "section": "[\"consensus\", \"revisions\", \"momentum\", \"price_targets\", \"revenue\", \"growth\"]"})
+  22:32:44 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_peer_sector({"symbol": "PIDILITIND", "section": "[\"benchmarks\", \"valuation_matrix\", \"peer_metrics\", \"peer_growth\"]"})
+  22:32:44 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__get_events_actions({"symbol": "PIDILITIND", "section": "[\"catalysts\", \"material_events\", \"dividends\", \"dividend_policy\"]"})
+  22:33:24 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__render_chart({"symbol": "PIDILITIND", "chart_type": "pe"})
+  22:33:25 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__render_chart({"symbol": "PIDILITIND", "chart_type": "fair_value_range"})
+  22:33:25 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__render_chart({"symbol": "PIDILITIND", "chart_type": "dividend_history"})
+  22:33:26 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "(1915 - 1200) / 1554.0526 * 100", "b": "0"})
+  22:33:27 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "(59.299732 - 49.234) / 49.234 * 100", "b": "0"})
+  22:33:28 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "59.299732 / 11.8", "b": "0"})
+  22:33:28 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "fair_value", "a": "75", "b": "26.13"})
+  22:33:29 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "fair_value", "a": "60", "b": "26.13"})
+  22:33:29 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "fair_value", "a": "50", "b": "26.13"})
+  22:33:30 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "growth_rate", "a": "22.42", "b": "26.13"})
+  22:35:08 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "(1329.5 / 1227.15) ^ (1/3) - 1", "b": "0"})
+  22:35:08 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "(22.42 / 11.878) ^ (1/3) - 1", "b": "0"})
+  22:35:09 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "expr", "a": "1227.15 / 11.878", "b": "0"})
+  22:35:09 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "margin_of_safety", "a": "1613", "b": "1329.5"})
+  22:35:10 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "fair_value", "a": "45", "b": "18.0"})
+  22:35:10 [INFO] flowtracker.research.agent: [valuation] tool_call: mcp__valuation__calculate({"operation": "fair_value", "a": "65", "b": "29.34"})
+  22:38:41 [INFO] flowtracker.research.agent: [valuation] unused_tools: SdkMcpTool(name='calculate', description="Financial calculator — use for ALL math, never compute in your head. Returns result + full calculation string for citation. Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574'). \n\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n  'shares_to_value_cr'     a=shares (raw count), b=price (₹) → value in ₹ Cr\n  'per_share_to_total_cr'  a=per_share_value (₹), b=shares (raw count) → total ₹ Cr\n  'total_cr_to_per_share'  a=total_cr (₹ Cr), b=shares (raw count) → per share (₹)\n  'pe_from_price_eps'      a=price (₹), b=eps (₹) → PE ratio\n  'eps_from_pat_shares'    a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹)\n  'fair_value'             a=pe_multiple, b=eps (₹) → fair value / share (₹)\n  'growth_rate'            a=old value, b=new value → growth %\n  'mcap_cr'                a=price (₹), b=shares (raw count) → market cap ₹ Cr\n  'margin_of_safety'       a=fair_value (₹), b=current_price (₹) → MoS %\n  'annualize_quarterly'    a=quarterly_value → annualized (×4); leave b='0'\n  'pct_of'                 a=part, b=whole → percentage\n  'ratio'                  a=numerator, b=denominator → ratio\n\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n  Only numbers and + - * / ( ) are permitted in the expression.\n\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.", input_schema={'operation': <class 'str'>, 'a': <class 'str'>, 'b': <class 'str'>}, handler=<function calculate at 0x10e12e840>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_analytical_profile', description='Pre-computed analytical profile (updated weekly). Returns ALL metrics in ONE call: composite score (0-100), Piotroski F-Score (0-9), Beneish M-Score, earnings quality, Bernstein reverse DCF (implied growth + implied margin + 5x5 sensitivity matrix), capex cycle phase, common size P&L, BFSI metrics (NIM/ROA if bank), price performance (1M/3M/6M/1Y vs Nifty + sector). CALL THIS FIRST — drill into individual tools only for full 10Y history.', input_schema={'symbol': <class 'str'>}, handler=<function get_analytical_profile at 0x10e12d940>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_chart_data', description="Get Screener chart time series. chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function get_chart_data at 0x10e127ce0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_company_context', description="Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>, 'doc_type': <class 'str'>, 'limit': <class 'int'>, 'sub_section': <class 'str'>}, handler=<function get_company_context at 0x10e12e5c0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_estimates', description="Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_estimates at 0x10e12e340>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_events_actions', description="Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']. Optional: years (default 10), quarters (default 12), days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_events_actions at 0x10e12e700>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_fair_value_analysis', description="Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_fair_value_analysis at 0x10e12e0c0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_market_context', description="Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']. Optional: days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_market_context at 0x10e12e480>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_peer_sector', description="Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the 9 sections + 3 recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers'. Do NOT call section='all' — the ~50KB payload across 9 sections may truncate. Optional: metric (for specific valuation metric).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_peer_sector at 0x10e12e200>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_quality_scores', description="Accounting & quality metrics. section: 'earnings_quality' | 'piotroski' | 'beneish' | 'dupont' | 'common_size' | 'capex_cycle' | 'forensic_checks' | 'improvement_metrics' | 'capital_discipline' | 'incremental_roce' | 'altman_zscore' | 'working_capital' | 'operating_leverage' | 'fcf_yield' | 'tax_rate_analysis' | 'receivables_quality' | 'bfsi' | 'insurance' | 'metals' | 'realestate' | 'telecom' | 'power' | 'sector_health' | 'subsidiary' | ['section1', 'section2']. BFSI routing: 'all' auto-skips non-applicable. 'incremental_roce' = marginal return on new capital. 'altman_zscore' = EM distress predictor. 'working_capital' = CCC trend + channel stuffing flags. 'operating_leverage' = DOL earnings sensitivity. 'fcf_yield' = FCF/EV vs risk-free. 'tax_rate_analysis' = ETR anomalies. 'receivables_quality' = revenue recognition risk.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_quality_scores at 0x10e12dd00>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_valuation', description="Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']. Optional: metric (for band, default 'pe_trailing'), days (default 2500), years (default 10).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_valuation at 0x10e12df80>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_yahoo_peers', description="Get Yahoo Finance recommended peer companies with fundamentals snapshots. Returns subject + peer company snapshots (valuation, profitability, growth, ownership) with similarity scores. Better peer selection than Screener — uses Yahoo's recommendation engine.", input_schema={'symbol': <class 'str'>}, handler=<function get_yahoo_peers at 0x10e127e20>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='render_chart', description="Generate a PNG chart and return the file path for embedding in your report. Use the embed_markdown value directly in your report to show the chart. chart_type options: STOCK CHARTS: 'price' (price + SMA50/200, 7yr), 'pe' (PE ratio history, 7yr), 'delivery' (delivery % + volume bars, 90 days), 'revenue_profit' (10yr annual revenue & profit bars), 'quarterly' (12-quarter revenue & profit bars), 'margin_trend' (10yr OPM & NPM lines), 'roce_trend' (10yr ROCE bars, color-coded by quality), 'dupont' (DuPont decomposition: margin × turnover × leverage → ROE), 'cashflow' (10yr operating & free cash flow bars), 'shareholding' (12-quarter ownership trend lines), 'fair_value_range' (bear/base/bull vs current price horizontal bar), 'expense_pie' (expense breakdown pie chart), 'composite_radar' (8-factor quality score spider chart), 'dividend_history' (dividend payout ratio & DPS over time). SECTOR CHARTS: 'sector_mcap' (all sector stocks by market cap), 'sector_growth_bars' (sector peer revenue growth bars), 'sector_profitability_bars' (sector peer ROCE bars), 'sector_pe_distribution' (sector PE histogram with subject marked), 'sector_valuation_scatter' (PE vs ROCE scatter — bargain/avoid quadrants), 'sector_ownership_flow' (MF ownership changes — accumulation/exit). COMPARISON CHARTS (use comma-separated symbols, e.g. symbol='HDFCBANK,ICICIBANK'): 'comparison_revenue' (indexed revenue trajectories), 'comparison_pe' (PE history overlay), 'comparison_shareholding' (FII/MF ownership trends overlay), 'comparison_radar' (quality score radars overlaid), 'comparison_margins' (OPM/NPM trends overlay). Returns: {path, embed_markdown}.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function render_chart at 0x10e12cd60>, annotations=None)
+  22:38:41 [INFO] flowtracker.research.agent: [valuation] done: success 26098 chars, 28 calls, 11/13 tools used, 385s, $0.75
+  Agent completed in 443.5s (success=True)
+  Report: 26098 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A- (90) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260415T171922_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  chemicals           PIDILITIND    A-  (90)  [PASS]  prompt_fixes:3
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

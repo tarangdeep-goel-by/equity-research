@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-15T03:36:14.689946+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "fmcg": {
+      "agent": "ownership",
+      "stock": "HINDUNILVR",
+      "sector": "FMCG",
+      "grade": "A",
+      "grade_numeric": 94,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent breakdown of passive vs active MF conviction and the mechanics of the FII exit. However, it could have analyzed the historical duration/stickiness of the active MF holdings to gauge long-term conviction."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Flawless logic regarding MNC insider trading patterns and pledge expectations. A minor leap is assuming the FII exit is purely continuous based solely on the absence of block deals, which slightly oversimplifies algorithmic execution."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Covers almost all bases, but notably missed using the `sector_flows` tool to answer its own open question about whether the FII exit is an industry-wide rotation or stock-specific."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear synthesis of the technical supply overhang versus the structural DII bid. It could be improved by identifying historical price levels where the DII bid typically strengthens."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 96,
+          "rationale": "Perfectly applies the MNC subsidiary archetype (highlighting royalty risks, parent control, and ESOPs). To be flawless, it could have benchmarked HUL's FII ownership percentage against other MNC FMCG peers."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional use of the `calculate` tool to convert percentages to \u20b9 Cr equivalents. The MF conviction analysis is slightly constrained by the pipeline's limited 4-AMC dataset, though the agent correctly caveated this."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Open Questions / FII Trend",
+          "issue": "The agent asked if the FII exit was sector-wide but failed to call `get_peer_sector(section='sector_flows')` to answer its own question.",
+          "suggestion": "Instruct the agent to utilize sector flow tools when analyzing macro vs micro FII exit trends to determine if selling is stock-specific or industry-wide."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Ownership Structure",
+          "issue": "The public float sub-breakdown (Retail vs HNI vs Corporate) was missing from the pipeline extraction.",
+          "suggestion": "Ensure the `get_ownership(section='shareholder_detail')` tool reliably extracts and returns the retail/HNI/corporate sub-categories for the public float."
+        }
+      ],
+      "strengths": [
+        "Exceptional contextualization of the MNC subsidiary archetype, correctly interpreting insider sales as routine ESOP monetization and zero pledge as a structural baseline rather than a unique strength.",
+        "Deep dive into MF conviction, correctly separating passive ETF flows from active stock-picking to gauge true institutional sentiment and sizing the FII/DII handoff in exact Rupee terms."
+      ],
+      "summary": "This is an outstanding, institutional-grade ownership report that perfectly contextualizes data within the MNC subsidiary archetype. The only notable omission is failing to pull sector flow data to determine if the FII exit is HUL-specific or an industry-wide rotation, despite identifying this as a key open question.",
+      "report_length": 26495,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 27.800365415983833,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent breakdown of passive vs active MF conviction and the mechanics of the FII exit. However, it could have analyzed the historical duration/stickiness of the active MF holdings to gauge long-term conviction.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Flawless logic regarding MNC insider trading patterns and pledge expectations. A minor leap is assuming the FII exit is purely continuous based solely on the absence of block deals, which slightly oversimplifies algorithmic execution.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Covers almost all bases, but notably missed using the `sector_flows` tool to answer its own open question about whether the FII exit is an industry-wide rotation or stock-specific.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear synthesis of the technical supply overhang versus the structural DII bid. It could be improved by identifying historical price levels where the DII bid typically strengthens.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 96,\n      \"rationale\": \"Perfectly applies the MNC subsidiary archetype (highlighting royalty risks, parent control, and ESOPs). To be flawless, it could have benchmarked HUL's FII ownership percentage against other MNC FMCG peers.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional use of the `calculate` tool to convert percentages to \u20b9 Cr equivalents. The MF conviction analysis is slightly constrained by the pipeline's limited 4-AMC dataset, though the agent correctly caveated this.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 94\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Open Questions / FII Trend\",\n      \"issue\": \"The agent asked if the FII exit was sector-wide but failed to call `get_peer_sector(section='sector_flows')` to answer its own question.\",\n      \"suggestion\": \"Instruct the agent to utilize sector flow tools when analyzing macro vs micro FII exit trends to determine if selling is stock-specific or industry-wide.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Ownership Structure\",\n      \"issue\": \"The public float sub-breakdown (Retail vs HNI vs Corporate) was missing from the pipeline extraction.\",\n      \"suggestion\": \"Ensure the `get_ownership(section='shareholder_detail')` tool reliably extracts and returns the retail/HNI/corporate sub-categories for the public float.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional contextualization of the MNC subsidiary archetype, correctly interpreting insider sales as routine ESOP monetization and zero pledge as a structural baseline rather than a unique strength.\",\n    \"Deep dive into MF conviction, correctly separating pa"
+    }
+  }
+}
