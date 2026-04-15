@@ -78,7 +78,7 @@ N. ...
 End with a JSON code block matching the schema in 2.4.
 ```
 
-**The TOC-then-drill pattern** (lifted from the ownership agent's workflow) is now standard across the data layer. Applies to `get_ownership`, `get_fundamentals`, `get_sector_kpis`, `get_concall_insights`, and any large-registry tool. First call returns ~1-5 KB TOC listing available slices (sections / KPIs / quarter categories) plus recommended drill compositions; subsequent calls with `section=[...]` (waves) or `sub_section=<key>` (single slice) return just that scope. Eliminates the classic "agent sees truncated response, hallucinates missing data" failure mode that caused the 70+ KB MCP transport truncations on `section='all'` calls.
+**The TOC-then-drill pattern** (lifted from the ownership agent's workflow) is now standard across the data layer. Applies to `get_ownership`, `get_fundamentals`, `get_peer_sector`, `get_sector_kpis`, `get_concall_insights`, and any large-registry tool. First call returns ~1-5 KB TOC listing available slices (sections / KPIs / quarter categories) plus recommended drill compositions; subsequent calls with `section=[...]` (waves) or `sub_section=<key>` (single slice) return just that scope. Eliminates the classic "agent sees truncated response, hallucinates missing data" failure mode that caused the 70+ KB MCP transport truncations on `section='all'` calls.
 
 ### 2.3 Cross-agent invariants (every specialist must have these)
 

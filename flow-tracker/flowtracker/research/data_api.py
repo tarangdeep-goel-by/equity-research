@@ -816,6 +816,56 @@ class ResearchDataAPI:
             ),
         }
 
+    def get_peer_sector_toc(self, symbol: str) -> dict:
+        """Compact TOC for get_peer_sector — ~1-2 KB static section menu + waves.
+
+        Default response when the agent calls get_peer_sector with no section.
+        Lists all 9 sections + 3 recommended wave compositions so the agent
+        can plan drills without triggering the MCP-truncation failure mode
+        that hit get_fundamentals(section='all') and get_ownership(section='all').
+        """
+        sections = [
+            {"key": "peer_table",         "size": "med",   "purpose": "CMP, P/E, MCap, ROCE%, growth for peers of this stock — quick comparison"},
+            {"key": "peer_metrics",       "size": "med",   "purpose": "Fuller metric dict per peer (margins, turns, leverage)"},
+            {"key": "peer_growth",        "size": "small", "purpose": "1Y/3Y/5Y revenue, PAT, EPS growth per peer"},
+            {"key": "valuation_matrix",   "size": "med",   "purpose": "Multi-metric valuation comparison (PE/PB/EV-EBITDA/EV-Sales) with sector medians + percentile rank"},
+            {"key": "benchmarks",         "size": "small", "purpose": "Sector median + percentile rank for a single chosen metric (pass metric= arg)"},
+            {"key": "sector_overview",    "size": "small", "purpose": "Sector aggregate stats — TAM proxy, stock count, size tiers"},
+            {"key": "sector_flows",       "size": "small", "purpose": "Sector-level FII/DII flow direction + momentum"},
+            {"key": "sector_valuations",  "size": "small", "purpose": "Sector-wide valuation percentile vs own history"},
+            {"key": "yahoo_peers",        "size": "small", "purpose": "Yahoo-sourced peer set (supplements Screener peers)"},
+        ]
+        waves = [
+            {
+                "wave": 1,
+                "label": "Peer comparison (~12 KB)",
+                "sections": ["peer_table", "peer_metrics", "peer_growth", "benchmarks"],
+                "purpose": "Core peer-comparison block — who trades at what multiple and who grows how fast.",
+            },
+            {
+                "wave": 2,
+                "label": "Sector context (~6 KB)",
+                "sections": ["sector_overview", "sector_flows", "sector_valuations"],
+                "purpose": "Top-down macro on the sector — flow direction, valuation tier, aggregate size.",
+            },
+            {
+                "wave": 3,
+                "label": "Deep relative-valuation + peer-set cross-check (~10 KB)",
+                "sections": ["valuation_matrix", "yahoo_peers"],
+                "purpose": "Full multi-metric matrix + Yahoo peer-set cross-check when the Screener peer list looks off.",
+            },
+        ]
+        return {
+            "symbol": symbol.upper(),
+            "available_sections": sections,
+            "recommended_waves": waves,
+            "warnings": {
+                "truncation": "Do NOT call get_peer_sector(section='all') — the ~50 KB payload across 9 sections may truncate. Use recommended_waves.",
+                "seven_plus": "Calling 7+ sections in one list is near the truncation ceiling. Split into Wave 1 + Wave 2 instead.",
+            },
+            "hint": "Call get_peer_sector(section=[<wave sections>]) using recommended_waves, or section='<single>' for targeted drill. TOC is ~1-2 KB; each wave is 6-12 KB.",
+        }
+
     def get_fundamentals_toc(self, symbol: str) -> dict:
         """Compact table-of-contents for get_fundamentals — ~1-2 KB summary.
 

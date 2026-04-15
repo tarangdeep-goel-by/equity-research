@@ -1501,18 +1501,32 @@ def _get_peer_sector_section(api, symbol, section, args):
 
 @tool(
     "get_peer_sector",
-    "Peer comparison & sector data. section: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers' | ['section1', 'section2']. Optional: metric (for specific valuation metric).",
+    "Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the 9 sections + 3 recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers'. Do NOT call section='all' — the ~50KB payload across 9 sections may truncate. Optional: metric (for specific valuation metric).",
     {"symbol": str, "section": str},
     annotations=READ_ONLY,
 )
 async def get_peer_sector(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
     with ResearchDataAPI() as api:
+        # Default behavior when no section specified: return compact TOC.
+        # Same TOC-then-drill pattern as get_fundamentals / get_ownership.
+        if not section_raw or section_raw in ("toc", "summary"):
+            data = api.get_peer_sector_toc(symbol)
+            if isinstance(data, dict) and "error" not in data:
+                data = _add_freshness_meta(data, api, symbol)
+            return _with_dedup("get_peer_sector", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+        section = _parse_section(section_raw)
         if isinstance(section, list):
             data = {s: _get_peer_sector_section(api, symbol, s, args) for s in section}
         elif section == "all":
             data = {
+                "_warning": (
+                    "section='all' returns ~50 KB across 9 sections and may be truncated by the "
+                    "MCP transport. Prefer calling get_peer_sector with no section to see the TOC "
+                    "with recommended wave compositions."
+                ),
                 "peer_table": api.get_peer_comparison(symbol),
                 "peer_metrics": api.get_peer_metrics(symbol),
                 "peer_growth": api.get_peer_growth(symbol),

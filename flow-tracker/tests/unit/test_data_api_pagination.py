@@ -357,6 +357,36 @@ class TestFundamentalsTOC:
         assert "all" in toc["warnings"]["truncation"].lower()
 
 
+class TestPeerSectorTOC:
+    """get_peer_sector_toc returns the static section menu + recommended waves
+    — same TOC-then-drill pattern as fundamentals / ownership / concall.
+    """
+
+    def test_toc_returns_compact_menu(self, api):
+        toc = api.get_peer_sector_toc("SBIN")
+        size = len(json.dumps(toc, default=str))
+        assert size < 5000, f"TOC must be <5KB, got {size}"
+        assert "available_sections" in toc
+        assert len(toc["available_sections"]) == 9
+        for s in toc["available_sections"]:
+            assert {"key", "size", "purpose"}.issubset(s.keys())
+
+    def test_toc_recommends_3_waves(self, api):
+        toc = api.get_peer_sector_toc("SBIN")
+        assert "recommended_waves" in toc
+        assert len(toc["recommended_waves"]) == 3
+        w1 = set(toc["recommended_waves"][0]["sections"])
+        assert {"peer_table", "peer_metrics", "peer_growth", "benchmarks"}.issubset(w1)
+        w2 = set(toc["recommended_waves"][1]["sections"])
+        assert {"sector_overview", "sector_flows", "sector_valuations"}.issubset(w2)
+
+    def test_toc_includes_truncation_warning(self, api):
+        toc = api.get_peer_sector_toc("SBIN")
+        assert "warnings" in toc
+        assert "truncation" in toc["warnings"]
+        assert "all" in toc["warnings"]["truncation"].lower()
+
+
 class TestIndustryMappings:
     """Additive mapping coverage — ensures yfinance-style strings resolve to
     the right sector KPI framework without breaking existing Screener strings.
