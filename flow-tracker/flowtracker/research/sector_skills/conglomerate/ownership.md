@@ -64,3 +64,6 @@ Prefer these over generic ones:
 - "What is the promoter's aggregate pledge across all group-listed entities (not just this ticker)? SEBI disclosure requires per-entity but group aggregate is the real risk metric."
 - "Are there pending SEBI proceedings / ED investigations that could trigger FPI reclassification or Corporate Body deemed-promoter tagging?"
 - "Has any published short report flagged specific Corporate Body holders — and are those holders still on the register?"
+
+### Planned Public Float Sub-Breakdown Tooling
+**Public float sub-breakdown tooling:** Once `get_public_float_breakdown(symbol)` (planned in Phase 1 of post-overnight-fixes) lands, use it to split the Public bucket into retail (<₹2L nominal), HNI (>₹2L), corporate bodies, NRIs, and trusts. Until the pipeline ships, cite the top-named holders from `shareholder_detail` with classification='public' as the best available proxy and flag the aggregate sub-breakdown gap as a data limitation (not an open question).

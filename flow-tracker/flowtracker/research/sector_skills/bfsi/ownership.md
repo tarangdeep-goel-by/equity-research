@@ -101,3 +101,6 @@ Prefer these over generic regulatory questions:
 - "What disinvestment target did the Finance Ministry set for PSU bank stake sales in the current fiscal?"
 - "Is any RBI prompt-corrective-action (PCA) framework trigger active for this bank?" (for weaker PSBs)
 - "Are there pending SEBI circulars that would tighten the aggregate foreign-holding cap formula?"
+
+### Timeframe Alignment for Historical FII Analysis
+When analyzing an FII exit or ownership shift older than 12 months (e.g., an FII rolloff that started 10-22 months ago), pass `days=1825` to `get_ownership(section='bulk_block')`. The default 365-day window will miss the supply distribution. This is especially important for large-cap banks (SBIN, HDFCBANK, ICICIBANK) where FII rebalancing often plays out over multiple quarters. Cross-reference with quarterly shareholding %pt drops from `shareholding` — if the bulk_block deals don't explain the %pt move, supply was distributed via continuous open-market trades (Tenet 10).

@@ -64,3 +64,24 @@ Banks use aggressive technical write-offs to scrub GNPA optically — the loan i
 - Extract gross slippage, cash recoveries, upgrades, and technical write-offs as separate numbers from `get_company_context(section='concall_insights')`
 - A bank showing a falling GNPA% driven mostly by technical write-offs and minimal cash recoveries is **not cleaning its book** — it's just moving the same stress off the disclosed ratio
 - Always compute and present net slippage alongside GNPA/NNPA trends; the divergence between headline GNPA movement and net slippage is the forensic signal
+
+## Non-Interest Income Decomposition (fee moat vs treasury)
+For banks, split "Other Income" into:
+- **Fee income** (stable, moat): processing fees, card fees, remittance, forex conversion, insurance/wealth distribution, loan syndication. These scale with franchise strength and are hard to replicate.
+- **Treasury income** (volatile, rate-sensitive): MTM gains on AFS/HTM books, trading profits, SLR book revaluation.
+
+Compute fee moat strength: `fee_income ÷ total_income`.
+- **>20%** — strong fee moat (HDFCBANK, ICICIBANK, KOTAKBANK historically)
+- **10-20%** — moderate (mid-size privates, retail-heavy PSUs)
+- **<10%** — thin, over-reliance on NII (interest-rate exposure)
+
+Extract the decomposition from `get_company_context(section='concall_insights')` — banks disclose fee/treasury split in opening remarks or slide decks. If concall doesn't segment it, cite "Other Income" as an aggregate and caveat the moat assessment.
+
+## SOTP Trigger — Listed Subsidiary Value
+For private banks with listed/IPO-bound subsidiaries, call `get_valuation(section='sotp')` whenever subsidiary value is a potential catalyst. Common structures:
+- **HDFC Bank**: HDB Financial (IPO-bound, FY26 target), HDFC AMC (listed), HDFC Life Insurance (listed), HDFC ERGO (unlisted, group insurer).
+- **ICICI Bank**: ICICI Prudential Life (listed), ICICI Lombard General Insurance (listed), ICICI Prudential AMC (listed).
+- **Kotak Bank**: Kotak AMC (unlisted, large embedded value), Kotak Life Insurance (unlisted).
+- **Axis Bank**: Axis AMC (unlisted), Max Life JV (complex, re-look after Max Life delisting if material).
+
+When SOTP is material (>15% of standalone bank market cap), present the sub-totals in a separate "SOTP Valuation" subsection with per-sub valuation method disclosed (P/B for AMC, embedded-value multiple for insurance, P/E for NBFC).

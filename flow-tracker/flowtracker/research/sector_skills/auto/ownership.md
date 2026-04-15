@@ -51,3 +51,6 @@ Government subsidy structures (EV PLI, FAME, Auto-Component PLI) tie financial i
 - Are cross-holdings within the ancillary group diluting the operational independence and capital efficiency of the specific listed entity being evaluated?
 - Does the family promoter's capital allocation outside the auto sector present a systemic risk to the listed OEM?
 - For bailout / distress-adjacent MNC subs: is the parent's global condition stable enough that the Indian subsidiary's dividend policy can be relied on?
+
+### New-Age EV / Listed-Startup Auto Framing
+For new-age EV or listed-startup autos (OLAELEC, TVSMOTOR post-listing EV subsidiary, Ather if listed, etc.): any ownership category that grows >100% relatively in a single quarter (even if absolute <2%) warrants investigation. AIF growth (Alternative Investment Funds) can signal VC rotation post-lockup, or structured-finance vehicle entry. Drill via `get_ownership(section='shareholder_detail', classification='alternative_investment_funds')` when category-level growth is abnormal. For EV pure-plays, also watch promoter pledge — startup-founder promoter pledging is more common and less stigmatized than in traditional manufacturing; contextualize versus the promoter's personal debt disclosure rather than legacy pledge frameworks.

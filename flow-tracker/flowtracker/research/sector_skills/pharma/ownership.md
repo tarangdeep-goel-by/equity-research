@@ -43,3 +43,6 @@ PE-backed players face severe equity supply overhangs during exit windows — wh
 - Are minor upticks in family promoter pledges indicating hidden off-balance-sheet group distress or private ventures?
 - How does the target's strategic shift from generic formulations to biosimilars / specialty alter its targeted institutional investor base and capital intensity?
 - Will pending government approvals under brownfield FDI rules deter MNC-parent consolidation or open-market creeping acquisitions?
+
+### Family Trust Structural Framing (Shanghvi / promoter-family holdcos)
+Sun Pharma's Shanghvi family holds 54.48% via a family trust structure (not direct personal holdings). Zero open-market promoter activity is STRUCTURAL for family-trust holdcos, not informational. Do not infer low conviction from flat promoter pledge trajectory. The correct signal to track is any NEW pledging event (indicates family leverage), trust-internal reclassification (e.g. intra-family transfers), or unusual insider SELLING by non-promoter key managerial personnel — not the absence of routine open-market buying. This rule generalizes to any Indian pharma/manufacturing promoter using a family trust / HUF / multiple-related-party structure (Dr. Reddy's, Lupin, Cipla family holdings).

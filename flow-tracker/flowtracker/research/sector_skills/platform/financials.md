@@ -56,3 +56,19 @@ Standard P/E comparisons fail for loss-making platforms. The institutional-stand
 - **<20%** = growth has decelerated without a commensurate margin gain — the thesis is breaking
 - Track the metric quarterly (annualized): Revenue YoY Growth % + FCF / Revenue %. Compare to pure-play peers via `get_peer_sector(section='benchmarks')`
 - This is the only benchmark that holds across pre-profit, transitioning, and mature-profit platform stages
+
+## Rule of 40 Adjustment for Accounting Transitions
+For platforms mid-transition in revenue recognition (1P → 3P accounting, net-to-gross revenue treatment, GMV→net revenue restatement), the Rule of 40 cannot use reported headline revenue growth — the reported number conflates unit-economic progress with accounting optics. Instead:
+- Use **GOV/NOV growth** or **Bookings growth** from `get_company_context(section='concall_insights', sub_section='operational_metrics')`
+- Use **segment-level pass-through revenue** (not consolidated) where possible
+- If concall gives a like-for-like restated prior-period number, use that; otherwise caveat the Rule of 40 score with the accounting-basis note.
+
+Rule of 40 formula still applies: `revenue_growth% + ebitda_margin% ≥ 40`. A platform at 25% real growth and 15% EBITDA margin passes; the same platform reporting 60% headline growth (inflated by 1P→3P gross-up) and 10% margin LOOKS stronger but the underlying unit economics haven't improved.
+
+## Per-Order Unit Economics Derivation
+When `get_company_context(section='concall_insights', sub_section='operational_metrics')` gives total orders and the financial segment gives segment revenue, DERIVE per-order metrics via `calculate`:
+- **AOV (avg order value)** = `revenue_cr × 1e7 / order_count`
+- **Delivery cost per order** = `delivery_cost_cr × 1e7 / order_count`
+- **Contribution margin per order** = `(AOV − variable_cost_per_order) / AOV × 100`
+
+These unit metrics are what platform investors track — reported EBITDA margin is a lagging aggregate. For quick-commerce, food-delivery, and hyperlocal platforms, a 200bp contribution-margin improvement per order at scale (1M+ orders/day) signals multi-year operating leverage ahead of consolidated EBITDA turning positive.
