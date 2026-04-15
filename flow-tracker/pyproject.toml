@@ -29,6 +29,8 @@ test = [
     "freezegun>=1.4",
     "pytest-cov>=5",
     "syrupy>=4",
+    "pytest-repeat>=0.9",
+    "pytest-rerunfailures>=14",
 ]
 autoeval = [
     "google-genai>=1.0",
@@ -43,11 +45,21 @@ markers = [
     "integration: integration tests requiring store + display",
     "e2e: end-to-end pipeline tests",
     "contract: contract/regression tests",
+    "concurrency: SQLite concurrency tests (may be flaky under load)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:yfinance.*",
     "ignore::DeprecationWarning:openpyxl.*",
 ]
+
+[tool.coverage.run]
+branch = true
+source = ["flowtracker"]
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+skip_covered = false
 
 [project.scripts]
 flowtrack = "flowtracker.main:app"

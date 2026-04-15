@@ -61,11 +61,14 @@ class TestConcurrentWrites:
     def test_concurrent_writes_different_tables(self, initialized_db):
         """Writers to different tables don't interfere."""
         errors: list[Exception] = []
+        today = date.today().isoformat()
 
         def write_flows(db_path: Path) -> None:
             try:
                 with FlowStore(db_path=db_path) as store:
-                    store.upsert_flows([make_daily_flow()])
+                    # Use today's date so get_flows(days=7) below always includes it,
+                    # regardless of when the test runs (factory default is hardcoded).
+                    store.upsert_flows([make_daily_flow(dt=today)])
             except Exception as e:
                 errors.append(e)
 
@@ -130,8 +133,11 @@ class TestConcurrentReadWrite:
 
     def test_many_concurrent_readers(self, tmp_db):
         """10 concurrent readers all get consistent results."""
+        today = date.today().isoformat()
         with FlowStore(db_path=tmp_db) as store:
-            store.upsert_flows([make_daily_flow()])
+            # Use today's date so get_flows(days=7) always sees the row,
+            # regardless of when the test runs (factory default is hardcoded).
+            store.upsert_flows([make_daily_flow(dt=today)])
 
         results: list[int] = []
         errors: list[Exception] = []
