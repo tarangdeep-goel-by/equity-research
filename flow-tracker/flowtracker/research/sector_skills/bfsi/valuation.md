@@ -6,13 +6,15 @@ The most common valuation error in BFSI is defaulting to a PE + EV/EBITDA triang
 | Subtype | Primary multiple | Commonly-misapplied multiples that fail |
 | :--- | :--- | :--- |
 | **PSU bank** | P/ABV (P/B on book adjusted for Net NPA) | EV/EBITDA (no EBITDA), DCF-FCFE (CFO swings with deposit flow), EV/Revenue |
-| **Private bank** | P/ABV + P/B-ROE (justified P/B = ROE/CoE) | EV/EBITDA, sector-relative PE without adjusting for asset quality |
-| **Life insurer** | P/EV (price to embedded value), P/VNB-multiple | PE on accounting earnings (IFRS-17 optics), EV/EBITDA |
+| **Private bank** | P/ABV + P/B-ROE (justified P/B = (ROE−g)/(CoE−g)) | EV/EBITDA, sector-relative PE without adjusting for asset quality |
+| **Small finance bank (SFB)** | P/ABV with higher-NIM-higher-credit-cost normalization | Peer PE vs private banks (mis-scales at NIM 7-10%, credit cost 150-250 bps) |
+| **Life insurer** | Price-to-Embedded-Value (P/EV) + Implied VNB multiple | PE on accounting earnings (IFRS-17 optics), EV/EBITDA |
 | **General insurer** | P/B-ROE + underwriting-profit multiple | PE on low-combined-ratio year (mean-reverts), EV/EBITDA |
 | **NBFC (lending)** | P/B adjusted for credit cost and P/B-ROE | PE on peak-cycle earnings, EV/EBITDA |
+| **Housing finance (HFC)** | P/B-ROE at HFC-specific ROE (lower NIMs, very low credit cost) | NBFC peer PE (different loss curve), EV/EBITDA |
 | **AMC** | P/AUM% (% of AUM) + PE on normalized fee yield | EV/EBITDA on one-off performance-fee spike |
 | **Exchange** | EV/Revenue (take-rate anchored) + PE | P/B (book is mostly idle float), EV/EBITDA on peak-ADTV year |
-| **Broker** | PE on through-cycle active-client monetisation | P/B (book is float), EV/EBITDA on F&O-peak year |
+| **Broker** | PE on through-cycle active-client monetisation; split cash-segment (ADTV × bps) from F&O (orders × flat fee) | P/B (book is float), EV/EBITDA on F&O-peak year |
 | **Microfinance NBFC** | P/B adjusted for regional concentration risk | PE at cycle peak (JLG losses mean-revert hard) |
 | **Gold-loan NBFC** | P/B adjusted for LTV cycle + P/B-ROE | PE on peak gold-price year |
 
@@ -30,8 +32,14 @@ For private banks and holding-style financials, SOTP is often the lever that re-
 4. Apply a **20-25% holding-company discount** to the aggregate sub-value before adding to the standalone bank's P/ABV value.
 5. Back out implied P/ABV on the **standalone** (ex-SOTP) bank — this is the number the market is really paying for the core franchise.
 
-### Forward-Multiple Sanity — Justified P/B = ROE ÷ CoE
-The Gordon framework for a mature franchise: `Justified P/B = (ROE − g) ÷ (CoE − g)`. For a simple steady state, `Justified P/B ≈ ROE ÷ CoE`. If observed P/B materially exceeds this justified level, reverse-out what ROE expansion the market is pricing in, then stress-test it: does the current balance-sheet leverage allow that ROE at realistic credit cost and risk-weighted-asset growth? A bank trading at 3.0× P/B with reported 16% ROE at 12% CoE has justified P/B near 1.33× — 3.0× is pricing in sustained 36%+ ROE expansion, which on regulated leverage is rarely credible. Call `calculate` with CoE from `get_market_context(section='macro')` and published ROE; the WACC/CoE helper route adds country-risk premium.
+### Forward-Multiple Sanity — Justified P/B = (ROE − g) ÷ (CoE − g)
+The Gordon framework for a mature franchise: `Justified P/B = (ROE − g) ÷ (CoE − g)`, where `g` is the sustainable long-run book-value growth rate. For Indian BFSI, realistic `g` sits in the 10-14% range in nominal terms (earnings retention × ROE gives the steady-state rate). **Always carry `g` through the formula** — dropping it to zero is the most common error and produces a 50-70% under-estimate of fair P/B. Worked calibrations:
+
+- Top private bank: ROE 16%, CoE 12%, g 10% → justified P/B = (16−10)/(12−10) = 3.0× (so 3.0× market P/B is fair, not stretched).
+- Mid-cap private bank: ROE 13%, CoE 12%, g 9% → justified P/B = (13−9)/(12−9) = 1.33× (the same 3.0× market P/B IS stretched here).
+- PSU bank: ROE 14%, CoE 13%, g 10% → justified P/B = (14−10)/(13−10) = 1.33×.
+
+If observed P/B materially exceeds the justified level at realistic `g`, reverse-out what ROE expansion the market is pricing in and stress-test whether regulated leverage supports it. Sensitivity: a 1-pp change in `g` moves the justified multiple by ~30-50% — so the growth assumption is as load-bearing as the ROE/CoE inputs. Call `calculate` with `ROE`, `CoE`, and `g` as named inputs; pull CoE from `get_market_context(section='macro')` or the WACC helper.
 
 ### Peer Premium / Discount Decomposition
 If the stock trades at a P/ABV premium or discount vs sector median from `get_peer_sector(section='benchmarks')`, decompose the delta into at most four drivers: (a) NIM spread vs peer — 30-100 bps of sustained NIM advantage justifies 10-20% premium, (b) ROA delta — 20-50 bps of ROA advantage justifies 15-25% premium, (c) asset-quality delta — GNPA and credit-cost below peer median justifies 10-15% premium, (d) liability-franchise quality — CASA 500-1000 bps above peer is a structural premium driver. If (a) through (d) together do not account for more than half of the observed premium, the multiple is vulnerable to mean-reversion and the bull-case is leaning on re-rating rather than on earnings growth.
