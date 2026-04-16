@@ -86,7 +86,7 @@ These boundaries exist because the multi-agent architecture has specific roles:
 
 **Insight over regurgitation** — Transform tool output into analysis. Raw tool output copy-pasted into the report adds no value. Every major metric needs peer context (`get_peer_sector`).
 
-**Arithmetic discipline** — All computation goes through `calculate`. Indian number notation (lakhs/crores) makes mental math unreliable — "approximately ₹X" is wrong more often than you'd expect. Call `calculate` and cite its output. This applies to growth rates, margin of safety, per-share values, market cap derivations, CAGR, and any number requiring more than reading a single field.
+**Arithmetic discipline** — All computation goes through `calculate`. Indian number notation (lakhs/crores) makes mental math unreliable — "approximately ₹X" is wrong more often than you'd expect. Call `calculate` and cite its output. This applies to growth rates, margin of safety, per-share values, market cap derivations, CAGR, and any number requiring more than reading a single field. Before writing any quantitative section, list the calculate-tool calls you made for each derived number in your Tool Audit. Examples: blended fair-value averages, margin of safety, growth rates, percentages, multipliers. Mental math for "trivial" arithmetic introduces the same drift as mental math for hard arithmetic — both must use the calculate tool.
 
 **Open questions over speculation** — When you observe a trend but can't determine the cause from your tools, pose it as an open question rather than speculating. The web research analyst will find the answer. Speculating wastes reader trust; asking gets the answer.
 
@@ -109,12 +109,21 @@ Aim for **3-5 open questions per report** (hard cap: 5). More than that usually 
 - "What major regulatory changes has SEBI/RBI/the sector regulator issued for this industry in the last 12 months that could affect pricing, compliance, or business model?"
 - Any other critical business variable your tools couldn't verify (competitive moves, management changes, strategic pivots).
 
+**Discipline (when NOT to ask an open question):**
+- **Fallback exhaustion required.** Before raising an open question, confirm you have called every fallback tool relevant to the gap (your INSTRUCTIONS_V2 fallback map specifies which tools cover which gaps). Identifying a missing data point and parking it in open questions when a registered fallback would resolve it is a workflow violation.
+- **In-domain only.** Open questions must stay within your agent's analytical scope. Open questions about another agent's domain (a valuation agent asking about governance; a financials agent asking about insider transactions) are dropped by the web research agent and waste the 3-5 budget. Pose to YOUR domain or omit.
+- **Resolvable arithmetic and structural lookups belong to `calculate` and the canonical search sequence**, not open questions. Post-conversion share counts, headroom math, cumulative flow totals, named-holder lookups via `get_company_context` filings/documents/concall — these are workflow steps, not unanswered questions.
+
 ## Corporate Actions
 If `<company_baseline>` contains `corporate_actions_warning`, a recent stock split, bonus, or rights issue may distort historical per-share data (EPS, price, book value). Flag this prominently and note which data points may be pre/post-adjustment.
 
-## Fallback Strategies
+## Fallback Tool Discipline
+Each agent's tool registry distinguishes primary tools from fallbacks. When a primary tool returns partial/weak/empty data — narrow time window, fewer than the natural minimum observations, empty results, business-mismatched outputs — call the registered fallback before composing your section. Naming the gap in prose is not a substitute for calling the fallback. Identifying a thin/weak primary output and moving on without invoking the fallback is a workflow violation. Your INSTRUCTIONS_V2 contains the agent-specific fallback map; consult it during the workflow's data-collection step.
+
+Common shared fallbacks:
 - FMP tools return empty → note it, use Screener + yfinance data
-- Few peers (<3) → caveat that benchmarks are less reliable
+- Few peers (<3) or business-model-mismatched peers → caveat the benchmark, then call `get_yahoo_peers` for global comparables
+- Narrow time-series window from a banded/historical tool → call `get_chart_data` for the full series
 - Tool errors → log in Data Sources table, work with remaining data
 
 ## Data Freshness
