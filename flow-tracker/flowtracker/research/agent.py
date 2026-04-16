@@ -28,8 +28,10 @@ from flowtracker.research.briefing import (
     AgentCost,
     AgentTrace,
     BriefingEnvelope,
+    ComplianceGateTrace,
     PipelineTrace,
     ToolEvidence,
+    TurnEvent,
     parse_briefing_from_markdown,
     save_envelope,
     save_trace,
@@ -543,6 +545,7 @@ async def _run_specialist(
     # Phase 1: Generate report with thinking
     agent_started = datetime.now(timezone.utc).isoformat()
     start_time = time.time()
+    start_mono = time.monotonic()
     evidence: list[ToolEvidence] = []
     report_text = ""
     text_blocks: list[str] = []  # fallback: collect text from AssistantMessages
@@ -554,8 +557,45 @@ async def _run_specialist(
     agent_status = "success"
 
     # Track tool calls for evidence capture
-    # tool_use_id -> {tool, args, started_at, start_mono}
+    # tool_use_id -> {tool, args, started_at, start_mono, turn_index}
     pending_tool_calls: dict[str, dict] = {}
+
+    # Telemetry (C-2a, C-2f): turn-level + time-to-first-token
+    turns: list[TurnEvent] = []
+    turn_index = -1                  # incremented on each AssistantMessage
+    current_turn_mono: float | None = None
+    current_turn_started: str = ""
+    current_turn_reasoning_chars = 0
+    current_turn_tool_ids: list[str] = []
+    current_turn_usage: dict = {}
+    first_token_mono: float | None = None
+
+    def _flush_turn() -> None:
+        """Close the in-flight TurnEvent (if any) and append to turns list."""
+        nonlocal current_turn_mono, current_turn_started, current_turn_reasoning_chars
+        nonlocal current_turn_tool_ids, current_turn_usage
+        if current_turn_mono is None or turn_index < 0:
+            return
+        duration_ms = int((time.monotonic() - current_turn_mono) * 1000)
+        u = current_turn_usage or {}
+        turns.append(TurnEvent(
+            turn_index=turn_index,
+            started_at=current_turn_started,
+            duration_ms=duration_ms,
+            model=agent_model,
+            input_tokens=u.get("input_tokens", 0) or 0,
+            output_tokens=u.get("output_tokens", 0) or 0,
+            cache_read_tokens=u.get("cache_read_input_tokens", 0) or 0,
+            cache_write_tokens=u.get("cache_creation_input_tokens", 0) or 0,
+            reasoning_chars=current_turn_reasoning_chars,
+            tool_call_ids=list(current_turn_tool_ids),
+        ))
+        # Reset per-turn accumulators
+        current_turn_mono = None
+        current_turn_started = ""
+        current_turn_reasoning_chars = 0
+        current_turn_tool_ids = []
+        current_turn_usage = {}
 
     try:
         async for message in query(
@@ -571,9 +611,20 @@ async def _run_specialist(
                 )
                 continue
             if isinstance(message, AssistantMessage):
+                # C-2f: record first-token timestamp on the very first AssistantMessage
+                if first_token_mono is None:
+                    first_token_mono = time.monotonic()
+
+                # C-2a: a new assistant message = a new turn. Flush previous, start fresh.
+                _flush_turn()
+                turn_index += 1
+                current_turn_mono = time.monotonic()
+                current_turn_started = datetime.now(timezone.utc).isoformat()
+
                 # Accumulate tokens from each assistant turn (usage is a dict)
                 msg_usage = getattr(message, "usage", None)
                 if isinstance(msg_usage, dict):
+                    current_turn_usage = msg_usage  # stored on turn flush
                     input_tokens += msg_usage.get("input_tokens", 0) or 0
                     output_tokens += msg_usage.get("output_tokens", 0) or 0
 
@@ -581,6 +632,7 @@ async def _run_specialist(
                     block_type = type(block).__name__
                     if block_type == "TextBlock":
                         text_blocks.append(block.text)
+                        current_turn_reasoning_chars += len(block.text or "")
                     elif isinstance(block, ToolUseBlock):
                         call_started = datetime.now(timezone.utc).isoformat()
                         pending_tool_calls[block.id] = {
@@ -588,7 +640,9 @@ async def _run_specialist(
                             "args": block.input or {},
                             "started_at": call_started,
                             "start_mono": time.monotonic(),
+                            "turn_index": turn_index,
                         }
+                        current_turn_tool_ids.append(block.id)
                         # Record evidence immediately from ToolUseBlock.
                         # The Agent SDK processes tool results internally and does NOT
                         # expose ToolResultBlock through the stream, so we capture
@@ -597,6 +651,7 @@ async def _run_specialist(
                             tool=block.name,
                             args=block.input or {},
                             started_at=call_started,
+                            turn_index=turn_index,
                         ))
                         # Compact args for log readability — show all params, truncate long values
                         compact = {}
@@ -641,6 +696,8 @@ async def _run_specialist(
                     if result_in or result_out:
                         input_tokens = result_in
                         output_tokens = result_out
+                # C-2a: close the final turn on ResultMessage
+                _flush_turn()
     except Exception as exc:
         # Claude CLI may exit with code 1 after delivering results.
         # If we already captured text, proceed with what we have.
@@ -657,6 +714,15 @@ async def _run_specialist(
                 name, symbol, type(exc).__name__, exc,
                 exc_info=True,
             )
+    finally:
+        # C-2a: ensure any in-flight turn is flushed even on exception paths
+        _flush_turn()
+
+    # C-2f: compute time-to-first-token (delta from query start to first AssistantMessage)
+    time_to_first_token_ms = (
+        int((first_token_mono - start_mono) * 1000)
+        if first_token_mono is not None else None
+    )
 
     # Prefer TextBlocks over ResultMessage.result when TextBlocks have more content.
     # ResultMessage.result often contains only a short summary, while the full report
@@ -714,6 +780,42 @@ async def _run_specialist(
         cost=cost,
     )
 
+    # C-2e: compliance-gate cross-reference — map mandatory_metrics_status
+    # attempt strings to actual tool_use_ids in evidence, so evals can verify
+    # that "attempted" claims are backed by real tool calls.
+    compliance_traces: list[ComplianceGateTrace] = []
+    mms = (briefing or {}).get("mandatory_metrics_status", {}) or {}
+    if isinstance(mms, dict):
+        for metric_name, entry in mms.items():
+            if not isinstance(entry, dict):
+                continue
+            status = entry.get("status", "missing") or "missing"
+            attempts = entry.get("attempts", []) or []
+            if not isinstance(attempts, list):
+                attempts = []
+            # Match "get_foo(section='x')"-style strings against tool names in evidence
+            attempted_ids: list[str] = []
+            for attempt_str in attempts:
+                if not isinstance(attempt_str, str):
+                    continue
+                # Extract bare tool name (before first '(' or whole string)
+                bare = attempt_str.split("(", 1)[0].strip()
+                for idx, ev in enumerate(evidence):
+                    # tool names may be prefixed (mcp__agent__get_foo)
+                    ev_bare = ev.tool.split("__")[-1]
+                    if bare and bare == ev_bare:
+                        # Use evidence list index as stable tool_use_id proxy
+                        attempted_ids.append(f"ev-{idx}")
+                        break  # one match per attempt is enough
+            if status not in ("extracted", "attempted", "not_applicable", "missing"):
+                status = "missing"
+            compliance_traces.append(ComplianceGateTrace(
+                metric=str(metric_name),
+                status=status,
+                attempted_tool_use_ids=attempted_ids,
+                note=str(entry.get("source", "") or entry.get("value", "") or ""),
+            ))
+
     # Build trace
     trace = AgentTrace(
         agent=name,
@@ -727,6 +829,9 @@ async def _run_specialist(
         reasoning=reasoning_blocks,
         report_chars=len(report_text),
         cost=cost,
+        turns=turns,
+        time_to_first_token_ms=time_to_first_token_ms,
+        compliance_gate_traces=compliance_traces,
     )
 
     # Log unused tools for pipeline optimization
