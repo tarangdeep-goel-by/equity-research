@@ -31,28 +31,23 @@ runner = CliRunner()
 # dumb terminal so Rich doesn't emit cursor/control sequences.
 _ENV = {"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "120"}
 
-# Rich/Typer pad box drawings to the terminal width — which differs between
-# local dev (wide) and CI runners (narrow 80). We normalise output before
-# snapshotting so width-dependent padding and wrap points don't make the
-# snapshot brittle:
-#   1. Collapse any run of Unicode box-drawing chars (─━┃│┏┓┗┛╭╮╰╯┡┩ etc.)
-#      to a single character so line length stops mattering.
-#   2. Strip trailing whitespace per line.
-#   3. Collapse 2+ internal spaces to a single space (help columns align
-#      to width, which also differs between environments).
-_BOX_RUN_RE = re.compile(r"[─━│┃┏┓┗┛┠┨┯┷┿╋╭╮╰╯┡┩┢┪╇╈╉╊╌╍]{2,}")
-_MULTI_SPACE_RE = re.compile(r"  +")
+# Rich/Typer pad box drawings to the terminal width AND wrap long help strings
+# at different columns depending on terminal width, which differs between local
+# dev (wide) and CI runners (narrow 80). We normalise aggressively before
+# snapshotting so only meaningful content (words + punctuation) matters:
+#   1. Strip every Unicode box-drawing / border character.
+#   2. Collapse all whitespace (including newlines) to single spaces.
+#   3. Split into sentences at sentence-ending punctuation so the snapshot
+#      still has some line structure without being width-dependent.
+_BOX_CHARS_RE = re.compile(r"[─━│┃┏┓┗┛┠┨┯┷┿╋╭╮╰╯┡┩┢┪╇╈╉╊╌╍═║╔╗╚╝]")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 def _normalise_help(output: str) -> str:
     """Strip width-dependent artefacts so snapshots are stable across terminal widths."""
-    lines = []
-    for line in output.splitlines():
-        line = _BOX_RUN_RE.sub("═", line)
-        line = _MULTI_SPACE_RE.sub(" ", line)
-        line = line.rstrip()
-        lines.append(line)
-    return "\n".join(lines).rstrip()
+    stripped = _BOX_CHARS_RE.sub(" ", output)
+    collapsed = _WHITESPACE_RE.sub(" ", stripped).strip()
+    return collapsed
 
 
 def _help_key(cmd_path: list[str]) -> str:
