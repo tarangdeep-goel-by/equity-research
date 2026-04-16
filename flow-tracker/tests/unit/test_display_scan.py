@@ -17,7 +17,9 @@ from flowtracker.scan_models import BatchFetchResult, IndexConstituent, ScanSumm
 
 def _make_console() -> tuple[Console, StringIO]:
     buf = StringIO()
-    con = Console(file=buf, force_terminal=True, width=200)
+    # Drop force_terminal: Rich re-reads COLUMNS from env in that mode and
+    # clamps layout to narrow CI runners, ignoring the explicit width=.
+    con = Console(file=buf, width=200, no_color=True)
     return con, buf
 
 

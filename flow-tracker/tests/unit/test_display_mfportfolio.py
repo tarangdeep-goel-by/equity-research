@@ -16,7 +16,9 @@ from flowtracker.mfportfolio_models import MFHoldingChange, MFSchemeHolding
 
 def _make_console() -> tuple[Console, StringIO]:
     buf = StringIO()
-    con = Console(file=buf, force_terminal=True, width=200)
+    # no force_terminal: Rich otherwise re-reads COLUMNS from env and clamps
+    # column width on narrow CI runners even when width= is explicit.
+    con = Console(file=buf, width=200, no_color=True)
     return con, buf
 
 

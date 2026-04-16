@@ -33,7 +33,7 @@ from flowtracker.fmp_models import (
 def captured_console(monkeypatch):
     """Patch the module-level console with a StringIO-backed one and return the buffer."""
     buf = StringIO()
-    con = Console(file=buf, force_terminal=True, width=200, color_system=None)
+    con = Console(file=buf, width=200, color_system=None, no_color=True)
     monkeypatch.setattr(fmp_display, "console", con)
     return buf
 

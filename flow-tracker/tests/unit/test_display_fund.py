@@ -29,7 +29,7 @@ from flowtracker.fund_models import LiveSnapshot, QuarterlyResult, ValuationBand
 
 def _make_console() -> tuple[Console, StringIO]:
     buf = StringIO()
-    con = Console(file=buf, force_terminal=True, width=200)
+    con = Console(file=buf, width=200, no_color=True)
     return con, buf
 
 
