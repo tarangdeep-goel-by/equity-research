@@ -262,6 +262,12 @@ class TestRichFormat:
         out = ev.format_agent_evidence("financials", "HDFCBANK", agent_trace=_rich_trace())
         assert "Time to first token: 1.4s" in out  # 1350ms → 1.4s (rounded)
 
+    def test_cache_hit_rate_rendered(self):
+        """Explicit hit-rate line saves Gemini the math when grading cost_efficiency."""
+        out = ev.format_agent_evidence("financials", "HDFCBANK", agent_trace=_rich_trace())
+        # in=20000, cache_read=15000, cache_write=500 → 15000 / (15000+500+20000) = 42.3%
+        assert "Cache hit rate: 42.3%" in out
+
     def test_retries_line_present(self):
         out = ev.format_agent_evidence("financials", "HDFCBANK", agent_trace=_rich_trace())
         assert "Retries: 2" in out
