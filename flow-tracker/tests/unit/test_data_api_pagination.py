@@ -136,6 +136,98 @@ class TestConcallInsightsDrill:
         assert "operational_metrics" in result["valid_sections"]
 
 
+def _tagged_concall_quarters() -> list[dict]:
+    """Concall with topic-tagged Q&A exchanges across two quarters."""
+    return [
+        {
+            "fy_quarter": "FY26-Q3",
+            "period_ended": "2025-12-31",
+            "operational_metrics": {"same_store_growth_pct": {"value": "4.2%"}},
+            "qa_session": [
+                {"analyst": "A1", "questions": ["gross margin outlook"],
+                 "notable": "mgmt guided flat", "topics": ["margins", "guidance"]},
+                {"analyst": "A2", "questions": ["new store adds"],
+                 "notable": "50-60 stores", "topics": ["capex", "geography"]},
+                {"analyst": "A3", "questions": ["competition from DMart"],
+                 "notable": "no pricing action", "topics": ["competition", "pricing"]},
+            ],
+        },
+        {
+            "fy_quarter": "FY26-Q2",
+            "period_ended": "2025-09-30",
+            "operational_metrics": {"same_store_growth_pct": {"value": "3.8%"}},
+            "qa_session": [
+                {"analyst": "B1", "questions": ["EBITDA margin trajectory"],
+                 "notable": "cost pressure", "topics": ["margins", "costs"]},
+            ],
+        },
+    ]
+
+
+class TestConcallInsightsQuarterAndTopics:
+    def test_toc_includes_qa_topics_by_quarter_when_tagged(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _tagged_concall_quarters())
+        toc = api.get_concall_insights("TESTCO")
+        assert "qa_topics_by_quarter" in toc
+        assert set(toc["qa_topics_by_quarter"]["FY26-Q3"]) == {
+            "margins", "guidance", "capex", "geography", "competition", "pricing",
+        }
+        assert set(toc["qa_topics_by_quarter"]["FY26-Q2"]) == {"margins", "costs"}
+
+    def test_toc_omits_qa_topics_index_when_untagged(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _bank_concall_quarters())
+        toc = api.get_concall_insights("TESTCO")
+        assert "qa_topics_by_quarter" not in toc
+
+    def test_quarter_filter_narrows_to_single_quarter(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _tagged_concall_quarters())
+        toc = api.get_concall_insights("TESTCO", quarter="FY26-Q2")
+        assert len(toc["quarters"]) == 1
+        assert toc["quarters"][0]["fy_quarter"] == "FY26-Q2"
+
+    def test_quarter_not_found_returns_error_with_available(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _tagged_concall_quarters())
+        result = api.get_concall_insights("TESTCO", quarter="FY99-Q9")
+        assert "error" in result
+        assert "FY26-Q3" in result["available_quarters"]
+
+    def test_qa_topics_filter_returns_only_matching_exchanges(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _tagged_concall_quarters())
+        drill = api.get_concall_insights("TESTCO", qa_topics=["margins"])
+        assert drill["section"] == "qa_session"
+        q3 = next(q for q in drill["quarters"] if q["fy_quarter"] == "FY26-Q3")
+        q2 = next(q for q in drill["quarters"] if q["fy_quarter"] == "FY26-Q2")
+        assert len(q3["qa_session"]) == 1
+        assert q3["qa_session"][0]["analyst"] == "A1"
+        assert len(q2["qa_session"]) == 1
+        assert q2["qa_session"][0]["analyst"] == "B1"
+
+    def test_qa_topics_filter_falls_back_when_untagged(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _bank_concall_quarters())
+        drill = api.get_concall_insights("TESTCO", qa_topics=["margins"])
+        # Untagged extraction → warning + full Q&A returned
+        assert "_topic_filter_warning" in drill
+        q2 = next(q for q in drill["quarters"] if q["fy_quarter"] == "FY26-Q2")
+        assert len(q2["qa_session"]) == 1  # not filtered out
+
+    def test_qa_topics_conflicts_with_other_section_filter(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _tagged_concall_quarters())
+        result = api.get_concall_insights(
+            "TESTCO", section_filter="operational_metrics", qa_topics=["margins"],
+        )
+        assert "error" in result
+
+    def test_quarter_plus_qa_topics_combines(self, api, vault_home):
+        _write_concall(vault_home / "vault", "TESTCO", _tagged_concall_quarters())
+        drill = api.get_concall_insights(
+            "TESTCO", quarter="FY26-Q3", qa_topics=["competition"],
+        )
+        assert len(drill["quarters"]) == 1
+        qa = drill["quarters"][0]["qa_session"]
+        assert len(qa) == 1
+        assert qa[0]["analyst"] == "A3"
+
+
 # ---------------------------------------------------------------------------
 # get_sector_kpis — TOC mode + drill mode + unknown key
 # ---------------------------------------------------------------------------

@@ -119,6 +119,7 @@ _CONCALL_EXTRACTION_SCHEMA = {
                             "questions": {"type": "array", "items": {"type": "string"}},
                             "management_response": {"type": "string"},
                             "notable": {"type": "string"},
+                            "topics": {"type": "array", "items": {"type": "string"}},
                         },
                     },
                 },
@@ -530,7 +531,8 @@ Extract into this JSON structure:
       "analyst": "<analyst name, firm>",
       "questions": ["<exact questions asked>"],
       "management_response": "<full response, not summarized — include the actual reasoning and data points given>",
-      "notable": "<was management evasive? did they reveal something new? was this a tough question?>"
+      "notable": "<was management evasive? did they reveal something new? was this a tough question?>",
+      "topics": ["<2-4 short lowercase topic tags. Prefer reusing these canonical tags: margins, guidance, capex, demand, pricing, mix, costs, competition, market_share, inventory, working_capital, leverage, order_book, utilization, new_products, geography, regulation, m_and_a, capital_allocation, attrition, esg. Add new tags only for domain concepts not covered.>"]
     }
     // Include ALL analyst Q&A pairs, not just top 3-5.
     // The Q&A is often where the real insights are hidden.

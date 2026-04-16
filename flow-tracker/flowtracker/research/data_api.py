@@ -2257,7 +2257,13 @@ class ResearchDataAPI:
         "flags",
     )
 
-    def get_concall_insights(self, symbol: str, section_filter: str | None = None) -> dict:
+    def get_concall_insights(
+        self,
+        symbol: str,
+        section_filter: str | None = None,
+        quarter: str | None = None,
+        qa_topics: list[str] | None = None,
+    ) -> dict:
         """Get pre-extracted concall insights from the vault.
 
         Returns structured concall data covering the last 4 quarters:
@@ -2267,17 +2273,35 @@ class ResearchDataAPI:
 
         When called WITHOUT section_filter: returns a compact table of contents
         (quarters + which sections are populated + cross-quarter narrative) — NO
-        per-quarter payload. Keeps first-call response under ~4KB.
+        per-quarter payload. Keeps first-call response under ~4KB. When Q&A
+        entries carry topic tags, TOC also includes qa_topics_by_quarter so the
+        agent can drill by topic.
 
         When called WITH section_filter (e.g. 'operational_metrics'): returns that
         section's content across all quarters. Each section is ~5-15KB — well
         within the agent's readable window.
 
-        QA sessions are trimmed to questions + notable flags only. key_numbers_mentioned
-        is dropped (redundant with operational_metrics).
+        Optional narrowing:
+          - quarter='FY26-Q3' restricts every path to a single quarter.
+          - qa_topics=['margins','guidance'] returns only Q&A exchanges whose
+            topics intersect with the requested set (implies section_filter=
+            'qa_session'). Falls back to the full Q&A with a warning when the
+            extraction predates topic tagging.
+
+        QA sessions are trimmed to questions + notable flags only (+ topics when
+        present). key_numbers_mentioned is dropped (redundant with operational_metrics).
         """
         import json
         from pathlib import Path
+
+        # qa_topics implies Q&A drill-down — resolve conflict / default early.
+        if qa_topics:
+            if section_filter and section_filter != "qa_session":
+                return {
+                    "error": "qa_topics only applies to section_filter='qa_session'",
+                    "hint": "Drop section_filter (or set it to 'qa_session') when using qa_topics",
+                }
+            section_filter = "qa_session"
 
         vault = Path.home() / "vault" / "stocks" / symbol.upper() / "fundamentals"
         data = None
@@ -2293,26 +2317,52 @@ class ResearchDataAPI:
         if data is None:
             return {"error": f"No concall extraction found for {symbol}", "hint": "Run concall pipeline first"}
 
+        # Narrow to a single quarter early when requested — trims every downstream path.
+        if quarter:
+            wanted = quarter.upper().replace(" ", "")
+            matched = [
+                q for q in data.get("quarters", [])
+                if (q.get("fy_quarter") or q.get("label") or "").upper().replace(" ", "") == wanted
+            ]
+            if not matched:
+                available = [q.get("fy_quarter") or q.get("label") for q in data.get("quarters", [])]
+                return {
+                    "error": f"Quarter '{quarter}' not found in extraction",
+                    "available_quarters": available,
+                }
+            data["quarters"] = matched
+
         # Trim verbose sections universally (these trims are always safe) + track quality.
         # quality_statuses is per-quarter parallel to missing_periods — index i of each
         # refers to the same quarter, so we can report missing_periods accurately in _meta.
         quality_statuses: list[str] = []
         quarter_labels: list[str] = []
         missing_periods: list[str] = []
+        qa_topics_by_quarter: dict[str, list[str]] = {}
+        any_topics_present = False
         for q in data.get("quarters", []):
             trimmed_qa = []
+            quarter_topic_set: set[str] = set()
             for qa in q.get("qa_session", []):
-                trimmed_qa.append({
+                trimmed = {
                     "analyst": qa.get("analyst", ""),
                     "questions": qa.get("questions", []),
                     "notable": qa.get("notable", ""),
-                })
+                }
+                topics = qa.get("topics") or []
+                if topics:
+                    trimmed["topics"] = topics
+                    quarter_topic_set.update(t.lower() for t in topics if t)
+                    any_topics_present = True
+                trimmed_qa.append(trimmed)
             q["qa_session"] = trimmed_qa
             q.pop("key_numbers_mentioned", None)
             status = q.get("extraction_status", "complete")
             quality_statuses.append(status)
             label = q.get("fy_quarter") or q.get("label") or q.get("period_ended") or ""
             quarter_labels.append(label)
+            if quarter_topic_set and label:
+                qa_topics_by_quarter[label] = sorted(quarter_topic_set)
             if status in ("partial", "recovered", "failed"):
                 missing_periods.append(label)
 
@@ -2352,12 +2402,29 @@ class ResearchDataAPI:
                     "error": f"Unknown section '{section_filter}'",
                     "valid_sections": list(self._CONCALL_SECTIONS),
                 }
+            topic_filter_fallback: str | None = None
+            wanted_topics = {t.lower() for t in qa_topics} if qa_topics else set()
             slices = []
             for q in data.get("quarters", []):
+                section_payload = q.get(section_filter)
+                if section_filter == "qa_session" and wanted_topics:
+                    exchanges = section_payload or []
+                    if any_topics_present:
+                        section_payload = [
+                            qa for qa in exchanges
+                            if wanted_topics & {t.lower() for t in (qa.get("topics") or [])}
+                        ]
+                    else:
+                        # Extraction predates topic tagging — can't filter. Return full Q&A
+                        # with a warning so the agent knows to do its own pattern match.
+                        topic_filter_fallback = (
+                            "Q&A topic filter unavailable — this concall extraction predates "
+                            "topic tagging. Returning full Q&A; filter manually on question text."
+                        )
                 slices.append({
                     "fy_quarter": q.get("fy_quarter", q.get("label", "")),
                     "period_ended": q.get("period_ended"),
-                    section_filter: q.get(section_filter),
+                    section_filter: section_payload,
                 })
             result = {
                 "symbol": symbol.upper(),
@@ -2365,6 +2432,10 @@ class ResearchDataAPI:
                 "quarters": slices,
                 "cross_quarter_narrative": data.get("cross_quarter_narrative", {}) if section_filter == "management_commentary" else None,
             }
+            if wanted_topics:
+                result["qa_topics_requested"] = sorted(wanted_topics)
+            if topic_filter_fallback:
+                result["_topic_filter_warning"] = topic_filter_fallback
             if extraction_quality_warning:
                 result["_extraction_quality_warning"] = extraction_quality_warning
             result["_meta"] = meta
@@ -2394,6 +2465,12 @@ class ResearchDataAPI:
             "available_sections": list(self._CONCALL_SECTIONS),
             "hint": "Call again with sub_section='<section>' for full content. Example: sub_section='operational_metrics' or 'management_commentary'. Valid sections listed in available_sections.",
         }
+        if qa_topics_by_quarter:
+            toc["qa_topics_by_quarter"] = qa_topics_by_quarter
+            toc["hint"] += (
+                " For Q&A, pass qa_topics=['margins', ...] to filter exchanges by topic "
+                "(topic list per quarter in qa_topics_by_quarter)."
+            )
         if extraction_quality_warning:
             toc["_extraction_quality_warning"] = extraction_quality_warning
         toc["_meta"] = meta

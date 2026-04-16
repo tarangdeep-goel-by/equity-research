@@ -1005,7 +1005,11 @@ class TestSectorKpisAndConcallTools:
         with patch_api(fake):
             await get_concall_insights.handler({"symbol": "SBIN"})
         assert fake.calls[0][0] == "get_concall_insights"
-        assert fake.calls[0][2] == {"section_filter": None}
+        assert fake.calls[0][2] == {
+            "section_filter": None,
+            "quarter": None,
+            "qa_topics": None,
+        }
 
     @pytest.mark.asyncio
     async def test_concall_insights_drill(self):
@@ -1016,7 +1020,28 @@ class TestSectorKpisAndConcallTools:
             await get_concall_insights.handler(
                 {"symbol": "SBIN", "sub_section": "operational_metrics"}
             )
-        assert fake.calls[0][2] == {"section_filter": "operational_metrics"}
+        assert fake.calls[0][2] == {
+            "section_filter": "operational_metrics",
+            "quarter": None,
+            "qa_topics": None,
+        }
+
+    @pytest.mark.asyncio
+    async def test_concall_insights_with_quarter_and_topics(self):
+        from flowtracker.research.tools import get_concall_insights
+
+        fake = FakeAPI()
+        with patch_api(fake):
+            await get_concall_insights.handler({
+                "symbol": "SBIN",
+                "quarter": "FY26-Q3",
+                "qa_topics": ["margins", "guidance"],
+            })
+        assert fake.calls[0][2] == {
+            "section_filter": None,
+            "quarter": "FY26-Q3",
+            "qa_topics": ["margins", "guidance"],
+        }
 
 
 # ---------------------------------------------------------------------------
