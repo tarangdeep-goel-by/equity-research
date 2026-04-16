@@ -30,6 +30,7 @@ from flowtracker.research.briefing import (
     BriefingEnvelope,
     ComplianceGateTrace,
     PipelineTrace,
+    RetryEvent,
     ToolEvidence,
     TurnEvent,
     parse_briefing_from_markdown,
@@ -562,6 +563,8 @@ async def _run_specialist(
 
     # Telemetry (C-2a, C-2f): turn-level + time-to-first-token
     turns: list[TurnEvent] = []
+    # Telemetry (C-2b): retry events (rate_limit + same-args tool re-calls)
+    retries: list[RetryEvent] = []
     turn_index = -1                  # incremented on each AssistantMessage
     current_turn_mono: float | None = None
     current_turn_started: str = ""
@@ -609,6 +612,14 @@ async def _run_specialist(
                     message.rate_limit_info.rate_limit_type,
                     message.rate_limit_info.resets_at,
                 )
+                # C-2b: record rate-limit retry event (no specific tool context here)
+                retries.append(RetryEvent(
+                    tool_name="(any)",
+                    attempt=len(retries) + 1,
+                    cause="rate_limit",
+                    wait_ms=0,
+                    at=datetime.now(timezone.utc).isoformat(),
+                ))
                 continue
             if isinstance(message, AssistantMessage):
                 # C-2f: record first-token timestamp on the very first AssistantMessage
@@ -635,21 +646,36 @@ async def _run_specialist(
                         current_turn_reasoning_chars += len(block.text or "")
                     elif isinstance(block, ToolUseBlock):
                         call_started = datetime.now(timezone.utc).isoformat()
+                        call_args = block.input or {}
                         pending_tool_calls[block.id] = {
                             "tool": block.name,
-                            "args": block.input or {},
+                            "args": call_args,
                             "started_at": call_started,
                             "start_mono": time.monotonic(),
                             "turn_index": turn_index,
                         }
                         current_turn_tool_ids.append(block.id)
+                        # C-2b: same-(tool, args) re-call = retry. Count prior evidence
+                        # entries that match BEFORE we append the new one.
+                        prior_matches = sum(
+                            1 for ev in evidence
+                            if ev.tool == block.name and ev.args == call_args
+                        )
+                        if prior_matches > 0:
+                            retries.append(RetryEvent(
+                                tool_name=block.name,
+                                attempt=prior_matches + 1,
+                                cause="other",
+                                wait_ms=0,
+                                at=call_started,
+                            ))
                         # Record evidence immediately from ToolUseBlock.
                         # The Agent SDK processes tool results internally and does NOT
                         # expose ToolResultBlock through the stream, so we capture
                         # tool calls here (result_summary/hash stay empty).
                         evidence.append(ToolEvidence(
                             tool=block.name,
-                            args=block.input or {},
+                            args=call_args,
                             started_at=call_started,
                             turn_index=turn_index,
                         ))
@@ -830,6 +856,7 @@ async def _run_specialist(
         report_chars=len(report_text),
         cost=cost,
         turns=turns,
+        retries=retries,
         time_to_first_token_ms=time_to_first_token_ms,
         compliance_gate_traces=compliance_traces,
     )

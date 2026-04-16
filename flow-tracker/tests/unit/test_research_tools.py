@@ -2167,3 +2167,141 @@ class TestToolRegistries:
             NEWS_AGENT_TOOLS_V2,
         ):
             assert len(reg) > 0
+
+
+# ---------------------------------------------------------------------------
+# classify_completeness + _count_rows (C-2c)
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyCompleteness:
+    """Helper used by agent.py/evals to grade tool-use discipline."""
+
+    def test_none_is_empty(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness(None) == ("empty", 0)
+
+    def test_empty_dict_is_empty(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({}) == ("empty", 0)
+
+    def test_empty_list_is_empty(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness([]) == ("empty", 0)
+
+    def test_empty_string_is_empty(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness("") == ("empty", 0)
+
+    def test_whitespace_string_is_empty(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness("   \n  \t ") == ("empty", 0)
+
+    def test_populated_list_is_full(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness([1, 2, 3]) == ("full", 3)
+        assert classify_completeness([{"a": 1}]) == ("full", 1)
+
+    def test_error_dict(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({"error": "boom"}) == ("error", None)
+        assert classify_completeness({"error": "boom", "rows": [1, 2]}) == (
+            "error",
+            None,
+        )
+
+    def test_error_false_not_error(self):
+        # Falsy error key should NOT trigger error classification
+        from flowtracker.research.tools import classify_completeness
+
+        result = classify_completeness({"error": None, "rows": [1]})
+        assert result[0] == "full"
+        assert result[1] == 1
+
+    def test_truncated_underscore_flag(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({"_truncated": True, "rows": [1, 2, 3]}) == (
+            "truncated",
+            3,
+        )
+
+    def test_truncated_no_underscore_flag(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({"truncated": True, "items": [1, 2]}) == (
+            "truncated",
+            2,
+        )
+
+    def test_truncated_no_rows(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({"_truncated": True, "note": "too big"}) == (
+            "truncated",
+            None,
+        )
+
+    def test_degraded_quality_is_partial(self):
+        from flowtracker.research.tools import classify_completeness
+
+        payload = {"_meta": {"degraded_quality": True}, "rows": [1, 2, 3, 4]}
+        assert classify_completeness(payload) == ("partial", 4)
+
+    def test_degraded_quality_no_rows(self):
+        from flowtracker.research.tools import classify_completeness
+
+        payload = {"_meta": {"degraded_quality": True}, "summary": "fallback used"}
+        assert classify_completeness(payload) == ("partial", None)
+
+    def test_dict_with_rows_list_counts(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({"rows": [1, 2, 3, 4, 5]}) == ("full", 5)
+
+    def test_dict_with_items_list_counts(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({"items": [{"a": 1}, {"b": 2}]}) == ("full", 2)
+
+    def test_dict_with_data_list_counts(self):
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness({"data": [1]}) == ("full", 1)
+
+    def test_dict_without_row_keys_no_count(self):
+        from flowtracker.research.tools import classify_completeness
+
+        # Dict with scalar values only → full, but no row count derivable
+        assert classify_completeness({"name": "ACME", "pe": 42.5}) == ("full", None)
+
+    def test_plain_string_payload_is_full(self):
+        # Non-empty strings (e.g. business_profile markdown) classify as full.
+        from flowtracker.research.tools import classify_completeness
+
+        assert classify_completeness("some report text") == ("full", None)
+
+    def test_row_key_precedence(self):
+        # When multiple row keys exist, "rows" wins (first in our precedence list).
+        from flowtracker.research.tools import classify_completeness
+
+        payload = {"rows": [1, 2], "items": [1, 2, 3, 4], "data": [1]}
+        assert classify_completeness(payload) == ("full", 2)
+
+    def test_count_rows_helper_direct(self):
+        from flowtracker.research.tools import _count_rows
+
+        assert _count_rows([1, 2, 3]) == 3
+        assert _count_rows({"rows": [1]}) == 1
+        assert _count_rows({"items": [1, 2]}) == 2
+        assert _count_rows({"data": [1, 2, 3]}) == 3
+        assert _count_rows({"name": "x"}) is None
+        assert _count_rows(42) is None
+        assert _count_rows("hello") is None

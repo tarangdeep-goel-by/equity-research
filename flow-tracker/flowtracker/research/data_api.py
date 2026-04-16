@@ -2293,8 +2293,12 @@ class ResearchDataAPI:
         if data is None:
             return {"error": f"No concall extraction found for {symbol}", "hint": "Run concall pipeline first"}
 
-        # Trim verbose sections universally (these trims are always safe) + track quality
+        # Trim verbose sections universally (these trims are always safe) + track quality.
+        # quality_statuses is per-quarter parallel to missing_periods — index i of each
+        # refers to the same quarter, so we can report missing_periods accurately in _meta.
         quality_statuses: list[str] = []
+        quarter_labels: list[str] = []
+        missing_periods: list[str] = []
         for q in data.get("quarters", []):
             trimmed_qa = []
             for qa in q.get("qa_session", []):
@@ -2305,7 +2309,12 @@ class ResearchDataAPI:
                 })
             q["qa_session"] = trimmed_qa
             q.pop("key_numbers_mentioned", None)
-            quality_statuses.append(q.get("extraction_status", "complete"))
+            status = q.get("extraction_status", "complete")
+            quality_statuses.append(status)
+            label = q.get("fy_quarter") or q.get("label") or q.get("period_ended") or ""
+            quarter_labels.append(label)
+            if status in ("partial", "recovered", "failed"):
+                missing_periods.append(label)
 
         # Build extraction-quality warning (applied to both TOC and drill-down responses).
         # A quarter with "partial"/"recovered"/"failed" means the concall extraction model
@@ -2319,6 +2328,22 @@ class ResearchDataAPI:
             "as partial — cross-check key claims against get_fundamentals or filings, "
             "and note the data limitation in the report."
         ) if degraded else None
+
+        # _meta dict — machine-readable companion to the human-readable warning.
+        # Downstream graders use this to distinguish "agent didn't cover X" from
+        # "source-data couldn't support X". See C-2d.
+        if not quality_statuses:
+            # No quarters in file at all — empty extraction payload
+            meta_status = "empty"
+        elif degraded:
+            meta_status = "partial"
+        else:
+            meta_status = "full"
+        meta = {
+            "extraction_status": meta_status,
+            "missing_periods": missing_periods,
+            "degraded_quality": meta_status == "partial",
+        }
 
         # Targeted drill-down: return only the requested section across all quarters
         if section_filter:
@@ -2342,6 +2367,7 @@ class ResearchDataAPI:
             }
             if extraction_quality_warning:
                 result["_extraction_quality_warning"] = extraction_quality_warning
+            result["_meta"] = meta
             return result
 
         # Default: compact table of contents — no per-quarter payload
@@ -2370,6 +2396,7 @@ class ResearchDataAPI:
         }
         if extraction_quality_warning:
             toc["_extraction_quality_warning"] = extraction_quality_warning
+        toc["_meta"] = meta
         return toc
 
     def get_sector_kpis(self, symbol: str, kpi_key: str | None = None) -> dict:
@@ -2511,6 +2538,24 @@ class ResearchDataAPI:
                 except (OSError, _json.JSONDecodeError):
                     pass
 
+        # Compute extraction-quality _meta. Signal for sector KPIs:
+        # >50% of canonical KPIs missing → partial; none found → empty; else full.
+        # missing_metrics lists the canonical keys that no quarter reported. Graders
+        # use this to distinguish "agent ignored a metric" from "concall didn't mention it".
+        total_kpis = len(kpi_defs)
+        found_count = len(found_kpis)
+        if found_count == 0:
+            meta_status = "empty"
+        elif total_kpis and (total_kpis - found_count) / total_kpis > 0.5:
+            meta_status = "partial"
+        else:
+            meta_status = "full"
+        meta = {
+            "extraction_status": meta_status,
+            "missing_metrics": list(missing_kpis),
+            "degraded_quality": meta_status == "partial",
+        }
+
         # Targeted drill-down: return ONLY the requested KPI's timeline
         if kpi_key:
             match = next((k for k in found_kpis if k["key"] == kpi_key), None)
@@ -2521,6 +2566,7 @@ class ResearchDataAPI:
                     "kpi": match,
                     "trajectory": trajectories.get(kpi_key),
                     "quarters_analyzed": len(quarters),
+                    "_meta": meta,
                 }
             # Requested KPI exists in schema but has no values, or doesn't exist at all
             valid_keys = [k["key"] for k in kpi_defs]
@@ -2532,6 +2578,7 @@ class ResearchDataAPI:
                     "status": "schema_valid_but_unavailable",
                     "reason": f"'{kpi_key}' is a canonical {sector} KPI but no quarter reported it",
                     "quarters_analyzed": len(quarters),
+                    "_meta": meta,
                 }
             return {
                 "symbol": symbol.upper(),
@@ -2563,6 +2610,7 @@ class ResearchDataAPI:
             "coverage": f"{len(found_kpis)}/{len(kpi_defs)} canonical KPIs have values",
             "quarters_analyzed": len(quarters),
             "hint": "Call again with sub_section='<kpi_key>' for full per-quarter timeline + context. Example: sub_section='gross_npa_pct'",
+            "_meta": meta,
         }
 
     # --- Analytical Profile (pre-computed) ---

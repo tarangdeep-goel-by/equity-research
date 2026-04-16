@@ -902,6 +902,161 @@ class TestConcallExtractionQualityWarning:
 
 
 # ---------------------------------------------------------------------------
+# _meta extraction-status (C-2d) — machine-readable signal for graders to
+# distinguish "source data was incomplete" from "agent ignored the data".
+# ---------------------------------------------------------------------------
+
+
+class TestConcallInsightsMeta:
+    def test_full_status_when_all_quarters_complete(self, api, vault_home):
+        quarters = [
+            {
+                "fy_quarter": "FY26-Q2",
+                "operational_metrics": {"casa_ratio_pct": {"value": "39%"}},
+                "extraction_status": "complete",
+            },
+            {
+                "fy_quarter": "FY26-Q1",
+                "operational_metrics": {"casa_ratio_pct": {"value": "38%"}},
+                "extraction_status": "complete",
+            },
+        ]
+        _write_concall(vault_home / "vault", "METAFULL", quarters)
+        toc = api.get_concall_insights("METAFULL")
+        assert toc["_meta"]["extraction_status"] == "full"
+        assert toc["_meta"]["missing_periods"] == []
+        assert toc["_meta"]["degraded_quality"] is False
+
+    def test_partial_status_lists_degraded_quarter(self, api, vault_home):
+        quarters = [
+            {
+                "fy_quarter": "FY26-Q2",
+                "operational_metrics": {"casa_ratio_pct": {"value": "39%"}},
+                "extraction_status": "complete",
+            },
+            {
+                "fy_quarter": "FY26-Q1",
+                "operational_metrics": {},
+                "extraction_status": "partial",
+            },
+            {
+                "fy_quarter": "FY25-Q4",
+                "operational_metrics": {},
+                "extraction_status": "failed",
+            },
+        ]
+        _write_concall(vault_home / "vault", "METAPARTIAL", quarters)
+        toc = api.get_concall_insights("METAPARTIAL")
+        assert toc["_meta"]["extraction_status"] == "partial"
+        assert toc["_meta"]["degraded_quality"] is True
+        # Only the partial/failed quarters show up in missing_periods
+        assert "FY26-Q1" in toc["_meta"]["missing_periods"]
+        assert "FY25-Q4" in toc["_meta"]["missing_periods"]
+        assert "FY26-Q2" not in toc["_meta"]["missing_periods"]
+
+    def test_meta_present_on_drill_down(self, api, vault_home):
+        quarters = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {"casa_ratio_pct": {"value": "39%"}},
+            "extraction_status": "recovered",
+        }]
+        _write_concall(vault_home / "vault", "METADRILL", quarters)
+        drill = api.get_concall_insights("METADRILL", section_filter="operational_metrics")
+        assert "_meta" in drill
+        assert drill["_meta"]["extraction_status"] == "partial"
+        assert "FY26-Q2" in drill["_meta"]["missing_periods"]
+
+    def test_empty_status_when_no_quarters(self, api, vault_home):
+        _write_concall(vault_home / "vault", "METAEMPTY", [])
+        toc = api.get_concall_insights("METAEMPTY")
+        assert toc["_meta"]["extraction_status"] == "empty"
+        assert toc["_meta"]["missing_periods"] == []
+        assert toc["_meta"]["degraded_quality"] is False
+
+
+class TestSectorKPIsMeta:
+    def test_full_status_when_majority_kpis_present(self, api, vault_home, monkeypatch):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        # Banks have 11 canonical KPIs — populate 8 for a clean "full" signal.
+        quarters = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {
+                "casa_ratio_pct": {"value": "39%"},
+                "gross_npa_pct": {"value": "1.73%"},
+                "net_npa_pct": {"value": "0.44%"},
+                "net_interest_margin_pct": {"value": "3.2%"},
+                "provision_coverage_ratio_pct": {"value": "77%"},
+                "credit_cost_bps": {"value": "25"},
+                "capital_adequacy_ratio_pct": {"value": "16%"},
+                "cost_to_income_ratio_pct": {"value": "45%"},
+            },
+        }]
+        _write_concall(vault_home / "vault", "SKPIFULL", quarters)
+        result = api.get_sector_kpis("SKPIFULL")
+        assert "_meta" in result
+        assert result["_meta"]["extraction_status"] == "full"
+        assert result["_meta"]["degraded_quality"] is False
+
+    def test_partial_status_when_majority_kpis_missing(self, api, vault_home, monkeypatch):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        # Only 2 of 11 KPIs present → > 50% missing → partial.
+        quarters = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {
+                "casa_ratio_pct": {"value": "39%"},
+                "gross_npa_pct": {"value": "1.73%"},
+            },
+        }]
+        _write_concall(vault_home / "vault", "SKPIPART", quarters)
+        result = api.get_sector_kpis("SKPIPART")
+        assert result["_meta"]["extraction_status"] == "partial"
+        assert result["_meta"]["degraded_quality"] is True
+        # Missing metrics include the unreported canonical keys
+        assert "net_interest_margin_pct" in result["_meta"]["missing_metrics"]
+        assert "liquidity_coverage_ratio_pct" in result["_meta"]["missing_metrics"]
+        # Populated ones should not appear in missing_metrics
+        assert "casa_ratio_pct" not in result["_meta"]["missing_metrics"]
+
+    def test_empty_status_when_no_kpis_found(self, api, vault_home, monkeypatch):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        quarters = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {"unrelated_key": "x"},
+        }]
+        _write_concall(vault_home / "vault", "SKPIEMPTY", quarters)
+        result = api.get_sector_kpis("SKPIEMPTY")
+        assert result["_meta"]["extraction_status"] == "empty"
+        assert result["_meta"]["degraded_quality"] is False
+
+    def test_meta_on_drilldown_match(self, api, vault_home, monkeypatch):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        quarters = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {"casa_ratio_pct": {"value": "39%"}},
+        }]
+        _write_concall(vault_home / "vault", "SKPIDRILL", quarters)
+        result = api.get_sector_kpis("SKPIDRILL", kpi_key="casa_ratio_pct")
+        assert "_meta" in result
+        # 1 of 11 → partial
+        assert result["_meta"]["extraction_status"] == "partial"
+
+    def test_meta_on_drilldown_schema_valid_but_unavailable(
+        self, api, vault_home, monkeypatch,
+    ):
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        quarters = [{
+            "fy_quarter": "FY26-Q2",
+            "operational_metrics": {"casa_ratio_pct": {"value": "39%"}},
+        }]
+        _write_concall(vault_home / "vault", "SKPINOVAL", quarters)
+        # gross_npa_pct is a canonical banks KPI but no value for it in this concall
+        result = api.get_sector_kpis("SKPINOVAL", kpi_key="gross_npa_pct")
+        assert result.get("status") == "schema_valid_but_unavailable"
+        assert "_meta" in result
+        assert result["_meta"]["extraction_status"] == "partial"
+
+
+# ---------------------------------------------------------------------------
 # BFSI asset-quality lift end-to-end
 # ---------------------------------------------------------------------------
 

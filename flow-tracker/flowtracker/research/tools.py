@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any, Literal
 
 from claude_agent_sdk import tool
 from mcp.types import ToolAnnotations
@@ -16,6 +17,81 @@ from contextvars import ContextVar
 
 # Per-session tool result cache for deduplication
 _tool_result_cache: ContextVar[dict[str, str]] = ContextVar("tool_result_cache", default={})
+
+
+# ---------------------------------------------------------------------------
+# Completeness classification (C-2c)
+#
+# Public helpers for downstream instrumentation (agent.py, evals) to classify
+# tool return payloads without changing the tool wire format. We intentionally
+# do NOT mutate tool return dicts — the MCP envelope text payload is already
+# what the agent sees, and injecting `_meta` would change evidence hashes and
+# risk breaking the dedup cache. Instead, callers that observe a raw payload
+# (e.g. agent.py's ToolResultBlock path, or evals post-run) invoke
+# `classify_completeness` on the decoded JSON to populate
+# `ToolEvidence.completeness` and `ToolEvidence.row_count`.
+# ---------------------------------------------------------------------------
+
+
+Completeness = Literal["full", "partial", "empty", "truncated", "error"]
+
+
+def _count_rows(payload: Any) -> int | None:
+    """Best-effort row count for common payload shapes.
+
+    Returns:
+        - len(payload) if payload is a list
+        - len(payload[key]) for the first matching key in ("rows", "items", "data")
+          if payload is a dict whose value at that key is a list
+        - None otherwise
+    """
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict):
+        for key in ("rows", "items", "data"):
+            if key in payload and isinstance(payload[key], list):
+                return len(payload[key])
+    return None
+
+
+def classify_completeness(payload: Any) -> tuple[Completeness | None, int | None]:
+    """Classify a tool return payload for eval/telemetry purposes.
+
+    Heuristics (evaluated in order):
+        - None / empty dict / empty list / empty string → ("empty", 0)
+        - dict with truthy "error" key → ("error", None)
+        - dict with "_truncated" or "truncated" == True → ("truncated", row_count)
+        - dict with "_meta.degraded_quality" truthy → ("partial", row_count)
+        - list (non-empty) → ("full", len)
+        - str (whitespace-only) → ("empty", 0)
+        - fallback → ("full", row_count)
+    """
+    # Explicit empty cases first
+    if payload is None:
+        return ("empty", 0)
+    if isinstance(payload, (dict, list, str)) and len(payload) == 0:
+        return ("empty", 0)
+
+    # Dict-specific signals
+    if isinstance(payload, dict):
+        if payload.get("error"):
+            return ("error", None)
+        if payload.get("_truncated") is True or payload.get("truncated") is True:
+            return ("truncated", _count_rows(payload))
+        meta = payload.get("_meta")
+        if isinstance(meta, dict) and meta.get("degraded_quality"):
+            return ("partial", _count_rows(payload))
+
+    # Non-empty list → full, with count
+    if isinstance(payload, list):
+        return ("full", len(payload))
+
+    # Whitespace-only string counts as empty
+    if isinstance(payload, str) and not payload.strip():
+        return ("empty", 0)
+
+    # Default: full, try to derive a row count
+    return ("full", _count_rows(payload))
 
 
 def _cache_key(tool_name: str, args: dict) -> str:
