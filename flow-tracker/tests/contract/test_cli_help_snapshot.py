@@ -17,6 +17,8 @@ stays in the default (non-slow) test suite.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from typer.testing import CliRunner
 
@@ -28,6 +30,29 @@ runner = CliRunner()
 # Force deterministic rendering: no ANSI colors, fixed terminal width,
 # dumb terminal so Rich doesn't emit cursor/control sequences.
 _ENV = {"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "120"}
+
+# Rich/Typer pad box drawings to the terminal width — which differs between
+# local dev (wide) and CI runners (narrow 80). We normalise output before
+# snapshotting so width-dependent padding and wrap points don't make the
+# snapshot brittle:
+#   1. Collapse any run of Unicode box-drawing chars (─━┃│┏┓┗┛╭╮╰╯┡┩ etc.)
+#      to a single character so line length stops mattering.
+#   2. Strip trailing whitespace per line.
+#   3. Collapse 2+ internal spaces to a single space (help columns align
+#      to width, which also differs between environments).
+_BOX_RUN_RE = re.compile(r"[─━│┃┏┓┗┛┠┨┯┷┿╋╭╮╰╯┡┩┢┪╇╈╉╊╌╍]{2,}")
+_MULTI_SPACE_RE = re.compile(r"  +")
+
+
+def _normalise_help(output: str) -> str:
+    """Strip width-dependent artefacts so snapshots are stable across terminal widths."""
+    lines = []
+    for line in output.splitlines():
+        line = _BOX_RUN_RE.sub("═", line)
+        line = _MULTI_SPACE_RE.sub(" ", line)
+        line = line.rstrip()
+        lines.append(line)
+    return "\n".join(lines).rstrip()
 
 
 def _help_key(cmd_path: list[str]) -> str:
@@ -49,5 +74,5 @@ def test_help_outputs_match_snapshot(snapshot):
             f"{cmd_path} --help failed (exit {result.exit_code}): "
             f"{result.output[:200]}"
         )
-        outputs[_help_key(cmd_path)] = result.output
+        outputs[_help_key(cmd_path)] = _normalise_help(result.output)
     assert outputs == snapshot
