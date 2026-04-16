@@ -1,0 +1,50 @@
+## Regulated Power — Business Agent
+
+### Sub-type Archetype — Identify Utility Model Before Analysis
+"Regulated power" groups together businesses whose revenue engines, moat structure, and cyclical sensitivity are economically distinct. A PSU thermal generator earns on regulated equity base with coal pass-through; a transmission monopoly earns on capex × regulated ROE with near-zero demand risk; a renewable pure-play earns on MW × CUF × PPA tariff with refinancing optionality; a state-SERC-regulated discom earns on billed-units × tariff net of AT&C losses. Applying a thermal framework to a transmission business (or an IPP lens to a renewable YieldCo) inverts the diagnosis. State the sub-type and its primary revenue engine in the opening paragraph before decomposing growth.
+
+| Subtype | Primary revenue engine | Dominant axis | Unit of production |
+| :--- | :--- | :--- | :--- |
+| **PSU thermal generator** | Capacity charges × regulated ROE + fuel pass-through + incentives | regulated equity base × PAF incentive | MW installed, PAF%, SHR kcal/kWh |
+| **PSU transmission monopoly** | Regulated RAB × ROE + depreciation + O&M | capex × regulated ROE (POC pool) | circuit-km, inter-state capacity MW |
+| **PSU renewable operator** | MW × CUF × PPA tariff (bid-determined) | MW × CUF × tariff | MW operational + MW pipeline |
+| **Private IPP (merchant + PPA mix)** | Blended PPA + merchant-market (IEX) tariff | PLF × PPA mix × merchant spread | MW, PLF%, merchant-share % |
+| **Renewable pure-play (solar/wind YieldCo)** | 20-25Y PPA tariff × CUF; debt-heavy | long-contracted cash flow stability | MW × CUF × DSCR |
+| **Distribution (state-SERC regulated)** | Units billed × approved tariff − AT&C losses | billed units × tariff − losses | AT&C loss%, ACS-ARR gap, revenue per unit |
+
+### Revenue Decomposition — Always (A × B), Never a Single Line
+Thermal: `Revenue = Installed capacity (MW) × PLF (60-75% new supercritical; 55-65% older subcritical) × Effective tariff (capacity + energy)`. Transmission: `Revenue = Regulated Asset Base × Regulated ROE + depreciation + O&M — sharing incentive` — demand volume is not a driver because transmission charges are socialized through the POC (Point of Connection) pool. Renewable: `Revenue = MW operational × CUF (24-28% utility-scale solar; 25-32% onshore wind; 35-42% high-wind-site) × PPA tariff (₹2.4-3.5/kWh for recent solar, ₹2.8-3.9/kWh for wind)`. Distribution: `Revenue = Units billed × Approved tariff × (1 − AT&C losses)` — AT&C losses above 20% mean a meaningful share of every unit procured is never monetized. IPP blended: `Revenue = (PPA capacity × PPA tariff) + (Merchant capacity × PLF × IEX DAM price)`. Call `get_fundamentals(section='revenue_segments')` and `get_company_context(section='concall_insights', sub_section='operational_metrics')` for the MW / PAF / PLF / CUF / AT&C decomposition.
+
+### Moat Typology — Distinct by Sub-type
+Enumerate the moat lens that applies; "regulated monopoly" is not a universal answer:
+- **Regulatory compact (all regulated sub-types)** — CERC/SERC tariff orders guarantee ROE on approved equity. Moat durability is a function of regulator independence + contractual sanctity (Change-in-Law, Force Majeure pass-through clauses). Compact has weakened in discom-PPA-default episodes; weight the historical reliability of the specific regulator.
+- **Natural monopoly (transmission)** — inter-state transmission is a single-owner grid; duplicating a 400/765 kV corridor is not economic. POC pool socializes risk across all generators. This is the cleanest moat in Indian utilities.
+- **Long-contracted PPAs (renewable YieldCo)** — 20-25 year PPAs with sovereign-grade off-takers (central renewable-procurement agency, central-PSU-led aggregator, central generator-off-taker) compound discounted at the project IRR regardless of merchant price swings. Off-taker credit quality is the real moat driver, not tariff headline.
+- **Dispatch priority + scale (PSU thermal)** — merit-order dispatch favors lowest variable-cost plants; large PSU thermal fleets with supercritical + domestic coal linkage dispatch first. Moat erodes as renewable + gas displace thermal in merit order.
+- **Resource quality (renewable developers)** — CUF delta of 200-400 bps at a high-wind or high-irradiation site compounds over 25 years; site-quality edge = meaningful IRR edge. Track CUF disclosure vs peer.
+- **Execution + balance-sheet capacity** — building 3-5 GW/year of renewable capacity requires ₹15,000-25,000 Cr/year of equity + debt. Integrated players with EPC arms + captive component supply + refinancing access have execution moat over thin-capitalized developers.
+
+### Unit Economics — Sub-type-Appropriate Unit
+For thermal: **revenue per MW per year** — ₹4-6 Cr/MW at 75% PLF on regulated tariff; **PAF vs NAPAF** — every 1 pp above NAPAF is incentive, every 1 pp below is non-recoverable leakage; **SHR/APC deltas vs normative** (flagged in financials.md too — if actual SHR is 50 kcal above normative, that's ~1.5-2% fuel-cost under-recovery permanently). For transmission: **MW-km per Cr of capex**, **opex per circuit-km**, **availability factor** (normative 98%, incentive above). For renewable: **CUF%**, **PPA tenor × tariff**, **DSCR (debt service coverage ratio — typical renewable project at 1.25-1.45×)**, **project IRR (14-17% equity for vanilla, 12-14% for sovereign-tariff new solar)**. For distribution: **AT&C loss %**, **ACS-ARR gap** (Average Cost of Supply − Average Revenue Realized, in paise/kWh — if positive, the utility loses money on every unit sold and is subsidy-dependent), **revenue per consumer**, **feeder-level collection efficiency**. Extract via `get_company_context(section='concall_insights', sub_section='operational_metrics')`; fall back to management commentary if schema returns unavailable.
+
+### Capital-Cycle Position — 20-Year Transition Overlay
+Indian regulated power sits on top of a 20-year renewable-transition cycle (2020-2040) whose phases differ sharply. Current phase (2024-28): **renewable capacity-addition acceleration** toward the 500 GW non-fossil target by 2030, **thermal share declining but absolute MW still adding** (~15-25 GW net thermal by 2030 per CEA), **transmission capex elevated** to evacuate remote renewable zones (Rajasthan, Gujarat, Karnataka), **distribution reforms re-attempted** via the Revamped Distribution Sector Scheme (RDSS). Sub-type positioning within the cycle: PSU thermal in harvesting mode with incremental brownfield flexible-generation adds; PSU renewable + private YieldCos in aggressive-capex growth mode; transmission in super-cycle build-out; distribution in reform-execution phase with structural trajectory still uncertain. State which phase the specific company is in before forecasting.
+
+### Sector-Specific Red Flags for Business Quality
+- **COD slippage on large projects** — a ₹10,000 Cr thermal or renewable project running 12+ months late burns 300-500 bps of equity IRR; recurring slippage across a project portfolio signals structural execution weakness.
+- **Chronic AT&C losses >20-25%** for distribution — even with the LPS Rules 2022 providing payment discipline, losses at this level mean the utility is structurally lossy and subsidy-dependent. RDSS targets reducing to <12-15% by FY26.
+- **Aggressive PPA renegotiation/default by off-taker discoms** — the FY19-21 episode built ~₹1 L+ Cr of receivables across the IPP sector. Discoms entering state-election or tariff-hike-deferral phases may trigger payment delays again.
+- **Tariff-order delays at SERCs** — intra-state distribution tariff orders pending beyond the regulatory timeline indicate regulator-government friction; receivables build quietly during the delay.
+- **Renewable-project counterparty concentration** — a YieldCo with >50% of offtake from a single State Electricity Board (SEB) is exposed to that state's credit cycle; offtake contracted with a central sovereign-grade renewable-procurement agency is structurally safer.
+- **Coal-linkage disputes for PSU thermal** — truing-up on imported-coal blended tariff can be rejected by CERC at review; the 2022 imported-coal spike stressed margins for 3 quarters.
+- **Large Regulatory Deferral Account balance** (cross-referenced from financials.md) — RDA >10% of annual revenue = material share of reported PAT is pending regulator approval and not yet cash.
+
+### Data-shape Fallback for Unit Economics
+If `get_fundamentals(section='revenue_segments')` returns aggregated-only and `get_company_context(section='sector_kpis')` reports `status='schema_valid_but_unavailable'` for PLF/CUF/PAF/AT&C, fall back to `get_company_context(section='concall_insights', sub_section='management_commentary')` and `sub_section='operational_metrics'` and extract management-disclosed PLF%, CUF%, PAF%, SHR, APC, AT&C%, and capacity-addition pipeline MW. Cite the quarter. If narrative too is silent, add to Open Questions with the specific unit (e.g., "Q3 PAF across thermal fleet not disclosed").
+
+### Open Questions — Regulated Power Business-Specific
+- "What is the current renewable-capacity pipeline (MW under construction + MW won in auction but not yet started) and the expected COD trajectory over FY26-28?"
+- "For PSU thermal: what is the fleet-wide actual PAF vs NAPAF over the last 4 quarters, and what share of incentive income came from above-normative operations?"
+- "For transmission: what is the CWIP / Gross Block ratio and how many circuit-km of ISTS are pending commissioning under the current five-year capex plan?"
+- "For renewables: what is the weighted-average tariff of the operational book vs the pipeline, and does the pipeline tariff at current CoE still clear 13-15% project IRR?"
+- "For distribution/IPPs with discom exposure: what is the aging profile of receivables from top-3 discoms post LPS Rules 2022 implementation?"
