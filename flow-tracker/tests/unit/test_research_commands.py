@@ -489,7 +489,13 @@ class TestHelpSmoke:
         ["fundamentals", "business", "thesis", "explain", "run", "autoeval"],
     )
     def test_subcommand_help_renders(self, subcmd):
-        result = runner.invoke(app, ["research", subcmd, "--help"])
+        # Force a wide, color-less terminal so help text doesn't wrap "--help"
+        # mid-line (ANSI + narrow width on CI otherwise breaks the substring check).
+        result = runner.invoke(
+            app,
+            ["research", subcmd, "--help"],
+            env={"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"},
+        )
         assert result.exit_code == 0, result.output
         # Each command's typer-generated help should mention --help.
         assert "--help" in result.output

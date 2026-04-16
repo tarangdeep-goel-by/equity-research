@@ -17,6 +17,7 @@ stays in the default (non-slow) test suite.
 
 from __future__ import annotations
 
+import pytest
 from typer.testing import CliRunner
 
 from flowtracker.main import app
@@ -34,6 +35,7 @@ def _help_key(cmd_path: list[str]) -> str:
     return " ".join(cmd_path) if cmd_path else "(root)"
 
 
+@pytest.mark.timeout(60)
 def test_help_outputs_match_snapshot(snapshot):
     """Every CLI command --help output is snapshotted.
 
