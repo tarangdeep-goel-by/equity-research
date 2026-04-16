@@ -18,6 +18,9 @@ from flowtracker.research.briefing import (
 from flowtracker.research.verifier import (
     DEFAULT_VERIFY_MODEL,
     VERIFICATION_PROMPT,
+    _check_audit_vs_evidence,
+    _extract_tool_audit_section,
+    _audit_entries,
     _get_verifier_tools,
     _WRITE_TOOLS,
     apply_corrections,
@@ -512,3 +515,148 @@ class TestApplyCorrections:
         # should appear — just the banner header falls through from fail branch.
         assert "Verification Notes" not in result.report
         assert original in result.report
+
+
+# ---------------------------------------------------------------------------
+# iter3 §4.7 — audit-vs-evidence cross-check (shadow mode)
+# ---------------------------------------------------------------------------
+
+
+_REPORT_WITH_AUDIT = """# Ownership Report — ACME
+
+## Tool Audit
+| Step | Tool | Called |
+|---|---|---|
+| 1 | `get_analytical_profile` | ✓ |
+| 2 | `get_ownership` | ✓ |
+| 3 | `mcp__ownership__get_company_context` | ∅ |
+
+## 1. Ownership Structure
+Blah blah.
+"""
+
+_REPORT_WITHOUT_AUDIT = """# Report
+
+## 1. Summary
+
+No audit section here.
+"""
+
+
+def _ev(tool: str, is_error: bool = False, completeness: str | None = None):
+    return ToolEvidence(
+        tool=tool,
+        args={},
+        result_summary="x",
+        is_error=is_error,
+        completeness=completeness,
+    )
+
+
+class TestExtractToolAuditSection:
+    def test_returns_section_when_present(self) -> None:
+        text = _extract_tool_audit_section(_REPORT_WITH_AUDIT)
+        assert text is not None
+        assert "get_analytical_profile" in text
+
+    def test_returns_none_when_absent(self) -> None:
+        assert _extract_tool_audit_section(_REPORT_WITHOUT_AUDIT) is None
+
+
+class TestAuditEntries:
+    def test_parses_table_rows_with_and_without_empty_marker(self) -> None:
+        section = _extract_tool_audit_section(_REPORT_WITH_AUDIT)
+        entries = _audit_entries(section)
+        names = {name for name, _ in entries}
+        assert "get_analytical_profile" in names
+        assert "get_ownership" in names
+        assert "get_company_context" in names
+        # get_company_context row was marked ∅
+        flags = {name: flag for name, flag in entries}
+        assert flags["get_company_context"] is True
+        assert flags["get_analytical_profile"] is False
+
+
+class TestCheckAuditVsEvidence:
+    def test_perfect_match_returns_empty(self) -> None:
+        # ∅ rows in audit must have a matching (empty/errored) evidence entry —
+        # "∅" means called-and-returned-empty, not "never called".
+        env = BriefingEnvelope(
+            agent="ownership",
+            symbol="ACME",
+            report=_REPORT_WITH_AUDIT,
+            evidence=[
+                _ev("mcp__ownership__get_analytical_profile"),
+                _ev("mcp__ownership__get_ownership"),
+                _ev("mcp__ownership__get_company_context", completeness="empty"),
+            ],
+        )
+        assert _check_audit_vs_evidence(env) == []
+
+    def test_claimed_but_not_called_is_flagged(self) -> None:
+        env = BriefingEnvelope(
+            agent="ownership",
+            symbol="ACME",
+            report=_REPORT_WITH_AUDIT,
+            # missing analytical_profile + get_company_context entirely
+            evidence=[_ev("mcp__ownership__get_ownership")],
+        )
+        findings = _check_audit_vs_evidence(env)
+        assert any("claims `get_analytical_profile`" in f for f in findings)
+
+    def test_called_but_not_claimed_is_flagged(self) -> None:
+        env = BriefingEnvelope(
+            agent="ownership",
+            symbol="ACME",
+            report=_REPORT_WITH_AUDIT,
+            evidence=[
+                _ev("mcp__ownership__get_analytical_profile"),
+                _ev("mcp__ownership__get_ownership"),
+                _ev("mcp__ownership__get_company_context", completeness="empty"),
+                # Extra call never listed in audit:
+                _ev("mcp__ownership__get_peer_sector"),
+            ],
+        )
+        findings = _check_audit_vs_evidence(env)
+        assert any("`get_peer_sector`" in f and "does not list" in f for f in findings)
+
+    def test_toolsearch_called_but_not_claimed_is_ignored(self) -> None:
+        env = BriefingEnvelope(
+            agent="ownership",
+            symbol="ACME",
+            report=_REPORT_WITH_AUDIT,
+            evidence=[
+                _ev("mcp__ownership__get_analytical_profile"),
+                _ev("mcp__ownership__get_ownership"),
+                _ev("mcp__ownership__get_company_context", completeness="empty"),
+                _ev("ToolSearch"),  # commonly unlisted; ignore
+            ],
+        )
+        assert _check_audit_vs_evidence(env) == []
+
+    def test_claimed_empty_but_nonempty_is_flagged(self) -> None:
+        # Audit says get_company_context was ∅; evidence shows a full call.
+        env = BriefingEnvelope(
+            agent="ownership",
+            symbol="ACME",
+            report=_REPORT_WITH_AUDIT,
+            evidence=[
+                _ev("mcp__ownership__get_analytical_profile"),
+                _ev("mcp__ownership__get_ownership"),
+                _ev("mcp__ownership__get_company_context", completeness="full"),
+            ],
+        )
+        findings = _check_audit_vs_evidence(env)
+        assert any(
+            "marks `get_company_context` as ∅ but evidence shows non-empty" in f
+            for f in findings
+        )
+
+    def test_no_audit_section_returns_empty(self) -> None:
+        env = BriefingEnvelope(
+            agent="ownership",
+            symbol="ACME",
+            report=_REPORT_WITHOUT_AUDIT,
+            evidence=[_ev("mcp__ownership__get_analytical_profile")],
+        )
+        assert _check_audit_vs_evidence(env) == []

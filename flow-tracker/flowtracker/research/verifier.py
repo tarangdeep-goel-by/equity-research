@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,115 @@ End with a JSON code block:
 """
 
 
+# ---------------------------------------------------------------------------
+# Audit-vs-evidence cross-check (iter3 §4.7, shadow mode)
+#
+# Mechanical string-match: extract tool names the agent listed in its
+# "## Tool Audit" section of the report, compare to the set of tool names
+# that actually appear in BriefingEnvelope.evidence[]. Mismatches fall into
+# three buckets:
+#   (a) claimed_but_not_called  — agent says it called X, evidence has no X
+#   (b) called_but_not_claimed  — agent ran X but forgot to list it in audit
+#   (c) claimed_empty_but_nonempty — agent marked X as ∅, evidence is non-empty
+#
+# Returned as correction strings — in shadow mode these are attached to
+# VerificationResult.corrections but do NOT flip the verdict. Tighten to
+# verdict="fail" on (a) or (c) mismatches once 1 eval cycle confirms no
+# paraphrase false-positives.
+# ---------------------------------------------------------------------------
+
+
+# Match a wide range of tool-name appearances inside the Tool Audit table.
+# Tool names are typically mcp__<agent>__<name> or just <name> in audits.
+_AUDIT_TOOL_RE = re.compile(
+    r"`?(?:mcp__[a-z_]+__)?(get_[a-z_]+|render_chart|calculate|ToolSearch|save_business_profile)`?",
+)
+
+
+def _extract_tool_audit_section(report: str) -> str | None:
+    """Return the text of the ## Tool Audit section, or None if absent."""
+    m = re.search(
+        r"(?mi)^\#{1,3}\s*Tool\s+Audit\b.*?(?=^\#{1,3}\s|\Z)",
+        report,
+        flags=re.DOTALL,
+    )
+    return m.group(0) if m else None
+
+
+def _audit_entries(audit_text: str) -> list[tuple[str, bool]]:
+    """Parse (tool_name, claimed_empty) pairs from the Tool Audit section.
+
+    claimed_empty is True when the audit line contains ∅ (U+2205) or "empty".
+    """
+    entries: list[tuple[str, bool]] = []
+    for line in audit_text.splitlines()[1:]:  # skip the header line
+        names_in_line = _AUDIT_TOOL_RE.findall(line)
+        if not names_in_line:
+            continue
+        claimed_empty = ("∅" in line) or bool(re.search(r"\bempty\b", line, re.I))
+        for name in names_in_line:
+            # Normalize: drop mcp__<agent>__ prefix so audit names and
+            # evidence names compare apples-to-apples.
+            base = name.split("__")[-1]
+            entries.append((base, claimed_empty))
+    return entries
+
+
+def _check_audit_vs_evidence(envelope: BriefingEnvelope) -> list[str]:
+    """Shadow-mode cross-check. Returns human-readable correction strings.
+
+    Empty list when audit section is absent or perfectly matches evidence.
+    """
+    audit_text = _extract_tool_audit_section(envelope.report or "")
+    if not audit_text:
+        # No audit section — agent didn't emit one. Not a mismatch by itself.
+        return []
+
+    audit = _audit_entries(audit_text)
+    if not audit:
+        return []
+
+    # Normalize evidence tool names the same way
+    evidence_tools: dict[str, list[ToolEvidence]] = {}
+    for e in envelope.evidence:
+        base = e.tool.split("__")[-1]
+        evidence_tools.setdefault(base, []).append(e)
+
+    claimed_names = {name for name, _ in audit}
+    called_names = set(evidence_tools.keys())
+
+    corrections: list[str] = []
+
+    # (a) claimed but not called
+    for name in sorted(claimed_names - called_names):
+        corrections.append(
+            f"Tool Audit claims `{name}` was called but evidence[] has no matching entry"
+        )
+
+    # (b) called but not claimed — less severe; many agents omit ToolSearch from audit
+    unclaimed = sorted(called_names - claimed_names - {"ToolSearch"})
+    for name in unclaimed:
+        corrections.append(
+            f"evidence[] shows `{name}` call but Tool Audit does not list it"
+        )
+
+    # (c) claimed empty but evidence shows non-empty
+    for name, empty_flag in audit:
+        if not empty_flag or name not in evidence_tools:
+            continue
+        evs = evidence_tools[name]
+        non_empty = [
+            e for e in evs
+            if not e.is_error and (e.completeness in (None, "full", "partial"))
+        ]
+        if non_empty:
+            corrections.append(
+                f"Tool Audit marks `{name}` as ∅ but evidence shows non-empty result"
+            )
+
+    return corrections
+
+
 async def _run_verifier(
     agent_name: str,
     symbol: str,
@@ -196,6 +306,15 @@ Spot-check 3-5 key claims by re-fetching data. Produce your verification result.
 
     duration = time.time() - verify_start
 
+    # Shadow-mode audit-vs-evidence cross-check (iter3 §4.7).
+    # Appended to corrections; does NOT flip the verifier's LLM verdict.
+    audit_findings = _check_audit_vs_evidence(envelope)
+    if audit_findings:
+        logger.info(
+            "[verify] %s %s: audit-vs-evidence found %d mismatch(es) (shadow mode)",
+            agent_name, symbol, len(audit_findings),
+        )
+
     # Parse verification result from JSON
     parsed = parse_briefing_from_markdown(result_text)
     if parsed:
@@ -204,25 +323,29 @@ Spot-check 3-5 key claims by re-fetching data. Produce your verification result.
         issues_n = len(parsed.get("issues", []))
         logger.info("[verify] %s %s: done %.1fs verdict=%s checks=%d issues=%d",
                     agent_name, symbol, duration, verdict, checks, issues_n)
+        corrections = list(parsed.get("corrections", []))
+        if audit_findings:
+            corrections.extend([f"[audit-vs-evidence] {f}" for f in audit_findings])
         return VerificationResult(
             agent_verified=parsed.get("agent_verified", agent_name),
             symbol=parsed.get("symbol", symbol),
             verdict=verdict,
             spot_checks_performed=checks,
             issues=parsed.get("issues", []),
-            corrections=parsed.get("corrections", []),
+            corrections=corrections,
             overall_data_quality=parsed.get("overall_data_quality", ""),
         )
 
     # Fallback if parsing fails
     logger.warning("[verify] %s %s: done %.1fs parsing failed — accepting as pass", agent_name, symbol, duration)
+    corrections = [f"[audit-vs-evidence] {f}" for f in audit_findings]
     return VerificationResult(
         agent_verified=agent_name,
         symbol=symbol,
         verdict="pass",
         spot_checks_performed=0,
         issues=[],
-        corrections=[],
+        corrections=corrections,
         overall_data_quality="Verification parsing failed -- report accepted as-is",
     )
 
