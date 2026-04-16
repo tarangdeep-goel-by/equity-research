@@ -82,7 +82,7 @@ End with a JSON code block matching the schema in 2.4.
 
 ### 2.3 Cross-agent invariants (every specialist must have these)
 
-These eight rules appear — in the same spirit, adapted to the agent's domain — in **every** agent's SYSTEM prompt. Don't omit.
+These nine rules appear — in the same spirit, adapted to the agent's domain — in **every** agent's SYSTEM prompt. Don't omit.
 
 | # | Invariant | Financials equivalent | Ownership equivalent |
 |---|---|---|---|
@@ -94,6 +94,7 @@ These eight rules appear — in the same spirit, adapted to the agent's domain �
 | **I-6** | **Numerical source-of-truth discipline.** Don't hand-multiply raw share counts × price to derive market cap or stake values. Pre-computed authoritative fields (`mcap_cr`, `free_float_mcap_cr`, `pe_trailing`, `eps_ttm` from the analytical profile / valuation snapshot) are the single source of truth — raw share counts are easy to misread as lakhs/crores and produce 10× errors. Route every derivation through `calculate` with authoritative inputs. | SHARED_PREAMBLE "Trust Tool Outputs" | "Market Cap & Share Value" section in INSTRUCTIONS |
 | **I-7** | **Structural signal absence ≠ informational signal.** An absence of buying / selling / activity may be **structural** (regulatory, mechanical, or statutorily constrained) rather than **informational** (conviction-driven). Before drawing conclusions from "no action", check: is the actor legally / structurally capable of the action? MPS 75% caps promoter buying; PSU executives are IAS-cadre not ESOP-compensated; MNC-subsidiary boards don't do open-market deals; PSU dividend policy is Finance-Ministry-set; regulated-utility capex is tariff-order-driven. Absence is signal only when action is possible. | Rule 17 | Rule 9 |
 | **I-8** | **Structural holder reclassification by size × velocity.** Long-held (≥4 quarters), large (e.g., >5% for a category anchor), slow-moving institutional positions are functionally "floor capital" and should be separated from float-at-risk calculations. This applies to quasi-sovereign anchors (LIC-class insurers), promoter holdcos, and ESOP trusts — reclassify before computing liquidity / supply dynamics. | (apply to risk agent when built) | Embedded in ownership Rule 15 + BFSI skill |
+| **I-9** | **Fallback tool discipline.** Each agent's prompt must enumerate primary→fallback tool pairs for its domain. When a primary tool returns partial/weak/empty data (narrow time window, fewer than the natural minimum observations, empty results, business-mismatched outputs), the fallback is mandatory before writing the report. The fallback map lives in the agent's `INSTRUCTIONS_V2` (e.g., `VALUATION_INSTRUCTIONS_V2` "Fallback Tool Map" section) and must be regenerated whenever new tools are added to the agent's registry. Naming the gap in prose is not a substitute for calling the fallback. Lifted to `SHARED_PREAMBLE_V2` so the discipline applies to all 8 specialists. | (build fallback map when financials adds new estimate-tier tools) | Built into Tenet 14 canonical search sequence |
 
 ### 2.4 Briefing schema — required fields
 
