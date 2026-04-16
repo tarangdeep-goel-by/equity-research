@@ -54,3 +54,24 @@ Government subsidy structures (EV PLI, FAME, Auto-Component PLI) tie financial i
 
 ### New-Age EV / Listed-Startup Auto Framing
 For new-age EV or listed-startup autos (OLAELEC, TVSMOTOR post-listing EV subsidiary, Ather if listed, etc.): any ownership category that grows >100% relatively in a single quarter (even if absolute <2%) warrants investigation. AIF growth (Alternative Investment Funds) can signal VC rotation post-lockup, or structured-finance vehicle entry. Drill via `get_ownership(section='shareholder_detail', classification='alternative_investment_funds')` when category-level growth is abnormal. For EV pure-plays, also watch promoter pledge — startup-founder promoter pledging is more common and less stigmatized than in traditional manufacturing; contextualize versus the promoter's personal debt disclosure rather than legacy pledge frameworks.
+
+### Recently-Listed EV / Auto IPO Lock-In Calendar (Tenet 19)
+Any auto / auto-adjacent stock listed <730 days ago — OLAELEC (pure-play EV), ATHER (if listed), KIRLOSBROS (auto-adjacent industrial), SWIGGY (peer-listed platform, same post-IPO SEBI (ICDR) Reg 16/17 cycle even though non-auto), UNOMINDA (carve-out) — requires a populated lock-in calendar in Section 2. Without it, FII / VC exit narration during the first 540 days is incomplete and 30/90/180-day expiries get collapsed into a single "1-year lock-in" story:
+
+| Expiry Date | Category Expiring | % of Equity | Current Status |
+| :--- | :--- | :--- | :--- |
+| T+30d | Anchor allocation (50% tranche) | X% | locked / expired |
+| T+90d | Anchor allocation (balance 50%) | X% | locked / expired |
+| T+180d | Pre-IPO investor lock (VC / strategic tier-1) | X% | locked / expired |
+| T+365d | Promoter-group (selling-shareholders) | X% | locked / expired |
+| T+540d | Strategic / founder-tier promoter lock (18m SEBI floor) | X% | locked / expired |
+
+Dates sourced from the DRHP / RHP via `get_company_context(section='filings', query='lock-in|RHP|allotment')`. Do NOT fold 30-day / 90-day / 180-day expiries into a single "one-year lock-in" summary — these are distinct cliffs and the FII selloff is typically concentrated in the 30-60 day window AFTER each cliff (Tenet 19).
+
+### OFS-at-IPO vs Insider-Selling Reconciliation (Auto IPO Window)
+Recently-listed auto IPOs exhibit a diagnostic reconciliation: a 2-3pp promoter-stake **DROP** in the IPO quarter, accompanied by a "0 insider trades" report from the TOC summary, is NOT a contradiction. It is the **offer-for-sale (OFS) component of the IPO itself** — the selling shareholders (promoter-group entities who partially cashed out at listing) moving off the promoter rolls via the primary-market OFS mechanism. SEBI SAST / PIT insider-trading disclosures cover **secondary-market trades AFTER listing**, not primary-market OFS at the IPO date itself. Failing to reconcile these produces a false "governance red flag" narrative.
+
+When this pattern appears (recently-listed auto, promoter drop in IPO quarter, insider feed clean), populate the briefing envelope's `reconciliations` field with a line such as:
+- *"Promoter-stake drop of 2.19pp in IPO quarter is the OFS component of the primary IPO — not reflected in SAST insider-trading data (which begins post-listing). No secondary-market insider selling occurred."*
+
+*Pattern applies to*: OLAELEC IPO quarter, ATHER (on listing), KIRLOSBROS / UNOMINDA carve-out OFS events — verify via `corporate_actions` + `filings` for the RHP OFS quantum, then cross-check against `get_ownership(section='insider')` for the post-listing window to confirm no SAST events coincide.

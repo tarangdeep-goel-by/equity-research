@@ -69,3 +69,16 @@ Typical covenant threshold: margin call triggers when `LTV × 1.3` breached (i.e
 - `current_price` — from `get_analytical_profile`
 
 Use `calculate` to derive LTV. Do NOT leave margin-call risk as an open question — all inputs are in your tools. Report headroom to margin call in the Risk Signals section, not as a question.
+
+### `mf_changes` All-New-Entry Pipeline Artifact — Metals-Specific Re-Interpretation (Tenet 11)
+When `get_ownership(section='mf_changes')` returns 100% of schemes classified as `new_entry` (often with `prev_month_schemes=0` in the envelope), this is a DATA-PIPELINE artifact, not a genuine 100% fresh-accumulation signal. The correct interpretation path:
+
+1. Recognize the artifact: if ALL schemes (e.g., 57/57) are tagged `new_entry` simultaneously, prior-month comparison data is missing from the pipeline, not zero in the market. Genuine full-sector re-accumulation is extraordinarily rare; a pipeline-coverage gap is the overwhelmingly more likely explanation.
+2. Apply the general Tenet 11 reclassification-first rule: do NOT narrate this as directional active buying.
+3. **Metals-specific overlay:** metals commodity cycles drive MF-house rotation at much higher frequency than FMCG/IT/pharma — MF books in VEDL, HINDALCO, JSWSTEEL, TATASTEEL, NATIONALUM get re-built every 2-3 quarters around LME turning points. So prior-month zeros are MORE likely in metals than in structurally stable sectors, reinforcing the artifact diagnosis.
+4. Correct workaround: re-pull `get_ownership(section='mf_holdings')` for the current quarter AND the prior quarter, and diff manually (symbol × scheme-level) — this avoids the `mf_changes` classifier. If historical `mf_holdings` for prior quarters is not retrievable, raise a SPECIFIC open question naming the comparison window (e.g. *"`mf_changes` returned 57/57 as new_entry with `prev_month_schemes=0` — is this a pipeline coverage gap for VEDL Mar-quarter, or genuine post-distress re-accumulation after the Jan-quarter exodus?"*) and cite the historical mf_holdings window you attempted.
+
+*Pattern applies to*: VEDL, HINDALCO, JSWSTEEL, TATASTEEL, NATIONALUM — same artifact diagnosis whenever `mf_changes` returns a monolithic `new_entry` classification.
+
+### Public-Bucket Sub-Breakdown Pointer for Metals (Tenet 8)
+When Tenet 8 applies — Public > 15% of equity — the retail vs HNI vs Corporate-Bodies split is especially informative in metals because Corporate-Bodies in diversified-metals groups are often inter-group holdcos (second-promoter layer) rather than genuine third-party corporate investors. Until the Phase 3 D4 `public_breakdown` table ships, retrieve the breakdown from the quarterly shareholding pattern filing via the canonical Tenet 8 search (`filings` → `documents` → `concall_insights` → `shareholder_detail` → `balance_sheet_detail`). Flag any Corporate-Bodies concentration >5% aggregate as potential second-promoter-layer risk — in diversified metals groups this is frequently the case.

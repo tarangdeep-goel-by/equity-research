@@ -67,3 +67,19 @@ Prefer these over generic ones:
 
 ### Planned Public Float Sub-Breakdown Tooling
 **Public float sub-breakdown tooling:** Once `get_public_float_breakdown(symbol)` (planned in Phase 1 of post-overnight-fixes) lands, use it to split the Public bucket into retail (<₹2L nominal), HNI (>₹2L), corporate bodies, NRIs, and trusts. Until the pipeline ships, cite the top-named holders from `shareholder_detail` with classification='public' as the best available proxy and flag the aggregate sub-breakdown gap as a data limitation (not an open question).
+
+### Conglomerate FII Anchor Events — Canonical Search Worked Pattern
+Conglomerate ownership narratives are frequently dominated by a single multi-quarter FII-group anchor — a sizeable structured entry by one institutional investor that persists across several quarters and defines the foreign-flow framing. The default `get_ownership(section='bulk_block', days=365)` window is insufficient; widen to `days=1825` when the anchor event sits beyond the trailing year, otherwise the defining trade disappears from the record. The *full 5-source canonical search* applies once the anchor entry date is triangulated.
+
+1. `get_company_context(section='filings', query='open market|bulk deal|block deal|preferential allotment')` — exchange disclosures carrying the anchor's acquisition-day SEBI reporting and any preferential-allotment resolutions.
+2. `get_company_context(section='documents', query='anchor|strategic investor|capital raise|preferential allotment')` — press releases announcing the anchor institutional entry, the structured-investment rationale, and any co-investor roster.
+3. `get_company_context(section='concall_insights', sub_section='management_commentary')` — capital-raise rationale, use-of-proceeds, and management's own framing of the anchor's strategic intent (passive bet vs long-cycle aligned capital).
+4. `get_ownership(section='shareholder_detail')` — the anchor's stake trajectory across subsequent quarters; subsequent top-ups or trims materially change the narrative.
+5. `get_fundamentals(section='balance_sheet_detail')` — *skip — not applicable to anchor-entry analysis* (anchor buys in the secondary market or via preferential allotment; share count changes only on fresh issue).
+
+If the anchor's SEBI filing is older than the default window, raise a SPECIFIC open question naming the investor and quarter (e.g. *"GQG March 2023 block deals on ADANIENT — `bulk_block(days=365)` returns empty; rerun with `days=1825` to recover the defining entry?"*) rather than a generic "who are the FII holders?".
+
+*Pattern applies to*: ADANIENT ↔ GQG Partners 2023 anchor, Adani Green ↔ IHC (International Holding Co) structured investment, Vedanta ↔ Twin Star / Volcan Investments — same 5-source path whenever the ownership narrative invokes a named multi-quarter FII-group anchor.
+
+### Historical-MCAP Discipline for Conglomerate FII %pt Conversions
+Conglomerates holding cyclical or resource-exposed verticals (ports, power, metals, airports) have endured episodic mcap compressions and expansions of 3-5x within a 24-month window; converting a historical FII %pt shift to ₹Cr against the current mcap systematically misstates the flow. Always pass `inputs_as_of` / `mcap_as_of` to `calculate()` when sourcing pre-rerating %pt changes. See Tenet 16.

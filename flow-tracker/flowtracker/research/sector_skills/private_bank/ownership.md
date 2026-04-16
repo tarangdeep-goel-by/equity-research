@@ -73,3 +73,13 @@ Before drafting the Institutional Verdict, explicitly confirm each row:
 - "For KOTAKBANK: what is the trailing 4-quarter pace of promoter-stake reduction, and is the 26%-by-2030 SEBI glide path on schedule?"
 - "Is the Hinduja-Group pledged-share ratio in INDUSINDBK within the family-group disclosure norm, or rising?"
 - "Has any recent RBI disclosure moved this bank onto the sector-cap list (<2pp from 74%)?"
+
+### ADR/GDR Private-Bank Specifics
+Cross-reference the BFSI ADR/GDR 5-source canonical search worked pattern (`bfsi/ownership.md` — *ADR / GDR Outstanding Lookup*). The canonical sequence (`get_company_context(filings)` → `documents` → `concall_insights` → `get_ownership(shareholder_detail)` → `get_fundamentals(balance_sheet_detail)`) is mandatory before asserting foreign headroom for any large private bank. Three private-bank-specific quirks diverge from the general BFSI framing:
+
+- **Listing venue:** HDFCBANK and ICICIBANK ADR programmes list on NYSE (not LSE), differentiating them from occasional PSU-bank GDR placements on LSE. Depositary is typically BNY Mellon or Deutsche Bank Trust — surfaces in `shareholder_detail` as the depositary line-item.
+- **Rule 144A vs Reg-S tranches:** Indian private-bank ADR issuance distinguishes Rule 144A placements (QIB-only, US-domiciled, restricted resale) from Reg-S tranches (offshore, non-US investors, freer liquidity). The two tranches have distinct eligible-investor pools and secondary-market liquidity — narrate which tranche dominates when discussing ADR foreign-flow sensitivity.
+- **ADR ratio convention:** HDFCBANK and ICICIBANK both use **1 ADR = 3 underlying Indian shares** as the structural ratio. Apply this when converting ADR outstanding to India-equivalent share count for the 74% aggregate calculation. (Contrast with IT-services peers where INFY uses 1 ADR = 1 share — do NOT assume cross-sector ratio uniformity.)
+
+### ESOP Pool Sizing — Private Bank Baseline
+Indian private banks run structurally leaner ESOP pools than IT services, typically **1-3% of paid-up capital** (vs **5-10%** for large-cap IT services peers). This tightens Tenet 15 (ESOP-dilution tracking) application: quarterly ESOP-vest-linked insider selling is a smaller supply event in private banks, and clusters >50bps in a single quarter warrant narrative treatment rather than being absorbed as routine noise. Peer instances: HDFCBANK, ICICIBANK, KOTAKBANK, AXISBANK, INDUSINDBK. For IDFCFIRSTB (recent PE-backed transition) the pool can be slightly wider — verify via `get_company_context(filings)` before applying the 1-3% baseline.

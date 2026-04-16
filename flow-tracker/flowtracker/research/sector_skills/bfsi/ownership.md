@@ -108,3 +108,25 @@ Distinct from the FPI 10% per-entity sub-limit, RBI Master Direction on Acquisit
 
 ### Timeframe Alignment for Historical FII Analysis
 When analyzing an FII exit or ownership shift older than 12 months (e.g., an FII rolloff that started 10-22 months ago), pass `days=1825` to `get_ownership(section='bulk_block')`. The default 365-day window will miss the supply distribution. This is especially important for large-cap banks (SBIN, HDFCBANK, ICICIBANK) where FII rebalancing often plays out over multiple quarters. Cross-reference with quarterly shareholding %pt drops from `shareholding` — if the bulk_block deals don't explain the %pt move, supply was distributed via continuous open-market trades (Tenet 10).
+
+### ADR / GDR Outstanding Lookup — Canonical Search Worked Pattern
+Cross-listed Indian banks (those running NYSE or LSE depositary-receipt programmes) have a material fraction of paid-up capital held as ADRs / GDRs that counts toward the 74% aggregate foreign cap but does NOT appear in the FPI line of domestic exchange filings. Treating reported FII% as the full foreign footprint underestimates the aggregate by 14-18pp for large ADR programmes and inverts the headroom thesis. The *full 5-source canonical search* is mandatory before asserting foreign headroom.
+
+1. `get_company_context(section='filings', query='ADR|GDR|depositary receipts|Rule 144A')` — BSE/NSE disclosures on ADR-ratio conversions, tender offers, sponsor-level programme changes, and Rule 144A placements.
+2. `get_company_context(section='documents', query='ADR|GDR|depositary|NYSE|LSE')` — press releases announcing ADR-ratio changes, two-way fungibility actions, and custodian or depositary-bank transitions.
+3. `get_company_context(section='concall_insights', sub_section='management_commentary')` — management disclosure of ADR / GDR outstanding as a % of paid-up capital; routinely cited in annual-results concalls and investor-day decks.
+4. `get_ownership(section='shareholder_detail')` — *check — NYSE / LSE custodian names appear as named depositaries* (typically Deutsche Bank Trust, BNY Mellon, Citibank N.A. as depositary); the depositary line-item is the ADR holder aggregate.
+5. `get_fundamentals(section='balance_sheet_detail')` — *check — authorised vs issued share capital split* sometimes exposes the ADR tranche when depositary-receipt shares are carried as a distinct issued-capital sub-line.
+
+If all five sources fail to surface an explicit ADR outstanding %, raise as a SPECIFIC open question naming the programme (e.g. *"HDFC Bank NYSE ADR programme — no current ADR outstanding % disclosed across filings, documents, or concall; what is the combined direct-FPI + ADR + NRI holding vs the 74% cap as of the latest quarter?"*).
+
+*Pattern applies to*: HDFCBANK (NYSE ADR), ICICIBANK (NYSE ADR), INFY and WIPRO (NYSE ADR, adjacent IT comparable for methodology), RDYPHARMA / Dr. Reddy's (NYSE ADR via depositary programme) — same 5-source path whenever a large private bank or cross-listed Indian issuer narrative invokes foreign headroom.
+
+### Cross-Section Reconciliation Template for BFSI Narratives
+BFSI ownership narratives reliably conflate two legitimate but distinct timeframes: (a) LATEST-QUARTER %pt change (the tactical trading-book read) surfaced in Section 2 — Money Flow Story, and (b) MULTI-YEAR CYCLE framing (the structural asset-cycle / de-rating thesis) surfaced in Section 6 — Institutional Verdict. Both can be true simultaneously — a bank can be experiencing a tactical FII re-entry while still sitting inside a multi-year structural FII exit — but the verdict must explicitly reconcile the two, not assert only the structural framing and leave the latest-quarter direction unstated.
+
+**Correct reconciliation phrasing:** *"Latest-quarter +0.77pp FII re-entry is a tactical read; the multi-year de-rating and 4pp FII exit since FY22 remains the structural position — both statements are true at different timeframes."*
+
+**The named trap:** stating "partial foreign exit" in Section 6 without re-stating the latest-quarter direction in Section 2 creates an unreconciled contradiction. This violates Step 7a (cross-section reconciliation discipline). Populate the briefing envelope's `reconciliations` field with this pattern whenever the latest quarter direction diverges from the multi-year framing.
+
+*Pattern applies to*: SBIN (quarterly trading-book FII flow vs multi-year PSU de-rating cycle), HDFCBANK (quarterly re-entry vs multi-year HDFC-Ltd-merger overhang), ICICIBANK, KOTAKBANK — any large bank where the trading-book cohort and the structural-asset-cycle cohort are reading the same name on different timeframes.

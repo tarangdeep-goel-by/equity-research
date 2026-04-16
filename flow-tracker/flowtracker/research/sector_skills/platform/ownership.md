@@ -57,3 +57,18 @@ When evaluating domestic institutional accumulation, do not look solely at aggre
 - Have founders structured their compensation to rely heavily on new ESOP grants, functionally acting as promoters while avoiding regulatory promoter classification?
 - How aggressively is the company expanding its ESOP pool relative to its path to operating profitability?
 - For companies with an unlisted parent holdco, what is the founder's aggregate economic stake across listed + unlisted entities, and how does the parent's own capital structure affect the listed entity's governance?
+
+### Historical-MCAP Discipline — Platform Worked Pattern
+New-age platforms listed inside the last 36 months compound two distortions simultaneously: (a) massive post-IPO mcap expansion (3-10x is routine for category leaders), and (b) business-model transitions (1P → 3P, ad-tier monetisation, insurance reframes) that reset revenue denominators mid-cycle. Converting a historical FII %pt change using the *current* mcap is a flow-overstatement error the agent makes reflexively; this is the `HISTORICAL_MCAP_MISMATCH` warning path. Every historical %pt → ₹Cr conversion must pass `inputs_as_of` and `mcap_as_of` to `calculate()` to pin both inputs to the same historical quarter.
+
+**Correct call signature** (converting a ~2023-Q4 FII %pt change into ₹Cr using the mcap from that quarter):
+```
+calculate(operation='pct_of', a='6.26', b='historical_mcap_cr', inputs_as_of='2023-Q4', mcap_as_of='2023-Q4')
+```
+
+**Wrong call signature** (fires the `HISTORICAL_MCAP_MISMATCH` warning because the %pt is historical but the mcap defaults to current):
+```
+calculate(operation='pct_of', a='6.26', b='current_mcap_cr')
+```
+
+*Pattern applies to*: ETERNAL (Zomato, post-IPO mcap >5x + 1P→3P transition), PayTM (listing-price-to-current discounted; cross-rerating after payments-bank carve-out), Nykaa (post-IPO mcap compression then partial re-rating), Policybazaar / PB Fintech (pre-insurance-reframe framing), GROWW — any platform listed within the last 36 months where the mcap has moved >3x since the FII-entry dates being analyzed. *Skip the discipline* only when the %pt window is fully within the current fiscal year and the mcap has not moved >15% over that span.

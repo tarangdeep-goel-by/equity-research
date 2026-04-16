@@ -47,3 +47,12 @@ Conglomerate chemical entities frequently utilize complex cross-holdings or publ
 - Is the royalty + dividend payout structure of the MNC subsidiary signaling elevated parent-company cash extraction?
 - How is institutional ownership within the paints oligopoly reacting to capacity additions by new conglomerate entrants?
 - Are pre-monsoon MF flows aligning with historical seasonal accumulation patterns for the agrichemical portfolio?
+
+### Specialty vs Commodity Peer Anchor — Chemicals FII and Pledge (Tenet 18)
+"12% FII" is uninterpretable in chemicals without the specialty-vs-commodity split because moat and margin profile diverge sharply between the two buckets. Always anchor FII % and pledge % against the correct peer set:
+
+**FII % anchor (specialty):** *"FII stake of X% sits at the Y-th percentile within Indian specialty-chemicals top-tier (PIDILITIND, SRF, AARTIIND, NAVIN FLUORINE, DEEPAKNITR peer set via `get_peer_sector(section='benchmarks')`). Specialty-chem FII benchmarks run structurally higher (typical band 18-28%) than commodity-chem (typical band 6-14%) because branded-specialty ROCE of 20-30% attracts long-only foreign mandates; commodity chemicals earn cycle-weighted ROCE."* A 12% FII is *mid-range* for commodity-chem, but *bottom decile* for top-tier specialty — the qualitative read flips.
+
+**FII % anchor (commodity):** *"For TATACHEM / DCM Shriram / GSFC (commodity peer set), FII tends to cycle-rotate — absolute % is a weaker signal than FII direction vs the current LME-soda-ash / urea-feedstock cycle."*
+
+**Promoter pledge anchor (chemicals-specific baseline):** Chemicals sector carries a HIGHER baseline promoter pledge than pharma — commodity cyclicality drives working-capital borrowing and some families routinely pledge up to 8-12% as standing group-level liquidity. This is UNLIKE the near-zero baseline of pharma/FMCG/IT. Specialty chemicals (PIDILITIND/SRF/AARTIIND/NAVIN/DEEPAKNITR) trend closer to <5%; commodity chemicals (TATACHEM/DCM/GSFC) routinely sit at 5-15% with no distress signal. A pledge at 10% in a specialty name is a red flag; the same 10% in a commodity name is near-baseline. Cite the specialty-vs-commodity classification BEFORE narrating pledge conviction.
