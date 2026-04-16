@@ -833,8 +833,8 @@ async def get_sector_benchmarks(args):
 
 get_concall_insights = tool(
     "get_concall_insights",
-    "Get pre-extracted concall insights from the vault: 4 quarters of operational metrics, financial metrics, management commentary, subsidiary updates, risk flags, and cross-quarter narrative themes. First call returns a compact table of contents (quarters + populated sections). Pass sub_section to drill into one section across all quarters ('operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks').",
-    {"symbol": str, "sub_section": str},
+    "Get pre-extracted concall insights from the vault: 4 quarters of operational metrics, financial metrics, management commentary, subsidiary updates, risk flags, and cross-quarter narrative themes. First call returns a compact table of contents (quarters + populated sections + qa_topics_by_quarter when Q&A carries topic tags). Pass sub_section to drill into one section across all quarters ('operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'). Pass quarter (e.g. 'FY26-Q3') to narrow to a single quarter. Pass qa_topics (e.g. ['margins','guidance']) to return only Q&A exchanges tagged with those topics — implies sub_section='qa_session'.",
+    {"symbol": str, "sub_section": str, "quarter": str, "qa_topics": list},
     annotations=READ_ONLY,
 )
 
@@ -842,7 +842,12 @@ get_concall_insights = tool(
 @get_concall_insights
 async def get_concall_insights(args):
     with ResearchDataAPI() as api:
-        data = api.get_concall_insights(args["symbol"], section_filter=args.get("sub_section"))
+        data = api.get_concall_insights(
+            args["symbol"],
+            section_filter=args.get("sub_section"),
+            quarter=args.get("quarter"),
+            qa_topics=args.get("qa_topics"),
+        )
     return _with_dedup("get_concall_insights", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1751,7 +1756,12 @@ def _get_company_context_section(api, symbol, section, args):
         path = Path.home() / "vault" / "stocks" / symbol.upper() / "profile.md"
         return path.read_text() if path.exists() else ""
     elif section == "concall_insights":
-        return api.get_concall_insights(symbol, section_filter=args.get("sub_section"))
+        return api.get_concall_insights(
+            symbol,
+            section_filter=args.get("sub_section"),
+            quarter=args.get("quarter"),
+            qa_topics=args.get("qa_topics"),
+        )
     elif section == "sector_kpis":
         return api.get_sector_kpis(symbol, kpi_key=args.get("sub_section"))
     elif section == "filings":
@@ -1778,7 +1788,12 @@ async def get_company_context(args):
                 "profile": api.get_company_profile(symbol),
                 "documents": api.get_company_documents(symbol, args.get("doc_type")),
                 "business_profile": _get_company_context_section(api, symbol, "business_profile", args),
-                "concall_insights": api.get_concall_insights(symbol, section_filter=args.get("sub_section")),
+                "concall_insights": api.get_concall_insights(
+                    symbol,
+                    section_filter=args.get("sub_section"),
+                    quarter=args.get("quarter"),
+                    qa_topics=args.get("qa_topics"),
+                ),
                 "sector_kpis": api.get_sector_kpis(symbol, kpi_key=args.get("sub_section")),
                 "filings": api.get_recent_filings(symbol, args.get("limit", 10)),
             }
