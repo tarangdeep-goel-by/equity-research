@@ -111,6 +111,8 @@ Grade this {agent} report on how well it covers ITS scope, not the full investme
 4. **Actionability** — Clear, evidence-backed conclusions? Bull/bear framework? Identifiable catalysts and risks?
 5. **Sector Framework** — Are the RIGHT analytical frameworks applied for THIS sector type? (e.g., BFSI needs NIM/CASA/CD ratio/credit costs; metals needs EV/EBITDA/cycle positioning; platform needs unit economics/GMV)
 6. **Data Sourcing** — Are claims backed by cited data? Sources attributed? Tool data used correctly?
+7. **Tool-Use Discipline** — Judge from the Agent Execution Log. A: retried on truncation/empty, chose the right tool first time, ≤1 wasted call, surfaced data-quality gaps honestly. B+: mostly disciplined but one tool choice was suboptimal or one "attempted" metric had no backing tool calls. C: gave up on first empty result, called same tool ≥3× without changing args, or claimed "attempted" without evidence. F: ignored the tool layer / no tool use. **Requires the Execution Log — if absent, grade N/A (return numeric=85).**
+8. **Cost Efficiency** — Judge from the Agent Execution Log. A: full-depth report with <$0.30 cost AND ≤8 turns. B+: $0.30–$0.60 OR 9–12 turns. C: $0.60–$1.00 OR 13–20 turns. F: >$1.00 OR >20 turns for similar depth, or cache hit rate <20% (re-pays for context). **Requires the Execution Log — if absent, grade N/A (return numeric=85).**
 
 ## Grade Scale
 A+ (97) = Institutional quality — you would send this to a portfolio manager without edits
@@ -125,7 +127,8 @@ F  (50) = Fundamentally flawed
 ## Grading Calibration
 - **Grade harshly.** A B+ is a good report. An A means institutional quality. Most reports should land in B to A- range.
 - For EACH parameter, you MUST identify at least one weakness or gap, even if minor. No parameter gets a perfect score without explicit justification.
-- Your **overall grade_numeric** must equal the arithmetic mean of the 6 parameter numeric scores (rounded to nearest integer). Do not inflate the overall above the average.
+- Your **overall grade_numeric** must equal the arithmetic mean of the 8 parameter numeric scores (rounded to nearest integer). Do not inflate the overall above the average.
+- If the Agent Execution Log is absent or shows only legacy format (no turns/retries/cost telemetry), grade tool_use_discipline and cost_efficiency as numeric=85 (B+) with rationale "legacy trace — telemetry not captured" and exclude both from your averaging.
 
 ## Critical Instructions
 - Do NOT grade the accuracy of specific numbers. Your training data is outdated — the report uses live data. Focus on frameworks, logic, and completeness.
@@ -153,7 +156,9 @@ The report may include an execution log showing tools called, tools available bu
     "completeness": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
     "actionability": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
     "sector_framework": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
-    "data_sourcing": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}}
+    "data_sourcing": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
+    "tool_use_discipline": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<cite log evidence; if log absent, use 85 + 'legacy trace'>"}},
+    "cost_efficiency": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<cite cost/turns; if log absent, use 85 + 'legacy trace'>"}}
   }},
   "overall": {{
     "grade": "<A+..F>",
@@ -805,6 +810,8 @@ def print_summary(results: dict[str, AgentEvalResult], target_numeric: int = 90)
         "actionability": "Action",
         "sector_framework": "Sector",
         "data_sourcing": "Data",
+        "tool_use_discipline": "Tools",
+        "cost_efficiency": "Cost",
     }
 
     print(f"\n{'='*90}")
