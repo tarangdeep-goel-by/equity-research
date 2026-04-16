@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-16T12:07:17.103863+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "insurance": {
+      "agent": "valuation",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Deeply deconstructs the PE compression narrative and correctly overrides flawed tool signals. However, it lacks a deeper critical analysis of the terminal growth and margin assumptions implied in the reverse DCF."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "The logic to override the 'DEEP VALUE' signal is exceptionally well-argued. However, the statement that 'WACC appears elevated for a near-zero-debt company' is financially flawed; with zero debt, WACC equals Ke, which is naturally high due to the high beta."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 86,
+          "rationale": "Covers the Fair Value Triangle comprehensively. However, it explicitly notes a concerning CFO-to-PAT gap but failed to call the cash flow quality tool to investigate it, leaving a material gap in the valuation risk assessment."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides highly actionable bull/base/bear targets, clear catalysts, and a well-defined margin of safety. The only slight weakness is that the base case relies heavily on management's \u20b91,000 Cr PAT guidance without an independent stress test."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Brilliant override of inapplicable insurance underwriting metrics (VNB, Combined Ratio) in favor of fintech/platform metrics (EV/Revenue, Forward PE). It misses only minor platform-specific valuation heuristics like the Rule of 40 or LTV/CAC."
+        },
+        "data_sourcing": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Excellent use of the `calculate` tool and explicit citations of tool artifacts. However, the agent explicitly complained about the poor quality of Screener peers but failed to call `get_yahoo_peers` to resolve the issue."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Cash Flow Quality",
+          "issue": "Agent identified a critical gap in cash flow (CFO = -\u20b9183 Cr vs positive PAT) but skipped calling `get_fundamentals(section='cash_flow_quality')` to investigate.",
+          "suggestion": "Update system prompt to mandate calling cash flow/quality tools whenever a significant divergence between CFO and PAT is detected in the analytical profile."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Relative Valuation",
+          "issue": "Agent noted that Screener peers (STYL, CCAVENUE) were heterogeneous and poor comparables, but failed to call `get_yahoo_peers` as a fallback.",
+          "suggestion": "Instruct the agent to automatically trigger `get_yahoo_peers` if the primary peer set returned by `get_peer_sector` lacks business model comparability."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "Valuation Snapshot",
+          "issue": "Agent states WACC is elevated for a zero-debt company, misunderstanding that zero debt means WACC = Cost of Equity, which is high due to the stock's beta.",
+          "suggestion": "Inherent LLM limitation regarding corporate finance theory; no pipeline fix required."
+        }
+      ],
+      "strengths": [
+        "Exceptional critical thinking in overriding the automated 'DEEP VALUE' signal and the flawed 3-year average projection model.",
+        "Correctly identified the company's true business model (distribution platform) and discarded irrelevant insurance underwriting metrics.",
+        "Superb explanation of the PE compression trajectory, correctly identifying it as an EPS normalization story rather than a price cheapening story."
+      ],
+      "summary": "This is a highly intelligent, institutional-grade report that correctly overrides flawed automated signals and applies the right sector framework. Its primary gap is a failure to execute specific fallback tools (cash flow quality, Yahoo peers) despite explicitly recognizing the need for them in the text.",
+      "report_length": 31608,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 56.97557204205077,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Deeply deconstructs the PE compression narrative and correctly overrides flawed tool signals. However, it lacks a deeper critical analysis of the terminal growth and margin assumptions implied in the reverse DCF.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"The logic to override the 'DEEP VALUE' signal is exceptionally well-argued. However, the statement that 'WACC appears elevated for a near-zero-debt company' is financially flawed; with zero debt, WACC equals Ke, which is naturally high due to the high beta.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 86,\n      \"rationale\": \"Covers the Fair Value Triangle comprehensively. However, it explicitly notes a concerning CFO-to-PAT gap but failed to call the cash flow quality tool to investigate it, leaving a material gap in the valuation risk assessment.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides highly actionable bull/base/bear targets, clear catalysts, and a well-defined margin of safety. The only slight weakness is that the base case relies heavily on management's \u20b91,000 Cr PAT guidance without an independent stress test.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Brilliant override of inapplicable insurance underwriting metrics (VNB, Combined Ratio) in favor of fintech/platform metrics (EV/Revenue, Forward PE). It misses only minor platform-specific valuation heuristics like the Rule of 40 or LTV/CAC.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Excellent use of the `calculate` tool and explicit citations of tool artifacts. However, the agent explicitly complained about the poor quality of Screener peers but failed to call `get_yahoo_peers` to resolve the issue.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Cash Flow Quality\",\n      \"issue\": \"Agent identified a critical gap in cash flow (CFO = -\u20b9183 Cr vs positive PAT) but skipped calling `get_fundamentals(section='cash_flow_quality')` to investigate.\",\n      \"suggestion\": \"Update system prompt to mandate calling cash flow/quality tools whenever a significant divergence between CFO and PAT is detected in the analytical profile.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Relative Valuation\",\n      \"issue\": \"Agent noted that Screener peers (STYL, CCAVENUE) were heterogeneous and poor comparables, but failed to call `get_yahoo_peers` as a fallback.\",\n      \"suggestion\": \"Instruct the agent to automatically trigger `get_yahoo_peers` if the primary peer set returned by `get_peer_sector` lacks business model comparability.\"\n    },\n    {\n      \"type\": \"NOT_OUR_PROBLEM\",\n      \"section\":"
+    }
+  }
+}

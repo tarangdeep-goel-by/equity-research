@@ -1,0 +1,27 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-16T18:46:23.001970+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "broker"
+  ],
+  "results": {
+    "broker": {
+      "agent": "valuation",
+      "stock": "GROWW",
+      "sector": "Fintech broker",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: ",
+      "report_length": 35560,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 2655.555852291058,
+      "run_skipped": true,
+      "raw_gemini_response": ""
+    }
+  }
+}

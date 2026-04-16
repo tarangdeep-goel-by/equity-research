@@ -1,0 +1,27 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-16T15:08:28.441948+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "broker"
+  ],
+  "results": {
+    "broker": {
+      "agent": "valuation",
+      "stock": "GROWW",
+      "sector": "Fintech broker",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+      "report_length": 35560,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 2.876327999983914,
+      "run_skipped": true,
+      "raw_gemini_response": "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+    }
+  }
+}
