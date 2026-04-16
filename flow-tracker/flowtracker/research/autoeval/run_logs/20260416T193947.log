@@ -1,0 +1,241 @@
+Run log: /Users/tarang/Documents/Projects/equity-research-iter3/flow-tracker/flowtracker/research/autoeval/run_logs/20260416T193947.log
+AutoEval (agent-first): agent=ownership sectors=['pharma']
+Target: grade_numeric >= 90
+
+--- ownership / SUNPHARMA (pharma) ---
+  Running agent...
+  01:09:48 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: started (max_age=6h)
+  01:09:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  01:09:48 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  01:09:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  01:09:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/SUNPHARMA/consolidated/ "HTTP/1.1 200 OK"
+  01:09:48 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: company_profile ok 1 records
+  01:09:48 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: company_documents ok 62 records
+  01:09:48 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: quarterly_results ok 13 records
+  01:09:48 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: screener_ratios ok 12 records
+  01:09:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/SUNPHARMA/consolidated/ "HTTP/1.1 200 OK"
+  01:09:49 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/6599038/ "HTTP/1.1 200 OK"
+  01:09:49 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: annual_financials ok 10 records
+  01:09:49 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/SUNPHARMA/ "HTTP/1.1 200 OK"
+  01:09:50 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/982/ "HTTP/1.1 200 OK"
+  01:09:50 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: standalone_financials ok 10 records
+  01:09:50 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: screener_ids ok 1 records
+  01:09:50 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/chart/?q=Price+to+Earning-Median+PE-EPS&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  01:09:50 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: chart_pe ok 1192 records
+  01:09:51 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  01:09:51 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.5s
+  01:09:52 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  01:09:52 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.8s
+  01:09:56 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  01:09:56 [WARNING] flowtracker.screener_client: Screener request failed (attempt 3/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 4.2s
+  01:10:00 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 429 Too Many Requests"
+  01:10:00 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: chart_price skipped: Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/3245/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
+  01:10:00 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6599038/peers/ "HTTP/1.1 429 Too Many Requests"
+  01:10:00 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/6599038/peers/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.6s
+  01:10:02 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6599038/peers/ "HTTP/1.1 200 OK"
+  01:10:02 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: peers ok 8 records
+  01:10:02 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/promoters/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  01:10:02 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/3245/investors/promoters/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.3s
+  01:10:03 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/promoters/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  01:10:03 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/3245/investors/promoters/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.1s
+  01:10:05 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/promoters/quarterly/ "HTTP/1.1 200 OK"
+  01:10:06 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/foreign_institutions/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  01:10:06 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/3245/investors/foreign_institutions/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.1s
+  01:10:07 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/foreign_institutions/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  01:10:07 [WARNING] flowtracker.screener_client: Screener request failed (attempt 2/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/3245/investors/foreign_institutions/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 2.7s
+  01:10:10 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/foreign_institutions/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  01:10:10 [WARNING] flowtracker.screener_client: Screener request failed (attempt 3/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/3245/investors/foreign_institutions/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 4.7s
+  01:10:15 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/foreign_institutions/quarterly/ "HTTP/1.1 200 OK"
+  01:10:16 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/domestic_institutions/quarterly/ "HTTP/1.1 200 OK"
+  01:10:17 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/public/quarterly/ "HTTP/1.1 429 Too Many Requests"
+  01:10:17 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/3/3245/investors/public/quarterly/'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.9s
+  01:10:19 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/3245/investors/public/quarterly/ "HTTP/1.1 200 OK"
+  01:10:20 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: shareholders ok 238 records
+  01:10:20 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  01:10:21 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  01:10:22 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  01:10:23 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  01:10:24 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: schedules_quarters ok 156 records
+  01:10:24 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  01:10:25 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 429 Too Many Requests"
+  01:10:25 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/3245/schedules/?parent=Expenses&section=profit-loss&consolidated='
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.9s
+  01:10:27 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  01:10:28 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  01:10:29 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  01:10:30 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: schedules_profit-loss ok 168 records
+  01:10:30 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  01:10:31 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  01:10:33 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 429 Too Many Requests"
+  01:10:33 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/3245/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated='
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.4s
+  01:10:34 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  01:10:35 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  01:10:36 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: schedules_balance-sheet ok 288 records
+  01:10:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  01:10:37 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 429 Too Many Requests"
+  01:10:37 [WARNING] flowtracker.screener_client: Screener request failed (attempt 1/4): Client error '429 Too Many Requests' for url 'https://www.screener.in/api/company/3245/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated='
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429 — retrying in 1.9s
+  01:10:39 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  01:10:40 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/3245/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  01:10:41 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: schedules_cash-flow ok 300 records
+  01:10:42 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: valuation_snapshot ok 1 records
+  01:10:42 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: consensus_estimate ok 1 records
+  /Users/tarang/Documents/Projects/equity-research-iter3/flow-tracker/.venv/lib/python3.12/site-packages/yfinance/scrapers/fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+    warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+  01:10:42 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: earnings_surprises ok 4 records
+  01:10:43 [WARNING] flowtracker.filing_client: yfinance corporate actions failed for SUNPHARMA: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+  01:10:43 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: corporate_actions skipped: no data
+  01:10:43 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/companies-listing/corporate-filings-insider-trading "HTTP/1.1 200 OK"
+  01:10:43 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/corporates-pit?from_date=17-01-2026&to_date=17-04-2026&symbol=SUNPHARMA "HTTP/1.1 200 OK"
+  01:10:43 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: insider_transactions skipped: no data
+  01:10:44 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_10042026.csv "HTTP/1.1 200 OK"
+  01:10:44 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-10: 2452 records (total: 2452, day 0/7)
+  01:10:44 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_13042026.csv "HTTP/1.1 200 OK"
+  01:10:45 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-13: 2456 records (total: 4908, day 3/7)
+  01:10:45 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_14042026.csv "HTTP/1.1 200 OK"
+  01:10:45 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-14: 2456 records (total: 7364, day 4/7)
+  01:10:46 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_15042026.csv "HTTP/1.1 200 OK"
+  01:10:46 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-15: 2456 records (total: 9820, day 5/7)
+  01:10:46 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_16042026.csv "HTTP/1.1 200 OK"
+  01:10:46 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-16: 2455 records (total: 12275, day 6/7)
+  01:10:47 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_17042026.csv "HTTP/1.1 404 Not Found"
+  01:10:47 [INFO] flowtracker.bhavcopy_client: No bhavcopy for 2026-04-17 (holiday/weekend)
+  01:10:47 [INFO] flowtracker.bhavcopy_client: Backfill complete: 5 trading days, 12275 records
+  01:10:48 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: delivery_data ok 5 records
+  01:10:48 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/market-data/live-equity-market "HTTP/1.1 200 OK"
+  01:10:48 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/snapshot-capital-market-largedeal "HTTP/1.1 200 OK"
+  01:10:48 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: bulk_block_deals ok 0 records
+  01:10:49 [INFO] httpx: HTTP Request: GET https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields "HTTP/1.1 200 OK"
+  01:10:49 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: macro ok 6 records
+  01:10:50 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/reports/fii-dii "HTTP/1.1 200 OK"
+  01:10:50 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/fiidiiTradeReact "HTTP/1.1 200 OK"
+  01:10:50 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: fii_dii_flows ok 2 records
+  01:10:50 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/PeerSmartSearch/w?Type=SS&text=SUNPHARMA "HTTP/1.1 200 OK"
+  01:10:51 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=1&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:51 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=2&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:52 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=3&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:53 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=4&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:54 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=5&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:56 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=6&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:57 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=7&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:58 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=8&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:10:59 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=9&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:11:01 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=10&strCat=-1&subcategory=-1&strPrevDate=20230418&strToDate=20260417&strSearch=P&strscrip=524715&strType=C "HTTP/1.1 200 OK"
+  01:11:01 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: filings ok 473 records
+  01:11:02 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/discounted-cash-flow/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  01:11:02 [WARNING] flowtracker.fmp_client: FMP request failed: /discounted-cash-flow/SUNPHARMA.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/discounted-cash-flow/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:02 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: fmp_dcf skipped: no data
+  01:11:03 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14 "HTTP/1.1 403 Forbidden"
+  01:11:03 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SUNPHARMA.NS {'type': 'rsi', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:04 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50 "HTTP/1.1 403 Forbidden"
+  01:11:04 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SUNPHARMA.NS {'type': 'sma', 'period': 50} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:04 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200 "HTTP/1.1 403 Forbidden"
+  01:11:04 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SUNPHARMA.NS {'type': 'sma', 'period': 200} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:05 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14 "HTTP/1.1 403 Forbidden"
+  01:11:05 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SUNPHARMA.NS {'type': 'macd', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:06 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14 "HTTP/1.1 403 Forbidden"
+  01:11:06 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/SUNPHARMA.NS {'type': 'adx', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:06 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: fmp_technicals skipped: no data
+  01:11:06 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/key-metrics/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  01:11:06 [WARNING] flowtracker.fmp_client: FMP request failed: /key-metrics/SUNPHARMA.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/key-metrics/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:06 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: fmp_key_metrics skipped: no data
+  01:11:07 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/financial-growth/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  01:11:07 [WARNING] flowtracker.fmp_client: FMP request failed: /financial-growth/SUNPHARMA.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/financial-growth/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:07 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: fmp_growth skipped: no data
+  01:11:07 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/grade/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  01:11:07 [WARNING] flowtracker.fmp_client: FMP request failed: /grade/SUNPHARMA.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/grade/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:07 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: fmp_grades skipped: no data
+  01:11:07 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/price-target/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  01:11:07 [WARNING] flowtracker.fmp_client: FMP request failed: /price-target/SUNPHARMA.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/price-target/SUNPHARMA.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  01:11:07 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: fmp_targets skipped: no data
+  01:11:07 [INFO] flowtracker.research.snapshot_builder: [snapshot] SUNPHARMA: built (10 screener, 18 yfinance, 2 ownership fields)
+  01:11:07 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: company_snapshot ok 1 records
+  01:11:08 [INFO] httpx: HTTP Request: GET https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/SUNPHARMA.NS "HTTP/1.1 200 OK"
+  01:11:08 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: yahoo_peers ok 5 records
+  01:11:08 [WARNING] flowtracker.research.refresh: [refresh] SUNPHARMA: analytical_snapshot skipped: Cannot operate on a closed database.
+  01:11:08 [INFO] flowtracker.research.refresh: [refresh] SUNPHARMA: done 80.0s, 34 sources, 2957 total records
+  01:11:08 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SUNPHARMA: started
+  01:11:08 [INFO] flowtracker.research.peer_refresh: [peer_refresh] SUNPHARMA: done 0.0s, 0 peers fetched, 9 cached, 6 benchmarks
+  01:11:08 [INFO] flowtracker.research.concall_extractor: [concall_ensure] SUNPHARMA: all 4 quarters cached
+  01:11:08 [INFO] httpx: HTTP Request: GET https://news.google.com/rss/search?q=Sun%20Pharmaceutical%20Industries%20Limited%20SUNPHARMA%20stock%20India&hl=en-IN&gl=IN&ceid=IN:en "HTTP/1.1 200 OK"
+  01:11:08 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research-iter3/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  01:11:20 [INFO] flowtracker.research.agent: [ownership] tool_call: ToolSearch({"query": "select:mcp__ownership__get_analytical_profile,mcp__ownership__get_ownership,m...", "max_results": "20"})
+  01:11:20 [WARNING] flowtracker.research.agent: [ownership] rate limited: status=allowed type=five_hour resets_at=1776384000
+  01:11:29 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_analytical_profile({"symbol": "SUNPHARMA"})
+  01:11:29 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "SUNPHARMA", "section": "toc"})
+  01:11:30 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_market_context({"symbol": "SUNPHARMA", "section": "[\"delivery_analysis\",\"fii_dii_flows\",\"fii_dii_streak\"]"})
+  01:11:31 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_peer_sector({"symbol": "SUNPHARMA", "section": "[\"benchmarks\",\"sector_flows\"]"})
+  01:11:31 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_estimates({"symbol": "SUNPHARMA", "section": "[\"consensus\",\"price_targets\"]"})
+  01:11:32 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__render_chart({"symbol": "SUNPHARMA", "chart_type": "shareholding"})
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  01:11:32 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  /Users/tarang/Documents/Projects/equity-research-iter3/flow-tracker/flowtracker/research/charts.py:294: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    ax.set_xticklabels(quarters, rotation=45, ha="right")
+  01:11:32 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__render_chart({"symbol": "SUNPHARMA", "chart_type": "delivery"})
+  01:11:44 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "SUNPHARMA", "section": "[\"shareholding\",\"changes\",\"promoter_pledge\",\"mf_conviction\"]"})
+  01:11:45 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "SUNPHARMA", "section": "mf_changes"})
+  01:11:45 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "SUNPHARMA", "section": "shareholder_detail"})
+  01:11:45 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "SUNPHARMA", "section": "mf_holdings"})
+  01:11:47 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_company_context({"symbol": "SUNPHARMA", "section": "concall_insights", "doc_type": "", "limit": "4", "sub_section": "financial_metrics"})
+  01:11:48 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_company_context({"symbol": "SUNPHARMA", "section": "filings", "doc_type": "", "limit": "20", "sub_section": ""})
+  01:12:46 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "406231 * 16.12 / 100", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2026-Q1"})
+  01:12:47 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "406231 * 20.82 / 100", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2026-Q1"})
+  01:12:51 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "406231 * 6.57 / 100", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2026-Q1"})
+  01:12:52 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "406231 * 4.22 / 100", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2026-Q1"})
+  01:12:53 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "406231 * 4.31 / 100", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2026-Q1"})
+  01:12:53 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "406231 * 54.48 / 100", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2026-Q1"})
+  01:12:54 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "406231 * 12.09 / 100", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2026-Q1"})
+  01:12:54 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "18.05 - 16.12", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2025-Q4"})
+  01:12:55 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "20.82 - 18.55", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2025-Q4"})
+  01:12:56 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "6.57 - 4.71", "b": "0", "inputs_as_of": "2025-Q4", "mcap_as_of": "2025-Q4"})
+  01:17:42 [ERROR] claude_agent_sdk._internal.query: Fatal error in message reader: Command failed with exit code 1 (exit code: 1)
+  Error output: Check stderr output for details
+  01:17:42 [WARNING] flowtracker.research.agent: Agent 'ownership' for SUNPHARMA raised Exception after producing content — proceeding with partial output
+  01:17:42 [INFO] flowtracker.research.agent: Agent 'ownership' SUNPHARMA: TextBlocks (36962 chars) >> ResultMessage (0 chars), using TextBlocks
+  01:17:42 [INFO] flowtracker.research.agent: [ownership] unused_tools: SdkMcpTool(name='calculate', description="Financial calculator — use for ALL math, never compute in your head. Returns result + full calculation string for citation. Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574'). \n\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n  'shares_to_value_cr'     a=shares (raw count), b=price (₹) → value in ₹ Cr\n  'per_share_to_total_cr'  a=per_share_value (₹), b=shares (raw count) → total ₹ Cr\n  'total_cr_to_per_share'  a=total_cr (₹ Cr), b=shares (raw count) → per share (₹)\n  'pe_from_price_eps'      a=price (₹), b=eps (₹) → PE ratio\n  'eps_from_pat_shares'    a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹)\n  'fair_value'             a=pe_multiple, b=eps (₹) → fair value / share (₹)\n  'growth_rate'            a=old value, b=new value → growth %\n  'mcap_cr'                a=price (₹), b=shares (raw count) → market cap ₹ Cr\n  'margin_of_safety'       a=fair_value (₹), b=current_price (₹) → MoS %\n  'annualize_quarterly'    a=quarterly_value → annualized (×4); leave b='0'\n  'pct_of'                 a=part, b=whole → percentage\n  'ratio'                  a=numerator, b=denominator → ratio\n\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n  Only numbers and + - * / ( ) are permitted in the expression.\n\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.\n\nTIMESTAMP DISCIPLINE (for historical flow-value math) — pass optional inputs_as_of and mcap_as_of:\n  When multiplying a historical %pt change by a market cap to derive ₹Cr flow value, pass inputs_as_of (ISO quarter or date of the %pt context, e.g. '2023-Q4') AND mcap_as_of (ISO quarter or date of the mcap context, e.g. '2026-Q1'). If they differ, the tool returns a HISTORICAL_MCAP_MISMATCH warning that you MUST echo verbatim in prose before citing the ₹Cr figure — because current mcap × historical %pt can be off by 20-50%.\n  Omit both args (back-compat) for current-period math. See Tenet 16.", input_schema={'operation': <class 'str'>, 'a': <class 'str'>, 'b': <class 'str'>, 'inputs_as_of': <class 'str'>, 'mcap_as_of': <class 'str'>}, handler=<function calculate at 0x10bced4e0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_analytical_profile', description='Pre-computed analytical profile (updated weekly). Returns ALL metrics in ONE call: composite score (0-100), Piotroski F-Score (0-9), Beneish M-Score, earnings quality, Bernstein reverse DCF (implied growth + implied margin + 5x5 sensitivity matrix), capex cycle phase, common size P&L, BFSI metrics (NIM/ROA if bank), price performance (1M/3M/6M/1Y vs Nifty + sector). CALL THIS FIRST — drill into individual tools only for full 10Y history.', input_schema={'symbol': <class 'str'>}, handler=<function get_analytical_profile at 0x10bcec5e0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_company_context', description="Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>, 'doc_type': <class 'str'>, 'limit': <class 'int'>, 'sub_section': <class 'str'>}, handler=<function get_company_context at 0x10bced260>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_estimates', description="Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_estimates at 0x10bcecfe0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_fundamentals', description="Unified financial data. First call with NO section (or section='toc') returns a compact ~1-2KB table of contents listing the 14 available sections + 4 recommended wave-call compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital'. Do NOT call section='all' — the 70+KB response is truncated mid-payload by the MCP transport. Optional: quarters (default 12), years (default 10), sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_fundamentals at 0x10bcec860>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_market_context', description="Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']. Optional: days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_market_context at 0x10bced120>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_ownership', description="Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction'. Heavy sections are capped (mf_holdings top 30 by value + tail summary; shareholder_detail top 20 holders) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_ownership at 0x10bcecae0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_peer_sector', description="Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the 9 sections + 3 recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers'. Do NOT call section='all' — the ~50KB payload across 9 sections may truncate. Optional: metric (for specific valuation metric).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_peer_sector at 0x10bcecea0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='render_chart', description="Generate a PNG chart and return the file path for embedding in your report. Use the embed_markdown value directly in your report to show the chart. chart_type options: STOCK CHARTS: 'price' (price + SMA50/200, 7yr), 'pe' (PE ratio history, 7yr), 'delivery' (delivery % + volume bars, 90 days), 'revenue_profit' (10yr annual revenue & profit bars), 'quarterly' (12-quarter revenue & profit bars), 'margin_trend' (10yr OPM & NPM lines), 'roce_trend' (10yr ROCE bars, color-coded by quality), 'dupont' (DuPont decomposition: margin × turnover × leverage → ROE), 'cashflow' (10yr operating & free cash flow bars), 'shareholding' (12-quarter ownership trend lines), 'fair_value_range' (bear/base/bull vs current price horizontal bar), 'expense_pie' (expense breakdown pie chart), 'composite_radar' (8-factor quality score spider chart), 'dividend_history' (dividend payout ratio & DPS over time). SECTOR CHARTS: 'sector_mcap' (all sector stocks by market cap), 'sector_growth_bars' (sector peer revenue growth bars), 'sector_profitability_bars' (sector peer ROCE bars), 'sector_pe_distribution' (sector PE histogram with subject marked), 'sector_valuation_scatter' (PE vs ROCE scatter — bargain/avoid quadrants), 'sector_ownership_flow' (MF ownership changes — accumulation/exit). COMPARISON CHARTS (use comma-separated symbols, e.g. symbol='HDFCBANK,ICICIBANK'): 'comparison_revenue' (indexed revenue trajectories), 'comparison_pe' (PE history overlay), 'comparison_shareholding' (FII/MF ownership trends overlay), 'comparison_radar' (quality score radars overlaid), 'comparison_margins' (OPM/NPM trends overlay). Returns: {path, embed_markdown}.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function render_chart at 0x10bce79c0>, annotations=None)
+  01:17:42 [INFO] flowtracker.research.agent: [ownership] done: success 36324 chars, 24 calls, 9/9 tools used, 394s, $0.76
+  Agent completed in 475.8s (success=True)
+  Report: 36324 chars
+  Evidence log loaded (43 lines)
+  Grading with Gemini...
+  Grade: A- (91) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research-iter3/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research-iter3/flow-tracker/flowtracker/research/autoeval/eval_history/20260416T194824_all_for_ownership.json
+
+======================================================================
+AGENT SUMMARY: ownership
+======================================================================
+  pharma              SUNPHARMA     A-  (91)  [PASS]  prompt_fixes:1
+======================================================================
+passing:1  failing:0  total:1
+======================================================================
