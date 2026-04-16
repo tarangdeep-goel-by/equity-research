@@ -30,7 +30,7 @@ jobs:
             --cov-branch \
             --cov-report=term \
             --cov-report=xml \
-            --cov-fail-under=70
+            --cov-fail-under=74
 
       - name: Slow suite (CLI smoke tests)
         run: uv run pytest -m "slow"

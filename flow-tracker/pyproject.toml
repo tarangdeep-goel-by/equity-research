@@ -60,6 +60,7 @@ source = ["flowtracker"]
 precision = 1
 show_missing = true
 skip_covered = false
+fail_under = 74
 
 [project.scripts]
 flowtrack = "flowtracker.main:app"
