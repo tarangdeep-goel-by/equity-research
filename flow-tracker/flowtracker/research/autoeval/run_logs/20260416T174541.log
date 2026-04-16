@@ -1,0 +1,190 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260416T174541.log
+AutoEval (agent-first): agent=ownership sectors=['conglomerate']
+Target: grade_numeric >= 90
+
+--- ownership / ADANIENT (conglomerate) ---
+  Running agent...
+  23:15:42 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: started (max_age=6h)
+  23:15:42 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  23:15:42 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  23:15:42 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  23:15:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/ADANIENT/consolidated/ "HTTP/1.1 200 OK"
+  23:15:43 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: company_profile ok 1 records
+  23:15:43 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: company_documents ok 56 records
+  23:15:43 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: quarterly_results ok 13 records
+  23:15:43 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: screener_ratios ok 12 records
+  23:15:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/ADANIENT/consolidated/ "HTTP/1.1 200 OK"
+  23:15:43 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/6594425/ "HTTP/1.1 200 OK"
+  23:15:43 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: annual_financials ok 10 records
+  23:15:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/ADANIENT/ "HTTP/1.1 200 OK"
+  23:15:44 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/3370/ "HTTP/1.1 200 OK"
+  23:15:44 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: standalone_financials ok 10 records
+  23:15:44 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: screener_ids ok 1 records
+  23:15:44 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/chart/?q=Price+to+Earning-Median+PE-EPS&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  23:15:44 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: chart_pe ok 1194 records
+  23:15:45 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  23:15:45 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: chart_price ok 5495 records
+  23:15:47 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/6594425/peers/ "HTTP/1.1 200 OK"
+  23:15:47 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: peers ok 4 records
+  23:15:47 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/56/investors/promoters/quarterly/ "HTTP/1.1 200 OK"
+  23:15:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/56/investors/foreign_institutions/quarterly/ "HTTP/1.1 200 OK"
+  23:15:49 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/56/investors/domestic_institutions/quarterly/ "HTTP/1.1 200 OK"
+  23:15:50 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/56/investors/public/quarterly/ "HTTP/1.1 200 OK"
+  23:15:51 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: shareholders ok 231 records
+  23:15:51 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:15:52 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:15:53 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:15:54 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  23:15:55 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: schedules_quarters ok 156 records
+  23:15:55 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  23:15:56 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  23:15:58 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  23:15:59 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  23:16:00 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: schedules_profit-loss ok 168 records
+  23:16:01 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  23:16:02 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  23:16:03 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  23:16:04 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  23:16:05 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: schedules_balance-sheet ok 324 records
+  23:16:05 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  23:16:06 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  23:16:08 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/56/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  23:16:09 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: schedules_cash-flow ok 348 records
+  23:16:09 [WARNING] flowtracker.validation: valuation_snapshot ADANIENT/2026-04-16: earnings_growth=9629.6 outside [-500, 1000]
+  23:16:09 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: valuation_snapshot ok 1 records
+  23:16:09 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: consensus_estimate ok 1 records
+  /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/yfinance/scrapers/fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+    warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+  23:16:09 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: earnings_surprises ok 4 records
+  23:16:10 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: corporate_actions ok 25 records
+  23:16:10 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/companies-listing/corporate-filings-insider-trading "HTTP/1.1 200 OK"
+  23:16:11 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/corporates-pit?from_date=16-01-2026&to_date=16-04-2026&symbol=ADANIENT "HTTP/1.1 200 OK"
+  23:16:11 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: insider_transactions skipped: no data
+  23:16:11 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_09042026.csv "HTTP/1.1 200 OK"
+  23:16:11 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-09: 2451 records (total: 2451, day 0/7)
+  23:16:12 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_10042026.csv "HTTP/1.1 200 OK"
+  23:16:12 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-10: 2452 records (total: 4903, day 1/7)
+  23:16:12 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_13042026.csv "HTTP/1.1 200 OK"
+  23:16:12 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-13: 2456 records (total: 7359, day 4/7)
+  23:16:13 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_14042026.csv "HTTP/1.1 200 OK"
+  23:16:13 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-14: 2456 records (total: 9815, day 5/7)
+  23:16:13 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_15042026.csv "HTTP/1.1 200 OK"
+  23:16:14 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-15: 2456 records (total: 12271, day 6/7)
+  23:16:14 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_16042026.csv "HTTP/1.1 200 OK"
+  23:16:14 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-16: 2455 records (total: 14726, day 7/7)
+  23:16:15 [INFO] flowtracker.bhavcopy_client: Backfill complete: 6 trading days, 14726 records
+  23:16:16 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: delivery_data ok 6 records
+  23:16:16 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/market-data/live-equity-market "HTTP/1.1 200 OK"
+  23:16:16 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/snapshot-capital-market-largedeal "HTTP/1.1 200 OK"
+  23:16:16 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: bulk_block_deals ok 0 records
+  23:16:18 [INFO] httpx: HTTP Request: GET https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields "HTTP/1.1 200 OK"
+  23:16:19 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: macro ok 6 records
+  23:16:19 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/reports/fii-dii "HTTP/1.1 200 OK"
+  23:16:23 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/fiidiiTradeReact "HTTP/1.1 200 OK"
+  23:16:23 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: fii_dii_flows ok 2 records
+  23:16:24 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/PeerSmartSearch/w?Type=SS&text=ADANIENT "HTTP/1.1 200 OK"
+  23:16:24 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=1&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:27 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=2&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:28 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=3&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:29 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=4&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:30 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=5&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:31 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=6&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:32 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=7&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:33 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=8&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:35 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=9&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:36 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=10&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:36 [INFO] httpx: HTTP Request: GET https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w?pageno=11&strCat=-1&subcategory=-1&strPrevDate=20230417&strToDate=20260416&strSearch=P&strscrip=512599&strType=C "HTTP/1.1 200 OK"
+  23:16:37 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: filings ok 493 records
+  23:16:38 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/discounted-cash-flow/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  23:16:38 [WARNING] flowtracker.fmp_client: FMP request failed: /discounted-cash-flow/ADANIENT.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/discounted-cash-flow/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:38 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: fmp_dcf skipped: no data
+  23:16:39 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14 "HTTP/1.1 403 Forbidden"
+  23:16:39 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/ADANIENT.NS {'type': 'rsi', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=rsi&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:40 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50 "HTTP/1.1 403 Forbidden"
+  23:16:40 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/ADANIENT.NS {'type': 'sma', 'period': 50} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=50'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:40 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200 "HTTP/1.1 403 Forbidden"
+  23:16:40 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/ADANIENT.NS {'type': 'sma', 'period': 200} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=sma&period=200'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:41 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14 "HTTP/1.1 403 Forbidden"
+  23:16:41 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/ADANIENT.NS {'type': 'macd', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=macd&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:42 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14 "HTTP/1.1 403 Forbidden"
+  23:16:42 [WARNING] flowtracker.fmp_client: FMP request failed: /technical_indicator/daily/ADANIENT.NS {'type': 'adx', 'period': 14} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/technical_indicator/daily/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&type=adx&period=14'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:42 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: fmp_technicals skipped: no data
+  23:16:43 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/key-metrics/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  23:16:43 [WARNING] flowtracker.fmp_client: FMP request failed: /key-metrics/ADANIENT.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/key-metrics/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:43 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: fmp_key_metrics skipped: no data
+  23:16:43 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/financial-growth/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10 "HTTP/1.1 403 Forbidden"
+  23:16:43 [WARNING] flowtracker.fmp_client: FMP request failed: /financial-growth/ADANIENT.NS {'period': 'annual', 'limit': 10} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/financial-growth/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=10'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:43 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: fmp_growth skipped: no data
+  23:16:44 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/grade/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  23:16:44 [WARNING] flowtracker.fmp_client: FMP request failed: /grade/ADANIENT.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/grade/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:44 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: fmp_grades skipped: no data
+  23:16:44 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/price-target/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero "HTTP/1.1 403 Forbidden"
+  23:16:44 [WARNING] flowtracker.fmp_client: FMP request failed: /price-target/ADANIENT.NS None -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/price-target/ADANIENT.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:44 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: fmp_targets skipped: no data
+  23:16:44 [INFO] flowtracker.research.snapshot_builder: [snapshot] ADANIENT: built (10 screener, 18 yfinance, 2 ownership fields)
+  23:16:44 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: company_snapshot ok 1 records
+  23:16:45 [INFO] httpx: HTTP Request: GET https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/ADANIENT.NS "HTTP/1.1 200 OK"
+  23:16:45 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: yahoo_peers ok 5 records
+  23:16:45 [WARNING] flowtracker.research.refresh: [refresh] ADANIENT: analytical_snapshot skipped: Cannot operate on a closed database.
+  23:16:45 [INFO] flowtracker.research.refresh: [refresh] ADANIENT: done 63.0s, 34 sources, 8567 total records
+  23:16:45 [INFO] flowtracker.research.peer_refresh: [peer_refresh] ADANIENT: started
+  23:16:46 [ERROR] yfinance: HTTP Error 404: Not Found{"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: 540492.NS"}}}
+  23:16:46 [WARNING] flowtracker.research.peer_refresh: yfinance snapshot for 540492: No data found for 540492
+  23:16:47 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/key-metrics/540492.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=1 "HTTP/1.1 403 Forbidden"
+  23:16:47 [WARNING] flowtracker.fmp_client: FMP request failed: /key-metrics/540492.NS {'period': 'annual', 'limit': 1} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/key-metrics/540492.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=1'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:48 [INFO] httpx: HTTP Request: GET https://financialmodelingprep.com/api/v3/financial-growth/540492.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=1 "HTTP/1.1 403 Forbidden"
+  23:16:48 [WARNING] flowtracker.fmp_client: FMP request failed: /financial-growth/540492.NS {'period': 'annual', 'limit': 1} -- Client error '403 Forbidden' for url 'https://financialmodelingprep.com/api/v3/financial-growth/540492.NS?apikey=tCAqzeXXLYYobY6eZpvaZuvqwHjKzero&period=annual&limit=1'
+  For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  23:16:49 [INFO] flowtracker.research.peer_refresh: [peer_refresh] ADANIENT: done 4.0s, 1 peers fetched, 7 cached, 6 benchmarks
+  23:16:49 [INFO] flowtracker.research.concall_extractor: [concall_ensure] ADANIENT: all 4 quarters cached
+  23:16:49 [INFO] httpx: HTTP Request: GET https://news.google.com/rss/search?q=Adani%20Enterprises%20Limited%20ADANIENT%20stock%20India&hl=en-IN&gl=IN&ceid=IN:en "HTTP/1.1 200 OK"
+  23:16:50 [INFO] claude_agent_sdk._internal.transport.subprocess_cli: Using bundled Claude Code CLI: /Users/tarang/Documents/Projects/equity-research/flow-tracker/.venv/lib/python3.12/site-packages/claude_agent_sdk/_bundled/claude
+  23:16:56 [INFO] flowtracker.research.agent: [ownership] tool_call: ToolSearch({"query": "select:mcp__ownership__get_analytical_profile,mcp__ownership__get_ownership,m...", "max_results": "20"})
+  23:16:56 [WARNING] flowtracker.research.agent: [ownership] rate limited: status=allowed type=five_hour resets_at=1776369600
+  23:17:00 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_analytical_profile({"symbol": "ADANIENT"})
+  23:17:00 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "ADANIENT", "section": "toc"})
+  23:17:12 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "ADANIENT", "section": "[\"shareholding\",\"changes\",\"promoter_pledge\",\"mf_conviction\"]"})
+  23:17:12 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "ADANIENT", "section": "mf_changes"})
+  23:17:12 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_ownership({"symbol": "ADANIENT", "section": "shareholder_detail"})
+  23:17:13 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_market_context({"symbol": "ADANIENT", "section": "[\"delivery_analysis\",\"fii_dii_flows\",\"fii_dii_streak\"]"})
+  23:17:13 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_peer_sector({"symbol": "ADANIENT", "section": "[\"benchmarks\",\"sector_flows\"]"})
+  23:17:14 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_estimates({"symbol": "ADANIENT", "section": "[\"consensus\",\"price_targets\"]"})
+  23:17:15 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_company_context({"symbol": "ADANIENT", "section": "concall_insights", "doc_type": "", "limit": "0", "sub_section": ""})
+  23:17:42 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__get_company_context({"symbol": "ADANIENT", "section": "concall_insights", "sub_section": "management_commentary", "doc_type": "", "limit": "0"})
+  23:17:43 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__render_chart({"symbol": "ADANIENT", "chart_type": "shareholding"})
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  23:17:43 [INFO] matplotlib.category: Using categorical units to plot a list of strings that are all parsable as floats or dates. If these strings should be plotted as numbers, cast to the appropriate data type before plotting.
+  /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/charts.py:294: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    ax.set_xticklabels(quarters, rotation=45, ha="right")
+  23:17:43 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__render_chart({"symbol": "ADANIENT", "chart_type": "delivery"})
+  23:17:44 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "pct_of", "a": "11.65", "b": "100"})
+  23:17:45 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "299899.32 * 11.65 / 100", "b": "0"})
+  23:17:45 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "299899.32 * 3.64 / 100", "b": "0"})
+  23:17:46 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "299899.32 * 2.78 / 100", "b": "0"})
+  23:17:46 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "73.97 + 0.03", "b": "0"})
+  23:17:47 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "299899.32 * 0.81 / 100", "b": "0"})
+  23:17:47 [INFO] flowtracker.research.agent: [ownership] tool_call: mcp__ownership__calculate({"operation": "expr", "a": "19.34 - 11.65", "b": "0"})
+  23:22:21 [INFO] flowtracker.research.agent: [ownership] unused_tools: SdkMcpTool(name='calculate', description="Financial calculator — use for ALL math, never compute in your head. Returns result + full calculation string for citation. Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574'). \n\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n  'shares_to_value_cr'     a=shares (raw count), b=price (₹) → value in ₹ Cr\n  'per_share_to_total_cr'  a=per_share_value (₹), b=shares (raw count) → total ₹ Cr\n  'total_cr_to_per_share'  a=total_cr (₹ Cr), b=shares (raw count) → per share (₹)\n  'pe_from_price_eps'      a=price (₹), b=eps (₹) → PE ratio\n  'eps_from_pat_shares'    a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹)\n  'fair_value'             a=pe_multiple, b=eps (₹) → fair value / share (₹)\n  'growth_rate'            a=old value, b=new value → growth %\n  'mcap_cr'                a=price (₹), b=shares (raw count) → market cap ₹ Cr\n  'margin_of_safety'       a=fair_value (₹), b=current_price (₹) → MoS %\n  'annualize_quarterly'    a=quarterly_value → annualized (×4); leave b='0'\n  'pct_of'                 a=part, b=whole → percentage\n  'ratio'                  a=numerator, b=denominator → ratio\n\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n  Only numbers and + - * / ( ) are permitted in the expression.\n\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.", input_schema={'operation': <class 'str'>, 'a': <class 'str'>, 'b': <class 'str'>}, handler=<function calculate at 0x110980040>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_analytical_profile', description='Pre-computed analytical profile (updated weekly). Returns ALL metrics in ONE call: composite score (0-100), Piotroski F-Score (0-9), Beneish M-Score, earnings quality, Bernstein reverse DCF (implied growth + implied margin + 5x5 sensitivity matrix), capex cycle phase, common size P&L, BFSI metrics (NIM/ROA if bank), price performance (1M/3M/6M/1Y vs Nifty + sector). CALL THIS FIRST — drill into individual tools only for full 10Y history.', input_schema={'symbol': <class 'str'>}, handler=<function get_analytical_profile at 0x11096f100>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_company_context', description="Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>, 'doc_type': <class 'str'>, 'limit': <class 'int'>, 'sub_section': <class 'str'>}, handler=<function get_company_context at 0x11096fd80>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_estimates', description="Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_estimates at 0x11096fb00>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_fundamentals', description="Unified financial data. First call with NO section (or section='toc') returns a compact ~1-2KB table of contents listing the 14 available sections + 4 recommended wave-call compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital'. Do NOT call section='all' — the 70+KB response is truncated mid-payload by the MCP transport. Optional: quarters (default 12), years (default 10), sub_section.", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_fundamentals at 0x11096f380>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_market_context', description="Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']. Optional: days (default 90).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_market_context at 0x11096fc40>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_ownership', description="Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction'. Heavy sections are capped (mf_holdings top 30 by value + tail summary; shareholder_detail top 20 holders) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_ownership at 0x11096f600>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='get_peer_sector', description="Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the 9 sections + 3 recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers'. Do NOT call section='all' — the ~50KB payload across 9 sections may truncate. Optional: metric (for specific valuation metric).", input_schema={'symbol': <class 'str'>, 'section': <class 'str'>}, handler=<function get_peer_sector at 0x11096f9c0>, annotations=ToolAnnotations(title=None, readOnlyHint=True, destructiveHint=None, idempotentHint=None, openWorldHint=None)), SdkMcpTool(name='render_chart', description="Generate a PNG chart and return the file path for embedding in your report. Use the embed_markdown value directly in your report to show the chart. chart_type options: STOCK CHARTS: 'price' (price + SMA50/200, 7yr), 'pe' (PE ratio history, 7yr), 'delivery' (delivery % + volume bars, 90 days), 'revenue_profit' (10yr annual revenue & profit bars), 'quarterly' (12-quarter revenue & profit bars), 'margin_trend' (10yr OPM & NPM lines), 'roce_trend' (10yr ROCE bars, color-coded by quality), 'dupont' (DuPont decomposition: margin × turnover × leverage → ROE), 'cashflow' (10yr operating & free cash flow bars), 'shareholding' (12-quarter ownership trend lines), 'fair_value_range' (bear/base/bull vs current price horizontal bar), 'expense_pie' (expense breakdown pie chart), 'composite_radar' (8-factor quality score spider chart), 'dividend_history' (dividend payout ratio & DPS over time). SECTOR CHARTS: 'sector_mcap' (all sector stocks by market cap), 'sector_growth_bars' (sector peer revenue growth bars), 'sector_profitability_bars' (sector peer ROCE bars), 'sector_pe_distribution' (sector PE histogram with subject marked), 'sector_valuation_scatter' (PE vs ROCE scatter — bargain/avoid quadrants), 'sector_ownership_flow' (MF ownership changes — accumulation/exit). COMPARISON CHARTS (use comma-separated symbols, e.g. symbol='HDFCBANK,ICICIBANK'): 'comparison_revenue' (indexed revenue trajectories), 'comparison_pe' (PE history overlay), 'comparison_shareholding' (FII/MF ownership trends overlay), 'comparison_radar' (quality score radars overlaid), 'comparison_margins' (OPM/NPM trends overlay). Returns: {path, embed_markdown}.", input_schema={'symbol': <class 'str'>, 'chart_type': <class 'str'>}, handler=<function render_chart at 0x11096e520>, annotations=None)
+  23:22:21 [INFO] flowtracker.research.agent: [ownership] done: success 28700 chars, 20 calls, 9/9 tools used, 331s, $0.62
+  Agent completed in 400.5s (success=True)
+  Report: 28700 chars
+  Evidence log loaded (39 lines)
+  Grading with Gemini...
+ERROR: google-genai not installed. Run: uv sync --extra autoeval
