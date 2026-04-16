@@ -158,3 +158,112 @@ class TestValuationBand:
         band = store.get_valuation_band("sbin", "pe_trailing", days=30)
         assert band is not None
         assert band.symbol == "SBIN"
+
+
+# ---------------------------------------------------------------------------
+# valuation_band — Phase 3.1: prefer screener_charts for pe_trailing
+# ---------------------------------------------------------------------------
+
+
+def _seed_screener_charts_pe(store: FlowStore, symbol: str, n_days: int,
+                             start_pe: float = 10.0, step: float = 0.05) -> None:
+    """Seed screener_charts with chart_type='pe' rows going back n_days from today."""
+    today = date.today()
+    for i in range(n_days):
+        d = (today - timedelta(days=n_days - 1 - i)).isoformat()
+        pe = start_pe + i * step
+        store._conn.execute(
+            "INSERT INTO screener_charts (symbol, chart_type, metric, date, value) "
+            "VALUES (?, 'pe', 'Price to Earning', ?, ?) "
+            "ON CONFLICT(symbol, chart_type, metric, date) DO UPDATE SET value=excluded.value",
+            (symbol.upper(), d, pe),
+        )
+    store._conn.commit()
+
+
+class TestValuationBandPEFromCharts:
+    def test_get_valuation_band_uses_screener_charts_when_available(self, store: FlowStore):
+        """Phase 3.1: pe_trailing band should read 200 rows from screener_charts
+        instead of the ~15 rows in valuation_snapshot."""
+        _seed_screener_charts_pe(store, "HDFCBANK", n_days=200, start_pe=12.0, step=0.02)
+
+        # Also seed a few valuation_snapshot rows to confirm they are NOT used when
+        # charts are available.
+        today = date.today()
+        for i in range(5):
+            d = (today - timedelta(days=i)).isoformat()
+            store.upsert_valuation_snapshot(
+                make_valuation_snapshot(symbol="HDFCBANK", dt=d, pe=99.0))
+
+        band = store.get_valuation_band("HDFCBANK", "pe_trailing", days=365)
+        assert band is not None
+        assert band.num_observations == 200
+        # min from charts = 12.0; max = 12.0 + 199*0.02 = 15.98
+        assert band.min_val == pytest.approx(12.0)
+        assert band.max_val == pytest.approx(15.98, abs=0.01)
+        # period spans ~200 days back to today
+        assert band.period_start < band.period_end
+        # Current value should be the most recent data point; valuation_snapshot.date
+        # equals today (same as latest chart date), and 99.0 > chart_latest, so the
+        # snapshot takes precedence when dates are tied on the snapshot side (> check).
+        # Latest chart is today with pe ≈ 15.98; snapshot also today (tie, chart wins).
+        assert band.current_val == pytest.approx(15.98, abs=0.01)
+
+    def test_get_valuation_band_falls_back_to_valuation_snapshot_when_no_charts(
+        self, store: FlowStore
+    ):
+        """If screener_charts has no 'pe' data, behavior should be unchanged
+        (read from valuation_snapshot)."""
+        today = date.today()
+        for i in range(10):
+            d = (today - timedelta(days=9 - i)).isoformat()
+            store.upsert_valuation_snapshot(
+                make_valuation_snapshot(symbol="SBIN", dt=d, pe=8.0 + i))
+
+        band = store.get_valuation_band("SBIN", "pe_trailing", days=30)
+        assert band is not None
+        assert band.num_observations == 10
+        assert band.min_val == pytest.approx(8.0)
+        assert band.max_val == pytest.approx(17.0)
+
+    def test_get_valuation_band_non_pe_metric_unchanged(self, store: FlowStore):
+        """Non-PE metrics (e.g., pb_ratio) should always read from valuation_snapshot,
+        even if screener_charts has 'pe' data for the same symbol."""
+        _seed_screener_charts_pe(store, "INFY", n_days=300, start_pe=20.0, step=0.1)
+        today = date.today()
+        for i in range(7):
+            d = (today - timedelta(days=6 - i)).isoformat()
+            store.upsert_valuation_snapshot(
+                make_valuation_snapshot(symbol="INFY", dt=d, pe=25.0))
+
+        band = store.get_valuation_band("INFY", "pb_ratio", days=30)
+        assert band is not None
+        # factories default pb_ratio = 1.8, so all 7 snapshot rows have pb_ratio=1.8
+        assert band.num_observations == 7
+        assert band.min_val == pytest.approx(1.8)
+        assert band.max_val == pytest.approx(1.8)
+
+    def test_get_valuation_band_pe_snapshot_newer_than_charts(self, store: FlowStore):
+        """When valuation_snapshot has a more recent date than any screener_charts row,
+        current_val should come from the snapshot (daily cron > weekly chart refresh)."""
+        # Seed charts ending 10 days ago
+        today = date.today()
+        for i in range(50):
+            d = (today - timedelta(days=10 + (49 - i))).isoformat()
+            pe = 14.0 + i * 0.04
+            store._conn.execute(
+                "INSERT INTO screener_charts (symbol, chart_type, metric, date, value) "
+                "VALUES (?, 'pe', 'Price to Earning', ?, ?)",
+                ("TCS", d, pe),
+            )
+        store._conn.commit()
+
+        # Snapshot from today with a distinct pe
+        store.upsert_valuation_snapshot(
+            make_valuation_snapshot(symbol="TCS", dt=today.isoformat(), pe=42.0))
+
+        band = store.get_valuation_band("TCS", "pe_trailing", days=365)
+        assert band is not None
+        assert band.num_observations == 50  # from charts
+        assert band.current_val == pytest.approx(42.0)  # from snapshot (newer)
+        assert band.period_end == today.isoformat()
