@@ -10,8 +10,8 @@ from pathlib import Path
 # is applied AFTER app import and cannot change an already-created Console,
 # which was the root cause of flaky CLI snapshot tests on CI (narrow runner
 # terminals vs. wide dev terminals producing different wrap behaviour).
-os.environ.setdefault("COLUMNS", "120")
-os.environ.setdefault("NO_COLOR", "1")
+os.environ["COLUMNS"] = "200"
+os.environ["NO_COLOR"] = "1"
 os.environ.setdefault("TERM", "dumb")
 
 import pytest
