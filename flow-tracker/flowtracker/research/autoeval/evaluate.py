@@ -112,7 +112,7 @@ Grade this {agent} report on how well it covers ITS scope, not the full investme
 5. **Sector Framework** — Are the RIGHT analytical frameworks applied for THIS sector type? (e.g., BFSI needs NIM/CASA/CD ratio/credit costs; metals needs EV/EBITDA/cycle positioning; platform needs unit economics/GMV)
 6. **Data Sourcing** — Are claims backed by cited data? Sources attributed? Tool data used correctly?
 7. **Tool-Use Discipline** — Judge from the Agent Execution Log. A: retried on truncation/empty, chose the right tool first time, ≤1 wasted call, surfaced data-quality gaps honestly. B+: mostly disciplined but one tool choice was suboptimal or one "attempted" metric had no backing tool calls. C: gave up on first empty result, called same tool ≥3× without changing args, or claimed "attempted" without evidence. F: ignored the tool layer / no tool use. **Requires the Execution Log — if absent, grade N/A (return numeric=85).**
-8. **Cost Efficiency** — Judge from the Agent Execution Log. A: full-depth report with <$0.30 cost AND ≤8 turns. B+: $0.30–$0.60 OR 9–12 turns. C: $0.60–$1.00 OR 13–20 turns. F: >$1.00 OR >20 turns for similar depth, or cache hit rate <20% (re-pays for context). **Requires the Execution Log — if absent, grade N/A (return numeric=85).**
+8. **Cost Efficiency** — Judge from the Agent Execution Log. A: full-depth report with <$0.30 cost AND ≤8 turns AND cache hit rate ≥70%. B+: $0.30–$0.60 OR 9–12 turns OR cache hit rate 50–70%. C: $0.60–$1.00 OR 13–20 turns OR cache hit rate 30–50%. F: >$1.00 OR >20 turns for similar depth, or cache hit rate <30% (re-pays for context). Cache hit rate is surfaced directly on the "Cache hit rate:" line — do not re-derive from raw tokens. **Requires the Execution Log — if absent, grade N/A (return numeric=85).**
 
 ## Grade Scale
 A+ (97) = Institutional quality — you would send this to a portfolio manager without edits
@@ -316,6 +316,14 @@ def format_agent_evidence(
                     f"{cr_tok/1000:.1f}k cache-read / {cw_tok/1000:.1f}k cache-write "
                     f"-> ${total_cost:.2f}"
                 )
+                # Cache hit rate: reads / (reads + fresh context written or sent)
+                # High hit rate = efficient re-use of cached prompt prefix.
+                # Surfaced explicitly so Gemini can reference it in cost_efficiency grading
+                # without re-deriving from raw numbers.
+                cache_denominator = cr_tok + cw_tok + in_tok
+                if cache_denominator > 0:
+                    hit_rate = 100.0 * cr_tok / cache_denominator
+                    sections.append(f"- Cache hit rate: {hit_rate:.1f}%")
 
             # --- Time to first token -------------------------------------
             if ttft_ms is not None:
