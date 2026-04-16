@@ -17,8 +17,6 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
 
       - name: Install Python + deps
         run: uv sync --extra test
