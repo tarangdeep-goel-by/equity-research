@@ -1,6 +1,7 @@
 # Plan: Comprehensive Valuation Agent Fixes
 
 **Created:** 2026-04-16 (after first end-to-end eval of harmonized valuation agent across 15 sectors)
+**Revised:** 2026-04-16 (post-review: corrected Phase 3.1 diagnosis, split Phase 1 into 1a/1b/1c, locked Phase 2 merge model, flagged tenet structural conversion)
 **Owner:** equity-research/flow-tracker
 **Source:** `plans/overnight-valuation-fixes.md` (eval results) + 45 Gemini-flagged issues across 15 sectors
 **Goal:** Address every substantive issue, not just the ones blocking the A- bar. Treat Gemini's feedback as the analytical critique it is.
@@ -155,9 +156,11 @@ These ride entirely in `prompts.py` and `playbook` updates. Single PR. No sector
 
 ### 1.2 — `VALUATION_SYSTEM_V2` new tenets (Patterns B, C2, C3, C4, D, F)
 
-**Where:** `flow-tracker/flowtracker/research/prompts.py`, `VALUATION_SYSTEM_V2` tenets section.
+**Where:** `flow-tracker/flowtracker/research/prompts.py`, `VALUATION_SYSTEM_V2`.
 
-**Add as new tenets (numbering follows current last tenet):**
+**Structural prerequisite (verified 2026-04-16):** `VALUATION_SYSTEM_V2` is currently a bullet-point "Key Rules" block (~14 bullets, prompts.py:495-524), NOT numbered tenets. `OWNERSHIP_SYSTEM_V2` uses numbered tenets (e.g., Tenet 14 at prompts.py:381). Before adding new rules, **convert `VALUATION_SYSTEM_V2` to numbered tenet format** to match the ownership convention. ~30-line restructure, no semantic change. This pays off when reasoning across agent prompts and when other agents (business/risk/sector) follow the same harmonization.
+
+**Add as new tenets after the existing converted ones:**
 
 **Tenet — Sector framework: name = execute (Pattern B)**
 > When you state in prose that a particular metric is the "primary", "most appropriate", or "anchor" valuation framework for the sector, you must execute that calculation in the Fair Value Triangle and assign it the highest weight. Naming a framework without computing it leaves the report inconsistent — your prose and your math should agree.
@@ -221,6 +224,22 @@ These ride entirely in `prompts.py` and `playbook` updates. Single PR. No sector
 
 `mandatory_metrics_status` in valuation briefing schema is already in place from Phase 1. Add to the list of required metric checks: `fallback_chain_complete: bool` indicating whether all fallback tools were called for partial primary outputs. Optional but useful as a self-check.
 
+### 1.6 — Cross-agent invariant lifts to `SHARED_PREAMBLE_V2` (Patterns A + F)
+
+**Where:** `flow-tracker/flowtracker/research/prompts.py`, `SHARED_PREAMBLE_V2`.
+
+**Decision:** §11 #2 locked — lift now rather than re-discover when business/risk/sector/technical agents hit their eval cycles.
+
+**Add as a new shared invariant block:**
+
+> **Fallback tool discipline (Pattern A).** Each agent's tool registry distinguishes primary tools from fallbacks. When a primary tool returns partial/weak/empty data (narrow time window, fewer than the natural minimum observations, empty results, business-mismatched outputs), call the registered fallback before composing your section. Naming the gap in prose is not a substitute for calling the fallback. Your INSTRUCTIONS_V2 contains the agent-specific fallback map; consult it during the workflow's data-collection step.
+>
+> **Open-questions discipline (Pattern F).** Open questions are reserved for items genuinely unverifiable from your tool registry. Before raising any open question, confirm you have called every fallback tool relevant to the gap. Open questions outside your agent's domain belong to other agents and waste the 3-5 budget. (Lifted from `OWNERSHIP_SYSTEM_V2` Tenet 14 to apply across all specialists.)
+
+**Affects all 8 specialist agents.** The valuation-specific Fallback Tool Map (§1.3) and ownership's open-questions ceiling stay in their agent-specific systems — the shared layer just ensures every agent has the same default discipline. When business/risk/sector/technical agents are harmonized, each will need its own fallback map populated; the shared invariant ensures the rule is already in place when those maps land.
+
+**Regression watch:** the same spot-check from §1.1 covers this — running 2 sectors each through ownership + financials post-Phase-1 confirms no regression from either §1.1 or §1.6.
+
 ---
 
 ## 4. Phase 2 — Sector Skill Files (intersects `full-sector-skills-buildout.md`)
@@ -259,34 +278,49 @@ Each file follows the mandatory template:
 5. Data-shape fallback (when canonical KPIs missing — fall back to concall management commentary)
 6. Sector-specific open-questions templates (3-5)
 
-### Generation method — same as ownership/financials
+### Generation method — locked: merge with `full-sector-skills-buildout.md` Phase 2
 
-Per-sector subagent dispatch (1 subagent owns business + valuation + risk + sector files for 1 sector → coherent framing). Drafts → Gemini review → revise → orchestrator spot-check.
+**Decision (locked 2026-04-16):** Execute jointly with `full-sector-skills-buildout.md` Phase 2. Single subagent dispatch model:
+
+- **One subagent per sector** owns ALL specialist files for that sector (business + valuation + risk + sector + any missing financials/ownership). Coherent cross-file framing per sector beats parallel dispatch by file-type, which would split context across 4 subagents per sector.
+- **Per-subagent input:** sector eval results (Gemini-flagged issues for that sector across all agents), playbook §3.2 template, the Mandatory Metric Checklist row from §4 above, links to existing `_shared.md` / `financials.md` / `ownership.md` for consistency.
+- **Per-subagent output:** drafts of all missing specialist files for that sector. Subagent also flags inconsistencies it finds across the existing files.
+- **Review gate:** Gemini review per sector batch → orchestrator spot-checks 3 sectors (1 BFSI, 1 cyclical, 1 platform/IT) for cross-file coherence → revise → merge.
+
+**Updates to `full-sector-skills-buildout.md`:** Phase 2 of that plan must be cross-referenced to point at this plan's §4 mandatory-metric checklists as the input spec for the valuation files.
 
 ### Coverage note — `private_bank` doesn't yet have skill files
 
-Just bfsi exists. Phase 2 should create `sector_skills/private_bank/` with valuation.md + ownership.md + financials.md (the latter two already noted in `post-overnight-fixes.md`).
+`private_bank/` exists with `_shared.md`, `financials.md`, `ownership.md` (verified 2026-04-16). Missing only `valuation.md`. Phase 2 generates it as part of the per-sector subagent dispatch.
 
 ---
 
 ## 5. Phase 3 — Data Pipeline Fixes (Pattern E)
 
-Four discrete data fixes. Each unblocks multiple sectors. Order by leverage:
+**Scope locked (§11 #5):** 3.1 + 3.3 + 3.4 in this cycle. 3.2 deferred (cross-agent FMP coordination), 3.5 deferred (single-stock impact). Order by leverage:
 
 ### 3.1 — PE/PB band depth (8+ sectors affected)
 
 **Where:** `flow-tracker/flowtracker/research/data_api.py::ResearchDataAPI.get_valuation_band()` (and downstream caching layer).
 
-**Diagnosis needed:** Why does `get_valuation(band)` return 4-week windows? Likely candidates:
-- (a) The Screener `pe` chart endpoint returns full history but the wrapping function filters/caches only the last 30 days
-- (b) Daily price × daily EPS (TTM) requires daily EPS — if daily EPS isn't available, function falls back to weekly/monthly and only the most recent month exists in DB
-- (c) `days` parameter default is 30 instead of 1825 (5Y)
+**Original diagnosis was wrong.** `days` default is already **2500 (~6.8yr)** at `data_api.py:429`, not 30. The real root cause is somewhere else in the call chain.
 
-**Fix:** Investigate, likely change default `days` from 30 → 1825 in `get_valuation_band` and re-verify Screener chart parsing handles the longer range.
+**Diagnostic step (DO THIS FIRST, before any fix):**
+1. Run `get_valuation(symbol='HDFCBANK', section='band')` (or any of bfsi / it_services / real_estate / regulated_power tickers that hit the issue) and capture the actual returned obs count + date range.
+2. Trace the call chain: `data_api.get_valuation_band` → store query → Screener chart parsing → cache layer. Identify which layer truncates 2500 → ~28.
+3. Candidate culprits to inspect:
+   - **(a)** Cache layer storing only the most recent month per symbol (TTL or row-cap on the cached chart series).
+   - **(b)** Screener `pe` chart endpoint returning full history, but the parser/store retaining only the latest N rows (check store.py insert logic for the chart series table).
+   - **(c)** Agent passing a non-default `days` value at the call site — search for `get_valuation(.*band.*days=` in agent prompts/tools to confirm.
+   - **(d)** Daily EPS (TTM) gap — if daily EPS isn't backfilled, the JOIN that produces daily PE drops to whatever rows the EPS series has.
+
+**Fix:** Determined by diagnostic step. Document the actual root cause in this section before patching.
 
 **Test:** All 4 sectors (bfsi, it_services, real_estate, regulated_power) re-run; confirm band returns >500 observations and spans >3 years.
 
-### 3.2 — FMP DCF coverage for Indian equities (4+ sectors affected, also financials agent)
+### 3.2 — FMP DCF coverage for Indian equities (4+ sectors affected, also financials agent) — **DEFERRED**
+
+**Status (§11 #5):** Deferred from this cycle. Pre-existing issue and cross-agent (financials also affected). Will be picked up alongside the next financials-agent eval cycle when cross-agent coordination is natural.
 
 **Where:** `flow-tracker/flowtracker/fmp_client.py` + `flow-tracker/flowtracker/research/data_api.py::get_fair_value_analysis(section='dcf')`.
 
@@ -316,11 +350,13 @@ Four discrete data fixes. Each unblocks multiple sectors. Order by leverage:
 
 **Test:** telecom/BHARTIARTL, regulated_power/NTPC, bfsi/SBIN, private_bank/HDFCBANK SOTP returns named listed + unlisted subs. Closes telecom's biggest grade gap.
 
-### 3.4 — BFSI asset quality + CASA (1 sector here, also flagged in financials agent)
+### 3.4 — BFSI asset quality + CASA (1 sector here, also flagged in financials agent) — **COORDINATE, DON'T DOUBLE-TRACK**
 
-Already documented in `post-overnight-fixes.md` Phase 6 (concall extractor `bfsi_asset_quality` schema). Coordinate.
+**Status (§11 #5):** In scope for this cycle but executed as part of `post-overnight-fixes.md` Phase 6 (concall extractor `bfsi_asset_quality` schema). Do NOT re-implement here. Action: confirm Phase 6 status before Phase 4 cycle B; if not yet shipped, prioritize alongside Phase 3.1/3.3 work.
 
-### 3.5 — Turnaround margin baseline for projections (1 sector but high impact)
+### 3.5 — Turnaround margin baseline for projections (1 sector but high impact) — **DEFERRED**
+
+**Status (§11 #5):** Deferred. Only insurance/POLICYBZR triggers this in the current eval matrix. Revisit when a second turnaround stock joins the matrix and the pattern is more than n=1.
 
 **Where:** `flow-tracker/flowtracker/research/projections.py` — projection tool uses naive 3-yr average margin.
 
@@ -399,28 +435,33 @@ Several patterns will surface identically when the other 4 untested agents (busi
 
 ## 10. Execution Sequence (optimized)
 
-| Day | Phase | Output |
-|---|---|---|
-| Day 1 (now) | 1.1 + 1.2 + 1.3 + 1.4 + 1.5 | Single PR `feat/valuation-prompt-patches`, ~150-200 line diff, merged after spot-check |
-| Day 1 evening | Phase 4 cycle A | Re-eval 15 sectors with new prompts, expect 3-5 grade lifts |
-| Day 2-3 | Phase 2 | 14 valuation.md sector skill files via subagent batch, Gemini-reviewed, merged |
-| Day 3 evening | Phase 4 cycle B | Re-eval 15 sectors, expect more A- → A |
-| Day 4-7 | Phase 3 | 4-5 data pipeline fixes (PE band, FMP DCF, subsidiary mapping, turnaround margins) |
-| Day 7 | Phase 4 cycle C | Final re-eval, target 14/14 A- with most A |
+**Phase 1 split into three PRs (revised 2026-04-16)** to isolate cross-agent regression risk. The original "single PR" approach bundled an 8-agent SHARED_PREAMBLE change with valuation-only patches — too much blast radius for one merge.
 
-**Total elapsed:** ~1 week
+| Step | Phase | Output | Risk |
+|---|---|---|---|
+| Day 1 morning | **PR 1a** — SHARED_PREAMBLE patches (§1.1 + §1.6) | Calculate-tool rule strengthening + Pattern A (fallback discipline) lift + Pattern F (open-questions discipline) lift | High — affects all 8 specialists. Spot-check ownership + financials with 2 sectors each before merge. |
+| Day 1 afternoon | **PR 1b** — Valuation-only prompt patches (§1.2 + §1.3 + §1.5) | Convert VALUATION_SYSTEM_V2 to numbered tenets, add 6 new tenets, Fallback Tool Map, briefing schema additions | Low — single agent. Re-run 3 below-bar sectors (telecom, auto, it_services) before merge. |
+| Day 1 evening | **PR 1c** — Playbook update (§1.4) | I-9 invariant added | Trivial — docs only. |
+| Day 2 | Phase 4 cycle A | Re-eval 15 sectors with new prompts, expect 3-5 grade lifts | — |
+| Day 3 | Phase 3.1 diagnostic | Trace `get_valuation_band` truncation chain on HDFCBANK; document root cause in §3.1 | — |
+| Day 3-4 | Phase 2 | All missing specialist sector files (incl. 14 valuation.md + private_bank gap closure) via per-sector subagent batch, Gemini-reviewed, merged | Medium — coordinate with `full-sector-skills-buildout.md` Phase 2. |
+| Day 5 | Phase 4 cycle B | Re-eval 15 sectors, expect more A- → A | — |
+| Day 5-7 | Phase 3 | Data pipeline fixes (PE band root cause from §3.1 diagnostic, FMP DCF, subsidiary mapping, turnaround margins) | Medium — touches store/data_api. |
+| Day 7 | Phase 4 cycle C | Final re-eval, target 14/14 A- with most A | — |
+
+**Total elapsed:** ~1 week (caveat: Gemini outage history per `feedback_gemini_outage_recovery` may extend by 1-2 days)
 **Total cost:** ~$60 (3 eval cycles + Phase 2 generation + Gemini reviews)
 **Net deliverable:** valuation agent at production-grade quality with hardened fallback discipline that informs the next 4 agent harmonizations
 
 ---
 
-## 11. Open Decisions for User
+## 11. Locked Decisions (resolved 2026-04-16)
 
-1. **Phase 1 SHARED_PREAMBLE edit** — strengthen calculate-tool rule for ALL agents now (riskier — may regress others) OR keep within VALUATION_SYSTEM_V2 only? Recommend: strengthen at SHARED_PREAMBLE with regression spot-check.
-2. **Cross-agent invariant lifting** — Patterns A/F to SHARED_PREAMBLE now or wait until business/risk/sector eval cycles surface the same? Recommend: lift now (cheap insurance).
-3. **Phase 2 parallelism** — execute alongside the in-flight `full-sector-skills-buildout.md` Phase 2, or sequence (this plan's Phase 2 first, then the buildout)? Recommend: merge — generate all 4 specialist sector files per sector together in one subagent batch (already the buildout's recommended model).
-4. **Pattern G acceptance** — formally document NOT_OUR_PROBLEM as accepted noise, OR add a final-pass consistency-check LLM call (cost: ~$3/run, +1-2 min)? Recommend: accept for now, revisit if grade ceiling becomes apparent.
-5. **Phase 3 prioritization** — fix all 5 data items, OR only the 2 that block grade lifts (band depth + subsidiary mapping)? FMP DCF empty is a known pre-existing issue, turnaround margin only hits 1 sector. Recommend: do 3.1 and 3.3 as part of the "fix all" remit; defer 3.2 (FMP) to coordinated cross-agent fix; defer 3.5 (turnaround) until a second turnaround stock joins eval matrix.
+1. **Phase 1 SHARED_PREAMBLE edit** — **LOCKED: strengthen at SHARED_PREAMBLE_V2** with regression spot-check on ownership + financials (2 sectors each) before merge. Affects all 8 specialists. Risk accepted in exchange for one-shot cross-agent benefit. → Implemented in PR 1a (§10).
+2. **Cross-agent invariant lifting** — **LOCKED: lift Patterns A (fallback discipline) and F (open-questions discipline) to SHARED_PREAMBLE_V2 now.** Cheap insurance vs. 4× re-discovery cost when business/risk/sector/technical agents hit eval cycles. → Implemented in PR 1a (§10) alongside Decision 1; new §1.6 covers it.
+3. **Phase 2 parallelism** — **LOCKED: merge with `full-sector-skills-buildout.md` Phase 2.** Per-sector subagent dispatch (1 subagent owns business + valuation + risk + sector + missing financials/ownership for that sector → coherent framing). → Already documented in §4 "Generation method".
+4. **Pattern G acceptance** — **LOCKED: accept and document as known LLM noise** in `fix_tracker.md`. No final-pass consistency-check LLM call. Revisit only if grade ceiling becomes apparent across multiple eval cycles.
+5. **Phase 3 prioritization** — **LOCKED: 3.1 + 3.3 + 3.4 only.** Defer 3.2 (FMP DCF — pre-existing, needs cross-agent coordination with financials agent) and 3.5 (turnaround margin baseline — only 1 stock in eval matrix triggers it; revisit when a second turnaround joins). 3.4 (BFSI asset quality) coordinates with `post-overnight-fixes.md` Phase 6 — do not double-track.
 
 ---
 
