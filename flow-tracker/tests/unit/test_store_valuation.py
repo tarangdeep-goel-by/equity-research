@@ -245,8 +245,9 @@ class TestValuationBandPEFromCharts:
 
     def test_get_valuation_band_pe_snapshot_newer_than_charts(self, store: FlowStore):
         """When valuation_snapshot has a more recent date than any screener_charts row,
-        current_val should come from the snapshot (daily cron > weekly chart refresh)."""
-        # Seed charts ending 10 days ago
+        the snapshot PE is spliced in as an extra observation so min/max/median
+        reflect current_val's position in the full set."""
+        # Seed charts ending 10 days ago with pe ranging 14.0 → 15.96
         today = date.today()
         for i in range(50):
             d = (today - timedelta(days=10 + (49 - i))).isoformat()
@@ -258,12 +259,43 @@ class TestValuationBandPEFromCharts:
             )
         store._conn.commit()
 
-        # Snapshot from today with a distinct pe
+        # Snapshot from today with pe=42 — far above the chart range
         store.upsert_valuation_snapshot(
             make_valuation_snapshot(symbol="TCS", dt=today.isoformat(), pe=42.0))
 
         band = store.get_valuation_band("TCS", "pe_trailing", days=365)
         assert band is not None
-        assert band.num_observations == 50  # from charts
+        assert band.num_observations == 51  # 50 charts + spliced snapshot
         assert band.current_val == pytest.approx(42.0)  # from snapshot (newer)
+        assert band.max_val == pytest.approx(42.0)  # snapshot is the new max
+        assert band.min_val == pytest.approx(14.0)  # chart series min preserved
+        # percentile uses strict-less-than; current_val itself is in the set so
+        # the reflexive max percentile is (n-1)/n = 50/51 ≈ 98.04%, not 100.
+        assert band.percentile == pytest.approx(50 / 51 * 100, abs=0.01)
         assert band.period_end == today.isoformat()
+
+    def test_get_valuation_band_pe_snapshot_above_chart_max(self, store: FlowStore):
+        """Regression guard for the Gemini-flagged bug: snapshot PE strictly greater
+        than chart_max must appear in max_val, not just current_val (otherwise the
+        band has current_val > max_val, which is nonsensical)."""
+        today = date.today()
+        # Charts top out at 30.0 and end 5 days ago
+        for i in range(20):
+            d = (today - timedelta(days=5 + (19 - i))).isoformat()
+            pe = 10.0 + i * 1.0  # 10, 11, ..., 29
+            store._conn.execute(
+                "INSERT INTO screener_charts (symbol, chart_type, metric, date, value) "
+                "VALUES (?, 'pe', 'Price to Earning', ?, ?)",
+                ("WIPRO", d, pe),
+            )
+        store._conn.commit()
+
+        # Snapshot today with pe well above chart max
+        store.upsert_valuation_snapshot(
+            make_valuation_snapshot(symbol="WIPRO", dt=today.isoformat(), pe=45.0))
+
+        band = store.get_valuation_band("WIPRO", "pe_trailing", days=365)
+        assert band is not None
+        assert band.current_val == pytest.approx(45.0)
+        assert band.max_val == pytest.approx(45.0)  # bug fix: snapshot now in the set
+        assert band.current_val <= band.max_val  # invariant
