@@ -5,8 +5,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch, PropertyMock
 
 import pandas as pd
+import pytest
+from freezegun import freeze_time
 
-from flowtracker.fund_client import FundClient, _safe_get, _div100, nse_symbol
+from flowtracker.fund_client import FundClient, YFinanceError, _safe_get, _div100, nse_symbol
 from flowtracker.fund_models import AnnualEPS, ValuationSnapshot
 
 
@@ -170,3 +172,303 @@ class TestFetchValuationSnapshot:
         assert snap.pe_trailing == 9.5
         assert snap.debt_to_equity == 0.5  # 50/100
         assert snap.fifty_two_week_high == 900.0
+
+
+class TestTickerCache:
+    """Test _ticker cache with 5-minute TTL."""
+
+    def test_cache_hit_within_ttl(self):
+        """Two consecutive calls within 5 minutes -> only 1 yfinance.Ticker construction."""
+        with patch("flowtracker.fund_client.yf.Ticker") as mock_ticker_cls:
+            mock_ticker_cls.return_value = MagicMock()
+            client = FundClient()
+            with freeze_time("2025-01-01 12:00:00"):
+                t1 = client._ticker("SBIN")
+            with freeze_time("2025-01-01 12:04:00"):  # 4 min later, within TTL
+                t2 = client._ticker("SBIN")
+            assert t1 is t2
+            assert mock_ticker_cls.call_count == 1
+
+    def test_cache_expires_after_ttl(self):
+        """After 5 min -> re-construct."""
+        with patch("flowtracker.fund_client.yf.Ticker") as mock_ticker_cls:
+            mock_ticker_cls.side_effect = [MagicMock(), MagicMock()]
+            client = FundClient()
+            with freeze_time("2025-01-01 12:00:00"):
+                client._ticker("SBIN")
+            with freeze_time("2025-01-01 12:06:00"):  # 6 min later, past TTL
+                client._ticker("SBIN")
+            assert mock_ticker_cls.call_count == 2
+
+    def test_cache_separates_symbols(self):
+        """Different symbols cached separately."""
+        with patch("flowtracker.fund_client.yf.Ticker") as mock_ticker_cls:
+            mock_ticker_cls.side_effect = [MagicMock(), MagicMock()]
+            client = FundClient()
+            client._ticker("SBIN")
+            client._ticker("TECHM")
+            assert mock_ticker_cls.call_count == 2
+
+
+class TestInfoCache:
+    """Test _info cache with 5-minute TTL."""
+
+    def test_info_cache_hit_within_ttl(self):
+        """Two _info calls within TTL -> info accessed once."""
+        mock_ticker = MagicMock()
+        info_prop = PropertyMock(return_value={"quoteType": "EQUITY", "longName": "X"})
+        type(mock_ticker).info = info_prop
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            with freeze_time("2025-01-01 12:00:00"):
+                i1 = client._info("SBIN")
+            with freeze_time("2025-01-01 12:04:00"):
+                i2 = client._info("SBIN")
+            assert i1 is i2
+            assert info_prop.call_count == 1
+
+    def test_info_cache_expires_after_ttl(self):
+        """After 5 min -> info fetched again."""
+        mock_ticker = MagicMock()
+        info_prop = PropertyMock(return_value={"quoteType": "EQUITY", "longName": "X"})
+        type(mock_ticker).info = info_prop
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            with freeze_time("2025-01-01 12:00:00"):
+                client._info("SBIN")
+            with freeze_time("2025-01-01 12:06:00"):
+                client._info("SBIN")
+            assert info_prop.call_count == 2
+
+    def test_info_raises_when_no_data(self):
+        """Empty/quoteType=None info raises YFinanceError."""
+        mock_ticker = MagicMock()
+        type(mock_ticker).info = PropertyMock(return_value={})
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            with pytest.raises(YFinanceError, match="No data found for SBIN"):
+                client._info("SBIN")
+
+    def test_get_live_snapshot(self):
+        """get_live_snapshot returns LiveSnapshot from info dict."""
+        mock_ticker = MagicMock()
+        mock_ticker.info = {
+            "quoteType": "EQUITY",
+            "longName": "State Bank of India",
+            "sector": "Financial Services",
+            "currentPrice": 820.0,
+            "marketCap": 7300000000000,
+            "trailingPE": 9.5,
+            "returnOnEquity": 0.18,
+            "debtToEquity": 50.0,
+        }
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            snap = client.get_live_snapshot("SBIN")
+        assert snap.symbol == "SBIN"
+        assert snap.company_name == "State Bank of India"
+        assert snap.price == 820.0
+        assert snap.roe == 18.0  # 0.18 * 100
+        assert snap.debt_to_equity == 0.5  # 50 / 100
+
+
+class TestFetchHistoricalPE:
+    """Test fetch_weekly_prices + compute_historical_pe end-to-end with mocked yfinance."""
+
+    def test_full_path_with_quarterly_history(self):
+        """Mock yfinance Ticker.history -> compute_historical_pe yields PE snapshots."""
+        # Build a weekly-price DataFrame for 2024-2025
+        idx = pd.DatetimeIndex(["2024-06-15", "2025-06-15"])
+        hist_df = pd.DataFrame(
+            {"Close": [500.0, 900.0], "Volume": [100000, 200000]},
+            index=idx,
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = hist_df
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            prices = client.fetch_weekly_prices("SBIN")
+            assert len(prices) == 2
+            assert prices[0][0] == "2024-06-15"
+            assert prices[0][1] == 500.0
+            assert prices[0][2] == 100000
+
+            eps_list = [
+                AnnualEPS(symbol="SBIN", fiscal_year_end="2024-03-31", eps=50.0),
+                AnnualEPS(symbol="SBIN", fiscal_year_end="2025-03-31", eps=60.0),
+            ]
+            snapshots = client.compute_historical_pe("SBIN", eps_list, weekly_prices=prices)
+            assert len(snapshots) == 2
+            assert snapshots[0].pe_trailing == 10.0  # 500/50
+            assert snapshots[1].pe_trailing == 15.0  # 900/60
+
+    def test_fetch_weekly_prices_empty_df(self):
+        """Empty history DataFrame -> empty list."""
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = pd.DataFrame()
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            assert client.fetch_weekly_prices("SBIN") == []
+
+    def test_fetch_weekly_prices_none_history(self):
+        """None history -> empty list."""
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = None
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            assert client.fetch_weekly_prices("SBIN") == []
+
+
+class TestExtremePEFilter:
+    """Cover compute_historical_pe filter branches with multiple price points."""
+
+    def test_mix_of_extreme_and_valid(self):
+        """Some prices yield PE > 200 (filtered), others valid."""
+        client = FundClient()
+        eps_list = [AnnualEPS(symbol="SBIN", fiscal_year_end="2024-03-31", eps=50.0)]
+        prices = [
+            ("2024-06-15", 500.0, 100000),    # PE = 10, valid
+            ("2024-07-15", 30000.0, 100000),  # PE = 600, filtered
+            ("2024-08-15", 25.0, 100000),     # PE = 0.5, filtered
+            ("2024-09-15", 1000.0, 100000),   # PE = 20, valid
+        ]
+        result = client.compute_historical_pe("SBIN", eps_list, weekly_prices=prices)
+        assert len(result) == 2
+        assert result[0].pe_trailing == 10.0
+        assert result[1].pe_trailing == 20.0
+
+    def test_no_applicable_eps(self):
+        """All prices precede earliest fiscal_year_end -> empty."""
+        client = FundClient()
+        eps_list = [AnnualEPS(symbol="SBIN", fiscal_year_end="2025-03-31", eps=50.0)]
+        prices = [("2024-06-15", 500.0, 100000)]  # before any FY end
+        result = client.compute_historical_pe("SBIN", eps_list, weekly_prices=prices)
+        assert result == []
+
+
+class TestFetchQuarterlyResults:
+    """Test fetch_quarterly_results with mocked income statement."""
+
+    def test_basic_quarterly_results(self):
+        col = pd.Timestamp("2024-12-31")
+        income_df = pd.DataFrame(
+            {col: [1000.0, 400.0, 200.0, 150.0, 250.0, 5.0, 4.8]},
+            index=[
+                "TotalRevenue", "GrossProfit", "OperatingIncome",
+                "NetIncome", "EBITDA", "BasicEPS", "DilutedEPS",
+            ],
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.get_income_stmt.return_value = income_df
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            results = client.fetch_quarterly_results("SBIN")
+        assert len(results) == 1
+        r = results[0]
+        assert r.symbol == "SBIN"
+        assert r.quarter_end == "2024-12-31"
+        assert r.revenue == 1000.0
+        assert r.net_income == 150.0
+        assert r.operating_margin == 0.2  # 200/1000
+        assert r.net_margin == 0.15  # 150/1000
+
+    def test_empty_income_returns_empty(self):
+        mock_ticker = MagicMock()
+        mock_ticker.get_income_stmt.return_value = pd.DataFrame()
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            assert client.fetch_quarterly_results("SBIN") == []
+
+    def test_none_income_returns_empty(self):
+        mock_ticker = MagicMock()
+        mock_ticker.get_income_stmt.return_value = None
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            assert client.fetch_quarterly_results("SBIN") == []
+
+
+class TestFetchQuarterlyBSCF:
+    """Test fetch_quarterly_bs_cf with mocked balance sheet + cash flow."""
+
+    def test_basic_bs_cf(self):
+        col = pd.Timestamp("2024-12-31")
+        bs_df = pd.DataFrame(
+            {col: [1e9, 5e8, 3e8, 4e8, 1e8, 2e8, 1e7]},
+            index=[
+                "Total Assets", "Total Debt", "Long Term Debt",
+                "Stockholders Equity", "Cash And Cash Equivalents",
+                "Net Debt", "Ordinary Shares Number",
+            ],
+        )
+        cf_df = pd.DataFrame(
+            {col: [2e8, 1.5e8, -5e7, -1e8, -1e8, 1e7, 5e7]},
+            index=[
+                "Operating Cash Flow", "Free Cash Flow", "Capital Expenditure",
+                "Investing Cash Flow", "Financing Cash Flow",
+                "Change In Working Capital", "Depreciation And Amortization",
+            ],
+        )
+        mock_ticker = MagicMock()
+        # quarterly_balance_sheet and quarterly_cashflow are properties
+        type(mock_ticker).quarterly_balance_sheet = PropertyMock(return_value=bs_df)
+        type(mock_ticker).quarterly_cashflow = PropertyMock(return_value=cf_df)
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            result = client.fetch_quarterly_bs_cf("SBIN")
+        assert result["symbol"] == "SBIN"
+        assert len(result["balance_sheet"]) == 1
+        bs = result["balance_sheet"][0]
+        assert bs["quarter_end"] == "2024-12-31"
+        assert bs["total_assets"] == 100.0  # 1e9 / 1e7
+        assert bs["shares_outstanding"] == 10000000  # raw round, no /1e7
+        assert len(result["cash_flow"]) == 1
+        cf = result["cash_flow"][0]
+        assert cf["operating_cash_flow"] == 20.0  # 2e8 / 1e7
+
+    def test_empty_bs_cf(self):
+        mock_ticker = MagicMock()
+        type(mock_ticker).quarterly_balance_sheet = PropertyMock(return_value=pd.DataFrame())
+        type(mock_ticker).quarterly_cashflow = PropertyMock(return_value=pd.DataFrame())
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            result = client.fetch_quarterly_bs_cf("SBIN")
+        assert result["balance_sheet"] == []
+        assert result["cash_flow"] == []
+
+
+class TestFetchYahooPeers:
+    """Test fetch_yahoo_peers httpx call path."""
+
+    def test_basic_peers(self):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "finance": {
+                "result": [{
+                    "recommendedSymbols": [
+                        {"symbol": "HDFCBANK.NS", "score": 0.1},
+                        {"symbol": "ICICIBANK.NS", "score": 0.2},
+                    ],
+                }],
+            },
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("httpx.get", return_value=mock_resp):
+            client = FundClient()
+            peers = client.fetch_yahoo_peers("SBIN")
+        assert len(peers) == 2
+        assert peers[0]["peer_symbol"] == "HDFCBANK"  # .NS stripped
+        assert peers[0]["score"] == 0.1
+        assert peers[1]["peer_symbol"] == "ICICIBANK"
+
+    def test_empty_results_returns_empty(self):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"finance": {"result": []}}
+        mock_resp.raise_for_status = MagicMock()
+        with patch("httpx.get", return_value=mock_resp):
+            client = FundClient()
+            assert client.fetch_yahoo_peers("SBIN") == []
+
+    def test_exception_returns_empty(self):
+        with patch("httpx.get", side_effect=Exception("boom")):
+            client = FundClient()
+            assert client.fetch_yahoo_peers("SBIN") == []

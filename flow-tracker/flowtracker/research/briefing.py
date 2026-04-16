@@ -4,13 +4,57 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 _VAULT_BASE = Path.home() / "vault" / "stocks"
+
+
+# ---------------------------------------------------------------------------
+# Telemetry dataclasses (turn-level + retry + compliance-gate observability)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TurnEvent:
+    """One assistant turn within an agent run."""
+
+    turn_index: int                              # 0-based
+    started_at: str                              # ISO-8601
+    duration_ms: int                             # wall-clock from turn start to ResultMessage
+    model: str                                   # model used this turn
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    reasoning_chars: int = 0                     # sum of TextBlock.text lengths this turn
+    tool_call_ids: list[str] = field(default_factory=list)  # tool_use_id values emitted this turn
+
+
+@dataclass
+class RetryEvent:
+    """A tool call retry, classified by cause."""
+
+    tool_name: str
+    attempt: int                                 # 1-indexed; 1 = first retry (second call)
+    cause: Literal["truncation", "rate_limit", "network", "validation", "empty_result", "other"]
+    wait_ms: int = 0                             # backoff wait before this attempt
+    at: str = ""                                 # ISO-8601
+
+
+@dataclass
+class ComplianceGateTrace:
+    """Cross-reference: mandatory-metric attempt -> backing tool calls."""
+
+    metric: str                                  # e.g. "GNPA", "pre_sales_value"
+    status: Literal["extracted", "attempted", "not_applicable", "missing"]
+    attempted_tool_use_ids: list[str] = field(default_factory=list)
+    note: str = ""                               # free-text from briefing
 
 
 class ToolEvidence(BaseModel, extra="ignore"):
@@ -23,6 +67,11 @@ class ToolEvidence(BaseModel, extra="ignore"):
     is_error: bool = False
     started_at: str = ""  # ISO timestamp when tool was invoked
     duration_ms: int = 0  # wall-clock milliseconds
+    # --- telemetry extensions (backward-compatible; default None/empty) ---
+    turn_index: int | None = None
+    completeness: Literal["full", "partial", "empty", "truncated", "error"] | None = None
+    row_count: int | None = None
+    extraction_meta: dict | None = None
 
 
 class AgentCost(BaseModel, extra="ignore"):
@@ -79,6 +128,12 @@ class AgentTrace(BaseModel, extra="ignore"):
     reasoning: list[str] = Field(default_factory=list)  # pre-report TextBlocks
     report_chars: int = 0
     cost: AgentCost = Field(default_factory=AgentCost)
+    # --- telemetry extensions (backward-compatible) ---
+    turns: list[TurnEvent] = Field(default_factory=list)
+    retries: list[RetryEvent] = Field(default_factory=list)
+    time_to_first_token_ms: int | None = None
+    compliance_gate_traces: list[ComplianceGateTrace] = Field(default_factory=list)
+    per_phase_cost: dict[str, AgentCost] = Field(default_factory=dict)
 
 
 class PhaseEvent(BaseModel, extra="ignore"):

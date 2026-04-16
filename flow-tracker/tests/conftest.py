@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+# Pin terminal width + disable ANSI BEFORE any flowtracker/rich/typer import
+# so Rich's Console picks these up at creation time. CliRunner's env={} kwarg
+# is applied AFTER app import and cannot change an already-created Console,
+# which was the root cause of flaky CLI snapshot tests on CI (narrow runner
+# terminals vs. wide dev terminals producing different wrap behaviour).
+os.environ["COLUMNS"] = "200"
+os.environ["NO_COLOR"] = "1"
+os.environ.setdefault("TERM", "dumb")
 
 import pytest
 

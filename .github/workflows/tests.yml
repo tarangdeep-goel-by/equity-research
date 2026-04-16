@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flow-tracker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Python + deps
+        run: uv sync --extra test
+
+      - name: Fast suite with branch coverage
+        run: |
+          uv run pytest -m "not slow" \
+            --cov=flowtracker \
+            --cov-branch \
+            --cov-report=term \
+            --cov-report=xml \
+            --cov-fail-under=74
+
+      - name: Slow suite (CLI smoke tests)
+        run: uv run pytest -m "slow"
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: flow-tracker/coverage.xml
+          fail_ci_if_error: false
