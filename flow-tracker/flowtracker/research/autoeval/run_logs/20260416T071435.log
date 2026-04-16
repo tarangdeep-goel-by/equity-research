@@ -1,0 +1,82 @@
+Run log: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/run_logs/20260416T071435.log
+AutoEval (agent-first): agent=ownership sectors=['platform']
+Target: grade_numeric >= 90
+
+--- ownership / ETERNAL (platform) ---
+  Running agent...
+  12:44:35 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: started (max_age=6h)
+  12:44:35 [INFO] httpx: HTTP Request: GET https://www.screener.in/login/ "HTTP/1.1 200 OK"
+  12:44:36 [INFO] httpx: HTTP Request: POST https://www.screener.in/login/ "HTTP/1.1 302 Found"
+  12:44:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/dash/ "HTTP/1.1 200 OK"
+  12:44:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/ETERNAL/consolidated/ "HTTP/1.1 200 OK"
+  12:44:36 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: company_profile ok 1 records
+  12:44:36 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: company_documents ok 47 records
+  12:44:36 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: quarterly_results ok 13 records
+  12:44:36 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: screener_ratios ok 8 records
+  12:44:36 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/ETERNAL/consolidated/ "HTTP/1.1 200 OK"
+  12:44:36 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/68088707/ "HTTP/1.1 200 OK"
+  12:44:36 [WARNING] flowtracker.validation: annual_financials ETERNAL/2018-03-31: eps=-3456.0000000000005 outside [-500, 5000]
+  12:44:36 [WARNING] flowtracker.validation: annual_financials ETERNAL/2019-03-31: eps=-32165.000000000004 outside [-500, 5000]
+  12:44:36 [WARNING] flowtracker.validation: annual_financials ETERNAL/2020-03-31: eps=-78905.33333333333 outside [-500, 5000]
+  12:44:36 [WARNING] flowtracker.validation: annual_financials ETERNAL/2021-03-31: eps=-20320.0 outside [-500, 5000]
+  12:44:36 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: annual_financials ok 8 records
+  12:44:37 [INFO] httpx: HTTP Request: GET https://www.screener.in/company/ETERNAL/ "HTTP/1.1 200 OK"
+  12:44:37 [INFO] httpx: HTTP Request: POST https://www.screener.in/user/company/export/68088706/ "HTTP/1.1 200 OK"
+  12:44:37 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: standalone_financials ok 10 records
+  12:44:37 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: screener_ids ok 1 records
+  12:44:37 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/chart/?q=Price+to+Earning-Median+PE-EPS&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  12:44:37 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: chart_pe ok 273 records
+  12:44:38 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/chart/?q=Price-DMA50-DMA200-Volume&days=10000&consolidated=true "HTTP/1.1 200 OK"
+  12:44:38 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: chart_price ok 1240 records
+  12:44:40 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/68088707/peers/ "HTTP/1.1 200 OK"
+  12:44:40 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: peers ok 8 records
+  12:44:40 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/1274894/investors/promoters/quarterly/ "HTTP/1.1 200 OK"
+  12:44:41 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/1274894/investors/foreign_institutions/quarterly/ "HTTP/1.1 200 OK"
+  12:44:42 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/1274894/investors/domestic_institutions/quarterly/ "HTTP/1.1 200 OK"
+  12:44:43 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/3/1274894/investors/public/quarterly/ "HTTP/1.1 200 OK"
+  12:44:44 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: shareholders ok 196 records
+  12:44:44 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Sales&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  12:44:45 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Expenses&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  12:44:46 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Other+Income&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  12:44:47 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Net+Profit&section=quarters&consolidated= "HTTP/1.1 200 OK"
+  12:44:48 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: schedules_quarters ok 117 records
+  12:44:48 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Sales&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  12:44:49 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Expenses&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  12:44:50 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Other+Income&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  12:44:51 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Net+Profit&section=profit-loss&consolidated= "HTTP/1.1 200 OK"
+  12:44:52 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: schedules_profit-loss ok 102 records
+  12:44:52 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Borrowings&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  12:44:53 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Other+Liabilities&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  12:44:54 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Fixed+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  12:44:55 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Other+Assets&section=balance-sheet&consolidated= "HTTP/1.1 200 OK"
+  12:44:56 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: schedules_balance-sheet ok 205 records
+  12:44:56 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Cash+from+Operating+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  12:44:57 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Cash+from+Investing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  12:44:59 [INFO] httpx: HTTP Request: GET https://www.screener.in/api/company/1274894/schedules/?parent=Cash+from+Financing+Activity&section=cash-flow&consolidated= "HTTP/1.1 200 OK"
+  12:45:00 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: schedules_cash-flow ok 126 records
+  12:45:00 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: valuation_snapshot ok 1 records
+  12:45:00 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: consensus_estimate ok 1 records
+  /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/.venv/lib/python3.12/site-packages/yfinance/scrapers/fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+    warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+  12:45:01 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: earnings_surprises ok 4 records
+  12:45:01 [WARNING] flowtracker.research.refresh: [refresh] ETERNAL: corporate_actions skipped: no data
+  12:45:01 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/companies-listing/corporate-filings-insider-trading "HTTP/1.1 200 OK"
+  12:45:01 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/corporates-pit?from_date=16-01-2026&to_date=16-04-2026&symbol=ETERNAL "HTTP/1.1 200 OK"
+  12:45:01 [WARNING] flowtracker.research.refresh: [refresh] ETERNAL: insider_transactions skipped: no data
+  12:45:01 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_09042026.csv "HTTP/1.1 200 OK"
+  12:45:01 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-09: 2451 records (total: 2451, day 0/7)
+  12:45:02 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_10042026.csv "HTTP/1.1 200 OK"
+  12:45:02 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-10: 2452 records (total: 4903, day 1/7)
+  12:45:03 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_13042026.csv "HTTP/1.1 200 OK"
+  12:45:03 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-13: 2456 records (total: 7359, day 4/7)
+  12:45:03 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_14042026.csv "HTTP/1.1 200 OK"
+  12:45:03 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-14: 2456 records (total: 9815, day 5/7)
+  12:45:04 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_15042026.csv "HTTP/1.1 200 OK"
+  12:45:04 [INFO] flowtracker.bhavcopy_client: Fetched 2026-04-15: 2456 records (total: 12271, day 6/7)
+  12:45:04 [INFO] httpx: HTTP Request: GET https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_16042026.csv "HTTP/1.1 404 Not Found"
+  12:45:04 [INFO] flowtracker.bhavcopy_client: No bhavcopy for 2026-04-16 (holiday/weekend)
+  12:45:05 [INFO] flowtracker.bhavcopy_client: Backfill complete: 5 trading days, 12271 records
+  12:45:05 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: delivery_data ok 5 records
+  12:45:06 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/market-data/live-equity-market "HTTP/1.1 200 OK"
+  12:45:06 [INFO] httpx: HTTP Request: GET https://www.nseindia.com/api/snapshot-capital-market-largedeal "HTTP/1.1 200 OK"
+  12:45:06 [INFO] flowtracker.research.refresh: [refresh] ETERNAL: bulk_block_deals ok 0 records

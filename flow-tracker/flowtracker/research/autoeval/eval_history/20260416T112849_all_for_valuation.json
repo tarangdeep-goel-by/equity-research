@@ -1,0 +1,66 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-16T11:28:49.917047+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "platform": {
+      "agent": "valuation",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "A",
+      "grade_numeric": 94,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Exceptional override of the tool's flawed 'DEEP VALUE' signal with deep economic reasoning regarding the 1P accounting shift. A minor gap is not linking the EV/Revenue premium directly to per-order unit economics (AOV/delivery costs)."
+        },
+        "logical_consistency": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "The core valuation logic is highly consistent, but there is a structural flaw: the JSON summary introduces critical M-Score and F-Score concerns that are entirely absent from the main report body."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Covers all required valuation bases (EV/Rev, PE, Consensus, Reverse DCF), but lacks a historical EV/Revenue band analysis, which would have been the ideal replacement for the broken PE band."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Provides a crystal-clear fair value triangle, explicit weightings, and highly specific near-term catalysts. The only minor gap is not quantifying the exact margin impact of the Swish competitive threat in the bear case."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Perfectly applies platform/marketplace valuation frameworks, anchoring on EV/Revenue and path-to-profitability. A minor omission is not attempting to estimate an EV/GMV multiple from the qualitative GOV disclosures."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Flawless integration of the `calculate` tool with transparent, verifiable math. A minor weakness is noting the defaulted WACC beta of 1.0 is flawed but not running a reverse DCF sensitivity with a corrected higher beta."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Structured Briefing / Main Body",
+          "issue": "The agent includes a critical forensic accounting insight in the JSON summary ('M-Score flag (-1.499)... F-Score accruals failure') that is completely missing from the main report text.",
+          "suggestion": "Update the system prompt to strictly enforce that all insights, risks, or data points included in the final structured JSON must be substantiated and discussed in the main body of the report."
+        }
+      ],
+      "strengths": [
+        "Brilliant identification of the PE band distortion caused by the 1P accounting shift, actively overriding a flawed mechanical tool signal with sound economic reasoning.",
+        "Excellent decomposition of the valuation premium versus peers (SWIGGY, MEESHO) using fundamental drivers like margin quality, EBITDA breakeven milestones, and market leadership."
+      ],
+      "summary": "This is an institutional-quality report that correctly identifies standard PE metrics are broken due to a 1P accounting shift, successfully pivoting to an EV/Revenue framework. The analysis is deeply commercial and highly actionable, with the only notable flaw being a structural one where forensic accounting risks were orphaned in the JSON summary without body text discussion.",
+      "report_length": 31475,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.258310458040796,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Exceptional override of the tool's flawed 'DEEP VALUE' signal with deep economic reasoning regarding the 1P accounting shift. A minor gap is not linking the EV/Revenue premium directly to per-order unit economics (AOV/delivery costs).\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"The core valuation logic is highly consistent, but there is a structural flaw: the JSON summary introduces critical M-Score and F-Score concerns that are entirely absent from the main report body.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Covers all required valuation bases (EV/Rev, PE, Consensus, Reverse DCF), but lacks a historical EV/Revenue band analysis, which would have been the ideal replacement for the broken PE band.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Provides a crystal-clear fair value triangle, explicit weightings, and highly specific near-term catalysts. The only minor gap is not quantifying the exact margin impact of the Swish competitive threat in the bear case.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Perfectly applies platform/marketplace valuation frameworks, anchoring on EV/Revenue and path-to-profitability. A minor omission is not attempting to estimate an EV/GMV multiple from the qualitative GOV disclosures.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Flawless integration of the `calculate` tool with transparent, verifiable math. A minor weakness is noting the defaulted WACC beta of 1.0 is flawed but not running a reverse DCF sensitivity with a corrected higher beta.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 94\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Structured Briefing / Main Body\",\n      \"issue\": \"The agent includes a critical forensic accounting insight in the JSON summary ('M-Score flag (-1.499)... F-Score accruals failure') that is completely missing from the main report text.\",\n      \"suggestion\": \"Update the system prompt to strictly enforce that all insights, risks, or data points included in the final structured JSON must be substantiated and discussed in the main body of the report.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant identification of the PE band distortion caused by the 1P accounting shift, actively overriding a flawed mechanical tool signal with sound economic reasoning.\",\n    \"Excellent decomposition of the valuation premium versus peers (SWIGGY, MEESHO) using fundamental drivers like margin quality, EBITDA breakeven milestones, and market leadership.\"\n  ],\n  \"summary\": \"This is an institutional-quality report that correctly identifies standard PE metrics are broken due to a 1P accounting shift, succes"
+    }
+  }
+}

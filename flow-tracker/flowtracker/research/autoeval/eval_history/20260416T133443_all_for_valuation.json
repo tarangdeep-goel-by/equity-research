@@ -1,0 +1,27 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-16T13:34:43.145648+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "chemicals"
+  ],
+  "results": {
+    "chemicals": {
+      "agent": "valuation",
+      "stock": "PIDILITIND",
+      "sector": "Specialty chemicals",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+      "report_length": 33733,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 192.6216477920534,
+      "run_skipped": true,
+      "raw_gemini_response": "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+    }
+  }
+}

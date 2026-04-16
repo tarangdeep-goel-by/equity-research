@@ -1,0 +1,72 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-16T18:58:18.605846+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "broker": {
+      "agent": "valuation",
+      "stock": "GROWW",
+      "sector": "Fintech broker",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional deduction on the share subdivision discrepancy and overriding flawed tool signals. However, the analysis of the Q3FY26 earnings decline (-27.8% YoY) is superficial and lacks investigation into whether it was a one-off or structural."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong overall logic, but there is a mismatch in the Fair Value Triangle: the text calculates a justified PE range of 53x-60x, but the applied scenarios use 40x, 50x, and 60x, contradicting its own derived floor."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Covers standard valuation dimensions well, but lacks critical broker-specific operational metrics like Active Client Market Share and Average Daily Turnover (ADTO) which drive the valuation."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides a clear 'Fair Value' conclusion and excellent near-term catalysts. However, the final JSON outputs a 'mixed' signal direction, which slightly muddies the firm stance taken in the text."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Correctly identifies FCF distortion for brokers and highlights F&O regulatory risks. Yet, it misses applying a framework around MTF (Margin Trading Facility) book growth and yield, which is the primary earnings growth engine for modern brokers."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Brilliant handling of the Screener vs yfinance EPS mismatch. However, it reverse-engineered the 3.6x split ratio from EPS rather than verifying the exact corporate action data, leaving a slight margin for error."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Fair Value Triangle",
+          "issue": "Mismatch between the calculated justified PE range (53x-60x) and the applied PE scenarios (40x, 50x, 60x).",
+          "suggestion": "Instruct the agent to strictly map its derived justified multiple ranges to the Bear/Base/Bull scenario tables to maintain mathematical consistency."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Sector Framework / Relative Valuation",
+          "issue": "Missing core broker KPIs (ADTO, Active Clients, Market Share) to justify the growth premium.",
+          "suggestion": "Ensure the agent queries `get_company_context(sector_kpis)` for broker-specific operational metrics to anchor the valuation narrative."
+        }
+      ],
+      "strengths": [
+        "Masterful identification and handling of the pre/post-IPO share subdivision discrepancy that distorted the PE band.",
+        "Excellent critical thinking in overriding the tool's 'Deep Value' signal and rejecting the mathematically flawed 111.8% historical CAGR projection."
+      ],
+      "summary": "This is an outstanding, near-institutional-grade report that demonstrates exceptional critical thinking, particularly in identifying the share split discrepancy and overriding flawed tool signals. The primary gap is the absence of core broker-specific KPIs (ADTO, Active Client Market Share) to anchor the operational growth narrative. With minor polish on logical consistency in the PE scenarios, this would be ready for a PM.",
+      "report_length": 35560,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 32.745670125004835,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional deduction on the share subdivision discrepancy and overriding flawed tool signals. However, the analysis of the Q3FY26 earnings decline (-27.8% YoY) is superficial and lacks investigation into whether it was a one-off or structural.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong overall logic, but there is a mismatch in the Fair Value Triangle: the text calculates a justified PE range of 53x-60x, but the applied scenarios use 40x, 50x, and 60x, contradicting its own derived floor.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Covers standard valuation dimensions well, but lacks critical broker-specific operational metrics like Active Client Market Share and Average Daily Turnover (ADTO) which drive the valuation.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides a clear 'Fair Value' conclusion and excellent near-term catalysts. However, the final JSON outputs a 'mixed' signal direction, which slightly muddies the firm stance taken in the text.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Correctly identifies FCF distortion for brokers and highlights F&O regulatory risks. Yet, it misses applying a framework around MTF (Margin Trading Facility) book growth and yield, which is the primary earnings growth engine for modern brokers.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Brilliant handling of the Screener vs yfinance EPS mismatch. However, it reverse-engineered the 3.6x split ratio from EPS rather than verifying the exact corporate action data, leaving a slight margin for error.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Fair Value Triangle\",\n      \"issue\": \"Mismatch between the calculated justified PE range (53x-60x) and the applied PE scenarios (40x, 50x, 60x).\",\n      \"suggestion\": \"Instruct the agent to strictly map its derived justified multiple ranges to the Bear/Base/Bull scenario tables to maintain mathematical consistency.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Sector Framework / Relative Valuation\",\n      \"issue\": \"Missing core broker KPIs (ADTO, Active Clients, Market Share) to justify the growth premium.\",\n      \"suggestion\": \"Ensure the agent queries `get_company_context(sector_kpis)` for broker-specific operational metrics to anchor the valuation narrative.\"\n    }\n  ],\n  \"strengths\": [\n    \"Masterful identification and handling of the pre/post-IPO share subdivision discrepancy that distorted the PE band.\",\n    \"Excellent critical thinking in overriding the tool's 'Deep Value' signal and rejecting the mathematically flawed 111.8% historic"
+    }
+  }
+}

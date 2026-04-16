@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/run_logs/20260416T114353.log
+AutoEval (agent-first): agent=valuation sectors=['real_estate']
+Target: grade_numeric >= 90
+
+--- valuation / GODREJPROP (real_estate) ---
+  Report: 35076 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A- (91) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/eval_history/20260416T114424_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  real_estate         GODREJPROP    A-  (91)  [PASS]  prompt_fixes:2
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

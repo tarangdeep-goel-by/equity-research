@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/run_logs/20260416T114904.log
+AutoEval (agent-first): agent=valuation sectors=['it_services']
+Target: grade_numeric >= 90
+
+--- valuation / TCS (it_services) ---
+  Report: 33923 chars
+  Evidence log loaded (4 lines)
+  Grading with Gemini...
+  Grade: A- (91) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/eval_history/20260416T114947_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  it_services         TCS           A-  (91)  [PASS]  prompt_fixes:2
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/run_logs/20260416T185745.log
+AutoEval (agent-first): agent=valuation sectors=['broker']
+Target: grade_numeric >= 90
+
+--- valuation / GROWW (broker) ---
+  Report: 35560 chars
+  Evidence   Evidence log loaded (4 lines)
+  Grading with  Grade: A- (91) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research-vpp/flow-tracker/flowtracker/research/autoeval/eval_history/20260416T185818_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  broker              GROWW         A-  (91)  [PASS]  prompt_fixes:2
+======================================================================
+passing:1  failing:0  total:1
+======================================================================
+==========
