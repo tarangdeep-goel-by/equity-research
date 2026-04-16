@@ -2065,6 +2065,61 @@ class TestCalculateTool:
         assert "Unknown operation" in data["error"]
 
     @pytest.mark.asyncio
+    async def test_timestamp_discipline_no_args_is_clean(self):
+        """Back-compat: no inputs_as_of/mcap_as_of → no warning, no hint."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "pct_of", "a": "10", "b": "100"}
+        )
+        data = _parse(result)
+        assert data["pct"] == 10.0
+        assert "timestamp_discipline" not in data
+
+    @pytest.mark.asyncio
+    async def test_timestamp_discipline_matching_quarters_no_warning(self):
+        """inputs_as_of == mcap_as_of (both current) → clean result."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler({
+            "operation": "pct_of", "a": "10", "b": "100",
+            "inputs_as_of": "2026-Q1", "mcap_as_of": "2026-Q1",
+        })
+        data = _parse(result)
+        assert data["pct"] == 10.0
+        assert "timestamp_discipline" not in data
+
+    @pytest.mark.asyncio
+    async def test_timestamp_discipline_mismatch_emits_warning(self):
+        """Historical %pt multiplied by current mcap → warning must fire."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler({
+            "operation": "pct_of", "a": "10", "b": "100",
+            "inputs_as_of": "2023-Q4", "mcap_as_of": "2026-Q1",
+        })
+        data = _parse(result)
+        assert "timestamp_discipline" in data
+        assert "HISTORICAL_MCAP_MISMATCH" in data["timestamp_discipline"]
+        assert "2023-Q4" in data["timestamp_discipline"]
+        assert "2026-Q1" in data["timestamp_discipline"]
+        assert "20-50%" in data["timestamp_discipline"]
+
+    @pytest.mark.asyncio
+    async def test_timestamp_discipline_mismatch_on_expr(self):
+        """Mismatch warning also fires for operation='expr' (common flow path)."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler({
+            "operation": "expr", "a": "10 * 1000000 / 100", "b": "0",
+            "inputs_as_of": "2023-Q4", "mcap_as_of": "2026-Q1",
+        })
+        data = _parse(result)
+        assert data["result"] == pytest.approx(100000.0)
+        assert "timestamp_discipline" in data
+        assert "HISTORICAL_MCAP_MISMATCH" in data["timestamp_discipline"]
+
+    @pytest.mark.asyncio
     async def test_non_numeric_args_return_parse_error(self):
         from flowtracker.research.tools import calculate
 

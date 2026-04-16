@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-16T19:47:42.252619+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "conglomerate": {
+      "agent": "ownership",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional depth on margin call triggers, Quant MF concentration risk, and MPS ceiling constraints, though it leaves the Q2FY24 promoter jump as an open question rather than hypothesizing specific Adani group restructuring events."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless logic. The inclusion of a dedicated 'Cross-Section Reconciliation' table to explicitly resolve apparent contradictions (e.g., FII selling vs. neutral delivery) is a masterclass in structured thinking."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Covers all major institutional and insider dimensions comprehensively, but lacks the breakdown of the 'Public' float into Retail (<\u20b92L) vs HNI (>\u20b92L), which is a standard metric for assessing weak-hand vs strong-hand float in India."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly actionable identification of the binary risk posed by Quant MF's concentration and the clear framing of FII headroom, though it lacks a specific valuation or macro trigger for when FII re-entry might occur."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Perfectly applies the holdco/conglomerate framework, correctly identifying that insider buying is structurally constrained by the family trust setup and the 75% MPS ceiling, rather than interpreting it as a bearish signal."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Outstanding transparency. Explicitly flags data pipeline artifacts (the mf_changes 'new_entry' flag) and concall extraction failures instead of attempting to hallucinate or gloss over missing data."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent drill-down discipline (skipped empty insider/bulk sections based on TOC) and handled the concall failure gracefully, though it made 8 sequential calls to the calculate tool."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "While the cost ($0.53) and cache hit rate (75.4%) are good, 29 turns is highly inefficient and triggers the >20 turns penalty, largely driven by 8 sequential, unbatched calculator calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "\u00a71. Ownership Structure",
+          "issue": "The 'Public' category (7.66%) is not broken down into Retail (up to \u20b92L) and HNI (above \u20b92L), missing a key nuance of non-institutional float.",
+          "suggestion": "Update the prompt to explicitly require the breakdown of the public float into Retail and HNI categories when analyzing NSE shareholding data, even if the total public float is small."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution Log",
+          "issue": "The agent made 8 sequential calls to the `calculate` tool (Turns 19-26), driving the total turn count to 29 and reducing time/cost efficiency.",
+          "suggestion": "Instruct the agent to minimize trivial math that doesn't require strict citation, or to batch calculations if possible, to reduce excessive sequential tool turns."
+        }
+      ],
+      "strengths": [
+        "Exceptional analysis of structural constraints (MPS ceiling) explaining the lack of insider buying, avoiding a common analytical trap.",
+        "Brilliant cross-section reconciliation table that proactively resolves apparent contradictions in the data, demonstrating high-level synthesis."
+      ],
+      "summary": "This is an institutional-quality ownership report that deeply understands the structural nuances of Indian conglomerates, particularly regarding MPS ceilings and holdco structures. The primary analytical gap is a missing breakdown of the public float into Retail vs HNI, and the execution was slightly inefficient due to excessive sequential calculator calls. Overall, the analytical depth, logical consistency, and transparency regarding data limitations are outstanding.",
+      "report_length": 30280,
+      "run_duration_s": 436.2302085830597,
+      "eval_duration_s": 38.923698832979426,
+      "run_skipped": false,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional depth on margin call triggers, Quant MF concentration risk, and MPS ceiling constraints, though it leaves the Q2FY24 promoter jump as an open question rather than hypothesizing specific Adani group restructuring events.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless logic. The inclusion of a dedicated 'Cross-Section Reconciliation' table to explicitly resolve apparent contradictions (e.g., FII selling vs. neutral delivery) is a masterclass in structured thinking.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Covers all major institutional and insider dimensions comprehensively, but lacks the breakdown of the 'Public' float into Retail (<\u20b92L) vs HNI (>\u20b92L), which is a standard metric for assessing weak-hand vs strong-hand float in India.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly actionable identification of the binary risk posed by Quant MF's concentration and the clear framing of FII headroom, though it lacks a specific valuation or macro trigger for when FII re-entry might occur.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Perfectly applies the holdco/conglomerate framework, correctly identifying that insider buying is structurally constrained by the family trust setup and the 75% MPS ceiling, rather than interpreting it as a bearish signal.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Outstanding transparency. Explicitly flags data pipeline artifacts (the mf_changes 'new_entry' flag) and concall extraction failures instead of attempting to hallucinate or gloss over missing data.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent drill-down discipline (skipped empty insider/bulk sections based on TOC) and handled the concall failure gracefully, though it made 8 sequential calls to the calculate tool.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"While the cost ($0.53) and cache hit rate (75.4%) are good, 29 turns is highly inefficient and triggers the >20 turns penalty, largely driven by 8 sequential, unbatched calculator calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"\u00a71. Ownership Structure\",\n      \"issue\": \"The 'Public' category (7.66%) is not broken down into Retail (up to \u20b92L) and HNI (above \u20b92L), missing a key nuance of non-institutional float.\",\n      \"suggestion\": \"Update the prompt to explicitly require the breakdown of the public float into Retail and HNI categories when analyzing NSE shareholding data, even if the total public float is small.\"\n    },\n"
+    }
+  }
+}

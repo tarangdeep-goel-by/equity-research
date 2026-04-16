@@ -38,3 +38,19 @@ Large-cap IT carries structural dominance in passive indices (~8-12% Nifty 50 we
 - Are buybacks being utilized fundamentally to return excess FCF, or defensively to mask heavy equity dilution from high-attrition cycles?
 - How much of the institutional buying is active stock-picking conviction versus a mechanical FII allocation to hedge against anticipated INR depreciation?
 - For founder-family investment vehicles or trust structures, do upcoming group-level capital-allocation decisions risk cascading sell-downs into the listed entity?
+
+### Buyback Arithmetic — Worked Example for IT Services (Tenet 20)
+IT services is the most buyback-active sector in Indian large-caps (TCS, INFY, WIPRO, TECHM, HCLTECH all execute recurring tender buybacks as the primary cash-return mechanism, in lieu of steady rising dividends). This makes buyback-window ownership math a *sector-specific* rather than generic concern. The arithmetic: for holder X with N_old shares and pre-buyback total S_old, after buyback of B shares, X's new % = `N_old / (S_old − B)`. Non-participation **increases** the holder's %. Therefore:
+
+- **Promoter % DROP during a buyback window = ACTIVE TENDER PARTICIPATION** (promoter chose to sell into the buyback at the tender price). This is a meaningful signal about promoter cash needs or conviction — NOT pro-rata non-participation.
+- **Promoter % FLAT during a buyback window = non-participation = conviction signal** (promoter retained stake while outsiders got diluted in).
+- **Promoter % UP during a buyback window = oversubscription acceptance skew in promoter's favour** — unusual, worth flagging.
+
+Before narrating any promoter-stake change across a buyback quarter, verify via `get_events_actions(section='corporate_actions')` for the buyback ratio (B / S_old), then compute the theoretical non-participation % via `calculate(operation='expr', a='N_old / (S_old - B) * 100')`. If the reported promoter % falls below that theoretical line, the promoter sold into the tender. *Peer instances*: TCS (Tata Sons routinely tenders in-kind, promoter % drifts down), INFY (founder-family and trusts typically non-participate), WIPRO (Premji Trust-dominated, non-participation is the usual pattern), TECHM (Mahindra holding — variable), HCLTECH (Shiv Nadar Foundation — typically non-participates).
+
+### Peer-and-Historical Anchor for IT Services FII (Tenet 18)
+Every FII % cited above 5% in an IT services ownership report must carry BOTH a peer anchor and a 5Y own-band anchor — descriptive numbers without anchors are incomplete. For top-tier IT services (TCS, INFY, HCLTECH, WIPRO, TECHM, LTIM), FII % sits structurally high because of MSCI EM weight, ADR aggregation, and dollar-revenue hedging demand. Use this anchor template:
+
+*"FII stake of X% sits at the Y-th percentile for top-tier IT services (TCS/INFY/HCLTECH/WIPRO/TECHM peer set, sourced via `get_peer_sector(section='benchmarks')`), and in the [top/bottom] [quartile/third] of this stock's 5Y band (min–max from `shareholder_detail` quarters). The TCS-specific 5Y band is structurally wider than the sector median because Tata Sons' promoter-and-trust architecture makes the free-float absorption surface narrower — passive rebalancing drives sharper moves."*
+
+Without the Tata Sons / Premji Trust / Mahindra-Group / founder-family context, a 25% FII reads as "high" in isolation when it's in fact in the bottom half of TCS's own 5Y band. Cite the structural reason alongside the anchor.

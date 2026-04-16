@@ -42,3 +42,30 @@ Broker Margin Trading Facility (MTF) books are a critical leverage indicator. Hi
 - Does the broker's MTF book expansion correlate with rising retail float, indicating cycle-peak exuberance?
 - For infrastructure monopolies, is FII ownership approaching the 49% SECC / D&P ceiling, capping further price discovery?
 - Are recent changes in standalone AMC ownership driven by structural shifts in domestic SIP flows, or FEMA NDI 100% FDI regulatory arbitrage?
+
+### New-Age Broker IPO Lock-In Calendar — Worked Template (Tenet 19)
+For any stockbroking/fintech-broker stock listed <730 days ago (recently-listed new-age discount-brokers such as GROWW, the post-listing ANGELONE glide path, ZERODHA-adjacent aggregator IPOs, 5PAISA, and any SEBI (ICDR) Reg 16/17 IPO), a lock-in calendar table is MANDATORY in Section 2 — without it, institutional flow narration during the first 540 days is incomplete. Populate:
+
+| Expiry Date | Category Expiring | % of Equity | Current Status |
+| :--- | :--- | :--- | :--- |
+| T+30d | Anchor allocation (50% tranche) | X% | locked / expired |
+| T+90d | Anchor allocation (balance 50%) | X% | locked / expired |
+| T+180d | Pre-IPO investor lock — VC roster tier-1 | X% | locked / expired |
+| T+365d | Promoter-group (selling-shareholders) | X% | locked / expired |
+| T+540d | Strategic / founder-tier promoter lock (18m SEBI floor) | X% | locked / expired |
+
+Dates sourced from the DRHP / RHP cover via `get_company_context(section='filings', query='lock-in|RHP|allotment')`. If unretrievable, raise a SPECIFIC open question citing the DRHP page, not a generic one (see Tenet 19). *Peer instances*: GROWW, ANGELONE, MOTILALOFS (legacy, but post-block-deal windows apply), 5PAISA, ICICIDIRECT (captive-broker carve-out).
+
+### Unit-Economics Overlay on FII vs DII Accumulation
+When FII accumulates in a new-age broker, cross-check whether the add tracks **ADTV (average daily turnover) growth** or **active-client growth** — these split the sector into two franchises. FIIs (active foreign mandates) preferentially accumulate tick-stream / ADTV-driven franchises (F&O-heavy, per-order revenue scaling) because the earnings beta to volatility is higher. DIIs preferentially accumulate stable-fee / subscription franchises (advisory, distribution, AMC-linked fee income) where PAT is less volatility-linked. If FII is adding but ADTV is flat while active-clients rise, the FII may be front-running a platform-fee pivot — flag as a conviction-quality question rather than treating as generic bullish. *Peer instances*: GROWW (ADTV-weighted tilt vs subscription tilt evolving), ANGELONE (F&O-heavy ADTV), MOTILALOFS (advisory/wealth-heavy, more DII-friendly), 5PAISA (ADTV-tilt), ICICIDIRECT (captive distribution-heavy).
+
+### Regulatory-Event Canonical Search (Broker-Specific)
+Any SEBI circular affecting brokers — peak-margin norms, upfront-margin collection, F&O lot-size changes, inactive-account norms, true-to-label rules, client-funds segregation audits — creates step-changes in broker economics and triggers sharp institutional rotation. Whenever the ownership narrative touches a SEBI regulatory event, concall narrative alone under-discloses. Apply the 3-source canonical search before correlating any FII exit/reentry to a regulatory catalyst:
+
+1. `get_company_context(section='filings', query='SEBI|circular|margin|peak margin|true to label|inactive account')` — exchange disclosures tied to the circular implementation date.
+2. `get_company_context(section='documents', query='SEBI circular|regulatory|margin rules')` — press-release / investor-letter characterization.
+3. `get_company_context(section='concall_insights', sub_section='flags')` then `sub_section='management_commentary')` — management's own framing of the step-change on revenue, order-count, and PAT.
+
+If all three return empty for the specific circular and implementation window cited in the ownership narrative, raise a SPECIFIC open question naming the circular date and broker segment affected (e.g. *"Peak-margin Phase-4 implementation December 2021 — no `filings` or `documents` disclosure found on per-order-revenue impact; is the ADTV step-down already reflected in the Q3-FY22 trajectory or deferred?"*), not a generic "what did SEBI change?".
+
+*Pattern applies to*: peak-margin rollout windows (GROWW, ANGELONE, 5PAISA post-Dec 2021), inactive-account rule sweeps, F&O lot-size revisions (Oct 2024), and true-to-label disclosure enforcement — same 3-source path whenever the ownership narrative invokes a SEBI regulatory trigger.

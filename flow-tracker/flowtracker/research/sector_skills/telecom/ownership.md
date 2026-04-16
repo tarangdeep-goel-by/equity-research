@@ -57,3 +57,19 @@ Telecom ownership is violently cyclical, tied directly to regulatory levies and 
 - If the target is a passive infrastructure player (towers / fibre), what percentage of its equity is owned by its primary telecom operator clients, and are those clients financially stable enough not to liquidate their infra stakes?
 - Has DII participation inflected positively in anticipation of ARPU hikes, contrasting with FII stagnation?
 - For bailout-exposed telcos (MoF debt-to-equity conversion cases), what is the announced or implied government exit path?
+
+### Rights Issue / Spectrum Auction Debt Raise — Canonical Search Worked Pattern
+Indian telecom ownership is shaped by cyclic rights-issue and spectrum-auction-linked capital raises — AGR dues, spectrum arrears, and 2-5-year auction cadences systematically force dilution events. When the ownership narrative touches a rights issue, preferential allotment, or AGR-linked debt-to-equity conversion, management characterizations in concall are insufficient; renunciation flows, allotment ratios, and post-dilution share counts must be cross-sourced. The *full 5-source canonical search* is mandatory before any promoter-dilution / FII-absorption correlation is drawn.
+
+1. `get_company_context(section='filings', query='rights issue|entitlement|record date|spectrum auction|AGR dues')` — BSE/NSE exchange disclosures carrying record dates, entitlement ratios, and Supreme Court / DoT rulings on AGR liability; authoritative source for record-date and allotment-day events.
+2. `get_company_context(section='documents', query='rights issue|record date|renunciation|allotment')` — press releases disclosing rights-issue pricing, renunciation windows, and ad-hoc board-approved allotments to strategic investors or promoter entities.
+3. `get_company_context(section='concall_insights', sub_section='management_commentary')` — use-of-proceeds narrative (spectrum-auction pay-down vs AGR settlement vs general capex); management frames the capital-raise rationale and disclosed participation intent.
+4. `get_ownership(section='shareholder_detail')` — *check — rights issues DO change shareholder composition post-renunciation*; promoters who subscribe fully maintain stake, under-subscribing promoters dilute, and renouncees appear as new named holders.
+5. `get_fundamentals(section='balance_sheet_detail')` — *check — the new share count lands in the balance sheet*; reconcile issued-share-capital line against pre-issue count to confirm the allotment size.
+
+If sources 1-3 return empty for a cited capital call, raise a SPECIFIC open question naming the record date and auction cycle (e.g. *"Spectrum auction March 2026 referenced in concall — no rights-issue record-date disclosure found across filings or documents; has the board deferred the capital call or is it post-cutoff?"*).
+
+*Pattern applies to*: BHARTIARTL (recurring spectrum-linked rights issues), VI / Vodafone Idea (AGR debt-to-equity conversion cycles), Reliance Jio (historical pre-listing capital infusions) — same 5-source path whenever the ownership narrative invokes a spectrum-auction or AGR-linked capital event.
+
+### Historical-MCAP Discipline for Telecom FII %pt Conversions
+Telecom FII %pt × current mcap is especially distortive for BHARTIARTL given the ~12x mcap expansion 2019-2026; the same %pt in 2020 and 2026 represents vastly different ₹Cr flows. Always pass `inputs_as_of` / `mcap_as_of` to `calculate()` when sourcing pre-2023 %pt changes — the historical-mcap mismatch warning exists precisely for this archetype. See Tenet 16.

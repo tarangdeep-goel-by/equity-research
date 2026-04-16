@@ -44,3 +44,6 @@ Pre-sales figures lead reported revenue by 2-3 quarters due to percentage-of-com
 - For REITs: is the Sponsor approaching a mandatory lock-in expiry that could result in a severe unit-supply overhang?
 - Are DIIs suddenly accumulating the stock aggressively, and does this historically correlate with a cycle peak for this specific developer?
 - How much of the pipeline value is trapped in non-wholly-owned SPVs vs 100% owned subsidiaries?
+
+### Public Bucket Sub-Breakdown — Real-Estate Context
+The Public-shareholder-bucket sub-breakdown (Retail / HNI / Corporate / Others split) matters structurally more for listed real-estate names than for most sectors: Indian homebuyers frequently become retail shareholders of the developer whose project they occupy, so the Retail folio count and Retail % of public is a meaningful sentiment-and-brand tell distinct from pure institutional flow. Until Phase 3 D4 (`shareholding_public_breakdown` table) lands, retrieve retail folio count and public-bucket splits via the Tenet 8 canonical search — pull quarterly shareholding-pattern filings through `get_company_context(section='filings', query='shareholding pattern|public shareholders|folio')` and extract the Public-category sub-table. Peer instances where the retail-folio tell is most active: GODREJPROP, DLF, OBEROIRLTY, MACROTECH (Lodha), SOBHA, PRESTIGE.

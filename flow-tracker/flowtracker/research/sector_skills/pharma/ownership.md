@@ -56,3 +56,16 @@ For Indian pharma, institutional positioning shifts MUST be correlated with the 
 - **MF rotation in the AuroraPharma/Aurobindo style names** when Domestic % rises = MF prefer the predictable cash-flow profile.
 
 Cite the mix shift in the Money Flow Story (Section 2) — "FIIs added 3.2pp coincident with US Specialty growing from 18% → 27% over FY23-FY25" is institutional-grade analysis. "FIIs added 3.2pp" alone is descriptive, not analytical.
+
+### USFDA Event Lookup — Canonical Search Worked Pattern
+For any Indian pharma with material US revenue exposure (Lupin, Dr. Reddy's, Cipla, Aurobindo, Divi's, Natco and similar generics / API exporters), whenever the narrative touches an FDA event — Form 483, Warning Letter, OAI classification, Import Alert, or EIR receipt — concalls alone systematically under-disclose. Management characterizes; regulators and press releases adjudicate. The *full 5-source canonical search* is mandatory before any FII-exit / FII-reentry correlation is drawn; calling `concall_insights` in isolation is the failure mode.
+
+1. `get_company_context(section='filings', query='USFDA|Form 483|Warning Letter|OAI|Import Alert')` — BSE/NSE regulatory disclosures; this is the authoritative source for Form 483 receipt, Warning Letter issuance, and OAI classification (companies are bound to disclose material regulatory events to exchanges).
+2. `get_company_context(section='documents', query='FDA|inspection|EIR|establishment inspection')` — press releases announcing inspection outcomes and EIR receipt; EIR receipt (closure of inspection with acceptable classification) is typically announced here, not via exchange filing.
+3. `get_company_context(section='concall_insights', sub_section='flags')` — management's own flagging of outstanding observations; then re-query with `sub_section='management_commentary'` for the characterization (remediation timeline, capex, CAPA progress) on the same inspection cycle.
+4. `get_ownership(section='shareholder_detail')` — *skip — not applicable to FDA events* (ownership structure does not change in response to regulatory observations; flow changes are captured upstream via FII/DII quarterly tables).
+5. `get_fundamentals(section='balance_sheet_detail')` — *skip — not applicable* (FDA events do not manifest in balance-sheet line items within the quarter of occurrence; remediation capex is already captured in concall_insights step 3).
+
+If all five sources return empty for the facility and inspection window cited in management commentary, raise a SPECIFIC open question naming the inspection date and facility (e.g. *"Halol Block-4 inspection closed October 2025 per concall — no Form 483 / EIR disclosure found across filings or documents; is the observation letter still outstanding or was the EIR received post-cutoff?"*) — not a generic "what's the FDA status?"
+
+*Pattern applies to*: Sun Pharma's Halol / Mohali cycle, Lupin's Goa / Pithampur, Dr. Reddy's Bachupally / Srikakulam, Cipla's Indore / Goa, Aurobindo's Andhra units — same 5-source path whenever the ownership narrative invokes an FDA event.

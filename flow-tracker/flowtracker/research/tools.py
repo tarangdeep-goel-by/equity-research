@@ -1880,12 +1880,17 @@ async def get_stock_news(args):
     "\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n"
     "  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n"
     "  Only numbers and + - * / ( ) are permitted in the expression.\n"
-    "\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.",
+    "\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.\n"
+    "\nTIMESTAMP DISCIPLINE (for historical flow-value math) — pass optional inputs_as_of and mcap_as_of:\n"
+    "  When multiplying a historical %pt change by a market cap to derive ₹Cr flow value, pass inputs_as_of (ISO quarter or date of the %pt context, e.g. '2023-Q4') AND mcap_as_of (ISO quarter or date of the mcap context, e.g. '2026-Q1'). If they differ, the tool returns a HISTORICAL_MCAP_MISMATCH warning that you MUST echo verbatim in prose before citing the ₹Cr figure — because current mcap × historical %pt can be off by 20-50%.\n"
+    "  Omit both args (back-compat) for current-period math. See Tenet 16.",
     # Schema: a/b declared as str to allow the 'expr' operation to pass an expression
     # string without MCP validation rejecting it. Numeric ops parse a/b via float().
     # Previously schema was {a: float, b: float} which caused MCP to reject
     # calculate(operation='expr', a='74 - 47.67') on BHARTIARTL ownership run.
-    {"operation": str, "a": str, "b": str},
+    # inputs_as_of / mcap_as_of are optional timestamp strings for historical-flow
+    # discipline; see Tenet 16 (OWNERSHIP_SYSTEM_V2).
+    {"operation": str, "a": str, "b": str, "inputs_as_of": str, "mcap_as_of": str},
     annotations=READ_ONLY,
 )
 async def calculate(args):
@@ -1987,6 +1992,24 @@ async def calculate(args):
             result = {"error": f"Unknown operation: {op}. See tool description for available operations."}
     except Exception as e:
         result = {"error": str(e)}
+
+    # Timestamp discipline for historical flow-value math (Tenet 16).
+    # If the agent passed both inputs_as_of and mcap_as_of and they differ,
+    # attach a HISTORICAL_MCAP_MISMATCH warning to the result. The agent must
+    # echo this string verbatim in prose before citing the ₹Cr figure.
+    inputs_as_of = args.get("inputs_as_of") or None
+    mcap_as_of = args.get("mcap_as_of") or None
+    if (
+        isinstance(result, dict)
+        and "error" not in result
+        and inputs_as_of and mcap_as_of and inputs_as_of != mcap_as_of
+    ):
+        result["timestamp_discipline"] = (
+            f"HISTORICAL_MCAP_MISMATCH: inputs from {inputs_as_of} combined with mcap from {mcap_as_of}. "
+            f"Result is at {mcap_as_of} mcap — actual historical flow value may differ 20-50%. "
+            f"Either pass mcap_as_of matching inputs_as_of, or report the change in %pt only. "
+            f"You must echo this caveat verbatim in prose before citing the ₹Cr figure."
+        )
 
     return _with_dedup("calculate", {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}, args)
 
