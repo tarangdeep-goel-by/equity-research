@@ -78,6 +78,101 @@ class TestFetchEstimates:
         assert est is None
 
 
+class TestEpsCurrentNextYear:
+    """fetch_estimates should populate eps_current_year / eps_next_year from
+    yfinance's earnings_estimate DataFrame (period index `0y` / `+1y`)."""
+
+    def _earnings_estimate_df(self) -> pd.DataFrame:
+        """Mirrors the live yfinance shape: rows `0q`, `+1q`, `0y`, `+1y`."""
+        return pd.DataFrame(
+            {
+                "avg": [10.0, 11.0, 59.5, 65.2],
+                "low": [9.0, 10.0, 53.0, 48.0],
+                "high": [11.0, 12.0, 65.0, 88.0],
+                "yearAgoEps": [8.0, 9.0, 51.0, 59.5],
+                "numberOfAnalysts": [8, 1, 34, 34],
+                "growth": [0.09, 0.15, 0.15, 0.10],
+                "currency": ["INR"] * 4,
+            },
+            index=["0q", "+1q", "0y", "+1y"],
+        )
+
+    def test_populates_cy_and_ny_eps(self):
+        mock_ticker = MagicMock()
+        mock_ticker.info = _MOCK_INFO
+        mock_ticker.earnings_estimate = self._earnings_estimate_df()
+
+        with patch("flowtracker.estimates_client.yf.Ticker", return_value=mock_ticker):
+            client = EstimatesClient()
+            est = client.fetch_estimates("SBIN")
+
+        assert est is not None
+        assert est.eps_current_year == 59.5
+        assert est.eps_next_year == 65.2
+
+    def test_empty_earnings_estimate_leaves_fields_none(self):
+        mock_ticker = MagicMock()
+        mock_ticker.info = _MOCK_INFO
+        mock_ticker.earnings_estimate = pd.DataFrame()
+
+        with patch("flowtracker.estimates_client.yf.Ticker", return_value=mock_ticker):
+            client = EstimatesClient()
+            est = client.fetch_estimates("SBIN")
+
+        assert est is not None
+        assert est.eps_current_year is None
+        assert est.eps_next_year is None
+
+    def test_missing_earnings_estimate_attribute_leaves_fields_none(self):
+        """yfinance raising when accessing earnings_estimate must not crash fetch."""
+        mock_ticker = MagicMock()
+        mock_ticker.info = _MOCK_INFO
+        type(mock_ticker).earnings_estimate = property(
+            lambda self: (_ for _ in ()).throw(AttributeError("no earnings_estimate"))
+        )
+
+        with patch("flowtracker.estimates_client.yf.Ticker", return_value=mock_ticker):
+            client = EstimatesClient()
+            est = client.fetch_estimates("SBIN")
+
+        assert est is not None
+        assert est.eps_current_year is None
+        assert est.eps_next_year is None
+
+    def test_partial_periods_populate_available(self):
+        """Only `0y` row present → eps_current_year set, eps_next_year None."""
+        mock_ticker = MagicMock()
+        mock_ticker.info = _MOCK_INFO
+        mock_ticker.earnings_estimate = pd.DataFrame(
+            {"avg": [50.0]},
+            index=["0y"],
+        )
+
+        with patch("flowtracker.estimates_client.yf.Ticker", return_value=mock_ticker):
+            client = EstimatesClient()
+            est = client.fetch_estimates("SBIN")
+
+        assert est is not None
+        assert est.eps_current_year == 50.0
+        assert est.eps_next_year is None
+
+    def test_nan_avg_filtered_to_none(self):
+        mock_ticker = MagicMock()
+        mock_ticker.info = _MOCK_INFO
+        mock_ticker.earnings_estimate = pd.DataFrame(
+            {"avg": [float("nan"), float("nan")]},
+            index=["0y", "+1y"],
+        )
+
+        with patch("flowtracker.estimates_client.yf.Ticker", return_value=mock_ticker):
+            client = EstimatesClient()
+            est = client.fetch_estimates("SBIN")
+
+        assert est is not None
+        assert est.eps_current_year is None
+        assert est.eps_next_year is None
+
+
 class TestFetchSurprises:
     """Test fetch_surprises with mocked yfinance."""
 

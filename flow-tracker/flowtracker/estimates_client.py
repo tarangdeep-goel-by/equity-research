@@ -14,6 +14,33 @@ from flowtracker.fund_client import nse_symbol
 logger = logging.getLogger(__name__)
 
 
+def _extract_cy_ny_eps(ticker) -> tuple[float | None, float | None]:
+    """Pull consensus EPS for current year (`0y`) and next year (`+1y`) from
+    yfinance's `earnings_estimate` DataFrame. Returns (None, None) on any
+    failure / empty / missing-row / NaN path."""
+    try:
+        ee = ticker.earnings_estimate
+    except Exception:
+        return None, None
+    if ee is None or getattr(ee, "empty", True):
+        return None, None
+    if "avg" not in ee.columns:
+        return None, None
+
+    def _row_avg(period: str) -> float | None:
+        if period not in ee.index:
+            return None
+        val = ee.loc[period, "avg"]
+        if val is None or str(val) == "nan":
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    return _row_avg("0y"), _row_avg("+1y")
+
+
 class EstimatesClient:
     """Client for consensus estimates via yfinance."""
 
@@ -28,6 +55,7 @@ class EstimatesClient:
                 return None
 
             _eg = info.get("earningsGrowth")
+            eps_cy, eps_ny = _extract_cy_ny_eps(ticker)
             return ConsensusEstimate(
                 symbol=symbol,
                 date=date.today().isoformat(),
@@ -40,6 +68,8 @@ class EstimatesClient:
                 recommendation_score=info.get("recommendationMean"),
                 forward_pe=info.get("forwardPE"),
                 forward_eps=info.get("forwardEps"),
+                eps_current_year=eps_cy,
+                eps_next_year=eps_ny,
                 earnings_growth=_eg * 100 if _eg is not None else None,
                 current_price=info.get("currentPrice") or info.get("regularMarketPrice"),
             )
