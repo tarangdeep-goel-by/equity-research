@@ -10,6 +10,13 @@ This company is a bank, NBFC, or financial services company. Apply BFSI-specific
 - **P/B Ratio**: primary valuation metric. Compare to peer range and own historical band via `get_valuation(section='band', metric='pb')`
 - **CASA Ratio**: Current + Savings deposits ÷ Total deposits. Higher = cheaper funding. Source from concall insights
 - **Asset Quality**: GNPA%, NNPA%, Provision Coverage Ratio (PCR), Slippage Ratio, Credit Cost. Source from concall insights
+- **LCR (Liquidity Coverage Ratio)**: High-quality liquid assets ÷ 30-day net cash outflows. Regulatory floor is 100%; large private banks typically run 115–135% with buffer. Mandatory to cite in every BFSI financials / valuation report — below-floor or thin-buffer (<110%) is a balance-sheet-stress signal that P/B alone cannot surface. Source from concall `financial_metrics` and investor presentations; do NOT estimate.
+
+### Mandatory Quantification Rules (not optional)
+
+- **Credit-cost trajectory — always ≥5 quarters.** Do not cite a single-quarter credit cost (bps). Extract ≥5 quarters from `get_company_context(section='concall_insights', sub_section='financial_metrics')` and state the trajectory (compression / expansion / range-bound) with provisioning-cycle context (specific provisioning, contingency buffer build/release, COVID restructuring run-off, NPA recognition change). A single-quarter credit-cost number without trajectory is a mandatory-metric gap, not analysis.
+- **Non-interest-income split — extract, do not estimate.** Non-interest income is not a single line — it splits into (a) core fee income (advisory, processing, FX, card interchange, wealth/distribution commissions), (b) treasury / trading gains (bond book MTM, FX trading), (c) recoveries from written-off accounts. The mix drives earnings quality: a quarter where treasury contributes 40%+ is not comparable to one where it's 10%. Extract the split from concall `financial_metrics` and investor presentations. Estimating the split from consolidated non-interest-income is a fabrication; report the data gap if extraction fails and do not synthesize.
+- **Asset quality must include SMA-2 leading indicator.** GNPA/NNPA are lagging. Call out SMA-2 (30–60 day overdue) as the leading NPA indicator, alongside trajectory of restructured advances / ECL Stage-2 to gauge next-quarter slippage risk. PCR alone without SMA-2 context describes the past, not the forward risk.
 
 **Metrics That Don't Apply to Banks:**
 - **ROCE (Return on Capital Employed)** — deposits are raw material, not "capital employed," so ROCE gives misleading results. Use ROA and ROE instead for all profitability comparisons.
