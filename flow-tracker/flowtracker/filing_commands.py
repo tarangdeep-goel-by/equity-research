@@ -214,6 +214,35 @@ def extract_concalls_cmd(
     console.print(f"  Saved to: ~/vault/stocks/{symbol.upper()}/fundamentals/concall_extraction_v2.json")
 
 
+@app.command(name="extract-deck")
+def extract_decks_cmd(
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
+    quarters: Annotated[int, typer.Option("--quarters", "-q", help="Number of deck quarters to extract")] = 4,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Claude model to use")] = None,
+    force: Annotated[bool, typer.Option("--force", help="Re-extract all quarters, ignoring cached JSON")] = False,
+) -> None:
+    """Extract structured insights from investor-deck PDFs via Docling + AI.
+
+    Reads ~/vault/stocks/{SYMBOL}/filings/FY??-Q?/investor_deck.pdf (up to N most
+    recent quarters). Docling converts each PDF to markdown (cached), then Claude
+    extracts segment_performance, strategic_priorities, outlook, charts, etc. Output
+    lands at ~/vault/stocks/{SYMBOL}/fundamentals/deck_extraction.json.
+    """
+    import asyncio
+
+    from flowtracker.research.deck_extractor import ensure_deck_data, extract_decks
+
+    runner = extract_decks if force else ensure_deck_data
+    result = asyncio.run(runner(symbol.upper(), quarters=quarters, model=model or "claude-sonnet-4-6"))
+
+    if result is None:
+        console.print(f"[yellow]No investor_deck.pdf found for {symbol.upper()}[/]")
+        console.print(f"  Expected at: ~/vault/stocks/{symbol.upper()}/filings/FY??-Q?/investor_deck.pdf")
+        return
+    console.print(f"[green]\u2713[/] Deck extraction: {result.get('quarters_analyzed', 0)} quarters for {symbol.upper()}")
+    console.print(f"  Saved to: ~/vault/stocks/{symbol.upper()}/fundamentals/deck_extraction.json")
+
+
 def _show_filing_summary(filings: list, symbol: str) -> None:
     """Show summary of fetched filings by category."""
     cats: dict[str, int] = {}

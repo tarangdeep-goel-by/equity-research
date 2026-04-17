@@ -2476,6 +2476,181 @@ class ResearchDataAPI:
         toc["_meta"] = meta
         return toc
 
+    _DECK_SECTIONS = (
+        "highlights",
+        "segment_performance",
+        "strategic_priorities",
+        "outlook_and_guidance",
+        "new_initiatives",
+        "charts_described",
+    )
+
+    def get_deck_insights(
+        self,
+        symbol: str,
+        section_filter: str | None = None,
+        quarter: str | None = None,
+        slide_topics: list[str] | None = None,
+    ) -> dict:
+        """Get pre-extracted investor-deck insights from the vault.
+
+        Deck extraction runs via `flowtrack filings extract-deck`. Output lives at
+        ~/vault/stocks/{SYMBOL}/fundamentals/deck_extraction.json. Covers the most
+        recent N deck PDFs (typically 4 quarters).
+
+        Without section_filter: returns a compact table of contents (quarters +
+        populated sections + slide_topics_by_quarter when tagged). <4KB.
+
+        With section_filter: returns that deck section across all quarters. Valid:
+        'highlights', 'segment_performance', 'strategic_priorities',
+        'outlook_and_guidance', 'new_initiatives', 'charts_described'.
+
+        Optional narrowing:
+          - quarter='FY26-Q3' narrows every path to one quarter.
+          - slide_topics=['segmental','outlook'] returns only decks whose slide_topics
+            intersect with the requested set — implies no specific section_filter
+            (returns relevant charts_described across matching decks).
+        """
+        import json
+        from pathlib import Path
+
+        vault = Path.home() / "vault" / "stocks" / symbol.upper() / "fundamentals"
+        path = vault / "deck_extraction.json"
+        if not path.exists():
+            return {
+                "error": f"No deck extraction found for {symbol}",
+                "hint": f"Run: flowtrack filings extract-deck -s {symbol}",
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            return {"error": f"Failed to read deck extraction for {symbol}: {e}"}
+
+        # Narrow to a single quarter when requested.
+        if quarter:
+            wanted = quarter.upper().replace(" ", "")
+            matched = [
+                q for q in data.get("quarters", [])
+                if (q.get("fy_quarter") or "").upper().replace(" ", "") == wanted
+            ]
+            if not matched:
+                available = [q.get("fy_quarter") for q in data.get("quarters", [])]
+                return {
+                    "error": f"Quarter '{quarter}' not found in deck extraction",
+                    "available_quarters": available,
+                }
+            data = {**data, "quarters": matched}
+
+        # Track quality + topic index in one pass.
+        quality_statuses: list[str] = []
+        missing_periods: list[str] = []
+        slide_topics_by_quarter: dict[str, list[str]] = {}
+        any_topics_present = False
+        for q in data.get("quarters", []):
+            status = q.get("extraction_status", "complete")
+            quality_statuses.append(status)
+            label = q.get("fy_quarter") or ""
+            if status in ("partial", "failed", "not_a_deck"):
+                missing_periods.append(label)
+            topics = q.get("slide_topics") or []
+            if topics and label:
+                slide_topics_by_quarter[label] = sorted({t.lower() for t in topics if t})
+                any_topics_present = True
+
+        degraded = [s for s in quality_statuses if s in ("partial", "failed", "not_a_deck")]
+        extraction_quality_warning = (
+            f"Deck extraction was degraded for {len(degraded)}/{len(quality_statuses)} "
+            f"quarters (statuses: {quality_statuses}). Some decks may be corporate "
+            "notices rather than real presentations, or Docling/Claude extraction failed. "
+            "Treat deck-derived analysis as partial — cross-check against concall_insights."
+        ) if degraded else None
+
+        if not quality_statuses:
+            meta_status = "empty"
+        elif degraded:
+            meta_status = "partial"
+        else:
+            meta_status = "full"
+        meta = {
+            "extraction_status": meta_status,
+            "missing_periods": missing_periods,
+            "degraded_quality": meta_status == "partial",
+        }
+
+        # slide_topics filter — narrow to quarters whose slide_topics intersect,
+        # implies agent wants the charts_described section from those quarters.
+        wanted_topics = {t.lower() for t in slide_topics} if slide_topics else set()
+        topic_filter_fallback: str | None = None
+
+        if wanted_topics and not any_topics_present:
+            topic_filter_fallback = (
+                "Slide-topic filter unavailable — this deck extraction predates topic "
+                "tagging. Returning all quarters; filter manually via section_filter."
+            )
+
+        # Targeted drill-down: one section across all (filtered) quarters.
+        if section_filter:
+            if section_filter not in self._DECK_SECTIONS:
+                return {
+                    "error": f"Unknown section '{section_filter}'",
+                    "valid_sections": list(self._DECK_SECTIONS),
+                }
+            slices = []
+            for q in data.get("quarters", []):
+                if wanted_topics and any_topics_present:
+                    q_topics = {t.lower() for t in (q.get("slide_topics") or [])}
+                    if not (wanted_topics & q_topics):
+                        continue
+                slices.append({
+                    "fy_quarter": q.get("fy_quarter", ""),
+                    "period_ended": q.get("period_ended"),
+                    section_filter: q.get(section_filter),
+                })
+            result = {
+                "symbol": symbol.upper(),
+                "section": section_filter,
+                "quarters": slices,
+            }
+            if wanted_topics:
+                result["slide_topics_requested"] = sorted(wanted_topics)
+            if topic_filter_fallback:
+                result["_topic_filter_warning"] = topic_filter_fallback
+            if extraction_quality_warning:
+                result["_extraction_quality_warning"] = extraction_quality_warning
+            result["_meta"] = meta
+            return result
+
+        # Default: TOC (no per-quarter payload).
+        toc_quarters = []
+        for q in data.get("quarters", []):
+            populated = [
+                s for s in self._DECK_SECTIONS
+                if q.get(s) and (len(q[s]) > 0 if isinstance(q[s], (list, dict, str)) else True)
+            ]
+            toc_quarters.append({
+                "fy_quarter": q.get("fy_quarter", ""),
+                "period_ended": q.get("period_ended"),
+                "sections_populated": populated,
+                "extraction_status": q.get("extraction_status", "complete"),
+            })
+        toc = {
+            "symbol": symbol.upper(),
+            "source_file": "deck_extraction.json",
+            "quarters": toc_quarters,
+            "available_sections": list(self._DECK_SECTIONS),
+            "hint": (
+                "Call get_deck_insights(sub_section='<section>') to drill in. "
+                "Pass quarter='FY26-Q3' to narrow. Pass slide_topics=['segmental',...] "
+                "to filter quarters by slide topics."
+            ),
+        }
+        if slide_topics_by_quarter:
+            toc["slide_topics_by_quarter"] = slide_topics_by_quarter
+        if extraction_quality_warning:
+            toc["_extraction_quality_warning"] = extraction_quality_warning
+        toc["_meta"] = meta
+        return toc
+
     def get_sector_kpis(self, symbol: str, kpi_key: str | None = None) -> dict:
         """Extract sector-specific KPIs from concall data using canonical field names.
 
