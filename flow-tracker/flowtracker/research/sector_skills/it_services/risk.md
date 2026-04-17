@@ -29,6 +29,7 @@ Concentration risk is the quietest risk in IT services because aggregate portfol
 - **US-geography concentration** — tier-1s draw 55-65% of revenue from the US; mid-caps often >70%. US-recession exposure dominates; a EU/UK recession is a secondary shock on ~20-30% of revenue.
 - **Talent-skill concentration** — cloud-migration, AI/ML, data-engineering skills are priced at 40-80% wage premiums to generalist services. A vendor under-hiring in these skills loses deal competitiveness; one over-hiring pays margin tax.
 - **AI-productivity erosion of pricing power** — classic T&M work shrinks billable hours as GenAI tools enter enterprise workflows; vendors without fixed-fee / outcome-linked exposure face structural pricing pressure in 2026-28.
+- **GCC ER&D insourcing — vertical-direct competition** — GCCs in aerospace, automotive, semiconductor, and BFSI-platforms are staffing 2-5k engineer captives in India that compete directly on the same domain depth as listed ER&D-specialist vendors (LTTS / TATATECH / CYIENT / KPITTECH archetypes). The threat is more acute than generic AMS / BPO GCC insourcing because ER&D domain IP is narrower, more capturable in a captive, and the client rarely runs a multi-vendor ER&D bench. Exposure metrics: ER&D-vendor top-5 client vertical overlap with known GCC build-outs, and annual-report disclosure of client-side engineering-headcount expansion.
 
 ### Bear-Case Scenarios — 20-40% Drawdown Triggers
 Historical IT-services drawdowns have recurring triggers:

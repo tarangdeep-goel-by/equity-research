@@ -24,6 +24,8 @@ Compute via `calculate` with `ttm_fcf_cr` and `market_cap_cr` as named inputs. P
 ### PEG Cross-Check — Growth-Adjusted Multiple Discipline
 `PEG = PE ÷ USD-revenue-growth-%`. For Indian tier-1s, 2.5-3.5 is the historical PEG band; >4 is stretched, <2 is cheap. Example: a tier-1 paying 24× PE for 9% USD-revenue growth = PEG 2.67 (middle of band, fair). The same 24× PE on 5% growth = PEG 4.8 (stretched — either growth must accelerate or multiple compresses). Use USD-revenue-growth (not reported INR growth) to isolate volume-price signal from FX noise. Route via `calculate` with `pe` and `usd_rev_growth_pct` as named inputs.
 
+**Why 2.5-3.5 is the fair PEG band for Indian tier-1 IT (not textbook 1.0-1.5):** four balance-sheet attributes compound earnings quality above raw growth. (a) **FCF conversion 80-100% of PAT** — earnings translate cleanly into distributable cash, unlike capex-heavy sectors. (b) **30-50% payout ratio** — ongoing cash yield adds 1.5-3% to total-return. (c) **Net-cash balance sheet** — no solvency discount. (d) **<2% maintenance capex** — incremental growth flows fully to FCF. Strip any of these and the band compresses toward standard 1.5-2.5 PEG territory.
+
 ### Forward-Multiple Sanity — Gordon / Justified PE with g
 The Gordon framework for a mature franchise: `Justified PE = (1 − retention) × (1 + g) ÷ (CoE − g)`, where `g` is sustainable long-run earnings growth. For Indian IT, realistic `g` sits in the 8-12% range in nominal terms (slower than 15-20% secular pace, given AI-reframe and discretionary-spend drag). **Always carry `g` through the formula** — the BFSI-pilot lesson is that dropping `g` produces a 50-70% under-estimate of fair multiple. Worked calibrations:
 
@@ -32,6 +34,8 @@ The Gordon framework for a mature franchise: `Justified PE = (1 − retention) �
 - Stressed tier-1: payout 70%, g 6%, CoE 12% → Justified PE = 0.7 × 1.06 / (0.12 − 0.06) = 12.4× (AI-reframe scenario with growth collapse).
 
 Sensitivity: a 2pp change in `g` (10→8%) drops justified PE from 38.5× to 18.9× — the growth assumption is as load-bearing as the CoE. Pull CoE from `get_market_context(section='macro')` or the WACC helper.
+
+**Forward-valuation scenario split — AI disruption vs AI monetisation.** The AI-reframe cycle is the largest variable in forward-g and should be scenario-split explicitly, not buried in a point estimate. Bear (disruption dominates): T&M compression on legacy AMS cuts 5-10% of revenue over 2-3 years; g collapses to 4-6% → Justified PE 12-16×. Bull (AI-plumbers monetisation dominates): AI-practice share grows to 15-25% of book on implementation / integration / data-migration / MLOps revenue; g sustains 11-13% → Justified PE 42-50×. Base: mixed — T&M compression offset by AI-adoption revenue, g 8-10%, Justified PE 22-30×. Diagnose which scenario the market is pricing (current PE vs scenario range) and which management disclosure would shift the probability weighting.
 
 ### Historical Band Context — Regime-Shift Caveats
 A 5-10Y PE band via `get_chart_data(chart_type='pe')` gives the long-arc context (current vs median vs trough-peak). But the band has regime breaks that should be stated, not smoothed over:
