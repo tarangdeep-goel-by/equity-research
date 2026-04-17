@@ -1951,10 +1951,33 @@ class FlowStore:
             )
         return [_snap(r) for r in rows]
 
+    def _pe_series_from_charts(self, symbol: str, days: int) -> list[tuple[str, float]]:
+        """Return [(date, pe_value), ...] from screener_charts for chart_type='pe'.
+
+        Phase 3.1 fix: valuation_snapshot only has ~28 days of data (since daily cron
+        was started recently), but screener_charts has historical PE series going back
+        to 2005 for mature stocks. Prefer charts when available.
+
+        Returns empty list if no rows found (caller falls back to valuation_snapshot).
+        """
+        rows = self._conn.execute(
+            "SELECT date, value FROM screener_charts "
+            "WHERE symbol = ? AND chart_type = 'pe' AND metric = 'Price to Earning' "
+            "AND date >= date('now', ? || ' days') AND value IS NOT NULL "
+            "ORDER BY date ASC",
+            (symbol.upper(), f"-{days}"),
+        ).fetchall()
+        return [(r["date"], r["value"]) for r in rows]
+
     def get_valuation_band(self, symbol: str, metric: str, days: int = 1095) -> ValuationBand | None:
         """Compute min/max/median/percentile for a valuation metric over N days.
 
         metric must be a column name in valuation_snapshot (e.g., 'pe_trailing', 'ev_ebitda', 'pb_ratio').
+
+        For metric='pe_trailing', reads from screener_charts (chart_type='pe') first —
+        that table has deep history (2005+ for mature stocks), while valuation_snapshot
+        only has ~28 days since the daily cron was started recently. Falls back to
+        valuation_snapshot if no chart data is available.
         """
         # Validate metric name to prevent SQL injection
         valid_metrics = {
@@ -1964,6 +1987,61 @@ class FlowStore:
         }
         if metric not in valid_metrics:
             return None
+
+        # Phase 3.1: prefer screener_charts for PE (deeper history)
+        if metric == "pe_trailing":
+            series = self._pe_series_from_charts(symbol, days)
+            if series:
+                # series is already date ASC from the SQL ORDER BY
+                chart_latest_date, chart_latest_val = series[-1]
+                period_start = series[0][0]
+                period_end = chart_latest_date
+                current_val = chart_latest_val
+                values = [v for _, v in series]
+
+                # If the daily cron produced a newer snapshot than the weekly chart
+                # refresh, splice it in as one extra observation rather than just
+                # replacing current_val — otherwise min/max/median/percentile would
+                # describe a different set than current_val sits in. Note: Screener
+                # "Price to Earning" and yfinance pe_trailing are both TTM but can
+                # diverge by 1-3% due to methodology; we accept that splice since the
+                # band is an approximation.
+                snap_latest = self._conn.execute(
+                    "SELECT pe_trailing, date FROM valuation_snapshot "
+                    "WHERE symbol = ? AND pe_trailing IS NOT NULL "
+                    "ORDER BY date DESC LIMIT 1",
+                    (symbol.upper(),),
+                ).fetchone()
+                if snap_latest is not None and snap_latest["date"] > chart_latest_date:
+                    values.append(snap_latest["pe_trailing"])
+                    current_val = snap_latest["pe_trailing"]
+                    period_end = snap_latest["date"]
+
+                values_sorted = sorted(values)
+                n = len(values_sorted)
+                min_val = values_sorted[0]
+                max_val = values_sorted[-1]
+                median_val = (
+                    values_sorted[n // 2]
+                    if n % 2 == 1
+                    else (values_sorted[n // 2 - 1] + values_sorted[n // 2]) / 2
+                )
+                below = sum(1 for v in values_sorted if v < current_val)
+                percentile = (below / n) * 100
+
+                return ValuationBand(
+                    symbol=symbol.upper(),
+                    metric=metric,
+                    min_val=min_val,
+                    max_val=max_val,
+                    median_val=median_val,
+                    current_val=current_val,
+                    percentile=percentile,
+                    num_observations=n,
+                    period_start=period_start,
+                    period_end=period_end,
+                )
+            # else: no chart data — fall through to valuation_snapshot path below
 
         rows = self._conn.execute(
             f"SELECT {metric}, date FROM valuation_snapshot "
