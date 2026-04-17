@@ -115,6 +115,69 @@ class TestSectorHintInjection:
 
 
 # ---------------------------------------------------------------------------
+# BFSI asset-quality coverage (E2 fix): canonical schema + extraction prompt
+# must expose GNPA / NNPA / PCR / CASA reliably for bank/NBFC concalls.
+# ---------------------------------------------------------------------------
+class TestBfsiAssetQualityCoverage:
+    """Regression guard for E2: concall extraction surfaces GNPA/NNPA/PCR/CASA for BFSI."""
+
+    _REQUIRED_BFSI_KEYS = (
+        "casa_ratio_pct",
+        "gross_npa_pct",
+        "net_npa_pct",
+        "provision_coverage_ratio_pct",
+    )
+
+    def test_banks_canonical_schema_has_asset_quality_kpis(self):
+        """The canonical `banks` KPI list must include GNPA / NNPA / PCR / CASA keys."""
+        from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
+
+        keys = {kpi["key"] for kpi in SECTOR_KPI_CONFIG["banks"]["kpis"]}
+        for required in self._REQUIRED_BFSI_KEYS:
+            assert required in keys, f"banks sector KPI config missing {required}"
+
+    def test_get_kpis_for_private_bank_covers_asset_quality(self):
+        """Industry → KPI lookup for 'Private Sector Bank' returns the 4 asset-quality fields."""
+        from flowtracker.research.sector_kpis import get_kpi_keys_for_industry
+
+        keys = get_kpi_keys_for_industry("Private Sector Bank")
+        assert keys is not None
+        for required in self._REQUIRED_BFSI_KEYS:
+            assert required in keys
+
+    def test_get_kpis_for_psu_bank_covers_asset_quality(self):
+        """PSU banks map to the same `banks` sector and expose the same asset-quality fields."""
+        from flowtracker.research.sector_kpis import get_kpi_keys_for_industry
+
+        keys = get_kpi_keys_for_industry("Public Sector Bank")
+        assert keys is not None
+        for required in self._REQUIRED_BFSI_KEYS:
+            assert required in keys
+
+    def test_extraction_hint_lists_asset_quality_for_bfsi(self):
+        """build_extraction_hint for a bank surfaces all four asset-quality canonical keys."""
+        from flowtracker.research.sector_kpis import build_extraction_hint
+
+        hint = build_extraction_hint("Private Sector Bank")
+        for required in self._REQUIRED_BFSI_KEYS:
+            assert required in hint, f"extraction hint missing canonical key {required}"
+
+    def test_base_extraction_prompt_mentions_bfsi_canonical_keys(self):
+        """The base CONCALL_EXTRACTION_PROMPT must list the canonical BFSI asset-quality keys.
+
+        Even when no `industry` is passed (no sector hint injected), the LLM should
+        still emit canonical field names for banks/NBFCs — otherwise downstream
+        tools cannot resolve GNPA / NNPA / PCR / CASA from operational_metrics.
+        """
+        from flowtracker.research.concall_extractor import CONCALL_EXTRACTION_PROMPT
+
+        for required in self._REQUIRED_BFSI_KEYS:
+            assert required in CONCALL_EXTRACTION_PROMPT, (
+                f"CONCALL_EXTRACTION_PROMPT must reference canonical key {required}"
+            )
+
+
+# ---------------------------------------------------------------------------
 # FY quarter sort helpers & Screener period conversion
 # ---------------------------------------------------------------------------
 from pathlib import Path

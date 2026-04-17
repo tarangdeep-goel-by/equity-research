@@ -467,7 +467,14 @@ Extract into this JSON structure:
     }
     // Include EVERY operational metric mentioned — not just 3-4 key ones.
     // For a marketplace: paying_subscribers, ARPU, traffic, unique_buyers, enquiries, conversion_rate, churn_rate, collections, deferred_revenue, supplier_count, buyer_count, etc.
-    // For a bank: NIM, CASA_ratio, advances_growth, deposit_growth, gross_NPA, net_NPA, PCR, slippage_rate, credit_cost, ROA, ROE, etc.
+    // For a bank/NBFC (BFSI): use these EXACT canonical field names when the metric is discussed —
+    //   casa_ratio_pct (CASA %), gross_npa_pct (GNPA %), net_npa_pct (NNPA %),
+    //   provision_coverage_ratio_pct (PCR %), net_interest_margin_pct (NIM %),
+    //   fresh_slippages_cr, credit_cost_bps, capital_adequacy_ratio_pct (CRAR),
+    //   liquidity_coverage_ratio_pct (LCR), cost_to_income_ratio_pct, roau_pct (ROA).
+    //   MANDATORY for BFSI: always emit casa_ratio_pct, gross_npa_pct, net_npa_pct,
+    //   provision_coverage_ratio_pct — if not stated in the call, set value to null
+    //   with reason "not_mentioned_in_concall". Never omit these four keys for BFSI.
     // For manufacturing: capacity_utilization, order_book, realization, raw_material_cost, power_cost, volume_growth, export_share, etc.
   },
 
