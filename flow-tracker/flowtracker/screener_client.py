@@ -523,16 +523,20 @@ class ScreenerClient:
         price_start = sections.get("PRICE:", len(all_rows))
         derived_start = sections.get("DERIVED:", len(all_rows))
 
-        # P&L fields
+        # P&L fields — labels match Screener's actual Data Sheet rows.
+        # Note: the "Profit & Loss" tab has aggregated rows (Operating Profit, Expenses)
+        # but those are Excel formulas referencing the Data Sheet and are returned as
+        # None by openpyxl unless Excel has opened and cached the file. The Data Sheet
+        # holds the raw component rows — we extract those and derive the aggregates
+        # below.
         revenue = _extract_row_values(pl_start, pl_end, "Sales")
         employee_cost = _extract_row_values(pl_start, pl_end, "Employee Cost")
         raw_material_cost = _extract_row_values(pl_start, pl_end, "Raw Material Cost")
-        power_and_fuel = _extract_row_values(pl_start, pl_end, "Power & Fuel Cost")
-        other_mfr_exp = _extract_row_values(pl_start, pl_end, "Other Manufacturing Expenses")
-        selling_and_admin = _extract_row_values(pl_start, pl_end, "Selling and Admin Expenses")
+        power_and_fuel = _extract_row_values(pl_start, pl_end, "Power and Fuel")
+        other_mfr_exp = _extract_row_values(pl_start, pl_end, "Other Mfr. Exp")
+        selling_and_admin = _extract_row_values(pl_start, pl_end, "Selling and admin")
         other_expenses_detail = _extract_row_values(pl_start, pl_end, "Other Expenses")
-        total_expenses = _extract_row_values(pl_start, pl_end, "Expenses")
-        operating_profit = _extract_row_values(pl_start, pl_end, "Operating Profit")
+        change_in_inventory = _extract_row_values(pl_start, pl_end, "Change in Inventory")
         other_income = _extract_row_values(pl_start, pl_end, "Other Income")
         depreciation = _extract_row_values(pl_start, pl_end, "Depreciation")
         interest = _extract_row_values(pl_start, pl_end, "Interest")
@@ -540,6 +544,36 @@ class ScreenerClient:
         tax = _extract_row_values(pl_start, pl_end, "Tax")
         net_income = _extract_row_values(pl_start, pl_end, "Net profit")
         dividend = _extract_row_values(pl_start, pl_end, "Dividend Amount")
+
+        # Derive operating_profit (EBIT) and total_expenses per year.
+        # operating_profit is populated as EBIT = PBT + Interest — the convention
+        # the ~10 downstream consumers (data_api.py, projections.py, E1's
+        # _compute_ebitda_from_row) assume when they compute EBITDA as op + dep,
+        # NOPAT as op * (1-t), or ROCE as EBIT / Capital Employed. Populating with
+        # Screener's own "Operating Profit" (Sales - opex-ex-D&A, an EBITDA-ish
+        # number) would over-count D&A in those consumers.
+        # total_expenses is Screener's "Expenses" aggregate:
+        #   Sales - (EBIT + Dep - OI) = revenue - operating_profit - dep + oi
+        def _safe(lst: list[float | None], i: int) -> float | None:
+            return lst[i] if i < len(lst) else None
+
+        operating_profit: list[float | None] = []
+        total_expenses: list[float | None] = []
+        for i in range(len(date_cols)):
+            pbt_i = _safe(pbt, i)
+            int_i = _safe(interest, i)
+            if pbt_i is None:
+                operating_profit.append(None)
+            else:
+                operating_profit.append(pbt_i + (int_i or 0))
+            rev_i = _safe(revenue, i)
+            op_i = operating_profit[i]
+            dep_i = _safe(depreciation, i)
+            oi_i = _safe(other_income, i)
+            if rev_i is None or op_i is None:
+                total_expenses.append(None)
+            else:
+                total_expenses.append(rev_i - op_i - (dep_i or 0) + (oi_i or 0))
 
         # Balance Sheet fields
         equity_capital = _extract_row_values(bs_start, bs_end, "Equity Share Capital")
