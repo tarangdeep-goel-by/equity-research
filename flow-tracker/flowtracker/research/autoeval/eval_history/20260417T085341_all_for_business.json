@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T08:53:41.173221+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "metals"
+  ],
+  "results": {
+    "metals": {
+      "agent": "business",
+      "stock": "VEDL",
+      "sector": "Diversified metals",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Masterful breakdown of transaction economics, unit costs (HZL COP vs LME), and the structural dividend extraction by the parent holdco."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Conclusions regarding the holdco discount and demerger thesis flow perfectly from the SOTP and peer valuation data."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Comprehensive coverage of all segments, though exact segment-level revenue splits are missing (which the agent correctly mitigated by estimating EBITDA contributions)."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Provides a crystal-clear binary framework (demerger vs holdco debt trap) with specific price targets and near-term catalysts."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies mining-specific frameworks: COP vs LME realization, EV/EBITDA, and SOTP for a diversified conglomerate."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent cross-referencing of concall data with financials, and correctly identified a yfinance data artefact to rely on Screener as the source of truth."
+        },
+        "tool_use_discipline": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Mostly disciplined and surfaced data gaps honestly, but hallucinated an unsupported 'revenue_segments' section for get_fundamentals in Turn 23."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Highly inefficient execution with 44 turns and $1.09 cost, well above the acceptable thresholds, driven by excessive sequential calculator calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Data Sourcing",
+          "issue": "Agent called get_fundamentals with an invalid section 'revenue_segments' which is not in the tool's allowed list, leading to a wasted turn.",
+          "suggestion": "Instruct the agent to strictly adhere to the allowed section enums provided in the tool description for get_fundamentals."
+        }
+      ],
+      "strengths": [
+        "Exceptional breakdown of the structural tension between VEDL and its parent VRL, quantifying the dividend extraction risk perfectly.",
+        "Excellent handling of peer selection, correctly discarding size-mismatched Screener peers in favor of Yahoo Finance peers to provide a realistic valuation context."
+      ],
+      "summary": "The report is an outstanding piece of fundamental analysis, perfectly capturing the complex holdco dynamics, unit economics, and demerger catalysts of Vedanta. However, the overall grade is dragged down by highly inefficient agent execution (44 turns, >$1.00 cost) and a hallucinated tool call.",
+      "report_length": 41228,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 79.12151466705836,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Masterful breakdown of transaction economics, unit costs (HZL COP vs LME), and the structural dividend extraction by the parent holdco.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Conclusions regarding the holdco discount and demerger thesis flow perfectly from the SOTP and peer valuation data.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Comprehensive coverage of all segments, though exact segment-level revenue splits are missing (which the agent correctly mitigated by estimating EBITDA contributions).\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Provides a crystal-clear binary framework (demerger vs holdco debt trap) with specific price targets and near-term catalysts.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies mining-specific frameworks: COP vs LME realization, EV/EBITDA, and SOTP for a diversified conglomerate.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent cross-referencing of concall data with financials, and correctly identified a yfinance data artefact to rely on Screener as the source of truth.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Mostly disciplined and surfaced data gaps honestly, but hallucinated an unsupported 'revenue_segments' section for get_fundamentals in Turn 23.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Highly inefficient execution with 44 turns and $1.09 cost, well above the acceptable thresholds, driven by excessive sequential calculator calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Data Sourcing\",\n      \"issue\": \"Agent called get_fundamentals with an invalid section 'revenue_segments' which is not in the tool's allowed list, leading to a wasted turn.\",\n      \"suggestion\": \"Instruct the agent to strictly adhere to the allowed section enums provided in the tool description for get_fundamentals.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional breakdown of the structural tension between VEDL and its parent VRL, quantifying the dividend extraction risk perfectly.\",\n    \"Excellent handling of peer selection, correctly discarding size-mismatched Screener peers in favor of Yahoo Finance peers to provide a realistic valuation context.\"\n  ],\n  \"summary\": \"The report is an outstanding piece of fundamental analysis, perfectly capturing the complex holdco dynamics, unit economics, and demerger catalysts of Vedanta. However, the overall grade is dragged down by highly inefficient agent execution (44 turns, >$1.00 cost) and a halluci"
+    }
+  }
+}

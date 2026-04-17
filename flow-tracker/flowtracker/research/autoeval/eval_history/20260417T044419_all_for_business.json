@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T04:44:19.727228+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "bfsi"
+  ],
+  "results": {
+    "bfsi": {
+      "agent": "business",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "B+",
+      "grade_numeric": 87,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Deeply analyzes the deposit-lending flywheel and CASA threats, though it could have quantified the exact impact of the upcoming ECL provisioning."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Conclusions logically follow from the data, though the bear case assumption regarding the \u20b99,000 Cr SMA-1 account lacks historical context on government account resolutions."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers most critical banking dimensions, but the absence of absolute GNPA/NNPA figures is a notable gap."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear bull/bear framework, though the bear case price target could benefit from a more rigorous stress-test of the equity multiplier."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect score justified by flawless application of banking metrics, including NIM, CASA ratio, credit costs, and DuPont decomposition."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Claims are well-backed, but the reliance on concall extraction for domestic NIM and CASA could be risky if transcripts are degraded."
+        },
+        "tool_use_discipline": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Honestly surfaced the failure of get_quality_scores (Turn 14), but the excessive number of individual calculate calls shows suboptimal planning."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Highly inefficient execution with 42 turns and $0.82 cost, falling into the F category despite a good cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Mandatory Metrics Status",
+          "issue": "Absolute GNPA and NNPA figures were not extracted because the get_quality_scores tool was unavailable/failed.",
+          "suggestion": "Restore or fix the get_quality_scores tool to ensure critical BFSI asset quality metrics are accessible."
+        }
+      ],
+      "strengths": [
+        "Excellent application of the BFSI framework, particularly the DuPont decomposition and the distinction between domestic and consolidated NIM.",
+        "Strong narrative connecting the historical NPA cleanup to the current earnings cycle, clearly identifying the core risk of CASA erosion due to MF disintermediation."
+      ],
+      "summary": "The report is analytically excellent, applying the BFSI framework perfectly to dissect SBI's revenue levers, margin mechanics, and structural risks. However, the agent's execution was highly inefficient, taking 42 turns to complete the task. Additionally, a tool failure prevented the extraction of absolute GNPA/NNPA figures, which is a notable gap for a bank analysis.",
+      "report_length": 36621,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 37.94051979202777,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Deeply analyzes the deposit-lending flywheel and CASA threats, though it could have quantified the exact impact of the upcoming ECL provisioning.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Conclusions logically follow from the data, though the bear case assumption regarding the \u20b99,000 Cr SMA-1 account lacks historical context on government account resolutions.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers most critical banking dimensions, but the absence of absolute GNPA/NNPA figures is a notable gap.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear bull/bear framework, though the bear case price target could benefit from a more rigorous stress-test of the equity multiplier.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect score justified by flawless application of banking metrics, including NIM, CASA ratio, credit costs, and DuPont decomposition.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Claims are well-backed, but the reliance on concall extraction for domestic NIM and CASA could be risky if transcripts are degraded.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Honestly surfaced the failure of get_quality_scores (Turn 14), but the excessive number of individual calculate calls shows suboptimal planning.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Highly inefficient execution with 42 turns and $0.82 cost, falling into the F category despite a good cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 87\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Mandatory Metrics Status\",\n      \"issue\": \"Absolute GNPA and NNPA figures were not extracted because the get_quality_scores tool was unavailable/failed.\",\n      \"suggestion\": \"Restore or fix the get_quality_scores tool to ensure critical BFSI asset quality metrics are accessible.\"\n    }\n  ],\n  \"strengths\": [\n    \"Excellent application of the BFSI framework, particularly the DuPont decomposition and the distinction between domestic and consolidated NIM.\",\n    \"Strong narrative connecting the historical NPA cleanup to the current earnings cycle, clearly identifying the core risk of CASA erosion due to MF disintermediation.\"\n  ],\n  \"summary\": \"The report is analytically excellent, applying the BFSI framework perfectly to dissect SBI's revenue levers, margin mechanics, and structural risks. However, the agent's execution was highly inefficient, taking 42 turns to complete the task. Additionally, a tool failure prevented the extraction of absolute GNPA/NNPA figures, which "
+    }
+  }
+}

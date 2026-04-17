@@ -1,0 +1,83 @@
+{
+  "sector": "all_for_risk",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T11:08:30.026083+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "conglomerate": {
+      "agent": "risk",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent depth. The report goes well beyond surface-level metrics, effectively connecting the WACC vs. ROCE spread to value destruction and explaining the mechanics of 'balance-sheet-as-a-weapon' infrastructure financing."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly logical progression. The distinction between surface-level safety (Altman Z-Score) and structural vulnerability (FCF burn, debt growth) is well articulated without contradiction."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all critical risk dimensions comprehensively. The only minor gap is the inability to extract KMP compensation data, though the agent correctly flagged this as an open question."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Institutional quality. The bear case scenario is exceptionally well-constructed, providing a quantified downside (30-50% decline) and specific, observable leading indicators (credit rating, pledge trends, incremental ROCE)."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect application of frameworks for an infrastructure conglomerate. The focus on CWIP parking risk, capital productivity, WACC vs. ROCE, and M&A integration velocity is exactly how this sector must be analyzed."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exemplary data sourcing. Every major claim is backed by a cited tool, and the agent is highly transparent about missing data (e.g., failed concall extractions, unverified US DOJ status)."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly disciplined, but the agent wasted several calls (Turns 23-25) struggling with the `calculate` tool's `expr` fallback to compute a 4-year CAGR, trying multiple syntax variations."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "The report took 29 turns, which is highly inefficient and falls into the lowest tier for turn count. However, the high cache hit rate (76.0%) kept the actual cost reasonable at $0.58."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Financial Risk (Debt Trajectory)",
+          "issue": "Agent wasted multiple turns trying to calculate a 4-year CAGR using the `calculate` tool's `expr` fallback, struggling with exponentiation syntax.",
+          "suggestion": "Update the `calculate` tool instructions to include a named operation for CAGR, or instruct the agent to rely on the `cagr_table` section of `get_fundamentals` instead of manual multi-year root calculations."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Open Questions",
+          "issue": "KMP compensation as a percentage of PAT could not be extracted from the available filings or cost structure data.",
+          "suggestion": "Ensure the `get_company_context(section='filings')` or `get_fundamentals(section='cost_structure')` tools explicitly parse and return Key Managerial Personnel (KMP) remuneration data from annual reports."
+        }
+      ],
+      "strengths": [
+        "Masterful synthesis of the WACC vs. ROCE spread and its implications for value destruction in a high-capex environment.",
+        "The Reverse DCF analysis brilliantly highlights the absurdity of the market's implied growth and margin expectations.",
+        "The Bear Case Pre-Mortem is highly actionable, logically sequenced, and provides clear downside price targets based on multiple compression."
+      ],
+      "summary": "This is an analytically brilliant risk report that perfectly captures the structural vulnerabilities of a high-growth infrastructure conglomerate, though the agent spun its wheels excessively (29 turns) trying to perform manual math. The application of sector-specific frameworks\u2014particularly CWIP parking risk and WACC/ROCE spreads\u2014is institutional grade and highly actionable for a portfolio manager.",
+      "report_length": 35880,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 45.94928050006274,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent depth. The report goes well beyond surface-level metrics, effectively connecting the WACC vs. ROCE spread to value destruction and explaining the mechanics of 'balance-sheet-as-a-weapon' infrastructure financing.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly logical progression. The distinction between surface-level safety (Altman Z-Score) and structural vulnerability (FCF burn, debt growth) is well articulated without contradiction.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all critical risk dimensions comprehensively. The only minor gap is the inability to extract KMP compensation data, though the agent correctly flagged this as an open question.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Institutional quality. The bear case scenario is exceptionally well-constructed, providing a quantified downside (30-50% decline) and specific, observable leading indicators (credit rating, pledge trends, incremental ROCE).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect application of frameworks for an infrastructure conglomerate. The focus on CWIP parking risk, capital productivity, WACC vs. ROCE, and M&A integration velocity is exactly how this sector must be analyzed.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exemplary data sourcing. Every major claim is backed by a cited tool, and the agent is highly transparent about missing data (e.g., failed concall extractions, unverified US DOJ status).\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly disciplined, but the agent wasted several calls (Turns 23-25) struggling with the `calculate` tool's `expr` fallback to compute a 4-year CAGR, trying multiple syntax variations.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"The report took 29 turns, which is highly inefficient and falls into the lowest tier for turn count. However, the high cache hit rate (76.0%) kept the actual cost reasonable at $0.58.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Financial Risk (Debt Trajectory)\",\n      \"issue\": \"Agent wasted multiple turns trying to calculate a 4-year CAGR using the `calculate` tool's `expr` fallback, struggling with exponentiation syntax.\",\n      \"suggestion\": \"Update the `calculate` tool instructions to include a named operation for CAGR, or instruct the agent to rely on the `cagr_table` section of `get_fundamentals` instead of manual multi-year root calculations.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Open Q"
+    }
+  }
+}

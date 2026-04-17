@@ -1,0 +1,89 @@
+{
+  "sector": "all_for_technical",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T06:16:32.538961+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "it_services": {
+      "agent": "technical",
+      "stock": "TCS",
+      "sector": "IT services",
+      "grade": "A",
+      "grade_numeric": 93,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent synthesis of delivery drops and FII/DII flows, explaining the 'why' behind the data. However, it misses derivatives/options positioning (OI, PCR) which is standard for analyzing F&O heavyweights."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong logical flow connecting the death cross to the short-term RSI bounce. A minor flaw exists in the prose representation of the 8-day delivery array (lists 9 numbers) versus the actual calculation (used 8)."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers price, volume, moving averages, and institutional flows comprehensively. The notable gap is the lack of derivatives data and relative strength comparison against the Nifty IT index."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Provides highly specific, level-based entry/exit zones and a clear timing verdict. It could only be slightly improved by defining a specific stop-loss level for the 'aggressive entry' scenario."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Correctly contextualizes technicals against TCS's high ROCE and IT sector macro headwinds. It misses comparing TCS's price action directly against the IT index (CNXIT) to gauge sector-relative momentum."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Excellent citation of tools and explicit acknowledgment of FMP limitations. It relies on a static baseline for shareholding, though it correctly notes the lack of recent insider activity."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Log shows 12 disciplined calls including proper use of `calculate` and `render_chart`. It handled the unavailable `get_estimates` tool gracefully and surfaced data limitations honestly."
+        },
+        "cost_efficiency": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Cache hit rate is excellent (70.6%) and cost is low ($0.33), but 19 turns is high and falls into the C-tier for turn count, indicating slightly inefficient planning."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Technical Indicators",
+          "issue": "Missing derivatives and options data (Open Interest, Put-Call Ratio) which are critical for analyzing short-term technicals of F&O heavyweights like TCS.",
+          "suggestion": "Update the technical agent's prompt to explicitly request options/derivatives data if available in the toolset, or to explicitly state its absence in the completeness caveat."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Price Action \u2014 52-Week Context",
+          "issue": "Compares TCS performance only to the Nifty 50, missing the sector-specific relative strength comparison.",
+          "suggestion": "Instruct the agent to always compare the stock's price performance against its specific sector index (e.g., Nifty IT) in addition to the broader market."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "3. Volume & Delivery Analysis",
+          "issue": "The prose lists 9 numbers in the 8-day average calculation string `(48+52+50+16+42+40+16+32+41)/8` but correctly calculates the average using 8 numbers in the actual tool call.",
+          "suggestion": "Minor LLM hallucination in text generation; the underlying math via the `calculate` tool was executed correctly."
+        }
+      ],
+      "strengths": [
+        "Exceptional synthesis of institutional flows (FII exit vs DII absorption) and their direct impact on establishing a price floor.",
+        "Highly actionable conclusion with specific technical levels and a clear, bifurcated framework for patient vs. aggressive accumulators.",
+        "Transparent handling of data limitations, explicitly calling out missing FMP indicators and unavailable tools without breaking character."
+      ],
+      "summary": "This is an institutional-quality technical report that brilliantly synthesizes price action, delivery volumes, and institutional flows into a cohesive narrative. The primary gap is the absence of derivatives data (OI, PCR) and relative strength comparisons against the IT index, which are standard for F&O heavyweights. Tool use and data transparency are exceptional, though the agent took an unusually high number of turns to complete the task.",
+      "report_length": 21076,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.396432291017845,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent synthesis of delivery drops and FII/DII flows, explaining the 'why' behind the data. However, it misses derivatives/options positioning (OI, PCR) which is standard for analyzing F&O heavyweights.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong logical flow connecting the death cross to the short-term RSI bounce. A minor flaw exists in the prose representation of the 8-day delivery array (lists 9 numbers) versus the actual calculation (used 8).\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers price, volume, moving averages, and institutional flows comprehensively. The notable gap is the lack of derivatives data and relative strength comparison against the Nifty IT index.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Provides highly specific, level-based entry/exit zones and a clear timing verdict. It could only be slightly improved by defining a specific stop-loss level for the 'aggressive entry' scenario.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Correctly contextualizes technicals against TCS's high ROCE and IT sector macro headwinds. It misses comparing TCS's price action directly against the IT index (CNXIT) to gauge sector-relative momentum.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Excellent citation of tools and explicit acknowledgment of FMP limitations. It relies on a static baseline for shareholding, though it correctly notes the lack of recent insider activity.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Log shows 12 disciplined calls including proper use of `calculate` and `render_chart`. It handled the unavailable `get_estimates` tool gracefully and surfaced data limitations honestly.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Cache hit rate is excellent (70.6%) and cost is low ($0.33), but 19 turns is high and falls into the C-tier for turn count, indicating slightly inefficient planning.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 93\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Technical Indicators\",\n      \"issue\": \"Missing derivatives and options data (Open Interest, Put-Call Ratio) which are critical for analyzing short-term technicals of F&O heavyweights like TCS.\",\n      \"suggestion\": \"Update the technical agent's prompt to explicitly request options/derivatives data if available in the toolset, or to explicitly state its absence in the completeness caveat.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Price Action \u2014 52-Week Context\",\n      \"issue\": \"Compares TCS performance only to the"
+    }
+  }
+}

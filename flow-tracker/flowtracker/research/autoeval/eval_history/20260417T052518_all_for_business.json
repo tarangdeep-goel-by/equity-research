@@ -1,0 +1,90 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T05:25:18.424674+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "private_bank"
+  ],
+  "results": {
+    "private_bank": {
+      "agent": "business",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "B",
+      "grade_numeric": 85,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent breakdown of transaction economics and moat, but fee income (Layer 2) analysis is relatively shallow compared to the deep dive on NII."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong logical flow, though citing a beta against the S&P 500 (even with a disclaimer) introduces a slight inconsistency in an otherwise India-focused analysis."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers major BFSI dimensions well, but lacks a deeper dive into non-employee operating expenses (branch expansion costs) and Liquidity Coverage Ratio (LCR)."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides clear bull/bear scenarios and catalysts, but lacks a concrete downside price target or margin of safety calculation for the bear case."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Applies NIM, CASA, and CD ratio perfectly, but omits detailed analysis of credit costs and provisioning buffers which are standard BFSI pillars."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Good overall attribution, but relies on an 'estimated' fee income figure rather than extracting the exact non-interest income from the available financial data."
+        },
+        "tool_use_discipline": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strictly followed instructions to use the `calculate` tool for all math (11 calls), avoiding hallucinations, but failed to find alternative data sources when `expense_pie` and `peer_growth` returned empty."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Extremely inefficient execution with 37 turns (well above the >20 turn threshold for an F) and $0.77 cost, despite a good cache hit rate of 79.6%."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "2. The Money Machine \u2014 Revenue = NIM \u00d7 Earning Assets + Fee",
+          "issue": "The agent estimated fee income instead of extracting the exact non-interest income figure, and missed analyzing branch expansion opex.",
+          "suggestion": "Instruct the agent to extract exact non-interest income and operating expense breakdowns from the `get_fundamentals` tool rather than estimating."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "4. Peer Benchmarking",
+          "issue": "The agent cited a beta relative to the S&P 500 from yfinance, which is irrelevant for an Indian stock.",
+          "suggestion": "Instruct the agent to ignore yfinance beta for non-US stocks and either calculate it against the local index or omit it."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "5. Why It Wins (Or Loses) \u2014 Moat Analysis",
+          "issue": "The agent missed analyzing credit costs, provisioning trends, and Liquidity Coverage Ratio (LCR).",
+          "suggestion": "Add LCR and credit costs/provisioning to the mandatory BFSI sector framework checklist in the prompt."
+        }
+      ],
+      "strengths": [
+        "Exceptional breakdown of the customer journey and transaction economics, clearly illustrating the bank's liability-driven moat.",
+        "Excellent handling of the 1:1 bonus issue, explicitly warning the reader and adjusting historical/current comparisons accordingly."
+      ],
+      "summary": "The report provides an institutional-quality narrative on HDFC Bank's business model, brilliantly explaining its liability franchise and the post-merger CD ratio normalization thesis. However, the agent's execution was highly inefficient (37 turns), and it missed some secondary BFSI metrics like credit costs and LCR.",
+      "report_length": 33423,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.64179387502372,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent breakdown of transaction economics and moat, but fee income (Layer 2) analysis is relatively shallow compared to the deep dive on NII.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong logical flow, though citing a beta against the S&P 500 (even with a disclaimer) introduces a slight inconsistency in an otherwise India-focused analysis.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers major BFSI dimensions well, but lacks a deeper dive into non-employee operating expenses (branch expansion costs) and Liquidity Coverage Ratio (LCR).\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides clear bull/bear scenarios and catalysts, but lacks a concrete downside price target or margin of safety calculation for the bear case.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Applies NIM, CASA, and CD ratio perfectly, but omits detailed analysis of credit costs and provisioning buffers which are standard BFSI pillars.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Good overall attribution, but relies on an 'estimated' fee income figure rather than extracting the exact non-interest income from the available financial data.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strictly followed instructions to use the `calculate` tool for all math (11 calls), avoiding hallucinations, but failed to find alternative data sources when `expense_pie` and `peer_growth` returned empty.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Extremely inefficient execution with 37 turns (well above the >20 turn threshold for an F) and $0.77 cost, despite a good cache hit rate of 79.6%.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B\",\n    \"grade_numeric\": 85\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2. The Money Machine \u2014 Revenue = NIM \u00d7 Earning Assets + Fee\",\n      \"issue\": \"The agent estimated fee income instead of extracting the exact non-interest income figure, and missed analyzing branch expansion opex.\",\n      \"suggestion\": \"Instruct the agent to extract exact non-interest income and operating expense breakdowns from the `get_fundamentals` tool rather than estimating.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"4. Peer Benchmarking\",\n      \"issue\": \"The agent cited a beta relative to the S&P 500 from yfinance, which is irrelevant for an Indian stock.\",\n      \"suggestion\": \"Instruct the agent to ignore yfinance beta for non-US stocks and either calculate it against the local index or omit it.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"5. Why It Wins (Or Loses"
+    }
+  }
+}

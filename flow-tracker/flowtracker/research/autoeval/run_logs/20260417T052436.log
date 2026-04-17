@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T052436.log
+AutoEval (agent-first): agent=business sectors=['private_bank']
+Target: grade_numeric >= 90
+
+--- business / HDFCBANK (private_bank) ---
+  Report: 33423 chars
+  Evidence log loaded (47 lines)
+  Grading with Gemini...
+  Grade: B (85) [FAIL]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260417T052518_all_for_business.json
+
+======================================================================
+AGENT SUMMARY: business
+======================================================================
+  private_bank        HDFCBANK      B   (85)  [FAIL]  prompt_fixes:3
+======================================================================
+passing:0  failing:1  total:1
+======================================================================

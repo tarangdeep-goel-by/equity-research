@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_technical",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T05:36:15.310065+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "private_bank"
+  ],
+  "results": {
+    "private_bank": {
+      "agent": "technical",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent interpretation of delivery divergence and RSI anomaly, going beyond surface-level technicals to explain the 'why' behind the price action. Minor polish needed on integrating broader market breadth indicators."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong reasoning throughout, particularly the explicit and logical override of the system's 'stable' delivery signal based on recent acute drops. Minor polish needed on linking the RSI anomaly to historical precedents."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers price, volume, moving averages, and institutional flows comprehensively. Lacks options/derivatives data (OI, PCR) and volatility metrics, though this may be a tool limitation."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear, conditional entry/exit framework tied to the upcoming earnings catalyst, with well-defined support and resistance levels. Minor polish needed on position sizing context for the entry zones."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Appropriately contextualizes the delivery percentage against large-cap private bank averages and highlights the impact of passive index flows. Could further compare technical strength directly against the Bank Nifty index."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Data sources are clearly cited after each section, and the agent correctly identifies and explains a data initialization artifact in the MF holdings payload. Minor polish needed on standardizing the citation format across all tables."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly disciplined, but the execution log shows an attempt to call `get_estimates` (Turn 8), which is not in the tool registry. The agent handled the failure gracefully."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "The execution log shows 18 turns to complete the report, which falls into the C bucket for efficiency, despite a low cost ($0.33) and good cache hit rate (76.7%)."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Mandatory Metrics",
+          "issue": "Agent attempted to call `get_estimates` which is not available in its tool registry.",
+          "suggestion": "Update the agent's system prompt to remove references to `get_estimates` or restrict it to only use tools explicitly provided in its schema."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "4. Institutional Flow Context",
+          "issue": "MF changes data returned as `new_entry` for all schemes due to a data initialization artifact.",
+          "suggestion": "Ensure the backend data pipeline for `get_ownership(section='mf_changes')` has historical baseline data loaded to compute meaningful QoQ changes."
+        }
+      ],
+      "strengths": [
+        "Brilliant synthesis of price action and delivery data, correctly identifying a speculative bounce and overriding a stale automated system flag.",
+        "Excellent handling of data anomalies, explicitly explaining the MF data initialization artifact rather than blindly reporting it as a massive accumulation."
+      ],
+      "summary": "This is a highly insightful technical report that excels in analytical depth, particularly in its interpretation of delivery divergences and institutional flows. The primary drawbacks are a slightly inefficient execution path (18 turns) and an attempt to call an unavailable tool, but the final analytical output is near institutional quality.",
+      "report_length": 20422,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 44.077284084050916,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent interpretation of delivery divergence and RSI anomaly, going beyond surface-level technicals to explain the 'why' behind the price action. Minor polish needed on integrating broader market breadth indicators.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong reasoning throughout, particularly the explicit and logical override of the system's 'stable' delivery signal based on recent acute drops. Minor polish needed on linking the RSI anomaly to historical precedents.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers price, volume, moving averages, and institutional flows comprehensively. Lacks options/derivatives data (OI, PCR) and volatility metrics, though this may be a tool limitation.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear, conditional entry/exit framework tied to the upcoming earnings catalyst, with well-defined support and resistance levels. Minor polish needed on position sizing context for the entry zones.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Appropriately contextualizes the delivery percentage against large-cap private bank averages and highlights the impact of passive index flows. Could further compare technical strength directly against the Bank Nifty index.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Data sources are clearly cited after each section, and the agent correctly identifies and explains a data initialization artifact in the MF holdings payload. Minor polish needed on standardizing the citation format across all tables.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly disciplined, but the execution log shows an attempt to call `get_estimates` (Turn 8), which is not in the tool registry. The agent handled the failure gracefully.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"The execution log shows 18 turns to complete the report, which falls into the C bucket for efficiency, despite a low cost ($0.33) and good cache hit rate (76.7%).\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Mandatory Metrics\",\n      \"issue\": \"Agent attempted to call `get_estimates` which is not available in its tool registry.\",\n      \"suggestion\": \"Update the agent's system prompt to remove references to `get_estimates` or restrict it to only use tools explicitly provided in its schema.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"4. Institutional Flow Context\",\n      \"issue\": \"MF changes data returned as `new_entry` for all schemes du"
+    }
+  }
+}

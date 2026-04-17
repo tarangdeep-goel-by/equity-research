@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T094514.log
+AutoEval (agent-first): agent=risk sectors=['telecom']
+Target: grade_numeric >= 90
+
+--- risk / BHARTIARTL (telecom) ---
+  Report: 35204 chars
+  Evidence log loaded (41 lines)
+  Grading with Gemini...
+  Grade: A (94) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260417T094542_all_for_risk.json
+
+======================================================================
+AGENT SUMMARY: risk
+======================================================================
+  telecom             BHARTIARTL    A   (94)  [PASS]  prompt_fixes:0
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

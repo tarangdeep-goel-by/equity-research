@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T13:32:06.063138+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "insurance"
+  ],
+  "results": {
+    "insurance": {
+      "agent": "financials",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional breakdown of treasury-funded PAT vs operating EBIT and contextualizing the F-score. Minor gap: could have explored the sustainability of the 7.8% treasury yield."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Flawless logic connecting premium growth to receivables drag and CFO negativity. Minor gap: assumes trail revenue margin stays at 85% without discussing potential margin degradation risks."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Covers all bases including subsidiary drag and aggregator KPIs. Minor gap: lacks detail on how competitive intensity specifically impacts the sticky 'Other Costs' (marketing)."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Clear thesis on the transition from treasury-funded to operationally-funded profitability. Minor gap: the timeline for credit business recovery is left open without scenario analysis."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly identified the aggregator model and applied take rate/trail revenue frameworks instead of underwriting metrics. Explicitly rejected inapplicable metrics like Combined Ratio, justifying the perfect score."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent citations and use of the calculate tool to derive exact percentages. Minor gap: industry comparison for renewal rates was missing."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Used all required tools and extracted all mandatory metrics. However, making 12 separate sequential calls to the calculate tool was suboptimal for pipeline speed."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "45 turns is highly inefficient and exceeds the >20 turns threshold for an F, driving the cost to $0.88 despite a high cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution Log",
+          "issue": "The agent made 12 separate sequential calls to the `calculate` tool, driving the turn count to 45.",
+          "suggestion": "Instruct the agent to consolidate data gathering and minimize sequential single-operation tool calls, or update the calculate tool to accept batch operations."
+        }
+      ],
+      "strengths": [
+        "Exceptional identification of the core earnings quality issue (treasury-funded PAT vs operating EBIT).",
+        "Perfect application of the aggregator sector framework, explicitly rejecting traditional insurance underwriting metrics."
+      ],
+      "summary": "This is an analytically outstanding report that perfectly applies the correct sector framework for an insurtech aggregator, correctly identifying the treasury-funded nature of current profits. However, the agent's execution was highly inefficient, taking 45 turns primarily due to sequential, single-operation calls to the calculate tool, which severely impacted cost efficiency.",
+      "report_length": 33638,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 57.228372458019294,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional breakdown of treasury-funded PAT vs operating EBIT and contextualizing the F-score. Minor gap: could have explored the sustainability of the 7.8% treasury yield.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Flawless logic connecting premium growth to receivables drag and CFO negativity. Minor gap: assumes trail revenue margin stays at 85% without discussing potential margin degradation risks.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Covers all bases including subsidiary drag and aggregator KPIs. Minor gap: lacks detail on how competitive intensity specifically impacts the sticky 'Other Costs' (marketing).\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Clear thesis on the transition from treasury-funded to operationally-funded profitability. Minor gap: the timeline for credit business recovery is left open without scenario analysis.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly identified the aggregator model and applied take rate/trail revenue frameworks instead of underwriting metrics. Explicitly rejected inapplicable metrics like Combined Ratio, justifying the perfect score.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent citations and use of the calculate tool to derive exact percentages. Minor gap: industry comparison for renewal rates was missing.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Used all required tools and extracted all mandatory metrics. However, making 12 separate sequential calls to the calculate tool was suboptimal for pipeline speed.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"45 turns is highly inefficient and exceeds the >20 turns threshold for an F, driving the cost to $0.88 despite a high cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution Log\",\n      \"issue\": \"The agent made 12 separate sequential calls to the `calculate` tool, driving the turn count to 45.\",\n      \"suggestion\": \"Instruct the agent to consolidate data gathering and minimize sequential single-operation tool calls, or update the calculate tool to accept batch operations.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional identification of the core earnings quality issue (treasury-funded PAT vs operating EBIT).\",\n    \"Perfect application of the aggregator sector framework, explicitly rejecting traditional insurance underwriting metrics.\"\n  ],\n  \"summary\": \"This is an analytically outstanding report that perfectly applies the correct sector framework for an"
+    }
+  }
+}

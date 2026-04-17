@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T100741.log
+AutoEval (agent-first): agent=valuation sectors=['fmcg']
+Target: grade_numeric >= 90
+
+--- valuation / HINDUNILVR (fmcg) ---
+  Report: 36047 chars
+  Evidence log loaded (47 lines)
+  Grading with Gemini...
+  Grade: B (85) [FAIL]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260417T100831_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  fmcg                HINDUNILVR    B   (85)  [FAIL]  prompt_fixes:3
+======================================================================
+passing:0  failing:1  total:1
+======================================================================

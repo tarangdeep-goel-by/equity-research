@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T06:12:59.310830+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "it_services"
+  ],
+  "results": {
+    "it_services": {
+      "agent": "business",
+      "stock": "TCS",
+      "sector": "IT services",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Goes deep into the structural moat of MSA lock-ins and the core paradox of TCS having the highest ROCE but lowest PE. Excellent analysis of the AI deflation risk."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly consistent logic, particularly in decomposing revenue growth into volume (headcount decline) vs. price/mix. The bull/bear scenarios tie perfectly to the narrative."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers almost all bases, but lacks a structured breakdown of revenue by vertical (BFSI, Retail) and geography, which is a fundamental staple for IT services."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a very clear conditional fair value range and identifies the exact catalyst (TCV conversion in H1 FY27) that will dictate the stock's trajectory."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applied the IT services capacity/pricing model (Headcount \u00d7 Utilization \u00d7 Billing Rate), evaluated TCV conversion, and analyzed pyramid rebalancing."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong attribution throughout, with explicit caveats about concall data quality and proper use of the calculate tool for derived metrics."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent discipline. Surfaced missing data (utilization, onsite mix) honestly in the JSON payload and used the calculate tool 7 times for precise derivations."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Agent took 38 turns and cost $0.89, which falls into the F category (>20 turns) despite a good 76% cache hit rate. Execution was highly inefficient."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Money Machine",
+          "issue": "Missing structured breakdown of revenue by vertical and geography.",
+          "suggestion": "Instruct the agent to explicitly extract and present vertical and geographic revenue mix for IT services companies, as this is critical for assessing segment-specific headwinds."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution",
+          "issue": "Highly inefficient execution taking 38 turns.",
+          "suggestion": "Encourage the agent to batch `calculate` tool calls or consolidate data gathering steps to reduce the number of turns and overall latency."
+        }
+      ],
+      "strengths": [
+        "Exceptional application of sector-specific frameworks, particularly the volume vs. price decomposition and TCV conversion analysis.",
+        "Deep analytical insight into the ROCE vs. PE paradox and the structural threat of AI-driven T&M deflation."
+      ],
+      "summary": "This is an exceptionally well-reasoned and analytically deep report that perfectly applies IT services frameworks. The primary analytical gap is the omission of a standard vertical/geography revenue breakdown, and the agent's execution was highly inefficient (38 turns), which drags down the overall score.",
+      "report_length": 41707,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 56.11450137500651,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Goes deep into the structural moat of MSA lock-ins and the core paradox of TCS having the highest ROCE but lowest PE. Excellent analysis of the AI deflation risk.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly consistent logic, particularly in decomposing revenue growth into volume (headcount decline) vs. price/mix. The bull/bear scenarios tie perfectly to the narrative.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers almost all bases, but lacks a structured breakdown of revenue by vertical (BFSI, Retail) and geography, which is a fundamental staple for IT services.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a very clear conditional fair value range and identifies the exact catalyst (TCV conversion in H1 FY27) that will dictate the stock's trajectory.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applied the IT services capacity/pricing model (Headcount \u00d7 Utilization \u00d7 Billing Rate), evaluated TCV conversion, and analyzed pyramid rebalancing.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong attribution throughout, with explicit caveats about concall data quality and proper use of the calculate tool for derived metrics.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent discipline. Surfaced missing data (utilization, onsite mix) honestly in the JSON payload and used the calculate tool 7 times for precise derivations.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Agent took 38 turns and cost $0.89, which falls into the F category (>20 turns) despite a good 76% cache hit rate. Execution was highly inefficient.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Money Machine\",\n      \"issue\": \"Missing structured breakdown of revenue by vertical and geography.\",\n      \"suggestion\": \"Instruct the agent to explicitly extract and present vertical and geographic revenue mix for IT services companies, as this is critical for assessing segment-specific headwinds.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution\",\n      \"issue\": \"Highly inefficient execution taking 38 turns.\",\n      \"suggestion\": \"Encourage the agent to batch `calculate` tool calls or consolidate data gathering steps to reduce the number of turns and overall latency.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional application of sector-specific frameworks, particularly the volume vs. price decomposition and TCV conversion analysis.\",\n    \"Deep analytical insight into the ROCE vs. PE parad"
+    }
+  }
+}

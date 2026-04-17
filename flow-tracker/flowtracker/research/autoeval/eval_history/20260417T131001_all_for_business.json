@@ -1,0 +1,85 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T13:10:01.197635+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "insurance"
+  ],
+  "results": {
+    "insurance": {
+      "agent": "business",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Exceptional depth. The agent's decomposition of EBITDA to prove that fresh business is still loss-making (-\u20b9152 Cr) by isolating the 85% margin trail revenue is institutional-grade analysis."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong overall logic, though there is a minor contradiction in the Bull Case where a calculated fair value of \u20b91,298 is described as 'near current price' despite being ~19% below the CMP of \u20b91,600."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Covers all critical dimensions including unit economics, capital allocation, and regulatory risks (Bima Sugam). Acknowledges the missing CAC/LTV data honestly."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a very clear framework for what the market is pricing in (FY29 delivery) and sets up a stark bull/bear scenario with specific monitorables."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect application of the insurtech marketplace framework. The agent explicitly rejected traditional insurance metrics (NIM, VNB) and correctly focused on take rates, renewal trail ARR, and contribution margins."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Excellent data integration. Claims are backed by specific concall references (e.g., 1/n accounting) and precise tool-derived figures."
+        },
+        "tool_use_discipline": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless tool execution. The agent correctly identified a peer mismatch in Screener and proactively used `get_yahoo_peers` as a fallback. It also used the `calculate` tool 10 times for precise margin and upside math."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "The agent took 43 turns to generate the report, which is highly inefficient and exceeds the >20 turns threshold for an F grade, despite a high cache hit rate (85.5%) keeping the absolute cost at $0.77."
+        }
+      },
+      "issues": [
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "7. The Big Question (Bull Case)",
+          "issue": "The report states that a fair value of \u20b91,298-\u20b91,515 is 'near current price' when the current price is \u20b91,600.60, which is actually a 5-19% downside.",
+          "suggestion": "Adjust the phrasing to accurately reflect that even in the bull case at 60-70x PE, the stock faces near-term downside or time correction."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution Log",
+          "issue": "The agent took 43 turns to complete the report, indicating excessive looping or over-querying of tools.",
+          "suggestion": "Optimize the agent's system prompt to batch tool calls more effectively and reduce unnecessary verification steps to bring turns under 15."
+        }
+      ],
+      "strengths": [
+        "Brilliant decomposition of EBITDA to isolate the profitability of the renewal trail versus the loss-making fresh business.",
+        "Proactive and intelligent tool use, specifically recognizing a bad peer set from Screener and fetching Yahoo peers for a more accurate platform-comparable valuation.",
+        "Excellent identification of the structural working capital drag (1/n accounting for monthly premiums) from concall data."
+      ],
+      "summary": "This is an analytically superb report that perfectly captures the nuances of an insurtech platform's unit economics, though it is heavily penalized for taking an inefficient 43 turns to generate. The insight that PB Fintech's profitability is entirely a function of its renewal trail while fresh business remains loss-making is exactly the kind of differentiated analysis expected from a senior analyst.",
+      "report_length": 34969,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 55.573169625015,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Exceptional depth. The agent's decomposition of EBITDA to prove that fresh business is still loss-making (-\u20b9152 Cr) by isolating the 85% margin trail revenue is institutional-grade analysis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong overall logic, though there is a minor contradiction in the Bull Case where a calculated fair value of \u20b91,298 is described as 'near current price' despite being ~19% below the CMP of \u20b91,600.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Covers all critical dimensions including unit economics, capital allocation, and regulatory risks (Bima Sugam). Acknowledges the missing CAC/LTV data honestly.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a very clear framework for what the market is pricing in (FY29 delivery) and sets up a stark bull/bear scenario with specific monitorables.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect application of the insurtech marketplace framework. The agent explicitly rejected traditional insurance metrics (NIM, VNB) and correctly focused on take rates, renewal trail ARR, and contribution margins.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Excellent data integration. Claims are backed by specific concall references (e.g., 1/n accounting) and precise tool-derived figures.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless tool execution. The agent correctly identified a peer mismatch in Screener and proactively used `get_yahoo_peers` as a fallback. It also used the `calculate` tool 10 times for precise margin and upside math.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"The agent took 43 turns to generate the report, which is highly inefficient and exceeds the >20 turns threshold for an F grade, despite a high cache hit rate (85.5%) keeping the absolute cost at $0.77.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"NOT_OUR_PROBLEM\",\n      \"section\": \"7. The Big Question (Bull Case)\",\n      \"issue\": \"The report states that a fair value of \u20b91,298-\u20b91,515 is 'near current price' when the current price is \u20b91,600.60, which is actually a 5-19% downside.\",\n      \"suggestion\": \"Adjust the phrasing to accurately reflect that even in the bull case at 60-70x PE, the stock faces near-term downside or time correction.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution Log\",\n      \"issue\": \"The agent took 43 turns to complete the report, indicating excessive looping or over-querying of tools.\",\n      \"suggestion\": \"Optimize the agent's sy"
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T11:16:46.118282+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "conglomerate": {
+      "agent": "sector",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptional identification of the conglomerate/incubator model, correctly dismissing the legacy Screener classification. Connects the massive CWIP to zero incremental ROCE to explain the 'hope trade' valuation."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Flawlessly reconciles seemingly contradictory metrics (high CFO/PAT vs deeply negative FCF and zero incremental ROCE) by framing them within the massive ongoing infrastructure capex cycle."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Thoroughly covers TAM, regulatory risks across multiple verticals, macro sensitivities, and institutional flows. Successfully maps out both intra-group and external competitive landscapes."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear verdict balancing massive infrastructure tailwinds against self-inflicted leverage and execution risks. Identifies highly specific catalysts like the overdue AERA CP5 tariff order."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Brilliantly rejects the flawed 'Trading - Minerals' default classification and correctly applies an incubator/holding company framework (SOTP, NAV discount, CWIP conversion, intra-group multiple comparison)."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent use of the calculate tool to verify CAGRs and aggregate group market cap. Cites specific government scheme outlays (NIP, SIGHT, PLI) to size the TAM accurately."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Demonstrated high resilience in the log. When sector tools failed due to the 1-stock Screener classification, it seamlessly pivoted to Yahoo peers and manual group aggregation. Used the calculate tool 10 times for rigorous verification."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "Cost reached $0.65 and required an excessive 46 turns, which is highly inefficient, though the 85.4% cache hit rate and the necessity of manual calculations due to the sector classification mismatch prevent a failing grade."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution Log",
+          "issue": "Highly inefficient execution (46 turns) driven by sequential, single-operation `calculate` tool calls instead of batching or using expression fallback more efficiently.",
+          "suggestion": "Instruct the agent to combine mathematical operations into a single `calculate` expression where possible, or rely on pre-calculated growth rates from `get_fundamentals(section='growth_rates')` to save turns."
+        }
+      ],
+      "strengths": [
+        "Exceptional adaptation to a broken sector classification by building a custom conglomerate/incubator framework.",
+        "Deep, nuanced interpretation of conflicting financial metrics (high CFO vs negative FCF, zero incremental ROCE).",
+        "Highly specific regulatory and macro risk mapping across 7 distinct business verticals."
+      ],
+      "summary": "This is an institutional-quality report that brilliantly navigates a broken database sector classification by building a custom, highly accurate conglomerate/incubator framework. The analytical depth is superb, though the agent burned through an excessive number of turns (46) performing manual calculations to get there.",
+      "report_length": 33246,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 76.45996470807586,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptional identification of the conglomerate/incubator model, correctly dismissing the legacy Screener classification. Connects the massive CWIP to zero incremental ROCE to explain the 'hope trade' valuation.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Flawlessly reconciles seemingly contradictory metrics (high CFO/PAT vs deeply negative FCF and zero incremental ROCE) by framing them within the massive ongoing infrastructure capex cycle.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Thoroughly covers TAM, regulatory risks across multiple verticals, macro sensitivities, and institutional flows. Successfully maps out both intra-group and external competitive landscapes.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear verdict balancing massive infrastructure tailwinds against self-inflicted leverage and execution risks. Identifies highly specific catalysts like the overdue AERA CP5 tariff order.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Brilliantly rejects the flawed 'Trading - Minerals' default classification and correctly applies an incubator/holding company framework (SOTP, NAV discount, CWIP conversion, intra-group multiple comparison).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent use of the calculate tool to verify CAGRs and aggregate group market cap. Cites specific government scheme outlays (NIP, SIGHT, PLI) to size the TAM accurately.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Demonstrated high resilience in the log. When sector tools failed due to the 1-stock Screener classification, it seamlessly pivoted to Yahoo peers and manual group aggregation. Used the calculate tool 10 times for rigorous verification.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"Cost reached $0.65 and required an excessive 46 turns, which is highly inefficient, though the 85.4% cache hit rate and the necessity of manual calculations due to the sector classification mismatch prevent a failing grade.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution Log\",\n      \"issue\": \"Highly inefficient execution (46 turns) driven by sequential, single-operation `calculate` tool calls instead of batching or using expression fallback more efficiently.\",\n      \"suggestion\": \"Instruct the agent to combine mathematical operations into a single `calculate` expression where possible, or rely on pre-calculated growth rates from `get_fundamentals(section='growth_rates')` to save turns.\"\n    }\n  ],\n  \"st"
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T09:36:49.016356+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "telecom"
+  ],
+  "results": {
+    "telecom": {
+      "agent": "business",
+      "stock": "BHARTIARTL",
+      "sector": "Telecom operator",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent breakdown of the fixed-cost operating leverage and ARPU math, though it slightly glosses over the unit economics of the 12% B2B enterprise segment."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong logical flow from ARPU increases to EBITDA expansion, though the prepaid churn vs postpaid growth dynamic could be reconciled more clearly when discussing flat subscriber volumes."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Covers all major segments and telecom metrics, but misses the critical currency devaluation risk inherent in the Airtel Africa business (e.g., Nigerian Naira)."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Highly actionable with a clear thesis pin, well-defined bull/bear cases, and specific catalysts like the Jio IPO."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of telecom-specific frameworks, correctly identifying EV/EBITDA as the primary valuation metric due to spectrum amortization."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Good use of concall data and financials, though relying on a single Reuters headline for the Jio IPO timing could use more corroboration."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Log shows excellent persistence in extracting concall metrics and rigorous use of the calculator tool for all math, avoiding hallucinations."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Fails the efficiency test with 47 turns (well above the 20-turn threshold) and $0.94 cost, driven by 12 separate sequential calculator calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Money Machine",
+          "issue": "The report misses the significant currency devaluation risk (e.g., Nigerian Naira) which historically impacts Airtel Africa's reported INR revenues despite constant currency growth.",
+          "suggestion": "Instruct the agent to explicitly check for FX/currency headwinds when analyzing foreign subsidiaries of Indian multinationals."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "General",
+          "issue": "The agent made 12 separate sequential `calculate` tool calls, driving the turn count to 47 and reducing cost efficiency.",
+          "suggestion": "Instruct the agent to consolidate mathematical operations into fewer `expr` calls where possible, or update the calculator tool to accept batch operations."
+        }
+      ],
+      "strengths": [
+        "Exceptional breakdown of telecom unit economics, specifically the ARPU-to-EBITDA flow-through and the fixed-cost operating leverage.",
+        "Correctly identifies the 'depreciation trap' and shifts the valuation focus to EV/EBITDA, demonstrating deep sector understanding."
+      ],
+      "summary": "This is an institutional-quality business report that perfectly captures the telecom sector's operating leverage and ARPU repair thesis. The analytical frameworks applied are spot-on, though it slightly overlooks the currency risks in the Africa subsidiary. The only major drawback is the excessive turn count (47 turns) driven by sequential calculator calls, which severely impacts cost efficiency.",
+      "report_length": 33758,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 52.38254058302846,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent breakdown of the fixed-cost operating leverage and ARPU math, though it slightly glosses over the unit economics of the 12% B2B enterprise segment.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong logical flow from ARPU increases to EBITDA expansion, though the prepaid churn vs postpaid growth dynamic could be reconciled more clearly when discussing flat subscriber volumes.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Covers all major segments and telecom metrics, but misses the critical currency devaluation risk inherent in the Airtel Africa business (e.g., Nigerian Naira).\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Highly actionable with a clear thesis pin, well-defined bull/bear cases, and specific catalysts like the Jio IPO.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of telecom-specific frameworks, correctly identifying EV/EBITDA as the primary valuation metric due to spectrum amortization.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Good use of concall data and financials, though relying on a single Reuters headline for the Jio IPO timing could use more corroboration.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Log shows excellent persistence in extracting concall metrics and rigorous use of the calculator tool for all math, avoiding hallucinations.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Fails the efficiency test with 47 turns (well above the 20-turn threshold) and $0.94 cost, driven by 12 separate sequential calculator calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Money Machine\",\n      \"issue\": \"The report misses the significant currency devaluation risk (e.g., Nigerian Naira) which historically impacts Airtel Africa's reported INR revenues despite constant currency growth.\",\n      \"suggestion\": \"Instruct the agent to explicitly check for FX/currency headwinds when analyzing foreign subsidiaries of Indian multinationals.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"General\",\n      \"issue\": \"The agent made 12 separate sequential `calculate` tool calls, driving the turn count to 47 and reducing cost efficiency.\",\n      \"suggestion\": \"Instruct the agent to consolidate mathematical operations into fewer `expr` calls where possible, or update the calculator tool to accept batch operations.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional breakdown of telecom unit economics, specifically the ARPU-to-EBITDA flow-through and the fixed"
+    }
+  }
+}

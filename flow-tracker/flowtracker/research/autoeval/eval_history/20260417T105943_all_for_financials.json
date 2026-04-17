@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T10:59:43.340369+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "conglomerate"
+  ],
+  "results": {
+    "conglomerate": {
+      "agent": "financials",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Exceptional depth in normalizing earnings and explaining structural margin shifts, though it could have briefly estimated the maintenance vs. growth capex split to further refine the FCF analysis."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Masterfully resolves contradictions like the F-Score vs M-Score, though the assumption of a flat 30% tax rate for normalizing other income is a slightly blunt instrument."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Thorough coverage of conglomerate dimensions, though the lack of segment-level EBIT margins (due to tool failure) leaves a minor gap in the SOTP foundation."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a crystal-clear investment framework and open questions, though it could have provided slightly more explicit bear/bull case triggers based on the CWIP commissioning timeline."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies an incubator lens focusing on CWIP and subsidiaries; a perfect score is justified as it explicitly overrides the misleading NSE 'Trading' classification with the correct analytical framework."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Meticulous citation of data sources and calculation strings, though it relies heavily on FY25 snapshot data for some leverage metrics without showing the full intra-year trajectory."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Honestly surfaced concall data gaps, but wasted turns by calling the calculate tool 7 times without timestamp arguments, then re-calling it 8 times with them."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Failed the cost efficiency threshold with 45 turns and $1.08 cost, largely driven by inefficient, repetitive calculate tool usage."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution Log",
+          "issue": "The agent made 15 sequential calls to the calculate tool, first without timestamp arguments and then re-doing them with timestamp arguments, driving up turns and cost.",
+          "suggestion": "Instruct the agent to include 'inputs_as_of' in its first pass of calculate tool calls to avoid having to re-do them, reducing total turns."
+        }
+      ],
+      "strengths": [
+        "Brilliant framing of the company as an incubator rather than a trading firm, correctly contextualizing the massive CWIP and negative FCF.",
+        "Excellent decomposition of reported vs. normalized earnings, highlighting the distortion caused by other income.",
+        "Nuanced reconciliation of conflicting quantitative signals (e.g., weak F-Score vs. clean M-Score)."
+      ],
+      "summary": "This is an outstanding, institutional-quality financial analysis that perfectly captures the complex reality of Adani Enterprises' conglomerate structure. The only significant flaw is the agent's highly inefficient tool execution, which drove the cost and turn count to unacceptable levels.",
+      "report_length": 39782,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.59968824998941,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Exceptional depth in normalizing earnings and explaining structural margin shifts, though it could have briefly estimated the maintenance vs. growth capex split to further refine the FCF analysis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Masterfully resolves contradictions like the F-Score vs M-Score, though the assumption of a flat 30% tax rate for normalizing other income is a slightly blunt instrument.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Thorough coverage of conglomerate dimensions, though the lack of segment-level EBIT margins (due to tool failure) leaves a minor gap in the SOTP foundation.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a crystal-clear investment framework and open questions, though it could have provided slightly more explicit bear/bull case triggers based on the CWIP commissioning timeline.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies an incubator lens focusing on CWIP and subsidiaries; a perfect score is justified as it explicitly overrides the misleading NSE 'Trading' classification with the correct analytical framework.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Meticulous citation of data sources and calculation strings, though it relies heavily on FY25 snapshot data for some leverage metrics without showing the full intra-year trajectory.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Honestly surfaced concall data gaps, but wasted turns by calling the calculate tool 7 times without timestamp arguments, then re-calling it 8 times with them.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Failed the cost efficiency threshold with 45 turns and $1.08 cost, largely driven by inefficient, repetitive calculate tool usage.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution Log\",\n      \"issue\": \"The agent made 15 sequential calls to the calculate tool, first without timestamp arguments and then re-doing them with timestamp arguments, driving up turns and cost.\",\n      \"suggestion\": \"Instruct the agent to include 'inputs_as_of' in its first pass of calculate tool calls to avoid having to re-do them, reducing total turns.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant framing of the company as an incubator rather than a trading firm, correctly contextualizing the massive CWIP and negative FCF.\",\n    \"Excellent decomposition of reported vs. normalized earnings, highlighting the distortion caused by other income.\",\n    \"Nuanced reconciliation"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T055914.log
+AutoEval (agent-first): agent=ownership sectors=['it_services']
+Target: grade_numeric >= 90
+
+--- ownership / TCS (it_services) ---
+  Report: 32144 chars
+  Evidence log loaded (40 lines)
+  Grading with Gemini...
+  Grade: A- (91) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260417T060015_all_for_ownership.json
+
+======================================================================
+AGENT SUMMARY: ownership
+======================================================================
+  it_services         TCS           A-  (91)  [PASS]  prompt_fixes:1
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

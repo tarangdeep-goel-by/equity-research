@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T07:54:58.976195+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "regulated_power": {
+      "agent": "ownership",
+      "stock": "NTPC",
+      "sector": "Regulated utility",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional depth. The agent brilliantly connects the absence of block deals during FII distribution to the gradual degradation of delivery percentages, demonstrating a deep understanding of market microstructure."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless logic. The dedicated 'Cross-Section Reconciliation Pass' perfectly resolves apparent contradictions (e.g., FII near-term bearish vs DII medium-term bullish, MF aggregate trimming vs thematic adding)."
+        },
+        "completeness": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Covers every conceivable angle: promoter constraints, FII headroom, DII/LIC conviction, MF velocity, pledge risk, delivery trends, and sector-level rotation flows."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Provides a highly actionable synthesis broken down into three clear dynamics (Yield Capture, Rally Exit, Renewable Rotation), giving a PM a nuanced but decisive 'mixed with a bullish core' verdict."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Applies the exact right frameworks for a PSU Utility: highlights the 51% statutory GoI floor, the 20% FEMA cap, regulated-ROE dividend yield (as an LIC bond proxy), and the thermal-to-renewable capital rotation."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Excellent data hygiene. The agent explicitly flags the mark-to-market mismatch when multiplying current market cap by historical percentage points, and correctly notes that FII names are below the 1% disclosure threshold."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Log shows smart TOC usage (skipped insider/bulk block because count was 0), 6 correct uses of the calculate tool, and honest surfacing of data gaps (FII 1% threshold, subsidiary budget limit)."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Log shows 34 turns, which strictly violates the >20 turns threshold for an F, despite a high cache hit rate (79.8%) keeping the actual cost reasonable ($0.68)."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Execution",
+          "issue": "The agent took 34 turns to complete the report, indicating highly inefficient, sequential tool calling.",
+          "suggestion": "Instruct the agent to batch its tool calls more aggressively (e.g., passing multiple sections in a single array to `get_ownership` like `section=['mf_changes', 'shareholder_detail']` instead of making separate sequential calls)."
+        }
+      ],
+      "strengths": [
+        "Exceptional sector-specific framing, correctly identifying the 51% PSU statutory floor, 20% FEMA cap, and LIC's use of NTPC as a regulated-ROE bond proxy.",
+        "Brilliant cross-pollination of data points, specifically linking the absence of block deals during FII distribution to the gradual degradation of delivery percentages."
+      ],
+      "summary": "This is an institutional-quality ownership report that demonstrates deep understanding of PSU utility dynamics and market microstructure, marred only by highly inefficient agent execution (34 turns). Analytically, the synthesis of FII distribution, LIC yield-seeking, and renewable sector rotation is outstanding and ready for a PM's desk.",
+      "report_length": 33104,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.50840225000866,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional depth. The agent brilliantly connects the absence of block deals during FII distribution to the gradual degradation of delivery percentages, demonstrating a deep understanding of market microstructure.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless logic. The dedicated 'Cross-Section Reconciliation Pass' perfectly resolves apparent contradictions (e.g., FII near-term bearish vs DII medium-term bullish, MF aggregate trimming vs thematic adding).\"\n    },\n    \"completeness\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Covers every conceivable angle: promoter constraints, FII headroom, DII/LIC conviction, MF velocity, pledge risk, delivery trends, and sector-level rotation flows.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Provides a highly actionable synthesis broken down into three clear dynamics (Yield Capture, Rally Exit, Renewable Rotation), giving a PM a nuanced but decisive 'mixed with a bullish core' verdict.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Applies the exact right frameworks for a PSU Utility: highlights the 51% statutory GoI floor, the 20% FEMA cap, regulated-ROE dividend yield (as an LIC bond proxy), and the thermal-to-renewable capital rotation.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Excellent data hygiene. The agent explicitly flags the mark-to-market mismatch when multiplying current market cap by historical percentage points, and correctly notes that FII names are below the 1% disclosure threshold.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Log shows smart TOC usage (skipped insider/bulk block because count was 0), 6 correct uses of the calculate tool, and honest surfacing of data gaps (FII 1% threshold, subsidiary budget limit).\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Log shows 34 turns, which strictly violates the >20 turns threshold for an F, despite a high cache hit rate (79.8%) keeping the actual cost reasonable ($0.68).\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Execution\",\n      \"issue\": \"The agent took 34 turns to complete the report, indicating highly inefficient, sequential tool calling.\",\n      \"suggestion\": \"Instruct the agent to batch its tool calls more aggressively (e.g., passing multiple sections in a single array to `get_ownership` like `section=['mf_changes', 'shareholder_detail']` instead of making separate sequential calls).\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional sector-specific framing, correctly identifying the 51% PSU statutory floor"
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T08:24:58.062756+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "regulated_power": {
+      "agent": "sector",
+      "stock": "NTPC",
+      "sector": "Regulated utility",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent differentiation between standalone and consolidated PE, and deep understanding of the 'value trap' paradox in pass-through models."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Strong logical flow, particularly in the Justified P/B framework and the explanation of the negative dividend yield spread vs G-sec."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Covers all critical sector dimensions including TAM, CERC regulatory frameworks, institutional flows, and nuclear optionality."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a clear bull/bear framework with specific catalysts (CWIP conversion) and risks (leverage, renewable execution)."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of utility-specific frameworks. Correctly identifies that top-line growth is a poor metric due to fuel pass-through, focusing instead on Regulated Equity Base, PLF, and Justified P/B."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Excellent use of management commentary for KPIs not found in structured data, with clear citations and proper application of the historical mcap mismatch warning."
+        },
+        "tool_use_discipline": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Good fallback logic for empty peer growth, but failed to follow calculator instructions by using the unsupported '^' operator three times (Turns 25, 26, 32)."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "High turn count (35 turns) due to calculator syntax errors and retries, though a high cache hit rate (77.6%) kept costs at the $0.60 threshold."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Calculations",
+          "issue": "Agent used the '^' operator in the calculate tool for CAGR calculations, which failed because the tool explicitly only supports '+ - * / ( )'.",
+          "suggestion": "Update the system prompt to explicitly instruct the agent to use the get_fundamentals(section='cagr_table') tool for multi-year CAGRs instead of attempting manual exponentiation."
+        }
+      ],
+      "strengths": [
+        "Exceptional grasp of regulated utility economics, correctly dismissing top-line growth in favor of ROCE and regulated equity base expansion.",
+        "Highly effective use of the Justified P/B framework (ROE / Cost of Equity) to contextualize the valuation premium.",
+        "Strong synthesis of institutional flow data, correctly identifying the FII-to-DII rotation and the yield-spread mechanics driving it."
+      ],
+      "summary": "This is an institutional-quality sector report that perfectly applies regulated utility frameworks, though its execution was slightly marred by calculator tool syntax errors. The analysis correctly identifies the core drivers of NTPC's valuation (CWIP conversion, CERC ROE, and renewable optionality) while providing a highly actionable competitive landscape breakdown.",
+      "report_length": 38676,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 31.82584833400324,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent differentiation between standalone and consolidated PE, and deep understanding of the 'value trap' paradox in pass-through models.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Strong logical flow, particularly in the Justified P/B framework and the explanation of the negative dividend yield spread vs G-sec.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Covers all critical sector dimensions including TAM, CERC regulatory frameworks, institutional flows, and nuclear optionality.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a clear bull/bear framework with specific catalysts (CWIP conversion) and risks (leverage, renewable execution).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of utility-specific frameworks. Correctly identifies that top-line growth is a poor metric due to fuel pass-through, focusing instead on Regulated Equity Base, PLF, and Justified P/B.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Excellent use of management commentary for KPIs not found in structured data, with clear citations and proper application of the historical mcap mismatch warning.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Good fallback logic for empty peer growth, but failed to follow calculator instructions by using the unsupported '^' operator three times (Turns 25, 26, 32).\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"High turn count (35 turns) due to calculator syntax errors and retries, though a high cache hit rate (77.6%) kept costs at the $0.60 threshold.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Calculations\",\n      \"issue\": \"Agent used the '^' operator in the calculate tool for CAGR calculations, which failed because the tool explicitly only supports '+ - * / ( )'.\",\n      \"suggestion\": \"Update the system prompt to explicitly instruct the agent to use the get_fundamentals(section='cagr_table') tool for multi-year CAGRs instead of attempting manual exponentiation.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional grasp of regulated utility economics, correctly dismissing top-line growth in favor of ROCE and regulated equity base expansion.\",\n    \"Highly effective use of the Justified P/B framework (ROE / Cost of Equity) to contextualize the valuation premium.\",\n    \"Strong synthesis of institutional flow data, correctly identifying the FII-to-DII rotation and the yield-spread mechanics driving it.\"\n  ],\n  \"summary\": \"This is an institutional-quality sector rep"
+    }
+  }
+}
