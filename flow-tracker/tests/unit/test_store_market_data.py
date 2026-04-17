@@ -195,6 +195,64 @@ class TestMacroDaily:
     def test_get_previous_empty(self, store: FlowStore):
         assert store.get_macro_previous() is None
 
+    def test_backfill_missing_gsec(self, store: FlowStore):
+        """backfill_missing_gsec fills NULL gsec_10y rows within the lookback window."""
+        today = date.today()
+        # Seed 4 days: today has gsec, prior 3 have gsec=NULL
+        snapshots = [
+            MacroSnapshot(date=today.isoformat(), india_vix=14.5,
+                          usd_inr=83.5, brent_crude=82.0, gsec_10y=6.48),
+        ]
+        for i in range(1, 4):
+            d = (today - timedelta(days=i)).isoformat()
+            snapshots.append(MacroSnapshot(
+                date=d, india_vix=14.0, usd_inr=83.4,
+                brent_crude=81.5, gsec_10y=None,
+            ))
+        store.upsert_macro_snapshots(snapshots)
+
+        patched = store.backfill_missing_gsec(6.48)
+        assert patched == 3  # 3 NULL rows got filled; today already had a value
+
+        # Every row in window now has gsec
+        trend = store.get_macro_trend(days=10)
+        for s in trend:
+            assert s.gsec_10y == 6.48, f"{s.date} still missing"
+
+    def test_backfill_missing_gsec_respects_lookback(self, store: FlowStore):
+        """Rows older than max_lookback_days are NOT patched."""
+        today = date.today()
+        # One row today (NULL), one row 30 days ago (NULL)
+        store.upsert_macro_snapshots([
+            MacroSnapshot(date=today.isoformat(), india_vix=14.5,
+                          usd_inr=83.5, brent_crude=82.0, gsec_10y=None),
+            MacroSnapshot(date=(today - timedelta(days=30)).isoformat(),
+                          india_vix=14.0, usd_inr=83.0, brent_crude=80.0, gsec_10y=None),
+        ])
+
+        patched = store.backfill_missing_gsec(6.48, max_lookback_days=7)
+        assert patched == 1  # only today's row within 7-day window
+
+        # Old row still NULL
+        row = store._conn.execute(
+            "SELECT gsec_10y FROM macro_daily WHERE date = ?",
+            ((today - timedelta(days=30)).isoformat(),),
+        ).fetchone()
+        assert row["gsec_10y"] is None
+
+    def test_backfill_missing_gsec_skips_populated_rows(self, store: FlowStore):
+        """Rows already holding a gsec value are not overwritten."""
+        today = date.today()
+        store.upsert_macro_snapshots([
+            MacroSnapshot(date=today.isoformat(), india_vix=14.5,
+                          usd_inr=83.5, brent_crude=82.0, gsec_10y=7.00),
+        ])
+        patched = store.backfill_missing_gsec(6.48)
+        assert patched == 0
+        latest = store.get_macro_latest()
+        assert latest is not None
+        assert latest.gsec_10y == 7.00
+
 
 # ---------------------------------------------------------------------------
 # bulk_block_deals

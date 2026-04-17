@@ -40,6 +40,19 @@ def fetch(
         else:
             snapshots = client.fetch_snapshot(days)
         count = store.upsert_macro_snapshots(snapshots)
+        # Backfill NULL gsec_10y rows in the last week with today's value.
+        # CCIL only publishes today's yield; without this, any day the cron
+        # ran before CCIL's end-of-day update keeps gsec_10y=NULL forever.
+        latest_gsec = next(
+            (s.gsec_10y for s in reversed(snapshots) if s.gsec_10y is not None),
+            None,
+        )
+        if latest_gsec is not None:
+            patched = store.backfill_missing_gsec(latest_gsec)
+            if patched:
+                console.print(
+                    f"[dim]Backfilled gsec_10y={latest_gsec} into {patched} prior row(s)[/]"
+                )
     display_macro_fetch_result(count)
 
 

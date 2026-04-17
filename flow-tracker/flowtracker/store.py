@@ -2277,6 +2277,25 @@ class FlowStore:
             gsec_10y=r["gsec_10y"],
         ) for r in rows]
 
+    def backfill_missing_gsec(self, value: float, max_lookback_days: int = 7) -> int:
+        """Fill NULL gsec_10y rows for the last N days with the given value.
+
+        CCIL only publishes today's 10Y yield, and prior-day rows inserted
+        before the first successful scrape keep NULL gsec_10y forever. This
+        helper patches recent NULLs with the latest scraped value — a
+        reasonable approximation since 10Y yields move <5bps/day.
+
+        Returns the number of rows updated.
+        """
+        cursor = self._conn.execute(
+            "UPDATE macro_daily SET gsec_10y = ? "
+            "WHERE date >= date('now', ? || ' days') "
+            "AND gsec_10y IS NULL",
+            (value, f"-{max_lookback_days}"),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
     # -- Bhavcopy + Delivery --
 
     def upsert_daily_stock_data(self, records: list[DailyStockData]) -> int:
