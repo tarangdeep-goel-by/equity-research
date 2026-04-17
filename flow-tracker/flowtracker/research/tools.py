@@ -851,6 +851,26 @@ async def get_concall_insights(args):
     return _with_dedup("get_concall_insights", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
+get_deck_insights = tool(
+    "get_deck_insights",
+    "Get pre-extracted investor-deck insights from the vault: up to 4 quarters of highlights, segment_performance, strategic_priorities, outlook_and_guidance, new_initiatives, charts_described, and slide_topics. Complements get_concall_insights — decks show polished charts, segmental tables, and forward guidance slides that the transcript doesn't expose as structured data. First call returns a compact TOC (quarters + populated sections + slide_topics_by_quarter when tagged). Pass sub_section to drill into one section across all quarters ('highlights' | 'segment_performance' | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'). Pass quarter (e.g. 'FY26-Q3') to narrow. Pass slide_topics (e.g. ['segmental','outlook']) to filter quarters by their topic tags.",
+    {"symbol": str, "sub_section": str, "quarter": str, "slide_topics": list},
+    annotations=READ_ONLY,
+)
+
+
+@get_deck_insights
+async def get_deck_insights(args):
+    with ResearchDataAPI() as api:
+        data = api.get_deck_insights(
+            args["symbol"],
+            section_filter=args.get("sub_section"),
+            quarter=args.get("quarter"),
+            slide_topics=args.get("slide_topics"),
+        )
+    return _with_dedup("get_deck_insights", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
 @tool(
     "render_chart",
     "Generate a PNG chart and return the file path for embedding in your report. "
@@ -1762,6 +1782,13 @@ def _get_company_context_section(api, symbol, section, args):
             quarter=args.get("quarter"),
             qa_topics=args.get("qa_topics"),
         )
+    elif section == "deck_insights":
+        return api.get_deck_insights(
+            symbol,
+            section_filter=args.get("sub_section"),
+            quarter=args.get("quarter"),
+            slide_topics=args.get("slide_topics"),
+        )
     elif section == "sector_kpis":
         return api.get_sector_kpis(symbol, kpi_key=args.get("sub_section"))
     elif section == "filings":
@@ -1772,7 +1799,7 @@ def _get_company_context_section(api, symbol, section, args):
 
 @tool(
     "get_company_context",
-    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
+    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'deck_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for deck_insights: 'highlights' | 'segment_performance' | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
     {"symbol": str, "section": str, "doc_type": str, "limit": int, "sub_section": str},
     annotations=READ_ONLY,
 )
@@ -1793,6 +1820,12 @@ async def get_company_context(args):
                     section_filter=args.get("sub_section"),
                     quarter=args.get("quarter"),
                     qa_topics=args.get("qa_topics"),
+                ),
+                "deck_insights": api.get_deck_insights(
+                    symbol,
+                    section_filter=args.get("sub_section"),
+                    quarter=args.get("quarter"),
+                    slide_topics=args.get("slide_topics"),
                 ),
                 "sector_kpis": api.get_sector_kpis(symbol, kpi_key=args.get("sub_section")),
                 "filings": api.get_recent_filings(symbol, args.get("limit", 10)),
