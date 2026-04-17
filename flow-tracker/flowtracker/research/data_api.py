@@ -5667,6 +5667,29 @@ class ResearchDataAPI:
 
     # --- Metals/Mining Metrics ---
 
+    @staticmethod
+    def _compute_ebitda_from_row(row: dict) -> float:
+        """Compute EBITDA from an annual financials row with a robust fallback.
+
+        Preferred: operating_profit + depreciation (EBIT + D&A).
+        Fallback (when operating_profit is missing — the common case for
+        Screener-sourced annual data across metals/telecom/IT/FMCG/financials):
+        bottom-up reconstruction as net_income + tax + interest + depreciation.
+        This mirrors the approach used in projections.py and get_fair_value.
+
+        Without this fallback, ``0 + depreciation`` is returned, causing EBITDA
+        to equal depreciation — the E1 bug in plans/post-eval-fix-plan.md that
+        affected metals/telecom Net Debt/EBITDA and EV/EBITDA calculations.
+        """
+        dep = row.get("depreciation", 0) or 0
+        op = row.get("operating_profit")
+        if op is not None:
+            return op + dep
+        ni = row.get("net_income", 0) or 0
+        tax = row.get("tax", 0) or 0
+        interest = row.get("interest", 0) or 0
+        return ni + tax + interest + dep
+
     def get_metals_metrics(self, symbol: str) -> dict:
         """Metals/Mining-specific metrics: EBITDA, Net Debt/EBITDA, EV/EBITDA."""
         if not self._is_metals(symbol):
@@ -5683,13 +5706,11 @@ class ResearchDataAPI:
         nd_ebitda_values = []
 
         for row in annual:
-            op = row.get("operating_profit", 0) or 0
-            dep = row.get("depreciation", 0) or 0
             borrowings = row.get("borrowings", 0) or 0
             cash = row.get("cash_and_bank", 0) or 0
             revenue = row.get("revenue", 0) or 0
 
-            ebitda = op + dep
+            ebitda = self._compute_ebitda_from_row(row)
             net_debt = borrowings - cash
 
             entry = {"fiscal_year": row.get("fiscal_year_end", "")}
@@ -5787,15 +5808,13 @@ class ResearchDataAPI:
 
         years_data = []
         for row in annual:
-            op = row.get("operating_profit", 0) or 0
-            dep = row.get("depreciation", 0) or 0
             borrowings = row.get("borrowings", 0) or 0
             cash = row.get("cash_and_bank", 0) or 0
             revenue = row.get("revenue", 0) or 0
             cfo = row.get("cfo", 0) or 0
             cfi = row.get("cfi", 0) or 0
 
-            ebitda = op + dep
+            ebitda = self._compute_ebitda_from_row(row)
             net_debt = borrowings - cash
 
             entry = {"fiscal_year": row.get("fiscal_year_end", "")}

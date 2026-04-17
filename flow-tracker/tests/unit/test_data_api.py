@@ -621,3 +621,159 @@ class TestClean:
 
         data = api.get_fair_value("SBIN")
         json.dumps(data)
+
+
+# ---------------------------------------------------------------------------
+# EBITDA field router — E1 regression fix
+# ---------------------------------------------------------------------------
+
+class TestEbitdaRouterE1:
+    """Regression tests for the E1 bug in plans/post-eval-fix-plan.md:
+    get_quality_scores(metals|telecom) was returning depreciation as EBITDA
+    when Screener-sourced annual data had operating_profit=None.
+
+    Before fix: ebitda = (op or 0) + (dep or 0)  →  0 + dep = dep
+    After fix:  falls back to bottom-up NI + tax + interest + dep
+    """
+
+    def test_helper_uses_operating_profit_when_available(self):
+        """Happy path: op is present, ebitda = op + dep."""
+        row = {
+            "operating_profit": 30_000.0,
+            "depreciation": 11_000.0,
+            "net_income": 15_000.0,
+            "tax": 5_000.0,
+            "interest": 8_000.0,
+        }
+        ebitda = ResearchDataAPI._compute_ebitda_from_row(row)
+        assert ebitda == 41_000.0
+        assert ebitda != row["depreciation"]
+
+    def test_helper_bottom_up_fallback_when_op_missing(self):
+        """E1 bug fix: when op is None (Screener metals/telecom case),
+        use NI + tax + interest + dep — not 0 + dep."""
+        row = {
+            "operating_profit": None,  # the bug trigger
+            "depreciation": 11_096.0,  # real VEDL FY2025 value
+            "net_income": 15_000.0,
+            "tax": 5_000.0,
+            "interest": 8_000.0,
+            "revenue": 152_968.0,
+        }
+        ebitda = ResearchDataAPI._compute_ebitda_from_row(row)
+        # EBITDA = 15000 + 5000 + 8000 + 11096 = 39096 — NOT 11096
+        assert ebitda == 39_096.0
+        assert ebitda != row["depreciation"], (
+            "E1 regression: EBITDA must not equal depreciation"
+        )
+
+    def test_helper_handles_all_none_gracefully(self):
+        """Empty row shouldn't crash — returns 0 (no useful signal)."""
+        assert ResearchDataAPI._compute_ebitda_from_row({}) == 0
+
+    def test_metals_metrics_ebitda_not_depreciation(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Integration: VEDL-like row with operating_profit=None must yield
+        EBITDA != depreciation through the get_metals_metrics path."""
+        from flowtracker.fund_models import AnnualFinancials
+
+        SYMBOL = "METALX"
+        # Mark as metals via company_snapshot (yfinance-owned columns)
+        populated_store.upsert_snapshot_yfinance(
+            SYMBOL,
+            {"sector": "Basic Materials", "industry": "Steel"},
+        )
+        # Seed annual financials with operating_profit=None (Screener case)
+        rows = [
+            AnnualFinancials(
+                symbol=SYMBOL,
+                fiscal_year_end=f"{2024 + i}-03-31",
+                revenue=150_000.0 + i * 5_000,
+                operating_profit=None,  # the bug trigger
+                depreciation=11_000.0 + i * 500,
+                net_income=12_000.0 + i * 800,
+                tax=4_000.0 + i * 200,
+                interest=6_000.0 + i * 300,
+                borrowings=90_000.0,
+                cash_and_bank=5_000.0,
+            )
+            for i in range(3)
+        ]
+        populated_store.upsert_annual_financials(rows)
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            result = api.get_metals_metrics(SYMBOL)
+        finally:
+            api.close()
+
+        assert "years" in result, f"Expected metals metrics, got: {result}"
+        assert len(result["years"]) >= 1
+        latest = result["years"][0]
+        # The fiscal_year comes back as a date string from the row
+        assert "ebitda" in latest
+        # Find matching annual row for this fiscal year
+        fy = latest["fiscal_year"]
+        matching = next(r for r in rows if r.fiscal_year_end == fy)
+        assert latest["ebitda"] != matching.depreciation, (
+            f"E1 regression: EBITDA ({latest['ebitda']}) must not equal "
+            f"depreciation ({matching.depreciation}) for metals"
+        )
+        # Expected bottom-up EBITDA = NI + tax + interest + dep
+        expected = (
+            matching.net_income + matching.tax + matching.interest + matching.depreciation
+        )
+        assert latest["ebitda"] == expected
+
+    def test_telecom_metrics_ebitda_not_depreciation(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Integration: BHARTIARTL-like row with operating_profit=None must
+        yield EBITDA != depreciation through get_telecom_metrics path."""
+        from flowtracker.fund_models import AnnualFinancials
+
+        SYMBOL = "TELCOX"
+        populated_store.upsert_snapshot_yfinance(
+            SYMBOL,
+            {"sector": "Communication Services", "industry": "Telecom Services"},
+        )
+        rows = [
+            AnnualFinancials(
+                symbol=SYMBOL,
+                fiscal_year_end=f"{2024 + i}-03-31",
+                revenue=170_000.0 + i * 10_000,
+                operating_profit=None,  # the bug trigger
+                depreciation=45_000.0 + i * 2_000,
+                net_income=20_000.0 + i * 1_500,
+                tax=7_000.0 + i * 300,
+                interest=12_000.0 + i * 500,
+                borrowings=200_000.0,
+                cash_and_bank=4_000.0,
+                cfo=60_000.0,
+                cfi=-55_000.0,
+            )
+            for i in range(3)
+        ]
+        populated_store.upsert_annual_financials(rows)
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            result = api.get_telecom_metrics(SYMBOL)
+        finally:
+            api.close()
+
+        assert "years" in result, f"Expected telecom metrics, got: {result}"
+        latest = result["years"][0]
+        fy = latest["fiscal_year"]
+        matching = next(r for r in rows if r.fiscal_year_end == fy)
+        assert latest["ebitda"] != matching.depreciation, (
+            f"E1 regression: EBITDA ({latest['ebitda']}) must not equal "
+            f"depreciation ({matching.depreciation}) for telecom"
+        )
+        expected = (
+            matching.net_income + matching.tax + matching.interest + matching.depreciation
+        )
+        assert latest["ebitda"] == expected
