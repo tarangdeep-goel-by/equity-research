@@ -102,6 +102,15 @@ def _build_yfinance(symbol: str, store: FlowStore) -> dict:
     data["high_52w"] = s.fifty_two_week_high
     data["low_52w"] = s.fifty_two_week_low
 
+    # Computed PEG fallback: yfinance's peg_ratio is usually None for Indian stocks.
+    # Compute PEG = forward_pe / earnings_growth_pct when yfinance didn't supply it
+    # and both inputs are available with a positive growth rate.
+    if data.get("peg") is None:
+        fpe = s.pe_forward
+        eg = s.earnings_growth
+        if fpe is not None and eg is not None and eg > 0:
+            data["peg"] = round(fpe / eg, 2)
+
     # Sector/industry from yfinance (authoritative source)
     try:
         from flowtracker.fund_client import FundClient
@@ -113,6 +122,74 @@ def _build_yfinance(symbol: str, store: FlowStore) -> dict:
             data["industry"] = live.industry
     except Exception:
         pass  # non-critical — don't block snapshot build
+
+    return data
+
+
+def _build_computed(symbol: str, store: FlowStore) -> dict:
+    """Compute ROIC and FCF yield from annual_financials + latest mcap.
+
+    ROIC  = NOPAT / invested_capital
+            NOPAT            = operating_profit * (1 - effective_tax_rate)
+            invested_capital = (equity_capital + reserves) + borrowings - cash_and_bank
+            effective_tax    = tax / profit_before_tax  (fallback 0.25 if PBT <= 0)
+
+    FCF yield = (CFO - capex) / mcap * 100
+                capex = (net_block_t - net_block_{t-1})
+                        + (cwip_t - cwip_{t-1})
+                        + depreciation_t
+                (requires 2 adjacent years of annual_financials)
+
+    Returns only keys whose inputs were all present. Silently skips metrics whose
+    inputs are missing — callers treat absence as "leave NULL".
+    """
+    data: dict = {}
+
+    annuals = store.get_annual_financials(symbol, limit=2)
+    if not annuals:
+        return data
+    latest = annuals[0]
+
+    # --- ROIC ---
+    op = getattr(latest, "operating_profit", None)
+    pbt = getattr(latest, "profit_before_tax", None) or 0
+    tax = getattr(latest, "tax", None) or 0
+    equity_capital = getattr(latest, "equity_capital", None) or 0
+    reserves = getattr(latest, "reserves", None) or 0
+    borrowings = getattr(latest, "borrowings", None) or 0
+    cash = getattr(latest, "cash_and_bank", None) or 0
+
+    if op is not None and op != 0:
+        eff_tax_rate = (tax / pbt) if pbt and pbt > 0 else 0.25
+        # Clamp tax rate to a sensible [0, 1] band — negative PBT / refunds can
+        # produce garbage values otherwise.
+        if eff_tax_rate < 0:
+            eff_tax_rate = 0.25
+        if eff_tax_rate > 1:
+            eff_tax_rate = 1.0
+        nopat = op * (1 - eff_tax_rate)
+        invested_capital = (equity_capital + reserves) + borrowings - cash
+        if invested_capital > 0:
+            data["roic"] = round(nopat / invested_capital * 100, 2)
+
+    # --- FCF yield ---
+    # Need mcap (from latest valuation_snapshot) and 2 years of annuals for capex.
+    mcap = None
+    snaps = store.get_valuation_history(symbol, days=7)
+    if snaps:
+        mcap = snaps[-1].market_cap
+    if mcap and mcap > 0 and len(annuals) >= 2:
+        prev = annuals[1]
+        cfo = getattr(latest, "cfo", None)
+        if cfo is not None:
+            nb_t = getattr(latest, "net_block", None) or 0
+            nb_t1 = getattr(prev, "net_block", None) or 0
+            cwip_t = getattr(latest, "cwip", None) or 0
+            cwip_t1 = getattr(prev, "cwip", None) or 0
+            dep = getattr(latest, "depreciation", None) or 0
+            capex = (nb_t - nb_t1) + (cwip_t - cwip_t1) + dep
+            fcf = cfo - capex
+            data["fcf_yield"] = round(fcf / mcap * 100, 2)
 
     return data
 
@@ -145,6 +222,7 @@ def build_company_snapshot(symbol: str, store: FlowStore) -> bool:
     screener = _build_screener(symbol, store)
     yfinance = _build_yfinance(symbol, store)
     ownership = _build_ownership(symbol, store)
+    computed = _build_computed(symbol, store)
 
     wrote = False
     if screener:
@@ -156,10 +234,13 @@ def build_company_snapshot(symbol: str, store: FlowStore) -> bool:
     if ownership:
         store.upsert_snapshot_ownership(symbol, ownership)
         wrote = True
+    if computed:
+        store.upsert_snapshot_computed(symbol, computed)
+        wrote = True
 
     if wrote:
         logger.info(
-            "[snapshot] %s: built (%d screener, %d yfinance, %d ownership fields)",
-            symbol, len(screener), len(yfinance), len(ownership),
+            "[snapshot] %s: built (%d screener, %d yfinance, %d ownership, %d computed fields)",
+            symbol, len(screener), len(yfinance), len(ownership), len(computed),
         )
     return wrote

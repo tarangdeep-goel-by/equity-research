@@ -3194,6 +3194,25 @@ class FlowStore:
         self._conn.commit()
         return 1
 
+    def upsert_snapshot_computed(self, symbol: str, data: dict) -> int:
+        """Write computed-only columns (roic, fcf_yield) to company_snapshot.
+
+        These are derived in snapshot_builder from annual_financials +
+        valuation_snapshot — not ingested from any external source. Missing keys
+        are written as NULL (pass only the keys you computed).
+        """
+        self._conn.execute(
+            """INSERT INTO company_snapshot (symbol, roic, fcf_yield, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(symbol) DO UPDATE SET
+                roic=COALESCE(excluded.roic, company_snapshot.roic),
+                fcf_yield=COALESCE(excluded.fcf_yield, company_snapshot.fcf_yield),
+                updated_at=datetime('now')""",
+            (symbol.upper(), data.get("roic"), data.get("fcf_yield")),
+        )
+        self._conn.commit()
+        return 1
+
     def get_company_snapshot(self, symbol: str) -> dict | None:
         """Get company snapshot for a single symbol."""
         row = self._conn.execute(
