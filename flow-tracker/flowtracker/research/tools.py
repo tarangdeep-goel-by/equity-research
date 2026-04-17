@@ -871,6 +871,25 @@ async def get_deck_insights(args):
     return _with_dedup("get_deck_insights", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
+get_annual_report = tool(
+    "get_annual_report",
+    "Get pre-extracted annual-report insights from the vault: up to 2 recent fiscal years, plus a cross-year evolution narrative (YoY changes in risks, auditor KAMs, governance, RPTs, strategic framing). Covers chairman_letter, mdna, risk_management, auditor_report, corporate_governance, brsr, related_party, segmental, notes_to_financials, financial_statements. Annual reports unlock data NOT in concalls or decks — auditor opinions & KAMs, contingent liabilities, board composition, related-party scrutiny, BRSR/ESG disclosures, detailed notes to accounts, segmental accounting. First call returns a compact TOC (years_on_file + sections_populated + cross_year_narrative). Pass section='auditor_report' (or any other) to drill into that section across years. Pass year='FY25' to narrow to one year.",
+    {"symbol": str, "year": str, "section": str},
+    annotations=READ_ONLY,
+)
+
+
+@get_annual_report
+async def get_annual_report(args):
+    with ResearchDataAPI() as api:
+        data = api.get_annual_report(
+            args["symbol"],
+            year=args.get("year"),
+            section=args.get("section"),
+        )
+    return _with_dedup("get_annual_report", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
 @tool(
     "render_chart",
     "Generate a PNG chart and return the file path for embedding in your report. "
@@ -1789,6 +1808,12 @@ def _get_company_context_section(api, symbol, section, args):
             quarter=args.get("quarter"),
             slide_topics=args.get("slide_topics"),
         )
+    elif section == "annual_report":
+        return api.get_annual_report(
+            symbol,
+            year=args.get("year"),
+            section=args.get("sub_section"),
+        )
     elif section == "sector_kpis":
         return api.get_sector_kpis(symbol, kpi_key=args.get("sub_section"))
     elif section == "filings":
@@ -1799,8 +1824,8 @@ def _get_company_context_section(api, symbol, section, args):
 
 @tool(
     "get_company_context",
-    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'deck_insights' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for deck_insights: 'highlights' | 'segment_performance' | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
-    {"symbol": str, "section": str, "doc_type": str, "limit": int, "sub_section": str},
+    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'deck_insights' | 'annual_report' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks'; for deck_insights: 'highlights' | 'segment_performance' | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'; for annual_report: 'chairman_letter' | 'mdna' | 'risk_management' | 'auditor_report' | 'corporate_governance' | 'brsr' | 'related_party' | 'segmental' | 'notes_to_financials' | 'financial_statements' — optional 'year' param to narrow to one FY like FY25; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
+    {"symbol": str, "section": str, "doc_type": str, "limit": int, "sub_section": str, "year": str},
     annotations=READ_ONLY,
 )
 async def get_company_context(args):
@@ -1826,6 +1851,11 @@ async def get_company_context(args):
                     section_filter=args.get("sub_section"),
                     quarter=args.get("quarter"),
                     slide_topics=args.get("slide_topics"),
+                ),
+                "annual_report": api.get_annual_report(
+                    symbol,
+                    year=args.get("year"),
+                    section=args.get("sub_section"),
                 ),
                 "sector_kpis": api.get_sector_kpis(symbol, kpi_key=args.get("sub_section")),
                 "filings": api.get_recent_filings(symbol, args.get("limit", 10)),

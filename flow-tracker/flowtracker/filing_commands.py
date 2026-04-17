@@ -214,6 +214,69 @@ def extract_concalls_cmd(
     console.print(f"  Saved to: ~/vault/stocks/{symbol.upper()}/fundamentals/concall_extraction_v2.json")
 
 
+@app.command(name="download-ar")
+def download_ar_cmd(
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
+    years: Annotated[int, typer.Option("--years", "-y", help="Number of recent fiscal years to download")] = 3,
+) -> None:
+    """Download annual report PDFs for the last N FYs to the vault.
+
+    URLs come from company_documents (populated by Screener). PDFs land at
+    ~/vault/stocks/{SYMBOL}/filings/FY??/annual_report.pdf.
+    """
+    from flowtracker.research.ar_downloader import ensure_annual_reports, list_ar_urls
+
+    available = list_ar_urls(symbol.upper(), max_years=years)
+    if not available:
+        console.print(f"[yellow]No AR URLs tracked for {symbol.upper()}[/]")
+        return
+    console.print(f"Tracked AR URLs for {symbol.upper()}: {[a['fy_label'] for a in available]}")
+    downloaded = ensure_annual_reports(symbol.upper(), max_years=years)
+    console.print(f"[green]\u2713[/] Downloaded {downloaded} new AR PDF(s)")
+
+
+@app.command(name="extract-ar")
+def extract_ar_cmd(
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
+    years: Annotated[int, typer.Option("--years", "-y", help="Number of recent fiscal years to extract")] = 2,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Claude model to use")] = None,
+    full: Annotated[bool, typer.Option("--full", help="Include heavy sections (notes_to_financials, financial_statements)")] = False,
+    force: Annotated[bool, typer.Option("--force", help="Re-extract all years, ignoring cached JSONs")] = False,
+    download: Annotated[bool, typer.Option("--download/--no-download", help="Download missing AR PDFs first")] = True,
+) -> None:
+    """Extract structured insights from annual report PDFs via Docling + AI.
+
+    Reads ~/vault/stocks/{SYMBOL}/filings/FY??/annual_report.pdf (up to N most
+    recent years). Extracts chairman_letter, mdna, risk_management, auditor_report,
+    corporate_governance, brsr, related_party, segmental by default. Pass --full
+    to also include notes_to_financials + financial_statements. Builds a
+    cross-year evolution narrative comparing the years.
+    """
+    import asyncio
+
+    from flowtracker.research.ar_downloader import ensure_annual_reports
+    from flowtracker.research.annual_report_extractor import (
+        ensure_annual_report_data,
+        extract_annual_reports,
+    )
+
+    if download:
+        n = ensure_annual_reports(symbol.upper(), max_years=years)
+        if n:
+            console.print(f"Downloaded {n} new AR PDF(s)")
+
+    runner = extract_annual_reports if force else ensure_annual_report_data
+    result = asyncio.run(runner(symbol.upper(), years=years, model=model or "claude-sonnet-4-6", full=full))
+
+    if result is None:
+        console.print(f"[yellow]No annual_report.pdf found for {symbol.upper()}[/]")
+        console.print(f"  Try: flowtrack filings download-ar -s {symbol.upper()}")
+        return
+    console.print(f"[green]\u2713[/] AR extraction: {result.get('years_analyzed')} for {symbol.upper()}")
+    console.print(f"  Per-year JSONs: ~/vault/stocks/{symbol.upper()}/fundamentals/annual_report_FY*.json")
+    console.print(f"  Cross-year narrative: ~/vault/stocks/{symbol.upper()}/fundamentals/annual_report_cross_year.json")
+
+
 @app.command(name="extract-deck")
 def extract_decks_cmd(
     symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
