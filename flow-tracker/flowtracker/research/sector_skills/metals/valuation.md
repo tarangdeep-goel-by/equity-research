@@ -14,6 +14,14 @@ The most common valuation error in metals is defaulting to PE. For commodity pro
 | **Specialty / alloy steel** | EV/EBITDA at specialty premium + PE if earnings stable | Forward PE on through-cycle earnings | Commodity-HRC peer multiple |
 | **Diversified mining** | SOTP by vertical (each at its own EV/EBITDA) | Per-vertical EV/ton | Consolidated PE or P/B |
 
+### Justified Multiples — Anchor EV/EBITDA to ROIC, WACC, and g
+A multiple is not a free parameter. The sub-sector target multiple (e.g., 5-8× mid-cycle EV/EBITDA for integrated steel) is a *band*; where a specific company sits in that band is determined by the ROIC-vs-WACC spread and the sustainable growth rate `g`, exactly as in the BFSI P/B-ROE anchor. Through-cycle ROIC is the correct input — peak ROIC distorts upward and trough ROIC distorts downward:
+- **Top-quartile cost-curve producer** — through-cycle ROIC of 14-18% vs WACC of 11-12% (spread 300-600 bps) + `g` of 6-8% (India infra + specialty-mix-shift) justifies the top of the band (7-8× integrated steel, 8-9× mining, 8-10× specialty).
+- **Median producer** — through-cycle ROIC of 10-13% vs WACC ~11% (spread near zero) justifies mid-band (5-6× integrated steel, 6-7× mining).
+- **Marginal / high-cost producer** — through-cycle ROIC of 7-9% below WACC justifies the bottom of the band (3-5× integrated steel); no amount of cycle-peak EBITDA rescues a structural ROIC-below-WACC business.
+
+Cite the through-cycle ROIC, WACC, and `g` alongside the chosen multiple. A multiple assigned without this triplet is a price-target, not a valuation. Route via `calculate` with `roic`, `wacc`, `g` as named inputs when computing justified EV/EBITDA; cross-check against the sub-sector band.
+
 ### Through-Cycle EBITDA Normalization — The #1 Metals Valuation Discipline
 Do NOT apply EV/EBITDA on trailing-twelve-month (TTM) EBITDA. TTM EBITDA at cycle peak is 50-100% above through-cycle; at trough it is 40-70% below. Using TTM multiples produces the classic cyclical trap (looks cheap at peak, expensive at trough). The through-cycle computation:
 
@@ -45,8 +53,10 @@ Every 10% move in the relevant commodity price (HRC for steel, LME primary for a
 | +10% coking coal | −8-12% margin bps | −5-8% (partial captive offset) |
 | +10% LME aluminium | +40-55% | +30-40% |
 | +15% aluminium power cost | −250-450 bps margin | partial offset if captive power |
+| +25% coking coal (60% pass-through mid-cycle) | −$30-60/t EBITDA on flat-steel producers | −$15-30/t (captive offset ~50%) |
+| CBAM at €70-90/tCO₂ × 2.1-2.4 tCO₂/t (BF-BOF) on EU volume | −€150-200/t on EU-facing tonnes | DRI-EAF (0.8-1.2 tCO₂/t) roughly halves the drag |
 
-Captive-integrated producers show lower sensitivity because part of the RM cost is internal transfer-price-linked. Compute the grid via `calculate` with the current-quarter EBITDA and realization split as named inputs. If a company claims pricing-power resilience, this grid is where the claim is tested.
+Captive-integrated producers show lower sensitivity because part of the RM cost is internal transfer-price-linked. Compute the grid via `calculate` with the current-quarter EBITDA and realization split as named inputs. If a company claims pricing-power resilience, this grid is where the claim is tested. Note that only ~60% of a coking-coal spike is passed through to HRC prices mid-cycle (full pass-through only at peak-demand phase); the residual hits EBITDA directly.
 
 ### Reverse-DCF on Through-Cycle EBITDA — What Is the Market Pricing?
 Run the inverse of a DCF to back out the commodity-price assumption embedded in the current EV. Take current market cap + net debt, apply the sub-sector target EV/EBITDA multiple (5-8× mid-cycle), solve for the implied through-cycle EBITDA, divide by current nameplate to get implied EBITDA/tonne, and back-solve for the commodity price that produces that EBITDA/tonne at the current cost structure. If the implied HRC is 20-30% above the 10Y average, the market is pricing a sustained cycle-peak regime — the bear-case is mean-reversion. If implied HRC is at or below the 10Y average, the market is pricing a mid-to-late-cycle phase with mean-reversion already discounted. Route via `calculate`.

@@ -11,7 +11,8 @@
 | **Zinc / lead integrated** | LME zinc/lead + byproduct silver − mining + smelting cost | Ore grade + byproduct credits + smelter utilization | EBITDA/tonne of refined metal; mined-metal volume |
 | **Copper smelter** | LME copper + TC/RC on concentrate − smelting cost | Smelter utilization + byproduct acid/precious-metal credits | Refined copper volume; TC/RC spread |
 | **Iron-ore mining (pure)** | NMDC-style pricing policy or auction-linked FoB realization − mining cost − royalty | Mine-grade, stripping ratio, railway evacuation | Saleable ore volume; ₹/tonne realization net of royalty |
-| **Specialty / alloy steel** | Value-added product premium over commodity HRC | Grade mix (auto / CRGO / stainless) and customer-qualified contracts | EBITDA/tonne vs commodity HRC benchmark |
+| **Specialty / alloy steel** | Value-added product premium over commodity HRC | Grade mix (auto / CRGO / stainless / API-grade pipe) and customer-qualified contracts; distinguish from bulk commodity HRC — specialty trades at 10-20% EBITDA/t premium and decouples from raw-commodity cycle | EBITDA/tonne vs commodity HRC benchmark |
+| **Bauxite / merchant mining (ore-only)** | Merchant ore realization × grade − mining + royalty cost | Grade, strip ratio, evacuation logistics, captive-buyer contracts | ₹/tonne saleable ore; reserve life (years) |
 | **Diversified mining** | SOTP of ore-only, smelter, rolled-products segments | Per-vertical cost-curve position | Per-segment EBITDA/tonne |
 
 ### Revenue Decomposition — Always Volume × Realization × Mix
@@ -25,12 +26,13 @@ The single largest moat in metals is raw-material integration, because it anchor
 - **Scale and port proximity** — top-2 in segment get logistics, procurement, and freight-rate advantages worth 2-4% of revenue; coastal plants save $15-25/t on export logistics.
 - **Specialty-grade qualification** — automotive CRGO, API-grade pipe steel, stainless, alloy steel have multi-year customer-qualification cycles and enjoy $80-150/t premium over commodity HRC, insulating margins from commodity cycle.
 - **Resource-reserve quality (mining)** — ore grade, strip ratio, and reserve life. A declared reserve-life of 25-40 years at 63-65% Fe grade is the quiet moat of the top Indian iron-ore producer versus 18-22 years at 58-60% grade for mid-tier miners.
+- **Low-carbon / "green" route (carbon-intensity moat, widening with CBAM 2026)** — DRI-EAF steel at 0.8-1.2 tCO₂/t versus BF-BOF at 2.1-2.4 tCO₂/t is the difference between a €70-100/t and a €150-200/t CBAM surcharge on EU-facing volume at current €70-90/tCO₂ EU ETS prices. Renewable-powered aluminium smelters earn a "green aluminium" premium of $10-30/t (widening as Western auto / packaging OEMs formalise Scope-3 procurement). This is an emerging moat, not yet a pricing-power axis at most Indian producers — flag announced DRI-module or renewable-PPA capex against stated carbon-intensity targets.
 
 Source integration profile from `get_company_context(section='concall_insights')` and `get_peer_sector(section='benchmarks')` when disclosed.
 
 ### Unit Economics — EBITDA per Tonne by Segment, Through-Cycle
 The correct unit of account is EBITDA per tonne, not reported operating margin percentage. A rising HRC price inflates both revenue and EBITDA, leaving margin% flat while EBITDA/tonne explodes — the margin optic misses the commodity rent. Sub-sector through-cycle ranges and peak-cycle overshoots:
-- **Integrated steel** — through-cycle $80-140/t; peak $180-250/t; trough $20-60/t; the highest-cost decile turns negative at trough.
+- **Integrated steel** — through-cycle $80-140/t; peak $180-250/t (super-cycle episodes such as post-COVID 2021-22 briefly touched $280-300/t for top-tier Indian integrated producers — flag these as transient, not through-cycle); trough $20-60/t; the highest-cost decile turns negative at trough.
 - **Non-integrated steel** — through-cycle $30-70/t; peak $80-120/t; trough can turn negative.
 - **Aluminium** — through-cycle $300-500/t; peak $700-1000/t; trough $100-200/t.
 - **Zinc / lead integrated** — through-cycle $800-1500/t; peak $2000-2500/t; trough $400-700/t.
