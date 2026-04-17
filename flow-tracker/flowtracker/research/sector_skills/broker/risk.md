@@ -46,6 +46,7 @@ Historical broker drawdowns have recurring triggers; use these as the scaffoldin
 - **Technology outage cluster** — 3+ outages within 6 months correlates with active-client attrition of 5-10% in the following 2 quarters.
 - **Parent-bank credit event (for bank-owned brokers)** — parent-bank NPL spike or liquidity stress propagates to the broker subsidiary's captive-base economics within 1-2 quarters.
 - **MTF book stress event** — flash-crash or single-stock halt overwhelms collateral haircut; bad-debt write-off >0.5% of book (vs industry norm <0.2%) signals structural risk-management failure.
+- **Cash-segment flat-fee / zero-brokerage contagion** — the discount-broker flat-fee model originated in F&O but is progressively bleeding into cash-delivery and intraday tiers (zero-delivery brokerage is already the headline at several discount platforms). If the flat-fee frame expands to cash-segment intraday and eventually institutional cash-execution, full-service and bank-owned brokers lose their remaining bps-on-turnover yield pool on cash. The structural compression is permanent (not cyclical) and compounds any SEBI F&O tightening — model the combined bear as yield erosion across both legs, not just F&O.
 
 Quantify each bear-case as a thesis-breaker: the metric threshold beyond which the base-case thesis is invalidated (e.g., "F&O revenue falling >40% YoY for 2 consecutive quarters" or "active-client count declining for 3 consecutive quarters with ARPU flat").
 

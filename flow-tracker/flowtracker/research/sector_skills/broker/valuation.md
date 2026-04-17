@@ -25,12 +25,18 @@ Broker earnings are cycle-sensitive; trailing PE on a F&O-peak year looks optica
 Call `get_valuation(section='band', metric='pe')` for the historical PE band and `get_chart_data(chart_type='pe')` as the deep-history fallback when the band call returns fewer than 20 quarterly observations. State the regime break explicitly when citing "current vs 5Y median PE" — pre-2021 retail-participation regime and post-2024 SEBI-regime are structurally distinct; averaging across them produces a misleading median.
 
 ### Market Cap Per Active Client — The Second Frame
-Comparable to platform businesses, a broker's market cap divided by 12-month active clients gives a per-client valuation number that cross-sectionally benchmarks monetisation efficiency. Typical Indian peer range: ₹3-8 lakh per active client across discount / full-service / hybrid names.
+Comparable to platform businesses, a broker's market cap divided by 12-month active clients gives a per-client valuation number that cross-sectionally benchmarks monetisation efficiency. **The calibration range varies ~10× by sub-type — never apply one uniform band across the sector.** Typical Indian listed peer ranges:
 
-- A broker at ₹4L per active client vs peer ₹7L either has **lower ARPU**, **lower expected activation-rate durability**, or **lower product-breadth monetisation** — decompose rather than asserting "undervalued".
-- A broker at ₹8L per active client vs peer ₹4L either has **superior ARPU** (advisory, PMS, MTF-yield), **superior product-breadth** (wealth layer), or **cycle-peak overpayment** — stress-test against the through-cycle ARPU.
+- **Discount broker** — ₹25,000-50,000 per active client (low ARPU × scale model; ANGELONE, GROWW, 5PAISA cohort at ~₹25k-70k per client as of recent market cap).
+- **Bank-owned / hybrid broker** — ₹50,000-1,00,000 per active client (ICICISEC cohort; captive-base monetisation lifts the per-client multiple).
+- **Full-service / wealth-tilted broker** — ₹3-8 lakh per active client (MOTILALOFS-style advisory + PMS bundling justifies 5-10× the pure-discount benchmark because ARPU is structurally 5-10× higher).
 
-Call `calculate` with `market_cap`, `active_clients`, and peer comparable values as named inputs. This frame is especially useful for pre-IPO / recently-listed brokers where historical PE band is thin.
+Applying a ₹3-8 lakh benchmark to a discount broker at ₹35,000 per client would hallucinate a 10× undervaluation — always resolve the sub-type before citing the peer comparable.
+
+- A discount broker at ₹25,000 per active client vs peer ₹45,000 either has **lower ARPU**, **lower expected activation-rate durability**, or **lower product-breadth monetisation** — decompose rather than asserting "undervalued".
+- A broker at the top of its sub-type band (e.g., discount at ₹50k, wealth at ₹8L) either has **superior ARPU** (advisory, PMS, MTF-yield), **superior product-breadth** (wealth layer), or **cycle-peak overpayment** — stress-test against the through-cycle ARPU.
+
+Call `calculate` with `market_cap`, `active_clients`, and sub-type-matched peer comparable values as named inputs. This frame is especially useful for pre-IPO / recently-listed brokers where historical PE band is thin.
 
 ### Per-AUM Valuation for Wealth and PMS
 For wealth / PMS-tilted brokers, P/AUM (market cap as % of total AUM or AUA) is a useful cross-section. Indian listed wealth-managers trade in the 4-8% P/AUM band for standalone PMS; bank-owned wealth arms are harder to isolate without SOTP. The structural floor: a mature wealth franchise at 1.0-1.5% annual fee yield and 40-50% PBT margin supports a 5-7× multiple on fee-income, which maps to roughly 5-7% P/AUM.
@@ -47,6 +53,7 @@ Post-2024 SEBI tightening is not a one-off; the regulatory direction is an ongoi
 - **Depositary participant band** (CDSL, NSDL, duopoly): 30-45× (utility-like duopoly premium, regulated rates).
 - **P/B as secondary check**: brokers should trade at a premium to book (2-4× typical) because fee income is capital-light; banks' P/B anchor does not apply.
 - **>30× PE requires evidence-of-growth**: named new products, disclosed institutional-expansion pipeline, documented wealth-book scale-up — not cyclical peak extrapolation.
+- **IPO / post-listing pricing at 40-60× trailing PE** — recently-listed and upcoming Indian broker IPOs have priced at 40-60× trailing PE, materially above the 15-25× through-cycle band. Treat this as "pricing in flawless execution of structural shifts" (wealth scale-up, ARPU expansion, regulatory stability) and stress-test explicitly against the 15-25× anchor with normalised earnings; do not accept the IPO benchmark as the sector re-rating anchor.
 
 ### What Fails for Brokers — Name These Explicitly
 - **EV/EBITDA** — client float in EV inflates enterprise value by multiples of real capital; EBITDA mixes proprietary earnings with float-linked interest income.
@@ -54,6 +61,16 @@ Post-2024 SEBI tightening is not a one-off; the regulatory direction is an ongoi
 - **Trailing PE on F&O-peak year** — mean-reverts on the next SEBI tightening cycle.
 - **P/B** — book is largely float (client margin, settlement balances, MTF funded by own + borrowed capital); book value is not a valuation anchor for fee-income franchises.
 - **Peer PE at different monetisation mix** — discount-broker PE vs full-service PE at the same number conceals different durability profiles.
+
+### Justified-Multiple / Gordon-Growth Discipline — Normalize the Earnings Base First
+The Gordon Growth / Justified-PE derivation — `Justified PE = (payout × (1 + g)) / (k − g)` — is only valid when applied to **through-cycle normalised earnings**, never to trailing F&O-peak PAT. The BFSI-pilot lesson translates directly: if `g` is a structural long-term growth rate (say 10-14% nominal, reflecting retail-participation deepening and GDP+) while the PAT input is a cyclical peak, the formula produces a fair-value anchor that double-counts the cycle (peak earnings compounded at a long-run growth rate that itself already includes cycle averaging). Before citing any justified-multiple:
+
+- Normalise PAT first — F&O ADTV at 70-80% of 2024 peak, activation rate at 3Y average, one-offs stripped. Only then apply `g`.
+- Tie `g` to the through-cycle revenue driver (active-client growth × ARPU expansion), not to the trailing ADTV growth rate.
+- For post-SEBI-reset brokers, `g` should explicitly be the post-regime growth path, not the 2020-24 expansion-phase CAGR.
+- If a justified multiple exceeds the 15-25× through-cycle PE band, the `g` assumption is doing the work — disclose the implied `g` and cross-check against retail-participation penetration ceilings rather than extrapolating volume growth.
+
+The output of a Gordon-style calculation on peak earnings with structural `g` is a seductively precise number that is directionally wrong; the eval-cycle failure mode is to cite it without showing the normalisation step.
 
 ### Data-shape Fallback for Valuation Inputs
 When `get_valuation(section='band', metric='pe')` returns `status='schema_valid_but_unavailable'` or fewer than 8 quarterly observations, fall back to `get_chart_data(chart_type='pe')` for deep history and `get_fundamentals(section='income_statement')` for trailing-4Q EPS reconstruction. For the market-cap-per-active-client frame, the active-client count extraction follows the same fallback as business.md: `get_company_context(section='sector_kpis')` then `section='concall_insights', sub_section='operational_metrics')`. Cite the source quarter for every extracted number. If F&O vs cash split is unavailable, state that through-cycle PE cannot be computed rigorously and flag as an Open Question rather than imputing from peer averages.
