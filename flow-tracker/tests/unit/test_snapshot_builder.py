@@ -21,6 +21,7 @@ from flowtracker.fund_models import LiveSnapshot
 # cost is paid during test collection, not inside a per-test 10s timeout.
 from flowtracker import fund_client as _fund_client_mod  # noqa: F401
 from flowtracker.research.snapshot_builder import (
+    _build_computed,
     _build_ownership,
     _build_screener,
     _build_yfinance,
@@ -28,6 +29,7 @@ from flowtracker.research.snapshot_builder import (
 )
 from flowtracker.store import FlowStore
 from tests.fixtures.factories import (
+    make_annual_financials,
     make_promoter_pledges,
     make_quarterly_results,
     make_screener_ratios,
@@ -323,3 +325,228 @@ class TestBuildCompanySnapshot:
         # No valuation_snapshot seeded → yfinance columns stay NULL
         assert row["pb"] is None
         assert row["beta"] is None
+
+
+# ---------------------------------------------------------------------------
+# PEG fallback computation — happens inside _build_yfinance
+# ---------------------------------------------------------------------------
+
+
+class TestPegComputed:
+    def test_peg_uses_yfinance_value_when_present(
+        self, populated_store: FlowStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If yfinance supplies peg_ratio, keep it as-is (don't override)."""
+        _patch_fund_client(monkeypatch, _FakeFundClient())
+        data = _build_yfinance("SBIN", populated_store)
+        # Fixture: peg_ratio=0.6 — must be preserved verbatim, NOT replaced by forward_pe / earnings_growth
+        assert data["peg"] == pytest.approx(0.6)
+
+    def test_peg_computed_when_yfinance_missing(self, store: FlowStore) -> None:
+        """With peg_ratio=None but forward_pe + earnings_growth present, compute PEG."""
+        from flowtracker.fund_models import ValuationSnapshot
+        store.upsert_valuation_snapshots([
+            ValuationSnapshot(
+                symbol="ACME",
+                date="2026-04-15",
+                price=1000.0,
+                pe_forward=30.0,
+                peg_ratio=None,
+                earnings_growth=20.0,  # percent form per P-3B.2
+            )
+        ])
+        data = _build_yfinance("ACME", store)
+        # PEG = 30 / 20 = 1.5
+        assert data.get("peg") == pytest.approx(1.5)
+
+    def test_peg_skipped_when_growth_non_positive(self, store: FlowStore) -> None:
+        """earnings_growth <= 0 → PEG is undefined, leave as None."""
+        from flowtracker.fund_models import ValuationSnapshot
+        store.upsert_valuation_snapshots([
+            ValuationSnapshot(
+                symbol="ACME",
+                date="2026-04-15",
+                price=1000.0,
+                pe_forward=30.0,
+                peg_ratio=None,
+                earnings_growth=-5.0,  # declining earnings → PEG undefined
+            )
+        ])
+        data = _build_yfinance("ACME", store)
+        assert data.get("peg") is None
+
+    def test_peg_skipped_when_forward_pe_missing(self, store: FlowStore) -> None:
+        """No forward_pe → cannot compute PEG, leave None."""
+        from flowtracker.fund_models import ValuationSnapshot
+        store.upsert_valuation_snapshots([
+            ValuationSnapshot(
+                symbol="ACME",
+                date="2026-04-15",
+                price=1000.0,
+                pe_forward=None,
+                peg_ratio=None,
+                earnings_growth=20.0,
+            )
+        ])
+        data = _build_yfinance("ACME", store)
+        assert data.get("peg") is None
+
+
+# ---------------------------------------------------------------------------
+# _build_computed — ROIC + FCF yield
+# ---------------------------------------------------------------------------
+
+
+class TestBuildComputed:
+    def test_roic_happy_path(self, populated_store: FlowStore) -> None:
+        """Fixture SBIN annual has operating_profit + tax/pbt + equity/borrowings/cash → ROIC computed."""
+        data = _build_computed("SBIN", populated_store)
+        assert "roic" in data
+        # Sanity: ROIC in a sensible range (fixture maths produces a reasonable %)
+        assert 0 < data["roic"] < 200
+
+    def test_fcf_yield_happy_path(self, populated_store: FlowStore) -> None:
+        """Fixture SBIN has 2 years of annuals + valuation mcap → FCF yield computed."""
+        data = _build_computed("SBIN", populated_store)
+        assert "fcf_yield" in data
+        assert isinstance(data["fcf_yield"], float)
+
+    def test_roic_skipped_without_operating_profit(self, store: FlowStore) -> None:
+        """Missing operating_profit → ROIC cannot be computed, key absent."""
+        from flowtracker.fund_models import AnnualFinancials
+        store.upsert_annual_financials([
+            AnnualFinancials(
+                symbol="ACME",
+                fiscal_year_end="2026-03-31",
+                revenue=1000.0,
+                operating_profit=None,  # unavailable → skip ROIC
+                profit_before_tax=200.0,
+                tax=50.0,
+                equity_capital=100.0,
+                reserves=400.0,
+                borrowings=200.0,
+                cash_and_bank=50.0,
+            ),
+        ])
+        data = _build_computed("ACME", store)
+        assert "roic" not in data
+
+    def test_roic_skipped_when_invested_capital_not_positive(self, store: FlowStore) -> None:
+        """Invested capital (equity + borrowings - cash) <= 0 → skip ROIC (division guard)."""
+        from flowtracker.fund_models import AnnualFinancials
+        store.upsert_annual_financials([
+            AnnualFinancials(
+                symbol="ACME",
+                fiscal_year_end="2026-03-31",
+                revenue=1000.0,
+                operating_profit=300.0,
+                profit_before_tax=200.0,
+                tax=50.0,
+                equity_capital=0.0,
+                reserves=0.0,
+                borrowings=0.0,
+                cash_and_bank=100.0,  # cash > equity+borrowings → negative invested capital
+            ),
+        ])
+        data = _build_computed("ACME", store)
+        assert "roic" not in data
+
+    def test_fcf_yield_skipped_with_only_one_annual(self, store: FlowStore) -> None:
+        """Capex delta needs 2 adjacent years → single annual row skips FCF yield."""
+        from flowtracker.fund_models import AnnualFinancials, ValuationSnapshot
+        store.upsert_annual_financials([
+            AnnualFinancials(
+                symbol="ACME",
+                fiscal_year_end="2026-03-31",
+                revenue=1000.0,
+                operating_profit=300.0,
+                profit_before_tax=200.0,
+                tax=50.0,
+                equity_capital=100.0,
+                reserves=400.0,
+                borrowings=200.0,
+                cash_and_bank=50.0,
+                cfo=250.0,
+                net_block=500.0,
+                cwip=20.0,
+                depreciation=30.0,
+            ),
+        ])
+        store.upsert_valuation_snapshots([
+            ValuationSnapshot(symbol="ACME", date="2026-04-15", price=1000.0, market_cap=50000.0),
+        ])
+        data = _build_computed("ACME", store)
+        assert "fcf_yield" not in data
+        # ROIC is still computable from a single year
+        assert "roic" in data
+
+    def test_fcf_yield_skipped_without_mcap(self, store: FlowStore) -> None:
+        """No valuation_snapshot (no mcap) → cannot compute FCF yield."""
+        store.upsert_annual_financials(make_annual_financials("ACME", n=2))
+        data = _build_computed("ACME", store)
+        # 2 years of annuals seeded, but no mcap → FCF yield cannot be produced
+        assert "fcf_yield" not in data
+
+    def test_fcf_yield_skipped_without_cfo(self, store: FlowStore) -> None:
+        """CFO missing on the latest annual → FCF undefined, skip."""
+        from flowtracker.fund_models import AnnualFinancials, ValuationSnapshot
+        store.upsert_annual_financials([
+            AnnualFinancials(
+                symbol="ACME", fiscal_year_end="2026-03-31",
+                revenue=1000.0, operating_profit=300.0, profit_before_tax=200.0, tax=50.0,
+                equity_capital=100.0, reserves=400.0, borrowings=200.0, cash_and_bank=50.0,
+                cfo=None,  # missing
+                net_block=500.0, cwip=20.0, depreciation=30.0,
+            ),
+            AnnualFinancials(
+                symbol="ACME", fiscal_year_end="2025-03-31",
+                revenue=900.0, net_block=450.0, cwip=15.0,
+            ),
+        ])
+        store.upsert_valuation_snapshots([
+            ValuationSnapshot(symbol="ACME", date="2026-04-15", price=1000.0, market_cap=50000.0),
+        ])
+        data = _build_computed("ACME", store)
+        assert "fcf_yield" not in data
+
+    def test_empty_store_returns_empty_dict(self, store: FlowStore) -> None:
+        """No annual_financials rows → empty dict, no exceptions."""
+        data = _build_computed("GHOST", store)
+        assert data == {}
+
+
+# ---------------------------------------------------------------------------
+# build_company_snapshot — verify computed fields persist
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCompanySnapshotComputed:
+    def test_computed_fields_written_to_table(
+        self, populated_store: FlowStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Happy path: roic + fcf_yield land in company_snapshot after full build."""
+        _patch_fund_client(monkeypatch, _FakeFundClient())
+        wrote = build_company_snapshot("SBIN", populated_store)
+        assert wrote is True
+        row = populated_store.get_company_snapshot("SBIN")
+        assert row is not None
+        assert row["roic"] is not None
+        assert row["fcf_yield"] is not None
+
+    def test_peg_computed_and_persisted_when_yfinance_null(
+        self, store: FlowStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """End-to-end: peg computed fallback flows through to company_snapshot.peg column."""
+        _patch_fund_client(monkeypatch, _FakeFundClient())
+        from flowtracker.fund_models import ValuationSnapshot
+        store.upsert_valuation_snapshots([
+            ValuationSnapshot(
+                symbol="ACME", date="2026-04-15", price=1000.0,
+                pe_forward=30.0, peg_ratio=None, earnings_growth=20.0,
+            )
+        ])
+        wrote = build_company_snapshot("ACME", store)
+        assert wrote is True
+        row = store.get_company_snapshot("ACME")
+        assert row is not None
+        assert row["peg"] == pytest.approx(1.5)
