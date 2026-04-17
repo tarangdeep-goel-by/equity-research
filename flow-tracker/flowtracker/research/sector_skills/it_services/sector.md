@@ -55,7 +55,7 @@ When benchmarking, pull from `get_peer_sector(section='benchmarks')` and state t
 - **Active-client count** — movement in $1M / $5M / $20M / $50M / $100M+ buckets.
 - **Top-5 / Top-10 client share** — concentration risk; >40% for Top-5 is a flag.
 - **Offshore-revenue share** — 70-90% for tier-1; mix-shift headroom matters for margin projection.
-- **Revenue per employee** — $60-80k tier-1, $35-55k mid-cap; asset-productivity benchmark.
+- **Revenue per employee** — $45-60k Indian tier-1 (offshore-heavy pyramid; US peer Accenture $100k+), $35-55k mid-cap; asset-productivity benchmark.
 
 A number quoted without sector percentile (e.g., "operating margin of 20%") omits whether that is top-quartile, median, or bottom-quartile; the re-rating thesis depends on percentile, not the absolute.
 

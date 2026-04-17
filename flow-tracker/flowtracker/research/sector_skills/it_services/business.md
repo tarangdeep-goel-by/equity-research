@@ -28,10 +28,10 @@ A tier-1 moat is not a mid-cap moat is not a platform moat. Name the applicable 
 
 ### Unit Economics — Sub-type-Appropriate Benchmark Ranges
 Aggregate P&L hides the story. Use sub-type-calibrated benchmarks:
-- **Revenue per FTE** — tier-1 runs $60-80k per FTE; mid-cap vertical specialists $35-55k; ER&D $55-75k (higher billing rates offset by lower offshore share); platform/product $150-250k (asset-light). A tier-1 falling below $55k while headcount grew materially is over-hired.
+- **Revenue per FTE** — Indian tier-1 runs $45-60k per FTE (structurally below US peers like Accenture $100k+ due to deep offshore pyramid scale); mid-cap vertical specialists $35-55k; ER&D $55-75k (higher billing rates offset by lower offshore share); platform/product $150-250k (asset-light). A tier-1 falling below $42k while headcount grew materially is over-hired.
 - **Utilisation** — 70-85% typical; tier-1 operates 82-86% as the sweet spot, <72% sustained means bench bloat, >88% means no capacity for new ramps.
 - **Attrition** — 14-22% normal, >25% is stress (talent fleeing while vendor claims demand is strong is a business-quality red flag). Post-2022 boom, sector attrition normalised from 25-30% peak back to 13-18%.
-- **Operating margin** — tier-1 22-26%, mid-cap 15-22%, ER&D 16-22%, platform/product 18-28% (with GM>70%). Below the band for 2+ quarters indicates lost pricing power, not just cyclicality.
+- **Operating margin** — tier-1 18-25% (wide band reflects Big-5 dispersion: TCS/Infosys sit at the top 22-26%, HCLTech/Wipro/TechM at 16-19%), mid-cap 15-22%, ER&D 16-22%, platform/product 18-28% (with GM>70%). Below the sub-type band for 2+ quarters indicates lost pricing power, not just cyclicality.
 - **Offshore revenue share** — tier-1 70-90%, mid-cap 65-80%, ER&D 55-75%. Onshore wages are 3-5× offshore, so mix-shift is the margin lever.
 
 ### Capital-Cycle Position — Discretionary vs Structural vs AI-Reframe
