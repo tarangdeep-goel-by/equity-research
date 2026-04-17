@@ -16,6 +16,7 @@ Regulatory risk in metals is concrete and ministry-specific. Tie each risk to th
 - **MoEF&CC (Ministry of Environment, Forest & Climate Change)** — Environmental Clearance (EC) regime for new / expanded plants; delayed EC for a planned expansion defers the earnings narrative by 4-8 quarters. Cross-check any announced expansion against EC status via filings.
 - **State Pollution Control Boards** — effluent, air, stack, and ambient-air standards; NGT orders can mandate partial shutdown. A 15-30-day enforced shutdown cuts the quarter's volume by 10-20% and flows through EBITDA/tonne.
 - **Ministry of Mines** — mine-auction policy, captive-vs-merchant allocation rules, royalty rates (set statutorily under the MMDR Act), lease renewals and District Mineral Foundation (DMF) contributions.
+- **IBM (Indian Bureau of Mines) Average Sale Price (ASP) regime** — royalty and auction premia under the post-2015 state-auction framework are indexed to IBM's monthly ASP for each mineral. Winning auction bids routinely clear at 80-110% premium over ASP, so a merchant miner's effective realisation after royalty + auction premium + DMF + NMET can be a thin 10-20% of gross FoB; a 10-15% drop in ASP with fixed auction premium flips the operation unprofitable. Cross-check auction-premium-vs-ASP for each declared mine.
 - **CAMPA (Compensatory Afforestation Fund)** — Ministry-administered fund that holds back clearances until afforestation payments are made.
 - **Iron-ore export duty** — policy-variable that Government of India adjusts; every 10% duty shift on iron-ore export reprices NMDC-style realization by a similar magnitude.
 - **Steel safeguard and anti-dumping duties** — protect domestic producers from Chinese import flood; removal or reduction is the single biggest Indian steel regulatory risk.
@@ -32,6 +33,7 @@ Operational risk in metals clusters around input-cost volatility, power dependen
 - **Railway / logistics disruption** — iron-ore and coal move primarily by rail; rake allocation constraints or Konkan-railway monsoon disruption hit utilization directly.
 - **Labor relations in PSU metals** — PSU metals (SAIL, NMDC, HINDCOPPER, NATIONALUM, MOIL) have unionised workforces; wage-revision cycles and strike risk show up every 3-5 years.
 - **Industrial-accident / fire risk** — blast-furnace outages, smelter pot-line shutdowns, gas leaks. A major incident typically means 6-18 months to restore full capacity. Check via `get_events_actions(section='material_events')`.
+- **Inventory-valuation risk (non-integrated steel, re-rollers, pipe makers)** — conversion-spread business models carry 30-60 days of HRC / slab inventory; a 15% mid-quarter HRC drop can wipe out the entire 5-8% conversion margin via unhedged inventory write-downs and NRV adjustments. Integrated producers with captive-RM feed are insulated because the cost basis is internal-transfer-priced. Flag inventory days vs HRC-price delta quarterly.
 
 ### Bear-Case Scenarios — 30-60% Drawdown Triggers
 Historical metals drawdowns have recurring triggers; use these as the scaffolding for a bear case:

@@ -29,6 +29,7 @@ Sector reports collapse when they treat metals as monolithic. Tier the sub-secto
 - **Diversified metals** — VEDL (diversified aluminium + zinc + oil & gas, complex listed-subsidiary structure with HINDZINC); JSWENERGY and APLLTD adjacencies where power and metals intersect.
 - **Specialty / alloy steel** — niche high-grade, auto-facing producers with value-added mix; trade at premium multiples to commodity-HRC peers.
 - **Coal mining** — COALINDIA (PSU monopoly, thermal coal, sector-adjacent rather than direct metals-input supplier for most listed producers).
+- **Graphite electrodes / carbon black (EAF-cycle adjacencies)** — graphite-electrode producers trade on the spread between needle-coke input cost and global EAF-steel capacity utilization; carbon black tracks tyre / auto demand plus oil-linked feedstock cost. Both are cyclical but decouple from domestic BF-BOF steel margins and deserve a separate cost-curve-and-EAF-utilization diagnostic rather than being merged into the steel comp set.
 - **Specialty / pharmaceutical cross-listed adjacencies** — GRANULES and similar names are pharma-sector and should not be benchmarked into metals even when screener classifications drift.
 
 ### Institutional-Flow Patterns — Metals-Specific
