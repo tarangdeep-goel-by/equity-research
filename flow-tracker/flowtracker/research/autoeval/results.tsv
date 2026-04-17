@@ -1,8 +1,8 @@
 timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	prompt_fixes	notes
 2026-04-07T06:44:37Z	1	business	SBIN	bfsi	ERR	0	30571	0.0	0.2	0	Gemini eval failed: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': '* GenerateContentReque
+2026-04-07T06:44:38Z	1	business	ETERNAL	platform	ERR	0	38541	0.0	0.2	0	Gemini eval failed: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': '* GenerateContentReque
 2026-04-07T06:44:38Z	1	business	TCS	it_services	ERR	0	40736	0.0	0.2	0	Gemini eval failed: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': '* GenerateContentReque
 2026-04-07T06:44:38Z	1	business	VEDL	metals	ERR	0	33621	0.0	0.2	0	Gemini eval failed: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': '* GenerateContentReque
-2026-04-07T06:44:38Z	1	business	ETERNAL	platform	ERR	0	38541	0.0	0.2	0	Gemini eval failed: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': '* GenerateContentReque
 2026-04-07T06:46:07Z	1	business	SBIN	bfsi	A+	96	30571	0.0	20.7	2	This is an institutional-quality initiation report that perfectly captures the nuances of analyzing 
 2026-04-07T06:46:37Z	1	business	TCS	it_services	A	94	40736	0.0	29.8	1	An institutional-quality equity research report that demonstrates a profound understanding of the In
 2026-04-07T06:47:00Z	1	business	VEDL	metals	A	95	33621	0.0	23.0	2	An outstanding, institutional-grade research report that perfectly captures the complex dynamics of 
@@ -67,22 +67,22 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-09T20:12:41Z	0	business	SBIN	bfsi	B+	88	26450	0.0	26.5	3	A highly readable and structurally sound report that nails the overarching narrative of SBI's NPA tu
 2026-04-09T20:24:00Z	0	financials	SBIN	bfsi	B+	88	31763	603.8	28.9	3	This is a highly analytical and well-structured report that correctly identifies SBI's core margin a
 2026-04-14T16:43:23Z	0	ownership	SBIN	bfsi	ERR	0	24935	0.0	1200.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
+2026-04-14T16:49:13Z	0	financials	SBIN	bfsi	ERR	0	31240	729.8	1199.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
 2026-04-14T17:03:34Z	0	ownership	SBIN	bfsi	ERR	0	24935	0.0	1199.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
 2026-04-14T17:04:57Z	0	ownership	SBIN	bfsi	B+	86	24935	0.0	39.9	1	The report provides a highly readable and analytically sound narrative of SBIN's ownership, particul
+2026-04-14T17:09:22Z	0	financials	SUNPHARMA	pharma	A-	92	38783	811.5	396.6	1	This is a highly sophisticated, institutional-quality financials report that correctly identifies Su
 2026-04-14T17:11:42Z	0	ownership	TCS	it_services	ERR	0	22908	0.0	72.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-14T17:14:54Z	0	ownership	TCS	it_services	ERR	0	22908	0.0	65.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-14T17:21:54Z	0	financials	GROWW	broker	A-	90	36554	709.8	42.4	2	This is a highly sophisticated, institutional-quality financial analysis that correctly applies brok
 2026-04-14T17:48:57Z	0	ownership	HDFCBANK	private_bank	A-	90	24772	0.0	42.9	2	A highly institutional and readable report that perfectly captures the FII-to-MF handoff dynamic cur
 2026-04-14T17:49:44Z	0	ownership	TCS	it_services	A	93	22908	0.0	90.4	0	An institutional-quality ownership report that brilliantly contextualizes high-level FII/DII flows a
+2026-04-14T17:57:03Z	0	financials	SBIN	bfsi	A-	91	47508	0.0	49.2	1	The report is highly sophisticated in its application of BFSI frameworks, offering institutional-gra
 2026-04-14T18:17:47Z	0	ownership	ADANIENT	conglomerate	A	94	26263	0.0	58.7	1	This is an institutional-grade ownership report that masterfully contextualizes raw data, particular
+2026-04-14T18:24:10Z	0	financials	GODREJPROP	real_estate	A-	90	41608	887.7	27.8	2	This is an institutional-quality report that perfectly captures the nuances of Indian real estate ac
 2026-04-14T18:28:53Z	0	ownership	POLICYBZR	insurance	B+	88	25391	0.0	33.7	3	This is a solid, highly readable report that correctly identifies the defining ownership narrative (
+2026-04-14T18:42:57Z	0	financials	ADANIENT	conglomerate	A-	92	32770	1093.9	32.8	2	This is an institutional-quality financial deep-dive that perfectly captures the complex, capital-he
 2026-04-14T18:53:20Z	0	ownership	BHARTIARTL	telecom	B+	88	23493	0.0	28.7	3	A solid, highly readable report that correctly identifies the core 'institutional handoff' thesis dr
 2026-04-14T19:11:22Z	0	ownership	BHARTIARTL	telecom	A	93	25855	0.0	34.7	2	This is an institutional-quality ownership report that applies excellent sector-specific nuances, pa
-2026-04-14T16:49:13Z	0	financials	SBIN	bfsi	ERR	0	31240	729.8	1199.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
-2026-04-14T17:09:22Z	0	financials	SUNPHARMA	pharma	A-	92	38783	811.5	396.6	1	This is a highly sophisticated, institutional-quality financials report that correctly identifies Su
-2026-04-14T17:21:54Z	0	financials	GROWW	broker	A-	90	36554	709.8	42.4	2	This is a highly sophisticated, institutional-quality financial analysis that correctly applies brok
-2026-04-14T17:57:03Z	0	financials	SBIN	bfsi	A-	91	47508	0.0	49.2	1	The report is highly sophisticated in its application of BFSI frameworks, offering institutional-gra
-2026-04-14T18:24:10Z	0	financials	GODREJPROP	real_estate	A-	90	41608	887.7	27.8	2	This is an institutional-quality report that perfectly captures the nuances of Indian real estate ac
-2026-04-14T18:42:57Z	0	financials	ADANIENT	conglomerate	A-	92	32770	1093.9	32.8	2	This is an institutional-quality financial deep-dive that perfectly captures the complex, capital-he
 2026-04-15T04:36:18Z	0	ownership	SUNPHARMA	pharma	A-	91	29305	410.7	27.9	2	This is a highly sophisticated, institutional-grade report that excels in structural analysis, parti
 2026-04-15T04:42:58Z	0	ownership	HDFCBANK	private_bank	A-	91	29979	367.7	32.4	2	This is a highly sophisticated ownership report that correctly contextualizes the complex post-merge
 2026-04-15T04:50:51Z	0	ownership	POLICYBZR	insurance	A	93	29139	443.8	28.8	1	This is an institutional-grade ownership report that brilliantly dissects a textbook FII-to-DII hand
@@ -120,11 +120,7 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-15T19:08:56Z	0	ownership	OLAELEC	auto	B+	89	31846	0.0	40.4	2	A strong, highly readable report that excellently synthesizes market data to build a clear bearish t
 2026-04-15T19:09:15Z	0	ownership	PIDILITIND	chemicals	A	93	30249	0.0	19.1	1	This is an institutional-quality ownership report that expertly weaves disparate data points into a 
 2026-04-15T19:09:45Z	0	ownership	HINDUNILVR	fmcg	A	93	27543	0.0	29.8	2	This is an institutional-quality ownership report that expertly applies MNC and FMCG frameworks to i
-<<<<<<< Updated upstream
 2026-04-16T06:28:16Z	0	ownership	NTPC	regulated_power	A-	92	32206	516.8	67.4	2	This is an outstanding, institutional-grade analysis of a PSU utility that perfectly applies sector-
-2026-04-16T19:47:42Z	0	ownership	ADANIENT	conglomerate	A-	91	30280	436.2	38.9	2	This is an institutional-quality ownership report that deeply understands the structural nuances of 
-2026-04-16T19:48:24Z	0	ownership	SUNPHARMA	pharma	A-	91	36324	475.8	40.9	1	This is a highly analytical, institutional-grade report that excels in structural framing and signal
-=======
 2026-04-16T10:50:43Z	99	valuation	SBIN	bfsi	A-	90	35249	747.1	30.5	3	This is a highly sophisticated, institutional-grade report that correctly identifies the core driver
 2026-04-16T11:03:53Z	99	valuation	HDFCBANK	private_bank	A-	90	33188	720.4	69.9	2	This is a highly sophisticated, institutional-quality valuation report that expertly navigates compl
 2026-04-16T11:19:11Z	99	valuation	VEDL	metals	A-	90	29373	0.0	30.3	2	This is a highly sophisticated valuation report that correctly navigates the complexities of a cycli
@@ -172,8 +168,8 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-16T13:38:52Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	1199.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
 2026-04-16T13:39:10Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	119.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:39:14Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	1199.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
-2026-04-16T13:41:00Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	5.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:41:00Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	14.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-16T13:41:00Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	5.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:41:17Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	5.1	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:43:02Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	220.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:43:34Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	1199.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
@@ -189,16 +185,16 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-16T13:49:47Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	1199.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
 2026-04-16T13:49:58Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	5.4	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:50:03Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	404.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
-2026-04-16T13:50:27Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	822.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:50:27Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	39.6	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-16T13:50:27Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	822.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:50:30Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	955.4	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:51:30Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	3.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:51:39Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	20.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:52:15Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	3.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:52:30Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	1.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:53:02Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	1.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
-2026-04-16T13:53:34Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	2.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:53:34Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	14.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-16T13:53:34Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	2.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:53:42Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	13.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:54:33Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	1.9	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T13:55:18Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	1.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
@@ -281,8 +277,8 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-16T15:10:08Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	1.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T15:12:57Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	5.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T17:04:50Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	46.5	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
-2026-04-16T17:04:50Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	46.6	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T17:04:50Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	46.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-16T17:04:50Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	46.6	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T17:10:37Z	99	valuation	OLAELEC	auto	ERR	0	32845	0.0	45.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T17:10:38Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	46.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-16T17:10:58Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	67.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
@@ -303,15 +299,16 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-16T18:11:41Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	1578.2	0	Gemini eval failed: 499 CANCELLED. {'error': {'code': 499, 'message': 'The operation was cancelled.'
 2026-04-16T18:36:43Z	99	valuation	HINDUNILVR	fmcg	ERR	0	32462	0.0	1198.7	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
 2026-04-16T18:42:33Z	99	valuation	HINDUNILVR	fmcg	B+	89	32462	0.0	48.1	3	This is a highly analytical and well-written report that demonstrates a deep understanding of FMCG v
-2026-04-16T18:46:23Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	2671.2	0	Gemini eval failed: 
 2026-04-16T18:46:23Z	99	valuation	GROWW	broker	ERR	0	35560	0.0	2655.6	0	Gemini eval failed: 
+2026-04-16T18:46:23Z	99	valuation	PIDILITIND	chemicals	ERR	0	33733	0.0	2671.2	0	Gemini eval failed: 
 2026-04-16T18:58:16Z	99	valuation	PIDILITIND	chemicals	A-	91	33733	0.0	30.5	2	This is a highly sophisticated, institutional-quality report that brilliantly navigates a sector-cla
 2026-04-16T18:58:18Z	99	valuation	GROWW	broker	A-	91	35560	0.0	32.7	2	This is an outstanding, near-institutional-grade report that demonstrates exceptional critical think
+2026-04-16T19:47:42Z	0	ownership	ADANIENT	conglomerate	A-	91	30280	436.2	38.9	2	This is an institutional-quality ownership report that deeply understands the structural nuances of 
+2026-04-16T19:48:24Z	0	ownership	SUNPHARMA	pharma	A-	91	36324	475.8	40.9	1	This is a highly analytical, institutional-grade report that excels in structural framing and signal
 2026-04-16T19:49:31Z	99	valuation	OLAELEC	auto	A	95	32845	0.0	25.2	1	This is an institutional-quality valuation report that expertly navigates the complexities of a pre-
 2026-04-16T19:49:35Z	99	valuation	PIDILITIND	chemicals	A-	92	33733	0.0	29.1	1	This is an institutional-quality valuation report that brilliantly contextualizes Pidilite's premium
 2026-04-16T19:49:44Z	99	valuation	HINDUNILVR	fmcg	A	93	32462	0.0	37.5	1	This is an institutional-quality valuation report that demonstrates deep sector understanding, parti
 2026-04-16T19:49:48Z	99	valuation	GROWW	broker	B+	88	35560	0.0	41.5	2	A highly intelligent report that successfully navigates severe data distortions (share splits, short
->>>>>>> Stashed changes
 2026-04-17T04:33:53Z	0	valuation	SBIN	bfsi	F	54	454	0.0	45.6	1	The agent completely failed to generate the valuation report, outputting only its internal execution
 2026-04-17T04:35:42Z	0	ownership	SBIN	bfsi	A	93	34482	0.0	29.6	1	This is an institutional-grade ownership report that perfectly applies PSU banking frameworks to SBI
 2026-04-17T04:44:19Z	0	business	SBIN	bfsi	B+	87	36621	0.0	37.9	0	The report is analytically excellent, applying the BFSI framework perfectly to dissect SBI's revenue
