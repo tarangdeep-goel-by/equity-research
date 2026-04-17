@@ -348,13 +348,41 @@ def _fy_label_from_path(ar_path: Path) -> str:
     return ar_path.parent.name
 
 
+def _section_is_complete(cached: dict | None) -> bool:
+    """A cached section is reusable if we have a dict with no extraction_error.
+
+    Includes section_not_found_or_empty — that's a stable "nothing here" result.
+    """
+    if not isinstance(cached, dict):
+        return False
+    return "extraction_error" not in cached
+
+
+def _atomic_write_json(path: Path, data: dict) -> None:
+    """Write JSON atomically — tmp file + rename. Keeps partial writes from
+    corrupting the cache if the process crashes mid-write."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    tmp.replace(path)
+
+
 async def _extract_single_ar(
     ar_pdf: Path,
     symbol: str,
     model: str,
     sections: tuple[str, ...],
 ) -> dict:
-    """Extract one AR PDF → structured JSON with per-section payloads."""
+    """Extract one AR PDF → structured JSON with per-section payloads.
+
+    Resilient to mid-extraction failures:
+      - Each section wrapped in try/except; a crash on one section doesn't
+        abort the whole AR.
+      - JSON written to disk after EVERY section completes (success or
+        failure). On re-run, already-complete sections are skipped.
+      - Overall extraction_status is 'partial' when any section errored,
+        'complete' when all succeeded.
+    """
     import time as _time
     t0 = _time.time()
     fy_label = _fy_label_from_path(ar_pdf)
@@ -368,37 +396,94 @@ async def _extract_single_ar(
                 symbol, fy_label, "cached" if extraction.from_cache else "fresh",
                 len(md), len(headings), len(section_index))
 
-    # Per-section parallel extraction
-    sem = asyncio.Semaphore(3)
-    tasks: list[tuple[str, asyncio.Task]] = []
+    # Output path — per-section incremental writes target this file.
+    # Resolve Path.home() at call-time so HOME-monkeypatching tests work.
+    vault_base = Path.home() / "vault" / "stocks"
+    out_path = vault_base / symbol / "fundamentals" / f"annual_report_{fy_label}.json"
 
-    async def _one(sec: str) -> tuple[str, dict]:
-        async with sem:
-            slice_text = slice_section(md, section_index, sec)
-            if not slice_text or len(slice_text) < 200:
-                return sec, {"status": "section_not_found_or_empty", "chars": len(slice_text)}
-            return sec, await _extract_section(sec, slice_text, symbol, fy_label, model)
+    # Load existing partial JSON — preserves completed sections from prior runs.
+    existing: dict = {}
+    if out_path.exists():
+        try:
+            existing = json.loads(out_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            existing = {}
 
-    section_results = dict(await asyncio.gather(*[_one(sec) for sec in sections]))
-
-    result = {
+    # Seed result with fresh meta (always refreshed) but keep existing section payloads.
+    result: dict = {
         "symbol": symbol,
         "fiscal_year": fy_label,
         "source_pdf": str(ar_pdf),
         "pages_chars": len(md),
-        "extraction_status": "complete",
+        "extraction_status": "in_progress",
         "extraction_date": date.today().isoformat(),
         "section_index": section_size_summary(section_index),
         "sections_extracted": list(sections),
         "_heading_count": len(headings),
         "_docling_cached": extraction.from_cache,
         "_docling_degraded": extraction.degraded,
-        "_elapsed_s": round(_time.time() - t0, 1),
     }
-    # Spread section results into top-level fields.
-    for sec, data in section_results.items():
-        result[sec] = data
+    # Carry over any already-complete section payloads.
+    for sec in sections:
+        if _section_is_complete(existing.get(sec)):
+            result[sec] = existing[sec]
 
+    # Determine which sections still need extraction.
+    pending = [sec for sec in sections if sec not in result]
+    if not pending:
+        result["extraction_status"] = "complete"
+        result["_elapsed_s"] = round(_time.time() - t0, 1)
+        _atomic_write_json(out_path, result)
+        logger.info("[ar] %s %s: all sections cached, skipped", symbol, fy_label)
+        return result
+
+    logger.info("[ar] %s %s: %d cached, %d pending: %s",
+                symbol, fy_label, len(sections) - len(pending), len(pending), pending)
+
+    # Per-section extraction — concurrency bounded, each section wrapped in
+    # try/except so a single subprocess crash can't wipe out the rest.
+    sem = asyncio.Semaphore(2)
+
+    async def _one(sec: str) -> tuple[str, dict]:
+        async with sem:
+            slice_text = slice_section(md, section_index, sec)
+            if not slice_text or len(slice_text) < 200:
+                return sec, {"status": "section_not_found_or_empty", "chars": len(slice_text)}
+            try:
+                data = await _extract_section(sec, slice_text, symbol, fy_label, model)
+                return sec, data
+            except Exception as e:
+                logger.warning("[ar] %s %s: section '%s' crashed: %s: %s",
+                               symbol, fy_label, sec, type(e).__name__, e)
+                return sec, {
+                    "extraction_error": f"{type(e).__name__}: {e}",
+                    "chars_attempted": len(slice_text),
+                }
+
+    # gather with return_exceptions=True so no single failure aborts the whole.
+    raw = await asyncio.gather(
+        *[_one(sec) for sec in pending],
+        return_exceptions=True,
+    )
+    # Process results AND persist incrementally — write after each batch completes
+    # (asyncio.gather doesn't yield progressively, so we write after the full batch).
+    for item in raw:
+        if isinstance(item, BaseException):
+            logger.error("[ar] %s %s: unexpected gather exception: %s",
+                         symbol, fy_label, item)
+            continue
+        sec, data = item
+        result[sec] = data
+        _atomic_write_json(out_path, result)  # persist after each section
+
+    # Final status — 'partial' when any section errored.
+    errored = [sec for sec in sections if isinstance(result.get(sec), dict)
+               and "extraction_error" in result[sec]]
+    result["extraction_status"] = "partial" if errored else "complete"
+    if errored:
+        result["extraction_errors"] = {sec: result[sec]["extraction_error"] for sec in errored}
+    result["_elapsed_s"] = round(_time.time() - t0, 1)
+    _atomic_write_json(out_path, result)
     return result
 
 
@@ -519,23 +604,28 @@ async def extract_annual_reports(
 
     year_results = list(await asyncio.gather(*[_with_sem(p) for p in pdfs]))
 
-    # Save per-year JSONs.
+    # Per-year JSONs are already persisted incrementally by _extract_single_ar.
     out_dir = _VAULT_BASE / symbol / "fundamentals"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for yr in year_results:
-        fy = yr.get("fiscal_year", "unknown")
-        out = out_dir / f"annual_report_{fy}.json"
-        out.write_text(json.dumps(yr, indent=2, ensure_ascii=False, default=str))
 
-    # Cross-year narrative (only when we have 2+ years).
-    cross_narrative = await _generate_cross_year_narrative(year_results, symbol, model)
-    (out_dir / "annual_report_cross_year.json").write_text(
-        json.dumps({
+    # Cross-year narrative — only run when we have ≥2 YEARS that aren't entirely
+    # error-states. Partial years with at least some sections are still useful
+    # for cross-year comparison.
+    usable_years = [y for y in year_results if y.get("extraction_status") in ("complete", "partial")]
+    if len(usable_years) >= 2:
+        cross_narrative = await _generate_cross_year_narrative(usable_years, symbol, model)
+    else:
+        cross_narrative = {
+            "status": "skipped",
+            "reason": f"only {len(usable_years)}/{len(year_results)} years extracted successfully",
+        }
+    _atomic_write_json(
+        out_dir / "annual_report_cross_year.json",
+        {
             "symbol": symbol,
             "years_analyzed": [y.get("fiscal_year") for y in year_results],
             "extraction_date": date.today().isoformat(),
             "narrative": cross_narrative,
-        }, indent=2, ensure_ascii=False, default=str)
+        },
     )
 
     logger.info("[ar] %s: done in %.1fs, %d years + cross-year narrative",
@@ -573,6 +663,8 @@ async def ensure_annual_report_data(
                 if existing.get("extraction_status") == "complete":
                     cached_years.append(existing)
                     continue
+                # 'partial' status → still re-run; _extract_single_ar will skip
+                # the already-complete sections and retry the errored ones.
             except (json.JSONDecodeError, OSError):
                 pass
         needing_extraction.append(pdf)
@@ -605,19 +697,23 @@ async def ensure_annual_report_data(
     all_results = cached_years + new_results
     all_results.sort(key=lambda y: _fy_sort_num(y.get("fiscal_year", "FY00")), reverse=True)
 
-    for yr in new_results:
-        fy = yr.get("fiscal_year", "unknown")
-        out = out_dir / f"annual_report_{fy}.json"
-        out.write_text(json.dumps(yr, indent=2, ensure_ascii=False, default=str))
-
-    cross = await _generate_cross_year_narrative(all_results, symbol, model)
-    (out_dir / "annual_report_cross_year.json").write_text(
-        json.dumps({
+    # Per-year JSONs already persisted by _extract_single_ar incrementally.
+    usable_years = [y for y in all_results if y.get("extraction_status") in ("complete", "partial")]
+    if len(usable_years) >= 2:
+        cross = await _generate_cross_year_narrative(usable_years, symbol, model)
+    else:
+        cross = {
+            "status": "skipped",
+            "reason": f"only {len(usable_years)}/{len(all_results)} years usable",
+        }
+    _atomic_write_json(
+        out_dir / "annual_report_cross_year.json",
+        {
             "symbol": symbol,
             "years_analyzed": [y.get("fiscal_year") for y in all_results],
             "extraction_date": date.today().isoformat(),
             "narrative": cross,
-        }, indent=2, ensure_ascii=False, default=str)
+        },
     )
     return {
         "symbol": symbol,
