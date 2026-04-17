@@ -18,7 +18,7 @@ The revenue bridge differs materially by sub-type and should be shown explicitly
 - **Wireless:** `Revenue = Active subscribers × ARPU × months`. Growth levers: subscriber net-adds, tariff hike, post-paid mix-shift, data-usage monetisation. The highest-leverage lever in India today is tariff: ARPU ₹180-220 currently, post-next-tariff-cycle target ₹250-300. Incremental EBITDA per ₹1 of ARPU lift is ~80% given the mostly-fixed cost base.
 - **Tower infra:** `Revenue = Towers × tenancy ratio × rent per tenant × months`. Tenancy ratio is the single most important utility-like KPI — moving from 1.8× to 2.2× lifts tower-level EBITDA disproportionately because the second and third tenants carry minimal incremental opex.
 - **FTTH:** `Revenue = Homes-passed × activation % × ARPU`; activation % (typically 20-35%) is the saturation lever after the fibre rollout is sunk.
-- **Enterprise:** `Revenue = Accounts × seats per account × ARPU per seat`; long-tenor contracts, retention-led rather than acquisition-led.
+- **Enterprise:** `Revenue = Accounts × seats per account × ARPU per seat` + `IoT/M2M SIM connections × connection ARPU`; long-tenor contracts, retention-led rather than acquisition-led. IoT/M2M SIM volume is a distinct driver from traditional B2B seats — track the SIM count separately when disclosed.
 
 Pull ARPU, active subscribers, and tenancy ratios from `get_company_context(section='concall_insights', sub_section='operational_metrics')` and `section='sector_kpis'`. When management reports ARPU on a non-VLR base, state the denominator — VLR-based ARPU and reported-base ARPU are materially different numbers.
 

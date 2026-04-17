@@ -35,6 +35,7 @@ Telecom carries a 3-4% weight in Nifty with heavily-concentrated stock-level wei
 - **FII rotation on tariff-cycle and DoT-policy news** — sector-level FII share oscillates with tariff-hike announcements, spectrum-auction outcomes, and Supreme Court / TDSAT rulings on AGR-adjacent issues.
 - **DII positioning is bifurcated** — growth-at-reasonable-price funds overweight the top-2 wireless + listed tower entities; contrarian / deep-value funds hold the distressed third operator betting on a tariff-cycle turn or government-stake rationalisation.
 - **Index-weight dominance** — passive-ETF flows hit the single top-weight operator disproportionately, driving index-rebalance-window mechanics that sector-level reads can miss.
+- **ADR/GDR fungibility and foreign-headroom thresholds** — for telecom names with listed ADRs/GDRs (notably BHARTIARTL), FII headroom and ADR/GDR fungibility directly dictate MSCI / FTSE index-weight changes; when foreign room drops below the exchange-set threshold, passive selling is triggered independent of fundamentals. Track foreign-room % alongside FII % for flow attribution.
 - **LIC as a quasi-sovereign anchor** in select telecom names — holdings that do not trade on fundamentals; strip out of speculative-float analysis.
 
 Cross-check the sector flow via `get_market_context(section='fii_dii_flows')` and `section='fii_dii_streak')` before claiming sector-level institutional rotation. A single operator's FII % change may not be a sector signal unless corroborated at the second-largest operator.

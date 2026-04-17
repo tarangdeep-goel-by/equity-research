@@ -44,7 +44,7 @@ Concentration and execution risks that aggregate-level advances-style diversific
 ### Bear-Case Scenarios — 30-50% Drawdown Triggers
 Historical Indian telecom drawdowns have recurring triggers; use these as the scaffolding:
 - **Tariff-war reprise** — the 2016-19 new-entrant-led tariff collapse took incumbent operators down 40-60%; a new entrant or aggressive challenger restarting a price war is a structural-drawdown trigger. Threshold: industry ARPU falling >10% YoY.
-- **Unfavourable spectrum-auction outcome** — losing access to critical coverage bands at a viable price repriced select operators 20-30% historically. Threshold: auction-close with shortfall in sub-1GHz or a key mid-band.
+- **Unfavourable spectrum-auction outcome** — losing access to critical coverage bands at a viable price repriced select operators 20-30% historically. Threshold: auction-close with shortfall in sub-1GHz or a key mid-band. Track the **spectrum maturity wall** — the specific calendar years a bulk of an operator's licences expire — because a wall concentrated in a single auction window forces heavy renewal capex at whatever reserve price DoT sets.
 - **DoT regulatory re-interpretation** — AGR-adjacent receivables or licence-fee calculation methodology re-opened by DoT is a fresh-liability latent.
 - **5G monetisation miss** — if ARPU does not lift 25-35% in the 2-3 years post-5G rollout, the 5G-capex cycle has destroyed value and the stock re-rates down 25-40%.
 - **Promoter-group cascade** — a credit event at the listed telecom's conglomerate parent can force a stake-sale or pledge-invocation independent of the listed-entity's own fundamentals.
