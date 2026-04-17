@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_technical",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T12:39:36.784734+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "platform": {
+      "agent": "technical",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent synthesis of RSI context, delivery divergence, and institutional flow, moving well beyond surface-level indicator readings."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Conclusions logically follow the data; the mixed/bearish posture is well-supported by the death cross and falling delivery despite the short-term price bounce."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major technical dimensions (price, volume, flows), but lacks relative technical strength comparison against direct platform peers."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Provides exceptionally clear, quantifiable bull/bear triggers (e.g., 'reclaim \u20b9290 on 2+ sessions with delivery >55%')."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Correctly focuses on delivery % and FII/DII flows for an Indian high-beta stock, but misses analyzing sector-wide technical trends for platform companies to contextualize the drawdown."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Thorough citations, explicit handling of the historical market cap mismatch caveat, and clear tool audit."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Agent Execution Log shows disciplined use of the calculator for math and graceful handling of the unavailable get_estimates tool."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "Agent Execution Log shows 22 turns, which is highly inefficient and exceeds the 20-turn threshold, though a 79.2% cache hit rate kept costs reasonable at $0.36."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Price Action / Sector Framework",
+          "issue": "The report compares ETERNAL's price performance to the Nifty 50, but fails to compare its technical strength against direct platform/quick-commerce peers to determine if the drawdown is idiosyncratic.",
+          "suggestion": "Instruct the agent to pull peer price performance (via get_peer_sector or get_chart_data) to establish relative strength within the specific sector, not just against the broader index."
+        }
+      ],
+      "strengths": [
+        "Exceptional contextualization of the RSI reading (explaining why a 72 RSI after a deep drawdown is a bounce-overshoot rather than an uptrend distribution).",
+        "Highly actionable synthesis section with specific price, delivery, and flow thresholds required to flip the technical signal."
+      ],
+      "summary": "This is a strong, highly actionable technical report that excellently synthesizes price action, delivery volume, and institutional flows. The primary gap is the lack of relative technical comparison against direct sector peers, and the agent required an inefficient 22 turns to generate the output.",
+      "report_length": 20666,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.16995891695842,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent synthesis of RSI context, delivery divergence, and institutional flow, moving well beyond surface-level indicator readings.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Conclusions logically follow the data; the mixed/bearish posture is well-supported by the death cross and falling delivery despite the short-term price bounce.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major technical dimensions (price, volume, flows), but lacks relative technical strength comparison against direct platform peers.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Provides exceptionally clear, quantifiable bull/bear triggers (e.g., 'reclaim \u20b9290 on 2+ sessions with delivery >55%').\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Correctly focuses on delivery % and FII/DII flows for an Indian high-beta stock, but misses analyzing sector-wide technical trends for platform companies to contextualize the drawdown.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Thorough citations, explicit handling of the historical market cap mismatch caveat, and clear tool audit.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Agent Execution Log shows disciplined use of the calculator for math and graceful handling of the unavailable get_estimates tool.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"Agent Execution Log shows 22 turns, which is highly inefficient and exceeds the 20-turn threshold, though a 79.2% cache hit rate kept costs reasonable at $0.36.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Price Action / Sector Framework\",\n      \"issue\": \"The report compares ETERNAL's price performance to the Nifty 50, but fails to compare its technical strength against direct platform/quick-commerce peers to determine if the drawdown is idiosyncratic.\",\n      \"suggestion\": \"Instruct the agent to pull peer price performance (via get_peer_sector or get_chart_data) to establish relative strength within the specific sector, not just against the broader index.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional contextualization of the RSI reading (explaining why a 72 RSI after a deep drawdown is a bounce-overshoot rather than an uptrend distribution).\",\n    \"Highly actionable synthesis section with specific price, delivery, and flow thresholds required to flip the technical signal.\"\n  ],\n  \"summary\": \"This is a strong, highly actionable technical report that excellently synthesizes price action, delivery volume, and institutional flows. "
+    }
+  }
+}

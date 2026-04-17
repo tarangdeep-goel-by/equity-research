@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T10:39:23.015182+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "fmcg"
+  ],
+  "results": {
+    "fmcg": {
+      "agent": "sector",
+      "stock": "HINDUNILVR",
+      "sector": "FMCG",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Strong analysis of working capital deterioration and volume vs. price dynamics, but flags an earnings anomaly (121% growth) without fully resolving the underlying cause."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly consistent and correctly contextualizes HUL's lower headline growth against its massive base, though it could have better integrated the impact of the ice cream demerger into the forward logic."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers macro and sector frameworks well, but completely misses segment-level analysis (Home Care vs Beauty & Personal Care vs Foods & Refreshment), which is critical for understanding HUL's margin mix."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Provides a clear verdict, specific catalysts, and a sobering reverse DCF reality check, but the top picks rationale is slightly brief and lacks specific valuation targets."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Explicit justification for near-perfect score: Applies the exact right FMCG metrics (UVG, RM/Sales, CCC) and correctly identifies the distinction between volume-led and price-led growth as the gold standard for the sector."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Transparently handles data contamination in the Diversified FMCG bucket, though it relies heavily on management's self-reported 'business winning %' without third-party market share validation."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Explicit justification for near-perfect score: The log shows 25 tool calls with excellent fallback logic (fetching Yahoo peers when Screener peers were contaminated), 7 calculator uses, and honest reporting of extraction failures."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 60,
+          "rationale": "Agent took 37 turns and cost $0.81. Exceeding 20 turns falls into the lowest efficiency tier according to the strict grading rubric, despite a solid 75.6% cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Sector Overview / 2. Competitive Landscape",
+          "issue": "Missing segment-level breakdown (Home Care, BPC, F&R) which is fundamental to analyzing HUL's revenue and margin mix.",
+          "suggestion": "Instruct the agent to explicitly extract and analyze segment-wise revenue and EBIT margins for multi-category FMCG conglomerates."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "3. Sector KPIs",
+          "issue": "The `get_company_context(section='sector_kpis')` tool only extracted 1 out of 8 canonical FMCG KPIs, forcing reliance on partial concall extractions.",
+          "suggestion": "Improve the KPI extraction regex/logic in the backend tool to better capture standard FMCG metrics like A&P spend, gross margin, and rural/urban split from filings."
+        }
+      ],
+      "strengths": [
+        "Exceptional handling of contaminated peer data by recognizing the issue and pivoting to Yahoo peers for accurate benchmarking.",
+        "Deep, nuanced analysis of working capital (CCC) deterioration and the critical distinction between volume-led and price-led growth."
+      ],
+      "summary": "This is a highly sophisticated sector report that correctly applies core FMCG frameworks like volume vs. price growth and working capital dynamics. The most notable analytical gap is the absence of segment-level performance (Home Care vs BPC vs F&R), which is essential for a diversified giant like HUL. Additionally, the agent's execution was highly inefficient, taking 37 turns to complete the report.",
+      "report_length": 39106,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 63.22096391604282,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Strong analysis of working capital deterioration and volume vs. price dynamics, but flags an earnings anomaly (121% growth) without fully resolving the underlying cause.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly consistent and correctly contextualizes HUL's lower headline growth against its massive base, though it could have better integrated the impact of the ice cream demerger into the forward logic.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers macro and sector frameworks well, but completely misses segment-level analysis (Home Care vs Beauty & Personal Care vs Foods & Refreshment), which is critical for understanding HUL's margin mix.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Provides a clear verdict, specific catalysts, and a sobering reverse DCF reality check, but the top picks rationale is slightly brief and lacks specific valuation targets.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Explicit justification for near-perfect score: Applies the exact right FMCG metrics (UVG, RM/Sales, CCC) and correctly identifies the distinction between volume-led and price-led growth as the gold standard for the sector.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Transparently handles data contamination in the Diversified FMCG bucket, though it relies heavily on management's self-reported 'business winning %' without third-party market share validation.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Explicit justification for near-perfect score: The log shows 25 tool calls with excellent fallback logic (fetching Yahoo peers when Screener peers were contaminated), 7 calculator uses, and honest reporting of extraction failures.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 60,\n      \"rationale\": \"Agent took 37 turns and cost $0.81. Exceeding 20 turns falls into the lowest efficiency tier according to the strict grading rubric, despite a solid 75.6% cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Sector Overview / 2. Competitive Landscape\",\n      \"issue\": \"Missing segment-level breakdown (Home Care, BPC, F&R) which is fundamental to analyzing HUL's revenue and margin mix.\",\n      \"suggestion\": \"Instruct the agent to explicitly extract and analyze segment-wise revenue and EBIT margins for multi-category FMCG conglomerates.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"3. Sector KPIs\",\n      \"issue\": \"The `get_company_context(section='sector_kpis')` tool only extracted 1 out of 8 canonical "
+    }
+  }
+}

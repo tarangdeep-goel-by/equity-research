@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T05:04:07.437846+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "bfsi": {
+      "agent": "sector",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional breakdown of the three overlapping banking cycles and application of the P/B-ROE framework to justify valuation. The depth of insight into structural vs cyclical issues is institutional grade."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly consistent logic, particularly in connecting CASA disintermediation to NIM compression, though slightly repetitive on the AUCA recovery points."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Comprehensive coverage of the sector, though it missed extracting some critical asset quality metrics (Gross/Net NPA) from the available tools."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear, evidence-backed verdict on SBIN and identifies CANBK as a relative value play, though specific entry/exit price levels are absent."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of BFSI frameworks, explicitly rejecting industrial metrics like ROCE and correctly analyzing EBLR vs MCLR repricing dynamics. The use of LCR, CASA, and credit costs is perfectly tailored to the sector."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Transparent about estimations (e.g., TAM from deposit share) and cites sources well, though relies heavily on concall text for metrics that should be in structured data."
+        },
+        "tool_use_discipline": {
+          "grade": "B",
+          "numeric": 83,
+          "rationale": "Agent fumbled significantly with the calculate tool, attempting unsupported operations ('cagr', 'pct_of_total', exponentiation) across multiple turns before checking the schema."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "Highly inefficient execution with 36 turns (exceeding the >20 threshold for F), but the 85.3% cache hit rate kept the total cost to a moderate $0.76."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution",
+          "issue": "Agent hallucinated calculate operations ('cagr', 'pct_of_total') and unsupported math syntax ('^') across multiple turns.",
+          "suggestion": "Emphasize in the system prompt that the calculate tool only supports specific named operations and basic arithmetic (+ - * /), and explicitly forbid exponentiation or assumed functions."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "3. Sector KPIs: The Banking Scorecard",
+          "issue": "Critical asset quality metrics (Gross NPA, Net NPA, CAR) were missing from the structured sector_kpis extraction.",
+          "suggestion": "Update the sector_kpis extraction logic to ensure reliable capture of standard asset quality and capital adequacy metrics for banks."
+        }
+      ],
+      "strengths": [
+        "Outstanding application of BFSI-specific frameworks, including a nuanced analysis of EBLR/MCLR repricing and the P/B-ROE valuation model.",
+        "Excellent synthesis of macroeconomic factors, regulatory changes (ECL/IndAS 109), and structural shifts (savings disintermediation) impacting the PSU banking sector."
+      ],
+      "summary": "This is an institutional-quality sector report that demonstrates a deep understanding of banking mechanics, perfectly applying frameworks like NIM compression, CASA erosion, and P/B-ROE valuation. The primary gap lies in the agent's execution efficiency, as it wasted numerous turns fumbling with unsupported calculator operations. Despite the high turn count, the analytical output is exceptional and highly actionable.",
+      "report_length": 42697,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 52.15042183292098,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional breakdown of the three overlapping banking cycles and application of the P/B-ROE framework to justify valuation. The depth of insight into structural vs cyclical issues is institutional grade.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly consistent logic, particularly in connecting CASA disintermediation to NIM compression, though slightly repetitive on the AUCA recovery points.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Comprehensive coverage of the sector, though it missed extracting some critical asset quality metrics (Gross/Net NPA) from the available tools.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear, evidence-backed verdict on SBIN and identifies CANBK as a relative value play, though specific entry/exit price levels are absent.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of BFSI frameworks, explicitly rejecting industrial metrics like ROCE and correctly analyzing EBLR vs MCLR repricing dynamics. The use of LCR, CASA, and credit costs is perfectly tailored to the sector.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Transparent about estimations (e.g., TAM from deposit share) and cites sources well, though relies heavily on concall text for metrics that should be in structured data.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B\",\n      \"numeric\": 83,\n      \"rationale\": \"Agent fumbled significantly with the calculate tool, attempting unsupported operations ('cagr', 'pct_of_total', exponentiation) across multiple turns before checking the schema.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"Highly inefficient execution with 36 turns (exceeding the >20 threshold for F), but the 85.3% cache hit rate kept the total cost to a moderate $0.76.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution\",\n      \"issue\": \"Agent hallucinated calculate operations ('cagr', 'pct_of_total') and unsupported math syntax ('^') across multiple turns.\",\n      \"suggestion\": \"Emphasize in the system prompt that the calculate tool only supports specific named operations and basic arithmetic (+ - * /), and explicitly forbid exponentiation or assumed functions.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"3. Sector KPIs: The Banking Scorecard\",\n      \"issue\": \"Critical asset quality metrics (Gross NPA, Net NPA, CAR) were missing from the structured sector_kpis extraction.\",\n      \"suggestion\": \"Update the sector_kpis extraction logic to ensure reliable capture of standard asset quality an"
+    }
+  }
+}

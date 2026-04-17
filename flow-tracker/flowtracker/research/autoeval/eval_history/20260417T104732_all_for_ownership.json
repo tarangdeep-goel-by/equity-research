@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T10:47:32.596114+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "conglomerate": {
+      "agent": "ownership",
+      "stock": "ADANIENT",
+      "sector": "Diversified conglomerate",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional depth in analyzing the 'Handoff Arithmetic' between FIIs, MFs, and Promoters. Correctly identifies the 75% MPS ceiling as a structural constraint rather than a behavioral signal."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong logical flow, particularly in the 'Cross-Section Reconciliation' which expertly resolves apparent contradictions between different timeframes and metrics."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major bases including pledge margin triggers and AMC concentration, though it misses the Retail vs HNI breakdown within the public float due to data limitations."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Delivers a clear 'MIXED' verdict with precise catalysts identified (needs fresh institutional demand due to promoter cap). Highlights specific AMC redemption risks."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Correctly identifies that ADANIENT is a conglomerate and the sole member of its 'Trading - Minerals' peer group, appropriately discarding sector flow attribution as meaningless."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless transparency regarding data limitations, explicitly calling out the concall extraction failure and MF changes pipeline artifact."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Good overall discipline (17 calls), but used the `calculate` tool in a hacky way (e.g., calculating 11.65% of 100) just to trigger the HISTORICAL_MCAP_MISMATCH warning, rather than actually computing the \u20b9Cr values."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 76,
+          "rationale": "Cost was contained to $0.55 thanks to a 73.7% cache hit rate, but 26 turns is highly inefficient and crosses the >20 turn threshold."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Top Named Holders",
+          "issue": "The agent used the `calculate` tool with dummy values (a='11.65', b='100') just to trigger the required historical mismatch warning, rather than using it to actually compute the \u20b9Cr values shown in the table.",
+          "suggestion": "Instruct the agent to use the `calculate` tool to actually perform the \u20b9Cr conversions (e.g., using `pct_of` with the actual market cap) rather than doing the math in its head and using the tool just for compliance."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Mandatory Metrics Status",
+          "issue": "The agent could not find the Retail/HNI/Corporate body breakdown in the public shareholding data.",
+          "suggestion": "Ensure the `get_ownership(section='shareholding')` payload explicitly breaks down the 'Public' category into Retail, HNI, and Corporate Bodies."
+        }
+      ],
+      "strengths": [
+        "The 'Cross-Section Reconciliation' section is a masterclass in synthesizing seemingly conflicting data points (e.g., FII declining vs. FII stable) into a coherent narrative.",
+        "Excellent contextualization of the 75% Minimum Public Shareholding (MPS) ceiling and its implications for future price action."
+      ],
+      "summary": "This is a highly analytical and well-reasoned ownership report that expertly navigates the complexities of Adani's shareholding structure. The primary gap is a minor tool-use hack and excessive turn count, but the actual financial analysis is institutional-grade.",
+      "report_length": 32002,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 39.70237970899325,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional depth in analyzing the 'Handoff Arithmetic' between FIIs, MFs, and Promoters. Correctly identifies the 75% MPS ceiling as a structural constraint rather than a behavioral signal.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong logical flow, particularly in the 'Cross-Section Reconciliation' which expertly resolves apparent contradictions between different timeframes and metrics.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major bases including pledge margin triggers and AMC concentration, though it misses the Retail vs HNI breakdown within the public float due to data limitations.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Delivers a clear 'MIXED' verdict with precise catalysts identified (needs fresh institutional demand due to promoter cap). Highlights specific AMC redemption risks.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Correctly identifies that ADANIENT is a conglomerate and the sole member of its 'Trading - Minerals' peer group, appropriately discarding sector flow attribution as meaningless.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless transparency regarding data limitations, explicitly calling out the concall extraction failure and MF changes pipeline artifact.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Good overall discipline (17 calls), but used the `calculate` tool in a hacky way (e.g., calculating 11.65% of 100) just to trigger the HISTORICAL_MCAP_MISMATCH warning, rather than actually computing the \u20b9Cr values.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 76,\n      \"rationale\": \"Cost was contained to $0.55 thanks to a 73.7% cache hit rate, but 26 turns is highly inefficient and crosses the >20 turn threshold.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Top Named Holders\",\n      \"issue\": \"The agent used the `calculate` tool with dummy values (a='11.65', b='100') just to trigger the required historical mismatch warning, rather than using it to actually compute the \u20b9Cr values shown in the table.\",\n      \"suggestion\": \"Instruct the agent to use the `calculate` tool to actually perform the \u20b9Cr conversions (e.g., using `pct_of` with the actual market cap) rather than doing the math in its head and using the tool just for compliance.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Mandatory Metrics Status\",\n      \"issue\": \"The agent could not find the Retail/HNI/Corporate body breakdown in the public shareholding data.\",\n      \"suggestion\": \"Ensure"
+    }
+  }
+}

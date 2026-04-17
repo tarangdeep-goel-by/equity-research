@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T12:34:45.180611+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "platform"
+  ],
+  "results": {
+    "platform": {
+      "agent": "business",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional breakdown of the 1P vs 3P accounting distortion and its impact on margins. Perfect score justified by the deep connection between unit economics and the investment thesis."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Conclusions logically follow data, though the assumption that food delivery will 'quietly compound' at 15-20% could use more stress-testing against QC cannibalization."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers almost all bases, but the missing cohort retention data (M+6/M+12) leaves a slight gap in assessing the true durability of Blinkit's customer behavior."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect score justified by the highly specific, quantifiable 'hardening/softening signals' (e.g., store additions <150/qtr) that provide a clear roadmap for PMs."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect score justified by the flawless application of quick commerce metrics (GOV, NOV, contribution margin, dark store density) to deconstruct the business."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Claims are well-backed by concall data, though relying on yfinance for the 41.8% gross margin instead of deriving it directly from fundamentals is a minor shortcut."
+        },
+        "tool_use_discipline": {
+          "grade": "B",
+          "numeric": 83,
+          "rationale": "Agent wasted multiple turns (27-31) guessing non-existent calculate operations ('cagr', 'pct_change') instead of reading the schema, requiring a ToolSearch to fix."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "At 42 turns, the execution is highly inefficient and exceeds the >20 turns threshold for an F, despite the 86% cache hit rate keeping costs at $0.74."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Execution",
+          "issue": "The agent guessed non-existent operations ('cagr', 'pct_change', 'margin') for the calculate tool multiple times before searching for the schema.",
+          "suggestion": "Update the system prompt to explicitly list the allowed calculate operations or instruct the agent to read the tool schema before calling it."
+        }
+      ],
+      "strengths": [
+        "Masterful handling of the 1P vs 3P accounting transition, preventing a naive misinterpretation of revenue growth and margin compression.",
+        "Deep, sector-specific unit economics analysis (Blinkit contribution margin, dark store capex, GOV vs NOV)."
+      ],
+      "summary": "This is an institution-grade business analysis that perfectly captures the nuances of Eternal's accounting transition and quick commerce unit economics. However, the agent's execution was highly inefficient, wasting over a dozen turns guessing tool parameters instead of reading the schema. While the final output is exceptional, the pipeline cost and latency need optimization.",
+      "report_length": 33444,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 51.216524000046775,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional breakdown of the 1P vs 3P accounting distortion and its impact on margins. Perfect score justified by the deep connection between unit economics and the investment thesis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Conclusions logically follow data, though the assumption that food delivery will 'quietly compound' at 15-20% could use more stress-testing against QC cannibalization.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers almost all bases, but the missing cohort retention data (M+6/M+12) leaves a slight gap in assessing the true durability of Blinkit's customer behavior.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect score justified by the highly specific, quantifiable 'hardening/softening signals' (e.g., store additions <150/qtr) that provide a clear roadmap for PMs.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect score justified by the flawless application of quick commerce metrics (GOV, NOV, contribution margin, dark store density) to deconstruct the business.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Claims are well-backed by concall data, though relying on yfinance for the 41.8% gross margin instead of deriving it directly from fundamentals is a minor shortcut.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B\",\n      \"numeric\": 83,\n      \"rationale\": \"Agent wasted multiple turns (27-31) guessing non-existent calculate operations ('cagr', 'pct_change') instead of reading the schema, requiring a ToolSearch to fix.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"At 42 turns, the execution is highly inefficient and exceeds the >20 turns threshold for an F, despite the 86% cache hit rate keeping costs at $0.74.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Execution\",\n      \"issue\": \"The agent guessed non-existent operations ('cagr', 'pct_change', 'margin') for the calculate tool multiple times before searching for the schema.\",\n      \"suggestion\": \"Update the system prompt to explicitly list the allowed calculate operations or instruct the agent to read the tool schema before calling it.\"\n    }\n  ],\n  \"strengths\": [\n    \"Masterful handling of the 1P vs 3P accounting transition, preventing a naive misinterpretation of revenue growth and margin compression.\",\n    \"Deep, sector-specific unit economics analysis (Blinkit contribution margin, dark store capex, GOV vs NOV).\"\n  ],\n  \"summary\": \"This is an institution-grade business analysis that perfectly captures the nuances of Eternal's accounting transition an"
+    }
+  }
+}

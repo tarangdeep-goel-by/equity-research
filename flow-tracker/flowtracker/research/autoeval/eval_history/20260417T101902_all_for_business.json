@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T10:19:02.592774+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "fmcg"
+  ],
+  "results": {
+    "fmcg": {
+      "agent": "business",
+      "stock": "HINDUNILVR",
+      "sector": "FMCG",
+      "grade": "B",
+      "grade_numeric": 85,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Goes beyond surface-level with the soap unit economics and ROCE acquisition arithmetic, but lacks a deep dive into the margin profile of the 'six big bets' vs the legacy portfolio."
+        },
+        "logical_consistency": {
+          "grade": "B",
+          "numeric": 83,
+          "rationale": "Generally sound logic, but contains a glaring numerical contradiction stating that a 23.2% margin is 'below the 23% floor'."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers the core FMCG pillars well, but misses a quantitative breakdown of channel mix (General Trade vs Modern Trade vs E-commerce) which is vital for assessing margin shifts."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides clear bull/bear scenarios and identifies the GST volume tailwind as a key catalyst, though it stops short of a definitive investment conclusion."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Applies the correct FMCG frameworks, particularly emphasizing the Volume vs Price decomposition and the structural advantage of negative working capital."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent data hygiene; correctly identified Screener peer mismatches, pivoted to Yahoo peers for benchmarking, and cited sources clearly."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Agent executed 23 tool calls, correctly used the calculator for derived metrics, and honestly surfaced missing data (e.g., exact A&P spend), showing strong discipline."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "With 34 turns, the agent significantly exceeded the >20 turn threshold for an F grade, indicating inefficient planning, though the 86.2% cache hit rate kept the cost at $0.77."
+        }
+      },
+      "issues": [
+        {
+          "type": "COMPUTATION",
+          "section": "Cost Structure & Margin Trajectory",
+          "issue": "States that Q2 FY26 EBITDA margin of 23.2% is 'below the 23% floor'.",
+          "suggestion": "Correct the logical comparison; 23.2% is above 23%, or adjust the text if the guidance floor was actually higher."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Revenue = Brands \u00d7 Outlets \u00d7 (Volume \u00d7 Price \u00d7 Mix)",
+          "issue": "Lacks a quantitative breakdown of channel mix (General Trade vs Modern Trade vs E-commerce).",
+          "suggestion": "Instruct the agent to explicitly extract and analyze channel contribution percentages for FMCG companies, as channel shifts impact margins."
+        }
+      ],
+      "strengths": [
+        "Brilliant explanation of the ROCE collapse being an artifact of the GSK acquisition arithmetic rather than operational deterioration.",
+        "Excellent breakdown of the unit economics and working capital float of a single bar of soap to illustrate the business model."
+      ],
+      "summary": "This is a strong, highly readable report that correctly identifies the critical drivers of an FMCG business, particularly the volume vs price dynamic and working capital float. However, it suffers from an excessive number of agent turns and a careless numerical logic error regarding margin guidance. Addressing the missing channel mix analysis would elevate it to institutional quality.",
+      "report_length": 34752,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 44.46482970798388,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Goes beyond surface-level with the soap unit economics and ROCE acquisition arithmetic, but lacks a deep dive into the margin profile of the 'six big bets' vs the legacy portfolio.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"B\",\n      \"numeric\": 83,\n      \"rationale\": \"Generally sound logic, but contains a glaring numerical contradiction stating that a 23.2% margin is 'below the 23% floor'.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers the core FMCG pillars well, but misses a quantitative breakdown of channel mix (General Trade vs Modern Trade vs E-commerce) which is vital for assessing margin shifts.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides clear bull/bear scenarios and identifies the GST volume tailwind as a key catalyst, though it stops short of a definitive investment conclusion.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Applies the correct FMCG frameworks, particularly emphasizing the Volume vs Price decomposition and the structural advantage of negative working capital.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent data hygiene; correctly identified Screener peer mismatches, pivoted to Yahoo peers for benchmarking, and cited sources clearly.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Agent executed 23 tool calls, correctly used the calculator for derived metrics, and honestly surfaced missing data (e.g., exact A&P spend), showing strong discipline.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"With 34 turns, the agent significantly exceeded the >20 turn threshold for an F grade, indicating inefficient planning, though the 86.2% cache hit rate kept the cost at $0.77.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B\",\n    \"grade_numeric\": 85\n  },\n  \"issues\": [\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"Cost Structure & Margin Trajectory\",\n      \"issue\": \"States that Q2 FY26 EBITDA margin of 23.2% is 'below the 23% floor'.\",\n      \"suggestion\": \"Correct the logical comparison; 23.2% is above 23%, or adjust the text if the guidance floor was actually higher.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Revenue = Brands \u00d7 Outlets \u00d7 (Volume \u00d7 Price \u00d7 Mix)\",\n      \"issue\": \"Lacks a quantitative breakdown of channel mix (General Trade vs Modern Trade vs E-commerce).\",\n      \"suggestion\": \"Instruct the agent to explicitly extract and analyze channel contribution percentages for FMCG companies, as channel shifts impact margins.\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant explanation of the ROCE collapse being an artifact of the GSK acquisition arithmetic rather than operational deteriorati"
+    }
+  }
+}

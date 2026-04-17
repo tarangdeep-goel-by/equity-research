@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T05:50:54.682027+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "private_bank"
+  ],
+  "results": {
+    "private_bank": {
+      "agent": "sector",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional breakdown of the EBLR repricing mechanics and the strategic rationale behind the deliberate CD ratio normalization, perfectly connecting operational data to investability."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless linkage between the P/B-ROE framework and the market's pricing of HDFC Bank's ROE recovery, with all assumptions clearly stated and no contradictions."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Comprehensive coverage of all banking dimensions, though it lacks a peer NIM comparison (which the agent correctly identified as a tool limitation)."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Delivers a strong verdict with clear catalysts and risks, though the exact timeline for the 85-90% CD ratio target achievement could be more explicitly modeled."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies BFSI-specific metrics (NIM, CASA, CD ratio, GNPA, Credit Cost) and explicitly discards irrelevant industrial metrics like ROCE and FCF."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent citation of tool data and corporate actions, though it had to rely on external knowledge for ICICI's NIM due to tool limitations."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly disciplined, but hallucinated a 'cagr' operation in the calculate tool and an invalid 'estimates' section, requiring extra turns to recover."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Highly inefficient execution taking 38 turns (well over the 20-turn threshold for an F), despite a reasonable cost of $0.76."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Execution",
+          "issue": "Agent hallucinated a 'cagr' operation in the calculate tool and an invalid 'estimates' section in get_estimates.",
+          "suggestion": "Reinforce strict adherence to the allowed enum values for tool sections and supported operations in the calculate tool."
+        }
+      ],
+      "strengths": [
+        "Masterful explanation of HDFC Bank's asset-sensitive EBLR dynamics during a rate-cut cycle.",
+        "Excellent use of the P/B-ROE framework to justify current valuations and project future re-rating."
+      ],
+      "summary": "This is an institutional-quality sector report that deeply understands banking mechanics, particularly the nuances of HDFC Bank's post-merger CD ratio normalization and EBLR repricing. The analytical depth and sector framework application are outstanding. However, the agent's execution was highly inefficient, taking 38 turns due to minor tool hallucinations that required recovery.",
+      "report_length": 38216,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 44.57206904201303,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional breakdown of the EBLR repricing mechanics and the strategic rationale behind the deliberate CD ratio normalization, perfectly connecting operational data to investability.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless linkage between the P/B-ROE framework and the market's pricing of HDFC Bank's ROE recovery, with all assumptions clearly stated and no contradictions.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Comprehensive coverage of all banking dimensions, though it lacks a peer NIM comparison (which the agent correctly identified as a tool limitation).\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Delivers a strong verdict with clear catalysts and risks, though the exact timeline for the 85-90% CD ratio target achievement could be more explicitly modeled.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies BFSI-specific metrics (NIM, CASA, CD ratio, GNPA, Credit Cost) and explicitly discards irrelevant industrial metrics like ROCE and FCF.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent citation of tool data and corporate actions, though it had to rely on external knowledge for ICICI's NIM due to tool limitations.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly disciplined, but hallucinated a 'cagr' operation in the calculate tool and an invalid 'estimates' section, requiring extra turns to recover.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Highly inefficient execution taking 38 turns (well over the 20-turn threshold for an F), despite a reasonable cost of $0.76.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Execution\",\n      \"issue\": \"Agent hallucinated a 'cagr' operation in the calculate tool and an invalid 'estimates' section in get_estimates.\",\n      \"suggestion\": \"Reinforce strict adherence to the allowed enum values for tool sections and supported operations in the calculate tool.\"\n    }\n  ],\n  \"strengths\": [\n    \"Masterful explanation of HDFC Bank's asset-sensitive EBLR dynamics during a rate-cut cycle.\",\n    \"Excellent use of the P/B-ROE framework to justify current valuations and project future re-rating.\"\n  ],\n  \"summary\": \"This is an institutional-quality sector report that deeply understands banking mechanics, particularly the nuances of HDFC Bank's post-merger CD ratio normalization and EBLR repricing. The analytical depth and sector framework application are outstanding. However, the agent's execution was highly inefficient, taking"
+    }
+  }
+}

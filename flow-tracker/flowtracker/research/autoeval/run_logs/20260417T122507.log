@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T122507.log
+AutoEval (agent-first): agent=valuation sectors=['platform']
+Target: grade_numeric >= 90
+
+--- valuation / ETERNAL (platform) ---
+  Report: 17 chars
+  Evidence log loaded (44 lines)
+  Grading with Gemini...
+  Grade: F (50) [FAIL]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260417T122527_all_for_valuation.json
+
+======================================================================
+AGENT SUMMARY: valuation
+======================================================================
+  platform            ETERNAL       F   (50)  [FAIL]  prompt_fixes:1
+======================================================================
+passing:0  failing:1  total:1
+======================================================================

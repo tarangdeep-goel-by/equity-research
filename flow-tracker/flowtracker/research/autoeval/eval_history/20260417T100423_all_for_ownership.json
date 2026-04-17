@@ -1,0 +1,89 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T10:04:23.883773+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "fmcg": {
+      "agent": "ownership",
+      "stock": "HINDUNILVR",
+      "sector": "FMCG",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Deeply analyzes the FII to DII handoff and correctly identifies the passive vs active nature of the MF holdings. Could have explored historical royalty extraction trends slightly more."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent internal logic, explicitly reconciling apparent contradictions (e.g., structural DII accumulation vs tactical MF trimming) in a dedicated section."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major ownership dimensions well, but leaves the critical MNC royalty cap issue as an open question instead of exhausting available tools to find it."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear 'Mixed' verdict with distinct structural (bullish) and tactical (cautious) timeframes, though lack of definitive royalty data slightly dilutes the risk assessment."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Perfectly applies the MNC-subsidiary FMCG framework, correctly interpreting the frozen 61.9% promoter stake and zero pledge as structural norms rather than active signals."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawlessly handles data limitations, explicitly calling out the historical mcap mismatch for LIC's stake and the 1-month pipeline flaw in MF velocity data."
+        },
+        "tool_use_discipline": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Good tool use overall, correctly utilizing the calculate tool and handling data gaps, but missed calling the 'filings' section to resolve the royalty question (noted in log as 'deferred')."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "Log shows 30 turns, which exceeds the >20 turn threshold for an F grade, though the 71.9% cache hit rate kept the cost at $0.60. Driven by 7 sequential, unbatched calculate calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Mandatory Metrics Status",
+          "issue": "Agent deferred the royalty cap check to 'web research' because it only checked concall_insights and failed to call the filings section.",
+          "suggestion": "Explicitly instruct the agent to call `get_company_context(section='filings')` when investigating related-party transactions or royalty caps for MNC subsidiaries."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit",
+          "issue": "Agent executed 7 separate `calculate` tool calls sequentially across 7 turns (Turns 21-27), driving total turns to 30.",
+          "suggestion": "Instruct the agent to batch independent tool calls (like multiple calculations) into a single turn to improve execution efficiency."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Section 4: Mutual Fund Conviction",
+          "issue": "The `mf_changes` data returned all 61 schemes as `new_entry` with `prev_value_cr: null`, indicating the pipeline only has 1 month of data and cannot compute velocity.",
+          "suggestion": "Backfill the MF holdings database to include at least 2-3 months of historical data so the `mf_changes` endpoint can accurately calculate month-over-month velocity."
+        }
+      ],
+      "strengths": [
+        "Superb application of the MNC-subsidiary archetype, correctly interpreting zero pledge and lack of promoter buying as structural features rather than signals.",
+        "Excellent handling of data pipeline anomalies, specifically identifying the 1-month MF velocity flaw and falling back to QoQ shareholding data.",
+        "Strong decomposition of MF holdings into active vs passive, highlighting the concentration risk in Nifty ETFs."
+      ],
+      "summary": "This is a highly sophisticated ownership report that perfectly applies the MNC-subsidiary framework and brilliantly handles data pipeline anomalies. The primary gap is the failure to check company filings for royalty cap revisions, leaving a critical MNC risk as an open question. Additionally, the agent's execution was highly inefficient, using 30 turns largely due to unbatched sequential calculator calls.",
+      "report_length": 30281,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 48.958202000008896,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Deeply analyzes the FII to DII handoff and correctly identifies the passive vs active nature of the MF holdings. Could have explored historical royalty extraction trends slightly more.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent internal logic, explicitly reconciling apparent contradictions (e.g., structural DII accumulation vs tactical MF trimming) in a dedicated section.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major ownership dimensions well, but leaves the critical MNC royalty cap issue as an open question instead of exhausting available tools to find it.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear 'Mixed' verdict with distinct structural (bullish) and tactical (cautious) timeframes, though lack of definitive royalty data slightly dilutes the risk assessment.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Perfectly applies the MNC-subsidiary FMCG framework, correctly interpreting the frozen 61.9% promoter stake and zero pledge as structural norms rather than active signals.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawlessly handles data limitations, explicitly calling out the historical mcap mismatch for LIC's stake and the 1-month pipeline flaw in MF velocity data.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Good tool use overall, correctly utilizing the calculate tool and handling data gaps, but missed calling the 'filings' section to resolve the royalty question (noted in log as 'deferred').\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"Log shows 30 turns, which exceeds the >20 turn threshold for an F grade, though the 71.9% cache hit rate kept the cost at $0.60. Driven by 7 sequential, unbatched calculate calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Mandatory Metrics Status\",\n      \"issue\": \"Agent deferred the royalty cap check to 'web research' because it only checked concall_insights and failed to call the filings section.\",\n      \"suggestion\": \"Explicitly instruct the agent to call `get_company_context(section='filings')` when investigating related-party transactions or royalty caps for MNC subsidiaries.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit\",\n      \"issue\": \"Agent executed 7 separate `calculate` tool calls sequentially across 7 turns (Turns 21-27), driving total turns to 30.\",\n      \"suggestion\": \"Instruct the agent to batch independent tool calls (like multiple calculations) into a single turn to im"
+    }
+  }
+}

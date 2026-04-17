@@ -1,0 +1,9 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T150715.log
+AutoEval (agent-first): agent=technical sectors=['real_estate']
+Target: grade_numeric >= 90
+
+--- technical / GODREJPROP (real_estate) ---
+  Report: 23072 chars
+  Evidence log loaded (2 lines)
+  Grading with Gemini...
+ERROR: google-genai not installed. Run: uv sync --extra autoeval

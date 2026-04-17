@@ -1,0 +1,88 @@
+{
+  "sector": "all_for_risk",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T09:01:53.938736+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "metals": {
+      "agent": "risk",
+      "stock": "VEDL",
+      "sector": "Diversified metals",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional identification of the 'dominant risk axis' (promoter balance-sheet entanglement) rather than just defaulting to commodity cycles. The margin call mechanics breakdown and LTV trigger estimation are institutional grade."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Flawless narrative flow. The tension between clean standalone accounting (M-Score) and toxic governance/parent-leverage is perfectly articulated without contradiction."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major bases (macro, operational, governance, financial), but misses a detailed standalone debt maturity schedule, which is critical for a highly leveraged entity facing parent liquidity issues."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Highly actionable pre-mortem bear case with specific price triggers (\u20b9350-510) and clear leading indicators (VRL $217M ICL repayment, LME zinc levels)."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Excellent application of metals cycle frameworks (capex-at-peak, incremental ROCE, CBAM exposure) and holding company discount/governance frameworks."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Heavily cited and cross-referenced. The agent explicitly caught a tool error (depreciation mapped to EBITDA) and manually corrected it using raw PBT + Interest + Dep math."
+        },
+        "tool_use_discipline": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect discipline. Caught the `get_quality_scores(metals)` error, bypassed it with the `calculate` tool (Turn 27), and accurately reported compliance gates for missing metrics."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Failed the efficiency test. Took 33 turns (well over the 20-turn limit), though the 61.4% cache hit rate kept the actual cost to a moderate $0.81."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Financial Risk",
+          "issue": "The `get_quality_scores(metals)` tool incorrectly maps depreciation to the EBITDA field.",
+          "suggestion": "Fix the backend data mapping for the metals quality score endpoint to correctly calculate EBITDA (PBT + Interest + Depreciation) instead of just returning Depreciation."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "General Execution",
+          "issue": "Agent took 33 turns, largely due to sequential, single-operation calls to the `calculate` tool and repeated attempts to find missing data.",
+          "suggestion": "Update system prompt to encourage batching calculations where possible and to set a hard limit on search retries for missing niche metrics (like CBAM exposure) to prevent runaway turn counts."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Financial Risk",
+          "issue": "Missing standalone debt maturity schedule for a highly leveraged company.",
+          "suggestion": "Add an instruction to the risk agent: 'For companies with Net Debt/EBITDA > 1.5x, explicitly extract and analyze the debt maturity profile to assess immediate refinancing/liquidity risk.'"
+        }
+      ],
+      "strengths": [
+        "Masterful synthesis of the VRL parent debt issue and how it forces VEDL's dividend policy, creating a structural earnings floor test.",
+        "Exceptional tool discipline in identifying a pipeline data error and manually calculating the correct EBITDA to ensure accurate leverage ratios."
+      ],
+      "summary": "This is an institutional-quality risk report that perfectly captures the nuanced, governance-heavy risk profile of Vedanta, though it was generated highly inefficiently. The analytical depth is outstanding\u2014particularly the margin-call trigger estimation and the framing of dividends as a parent-company lifeline\u2014making it immediately useful for a portfolio manager.",
+      "report_length": 35788,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 50.2594911250053,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional identification of the 'dominant risk axis' (promoter balance-sheet entanglement) rather than just defaulting to commodity cycles. The margin call mechanics breakdown and LTV trigger estimation are institutional grade.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Flawless narrative flow. The tension between clean standalone accounting (M-Score) and toxic governance/parent-leverage is perfectly articulated without contradiction.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major bases (macro, operational, governance, financial), but misses a detailed standalone debt maturity schedule, which is critical for a highly leveraged entity facing parent liquidity issues.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Highly actionable pre-mortem bear case with specific price triggers (\u20b9350-510) and clear leading indicators (VRL $217M ICL repayment, LME zinc levels).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Excellent application of metals cycle frameworks (capex-at-peak, incremental ROCE, CBAM exposure) and holding company discount/governance frameworks.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Heavily cited and cross-referenced. The agent explicitly caught a tool error (depreciation mapped to EBITDA) and manually corrected it using raw PBT + Interest + Dep math.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect discipline. Caught the `get_quality_scores(metals)` error, bypassed it with the `calculate` tool (Turn 27), and accurately reported compliance gates for missing metrics.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Failed the efficiency test. Took 33 turns (well over the 20-turn limit), though the 61.4% cache hit rate kept the actual cost to a moderate $0.81.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Financial Risk\",\n      \"issue\": \"The `get_quality_scores(metals)` tool incorrectly maps depreciation to the EBITDA field.\",\n      \"suggestion\": \"Fix the backend data mapping for the metals quality score endpoint to correctly calculate EBITDA (PBT + Interest + Depreciation) instead of just returning Depreciation.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"General Execution\",\n      \"issue\": \"Agent took 33 turns, largely due to sequential, single-operation calls to the `calculate` tool and repeated attempts to find missing data.\",\n      \"suggestion\": \"Update system prompt to encourage batching calculations where possible and to set a hard limit on search ret"
+    }
+  }
+}

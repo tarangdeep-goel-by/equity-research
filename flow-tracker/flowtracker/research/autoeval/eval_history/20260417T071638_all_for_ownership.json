@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T07:16:38.756037+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "real_estate": {
+      "agent": "ownership",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Excellent depth in analyzing the QIP structural break and institutional handoff, though it misses exploring the implications of the AIF category dropping to near zero."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Masterful cross-section reconciliation explicitly resolving apparent contradictions between macro delivery drops and quarterly structural accumulation. Perfect score justified by the dedicated reconciliation table."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Covers all mandatory metrics well, but misses a deeper breakdown of the 'Public' category which absorbed a massive +7.18pp during the QIP."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Clear bull/bear framework and catalysts, though the 'Mixed-to-Bullish' signal could provide more specific valuation triggers for the DII breakthrough zone risk."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawlessly applies the RE conglomerate archetype and DII breakthrough zone frameworks, perfectly contextualizing the zero pledge. Perfect score justified by deep sector-specific nuance."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Superb handling of the historical mcap mismatch warning, though it relied on concalls rather than subsidiary filings for SPV economic interest."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent use of the calculator's timestamp discipline (Turns 19-26), but slightly marred by defaulting to 'expr' instead of named operations for basic math."
+        },
+        "cost_efficiency": {
+          "grade": "D",
+          "numeric": 60,
+          "rationale": "Strictly penalized for exceeding the 20-turn limit (33 turns total), which slows down the pipeline significantly, despite the reasonable $0.60 cost and high 77.4% cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Mandatory Metrics (SPV true economic interest)",
+          "issue": "Agent failed to extract detailed SPV economic interest because it only checked concall_insights and shareholder_detail.",
+          "suggestion": "Instruct the agent to check get_company_context(section='subsidiaries') or 'filings' when extracting SPV/JV economic interest for real estate developers."
+        }
+      ],
+      "strengths": [
+        "Exceptional handling of the historical market cap mismatch warning, demonstrating high data discipline by reporting historical flows in percentage points rather than inaccurate Rupee values.",
+        "Outstanding cross-section reconciliation that proactively resolves apparent contradictions between short-term delivery compression and long-term institutional accumulation."
+      ],
+      "summary": "This is an institutional-quality ownership report that brilliantly contextualizes GODREJPROP's QIP dilution and institutional handoff. The application of real estate-specific frameworks, particularly regarding the conglomerate archetype and zero pledge, is flawless. The only notable drawback is the highly inefficient execution (33 turns) caused by sequential calculator calls, though the analytical output remains top-tier.",
+      "report_length": 31226,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 46.07611283403821,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Excellent depth in analyzing the QIP structural break and institutional handoff, though it misses exploring the implications of the AIF category dropping to near zero.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Masterful cross-section reconciliation explicitly resolving apparent contradictions between macro delivery drops and quarterly structural accumulation. Perfect score justified by the dedicated reconciliation table.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Covers all mandatory metrics well, but misses a deeper breakdown of the 'Public' category which absorbed a massive +7.18pp during the QIP.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Clear bull/bear framework and catalysts, though the 'Mixed-to-Bullish' signal could provide more specific valuation triggers for the DII breakthrough zone risk.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawlessly applies the RE conglomerate archetype and DII breakthrough zone frameworks, perfectly contextualizing the zero pledge. Perfect score justified by deep sector-specific nuance.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Superb handling of the historical mcap mismatch warning, though it relied on concalls rather than subsidiary filings for SPV economic interest.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent use of the calculator's timestamp discipline (Turns 19-26), but slightly marred by defaulting to 'expr' instead of named operations for basic math.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"D\",\n      \"numeric\": 60,\n      \"rationale\": \"Strictly penalized for exceeding the 20-turn limit (33 turns total), which slows down the pipeline significantly, despite the reasonable $0.60 cost and high 77.4% cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Mandatory Metrics (SPV true economic interest)\",\n      \"issue\": \"Agent failed to extract detailed SPV economic interest because it only checked concall_insights and shareholder_detail.\",\n      \"suggestion\": \"Instruct the agent to check get_company_context(section='subsidiaries') or 'filings' when extracting SPV/JV economic interest for real estate developers.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional handling of the historical market cap mismatch warning, demonstrating high data discipline by reporting historical flows in percentage points rather than inaccurate Rupee values.\",\n    \"Outstanding cross-section reconciliation that proactively resolves apparent contradictions between short-term delivery compression and lon"
+    }
+  }
+}

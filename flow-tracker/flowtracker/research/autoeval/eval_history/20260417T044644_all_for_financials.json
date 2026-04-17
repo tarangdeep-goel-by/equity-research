@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T04:46:44.400077+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "bfsi"
+  ],
+  "results": {
+    "bfsi": {
+      "agent": "financials",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "B+",
+      "grade_numeric": 87,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional breakdown of ROA quality and base-effect distortions, though it could have deeper analysis on the specific drivers of fee income growth."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Flawless logic in adjusting for one-offs (wage settlement, SR revaluation), though including ROCE in the charts/tables only to repeatedly disclaim its relevance creates minor narrative friction."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Comprehensive core banking coverage, but the absence of Q3FY26 asset quality data and the complete omission of listed subsidiaries (SBI Life, SBI Cards) are notable gaps."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Highly actionable catalysts and risks, but misses the valuation impact of SBI's already-listed subsidiaries by failing to conduct an SOTP analysis."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Perfect application of Bank DuPont, CASA/NIM spread, and credit costs; however, it could have included a deeper look at the specific composition of the loan book (retail vs corporate mix)."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Rigorous citation and excellent use of the calculate tool, though relying on narrative extraction for NNPA/PCR introduces slight risk of pulling point-in-time rather than structural figures."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Disciplined in surfacing the GNPA data gap and using calculate for math, but the execution was highly sequential (e.g., 8 separate calculate calls) rather than optimized."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Failed the cost efficiency threshold with 51 turns and $1.01 cost, driven by excessive sequential tool calls for calculations and concall drills."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Forward View & Valuation Framework",
+          "issue": "The agent highlights unlisted subsidiary monetization as a catalyst but completely misses valuing SBI's massive already-listed subsidiaries (SBI Life, SBI Cards) because it failed to call the `sotp` section of `get_valuation`.",
+          "suggestion": "Instruct the agent to explicitly call `get_valuation(section='sotp')` when covering banks or holding companies to ensure listed subsidiaries are factored into the valuation."
+        }
+      ],
+      "strengths": [
+        "Masterful decomposition of ROA and ROE, correctly identifying that profitability is driven by credit cost normalization and one-offs rather than structural NIM expansion.",
+        "Excellent handling of base-effect distortions in historical CAGRs (due to the FY18 loss year), providing a much more accurate picture of steady-state growth."
+      ],
+      "summary": "This is an institutional-quality fundamental analysis of the core banking business, featuring exceptional margin decomposition and risk identification. However, the report completely misses SBI's listed subsidiaries in its valuation, and the agent's execution was highly inefficient (51 turns, >$1.00 cost).",
+      "report_length": 42065,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 61.43710145901423,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional breakdown of ROA quality and base-effect distortions, though it could have deeper analysis on the specific drivers of fee income growth.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Flawless logic in adjusting for one-offs (wage settlement, SR revaluation), though including ROCE in the charts/tables only to repeatedly disclaim its relevance creates minor narrative friction.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Comprehensive core banking coverage, but the absence of Q3FY26 asset quality data and the complete omission of listed subsidiaries (SBI Life, SBI Cards) are notable gaps.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Highly actionable catalysts and risks, but misses the valuation impact of SBI's already-listed subsidiaries by failing to conduct an SOTP analysis.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Perfect application of Bank DuPont, CASA/NIM spread, and credit costs; however, it could have included a deeper look at the specific composition of the loan book (retail vs corporate mix).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Rigorous citation and excellent use of the calculate tool, though relying on narrative extraction for NNPA/PCR introduces slight risk of pulling point-in-time rather than structural figures.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Disciplined in surfacing the GNPA data gap and using calculate for math, but the execution was highly sequential (e.g., 8 separate calculate calls) rather than optimized.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Failed the cost efficiency threshold with 51 turns and $1.01 cost, driven by excessive sequential tool calls for calculations and concall drills.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 87\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Forward View & Valuation Framework\",\n      \"issue\": \"The agent highlights unlisted subsidiary monetization as a catalyst but completely misses valuing SBI's massive already-listed subsidiaries (SBI Life, SBI Cards) because it failed to call the `sotp` section of `get_valuation`.\",\n      \"suggestion\": \"Instruct the agent to explicitly call `get_valuation(section='sotp')` when covering banks or holding companies to ensure listed subsidiaries are factored into the valuation.\"\n    }\n  ],\n  \"strengths\": [\n    \"Masterful decomposition of ROA and ROE, correctly identifying that profitability is driven by credit cost normalization and one-offs rather than structural NIM expansion.\",\n    \"Excellent handling of base-effect"
+    }
+  }
+}

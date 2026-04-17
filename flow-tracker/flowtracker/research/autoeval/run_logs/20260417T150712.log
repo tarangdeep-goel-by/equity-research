@@ -1,0 +1,9 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T150712.log
+AutoEval (agent-first): agent=risk sectors=['pharma']
+Target: grade_numeric >= 90
+
+--- risk / SUNPHARMA (pharma) ---
+  Report: 38702 chars
+  Evidence log loaded (39 lines)
+  Grading with Gemini...
+ERROR: google-genai not installed. Run: uv sync --extra autoeval

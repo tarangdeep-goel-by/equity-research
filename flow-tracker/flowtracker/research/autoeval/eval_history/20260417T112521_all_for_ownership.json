@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T11:25:21.420396+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "platform"
+  ],
+  "results": {
+    "platform": {
+      "agent": "ownership",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "B+",
+      "grade_numeric": 86,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent decomposition of MF flows into active vs passive and deep dive into the PPFAS exit. However, it misses exploring the M&A/takeover vulnerability implications of a 0% promoter holding."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Explicitly and effectively reconciles conflicting signals (e.g., DII absorption vs falling delivery). Minor leap in assuming lack of block deals strictly means 'intraday selling pressure' without considering algorithmic VWAP execution."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all mandatory metrics and correctly flags the missing FII data. However, AIF and NRI categories are ignored after the initial pie chart despite being part of the capital structure."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear 'mixed' verdict with specific catalysts (Q4FY26 data). The final recommendation ('constructive medium-term view') is slightly vague and lacks specific valuation/price levels to watch."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Correctly highlights ESOP dilution, which is critical for tech platforms. Could be improved by linking the active manager exits more explicitly to platform-specific valuation ceilings (e.g., EV/GMV)."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong citations and correct use of tool data throughout. Minor flaw: introduces 'Swish $38M raise' which appears to be drawn from pre-training knowledge rather than the provided tool trace."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Good use of the calculate tool and proper drill-downs. However, it made a duplicate call for the exact same calculation (Turn 23 and Turn 28: '26.72 - 11.96') and called calculate 7 times sequentially."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "The agent took 31 turns, which exceeds the >20 turns threshold for an F grade, driven by multiple reasoning-only turns and sequential calculator calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "1. Ownership Structure",
+          "issue": "The `shareholder_detail` tool does not return named FII holders, preventing the agent from decomposing the 36.24% FII stake into active vs passive archetypes.",
+          "suggestion": "Enhance the `get_ownership` tool to pull FII named holders from NSE/BSE XBRL filings or a secondary data provider."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool-Use Discipline",
+          "issue": "The agent made duplicate calls to the calculate tool for the exact same expression (Turn 23 and Turn 28) and took 11 empty/reasoning turns.",
+          "suggestion": "Instruct the agent to review its tool history before making duplicate calculate calls, and to consolidate math operations where possible to save turns."
+        }
+      ],
+      "strengths": [
+        "Exceptional analysis of the PPFAS exit, correctly identifying it as a disproportionate signalling event despite its small absolute size.",
+        "Sophisticated reconciliation of conflicting signals (e.g., medium-term DII absorption vs short-term delivery deterioration)."
+      ],
+      "summary": "This is a highly analytical and well-reasoned ownership report that expertly dissects the FII-to-DII handoff and mutual fund conviction. The primary gap is operational rather than analytical, with the agent taking an inefficient 31 turns to complete the task, dragging down the overall score.",
+      "report_length": 30623,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 65.85868962504901,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent decomposition of MF flows into active vs passive and deep dive into the PPFAS exit. However, it misses exploring the M&A/takeover vulnerability implications of a 0% promoter holding.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Explicitly and effectively reconciles conflicting signals (e.g., DII absorption vs falling delivery). Minor leap in assuming lack of block deals strictly means 'intraday selling pressure' without considering algorithmic VWAP execution.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all mandatory metrics and correctly flags the missing FII data. However, AIF and NRI categories are ignored after the initial pie chart despite being part of the capital structure.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear 'mixed' verdict with specific catalysts (Q4FY26 data). The final recommendation ('constructive medium-term view') is slightly vague and lacks specific valuation/price levels to watch.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Correctly highlights ESOP dilution, which is critical for tech platforms. Could be improved by linking the active manager exits more explicitly to platform-specific valuation ceilings (e.g., EV/GMV).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong citations and correct use of tool data throughout. Minor flaw: introduces 'Swish $38M raise' which appears to be drawn from pre-training knowledge rather than the provided tool trace.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Good use of the calculate tool and proper drill-downs. However, it made a duplicate call for the exact same calculation (Turn 23 and Turn 28: '26.72 - 11.96') and called calculate 7 times sequentially.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"The agent took 31 turns, which exceeds the >20 turns threshold for an F grade, driven by multiple reasoning-only turns and sequential calculator calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 86\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"1. Ownership Structure\",\n      \"issue\": \"The `shareholder_detail` tool does not return named FII holders, preventing the agent from decomposing the 36.24% FII stake into active vs passive archetypes.\",\n      \"suggestion\": \"Enhance the `get_ownership` tool to pull FII named holders from NSE/BSE XBRL filings or a secondary data provider.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool-Use Discipline\",\n      \"issue\": \"The agent made duplicate calls to the calculate tool for the exact same expression "
+    }
+  }
+}

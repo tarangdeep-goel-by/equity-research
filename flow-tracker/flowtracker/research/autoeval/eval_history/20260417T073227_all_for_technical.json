@@ -1,0 +1,27 @@
+{
+  "sector": "all_for_technical",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T07:32:27.407932+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "real_estate"
+  ],
+  "results": {
+    "real_estate": {
+      "agent": "technical",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "ERR",
+      "grade_numeric": 0,
+      "parameters": {},
+      "issues": [],
+      "strengths": [],
+      "summary": "Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+      "report_length": 23072,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 39.34361479210202,
+      "run_skipped": true,
+      "raw_gemini_response": "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+    }
+  }
+}

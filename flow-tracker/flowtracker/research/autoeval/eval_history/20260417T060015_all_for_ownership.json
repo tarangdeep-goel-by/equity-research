@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-17T06:00:15.838393+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "it_services": {
+      "agent": "ownership",
+      "stock": "TCS",
+      "sector": "IT services",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Explicit justification for perfect score: The deduction of buyback participation explaining the promoter stake drop, combined with the structural explanation for zero insider buying, represents institutional-grade insight that requires no improvement."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Explicit justification for perfect score: The explicit reconciliation section perfectly resolves timeframe mismatches (11-quarter structural vs 4-week tactical) without any logical leaps."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "While comprehensive, it lacks a comparison of TCS's FII exit velocity against its direct peers (INFY, HCLTECH) to definitively prove the passive rebalancing thesis."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "The thesis is strong, but the link between the AI data center capex and buyback compression could be quantified (e.g., estimating the FCF hit)."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Good use of IT frameworks, but could have deeper analysis on how the specific nature of TCS's ESOP trust compares to typical IT sector dilution rates."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Explicit justification for perfect score: The agent strictly followed the timestamp discipline rule, echoing the HISTORICAL_MCAP_MISMATCH warning verbatim and refusing to present flawed \u20b9Cr flow conversions."
+        },
+        "tool_use_discipline": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong discipline in surfacing gaps, but initially misused the `pct_of` operation in the calculate tool before self-correcting to `expr`, leading to wasted calls (Turns 18-20 vs 26-27)."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "At 30 turns, the execution was highly inefficient and exceeded the 20-turn threshold, though a strong cache hit rate (78.7%) kept the final cost at a reasonable $0.60."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "1.3 Named Holders",
+          "issue": "The `shareholder_detail` tool fails to return FII names or ESOP trust entities, returning only domestic institutions (LIC, SBI ETF).",
+          "suggestion": "Expand the ownership data pipeline to parse FII and Trust categories from SEBI/NSE shareholding disclosures to enable active vs. passive foreign ownership decomposition."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "2.1 The FII Exit",
+          "issue": "The agent hypothesizes that the FII exit is due to MSCI rebalancing but does not pull peer shareholding data to verify if this was a sector-wide passive exit.",
+          "suggestion": "Instruct the agent to use `get_peer_sector` or `get_ownership` on a key peer (e.g., INFY) to validate sector-wide FII flow hypotheses."
+        }
+      ],
+      "strengths": [
+        "Brilliant deduction that the FY24 promoter stake drop was a buyback tender rather than an open-market sale, correctly contextualizing it within the 75% MPS ceiling.",
+        "Perfect adherence to timestamp discipline, correctly echoing the HISTORICAL_MCAP_MISMATCH warning instead of publishing flawed historical \u20b9Cr flow conversions."
+      ],
+      "summary": "This is an exceptionally well-reasoned report that correctly identifies structural constraints (MPS ceiling) and deduces corporate actions (buyback tenders) from raw ownership data. The primary gap is the pipeline's inability to surface FII names, which prevents a definitive decomposition of the FII exit. While the analytical logic is institutional-grade, the agent's execution was highly inefficient, requiring 30 turns due to initial calculator tool missteps before self-correcting.",
+      "report_length": 32144,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 60.64614579197951,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Explicit justification for perfect score: The deduction of buyback participation explaining the promoter stake drop, combined with the structural explanation for zero insider buying, represents institutional-grade insight that requires no improvement.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Explicit justification for perfect score: The explicit reconciliation section perfectly resolves timeframe mismatches (11-quarter structural vs 4-week tactical) without any logical leaps.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"While comprehensive, it lacks a comparison of TCS's FII exit velocity against its direct peers (INFY, HCLTECH) to definitively prove the passive rebalancing thesis.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"The thesis is strong, but the link between the AI data center capex and buyback compression could be quantified (e.g., estimating the FCF hit).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Good use of IT frameworks, but could have deeper analysis on how the specific nature of TCS's ESOP trust compares to typical IT sector dilution rates.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Explicit justification for perfect score: The agent strictly followed the timestamp discipline rule, echoing the HISTORICAL_MCAP_MISMATCH warning verbatim and refusing to present flawed \u20b9Cr flow conversions.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong discipline in surfacing gaps, but initially misused the `pct_of` operation in the calculate tool before self-correcting to `expr`, leading to wasted calls (Turns 18-20 vs 26-27).\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"At 30 turns, the execution was highly inefficient and exceeded the 20-turn threshold, though a strong cache hit rate (78.7%) kept the final cost at a reasonable $0.60.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"1.3 Named Holders\",\n      \"issue\": \"The `shareholder_detail` tool fails to return FII names or ESOP trust entities, returning only domestic institutions (LIC, SBI ETF).\",\n      \"suggestion\": \"Expand the ownership data pipeline to parse FII and Trust categories from SEBI/NSE shareholding disclosures to enable active vs. passive foreign ownership decomposition.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"2.1 The FII Exit\",\n      \"issue\": \"The agent hypothesizes that the FII exit is due to MSCI rebalancing but does not pull peer shareholding data to verify if this was a sector-wide passive exit.\","
+    }
+  }
+}
