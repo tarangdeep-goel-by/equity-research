@@ -9,7 +9,7 @@ The most common valuation error in Indian chemicals is a PE-only triangle. Speci
 | **CDMO / CRAMS** | EV/EBITDA | P/S (rapid-expansion names) | Trailing PE (lumpy commercial-phase revenue), peer PE vs specialty |
 | **Agrochem** | EV/EBITDA | PE | PE on monsoon-normal year extrapolated into drought-risk year |
 | **Commodity bulk** | EV/EBITDA | P/B (cycle-trough) | DCF (cycle-impossible), PE on peak-spread year |
-| **Fluorochem** | EV/EBITDA | PE + PLI-uplift premium | PE on HFC-phase-out peak pricing |
+| **Fluorochem** | EV/EBITDA | PE + HFO-transition capex premium | PE on HFC-phase-out peak pricing |
 | **Pigments / dyes** | EV/EBITDA | PE | Global-peer PE without REACH-registration adjustment |
 | **Custom synthesis** | EV/EBITDA | DCF on cash-generative 10Y+ molecule pipeline | PE on single-molecule spike year |
 

@@ -7,9 +7,9 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **Specialty** | Molecule IP × price × qualified-customer volume | 18-28% | 150-200 | customer-stickiness, mix-shift |
 | **CDMO / CRAMS** | Contract-manufacturing pipeline of innovator molecules | 20-30% | 180-250 | innovator-client retention, commercial-vs-development mix |
-| **Agrochem** | Active-ingredient portfolio × formulation leverage × B2F seasonality | 14-22% | 120-180 | AI/FMLG split, monsoon/export cycle |
+| **Agrochem** | Active-ingredient portfolio × formulation leverage × B2F seasonality | 12-22% (10-12% in deep-destock years like FY24-25) | 120-180 | AI/FMLG split, monsoon/export cycle |
 | **Commodity bulk** | Feedstock spread × process efficiency × cycle position | 8-14% | 80-120 | utilization, input-output pass-through |
-| **Fluorochem** | Specialty-mass hybrid; HFC/HFO portfolio + refrigerant-regulation cycle | 20-32% | 140-200 | Montreal Protocol phase-down, PLI capex |
+| **Fluorochem** | Specialty-mass hybrid; HFC/HFO portfolio + refrigerant-regulation cycle | 20-32% | 140-200 | Montreal Protocol phase-down, HFO capex |
 | **Pigments / dyes** | Export-led formulation + textile/auto demand cycle | 12-20% | 130-190 | global textile cycle, REACH registration |
 | **Custom synthesis** | Multi-step bespoke intermediates for pharma/agrochem innovators | 22-32% | 150-220 | process-complexity moat, single-molecule risk |
 

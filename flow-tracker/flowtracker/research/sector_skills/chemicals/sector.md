@@ -40,7 +40,7 @@ Cross-check via `get_market_context(section='fii_dii_flows')` and `section='fii_
 ### Structural Shifts — Beyond the Cycle
 Cyclical reads miss the slow-moving structural shifts reshaping chemicals economics over 3-5 years:
 - **China+1** — structural not cyclical tailwind for Indian specialty and CRAMS; innovator re-sourcing out of China is multi-year and outlasts any single China-policy shock. The tailwind is narrower than the 2021-22 thesis suggested — it applies to specific complex-synthesis sub-segments, not across commodity chemicals.
-- **PLI scheme** — specialty chemicals and fluorochem are PLI-notified; approved capex carries production-linked incentive over 5-6 years. Scheme-qualified capex earns a valuation premium vs non-qualified.
+- **PLI scheme — scope-specific, not blanket** — the notified PLI schemes relevant to chemicals are **Pharma Bulk Drugs / KSMs / APIs** (DoP, 2020) and **Medical Devices**, which benefit pharma-intermediate specialty and custom-synthesis players with API/KSM exposure. A dedicated PLI for broad specialty chemicals or fluorochemicals has been industry-proposed but is **not** notified as of FY26; do not assume PLI incentive for generic specialty or fluorochem capex. Only scheme-qualified capex (pharma-KSM/API approvals with explicit DoP notification) earns the incentive-uplift premium; verify scheme-qualification at the molecule/plant level rather than assuming sub-sector-wide coverage.
 - **Green chemistry / continuous-flow manufacturing** — capex cycle for process intensification, solvent recovery, and carbon-footprint reduction. Multi-year capex programme, compresses ROCE during build, expands gross margin and reduces regulatory-shutdown risk in steady state.
 - **Regulatory tightening globally** — REACH restriction-list extensions, TSCA enforcement, and USFDA cGMP standards have all tightened over 3-5Y. Compliant Indian players gain share from non-compliant regional competitors.
 - **Backward integration to KSM** — post-FY20 China disruption, Indian specialty has collectively capex'd into earlier stages of the synthesis chain; sector-wide KSM self-sufficiency has risen 10-15pp in 4-5 years.
@@ -67,6 +67,6 @@ If `get_peer_sector(section='sector_overview')` returns a sparse peer set (fewer
 ### Open Questions — Chemicals Sector-Specific
 - "Where is each relevant sub-type (specialty / CRAMS / agrochem / fluorochem / commodity) in its cycle, and are the phases aligned or divergent?"
 - "What is the current China utilization and NPC index trajectory, and is it pointing to export-dumping pressure or global tightening?"
-- "What share of the sub-sector's incremental capex is PLI-scheme qualified, and how does that reshape the valuation premium?"
+- "What share of the sub-sector's incremental capex is PLI-scheme qualified under the Pharma Bulk Drugs/KSM/API scheme (not assumed for generic specialty or fluorochem, which have no notified PLI), and how does verified scheme-qualification reshape the valuation premium?"
 - "Are any REACH / TSCA / USFDA regulatory actions in draft or enforcement that would reshape the export mix or molecule-portfolio economics?"
 - "For the sub-type under review, what is the EBITDA-margin percentile of the stock within the peer set, and what drivers explain the premium or discount?"

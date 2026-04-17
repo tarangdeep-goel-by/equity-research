@@ -59,4 +59,4 @@ When `get_quality_scores(section='chemicals')` returns missing utilization, sing
 - "What share of the largest plant contributes to consolidated EBITDA, and what ETP / environmental compliance events have been disclosed over the last 2 years?"
 - "Is there any CPCB / SPCB show-cause or closure notice active at any operating plant, and what is the remediation timeline?"
 - "What percentage of KSM / intermediate needs remains China-dependent after disclosed backward-integration capex commissions?"
-- "For fluorochem: where does the portfolio sit on the HFC-to-HFO transition curve, and is the PLI-scheme qualification secured for the relevant capex blocks?"
+- "For fluorochem: where does the portfolio sit on the HFC-to-HFO transition curve, and what is the capex-return profile (no dedicated PLI for fluorochem is notified as of FY26, so model returns on unincentivised HFO capex)?"
