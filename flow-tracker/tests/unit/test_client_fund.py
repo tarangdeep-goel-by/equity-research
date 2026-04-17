@@ -173,6 +173,60 @@ class TestFetchValuationSnapshot:
         assert snap.debt_to_equity == 0.5  # 50/100
         assert snap.fifty_two_week_high == 900.0
 
+    def test_cash_flow_fallback_from_statement(self):
+        """When info lacks freeCashflow/operatingCashflow (typical for NSE),
+        fall back to get_cash_flow(freq='yearly') with FreeCashFlow /
+        OperatingCashFlow rows."""
+        mock_ticker = MagicMock()
+        mock_ticker.info = {
+            "quoteType": "EQUITY",
+            "currentPrice": 100.0,
+            "freeCashflow": None,
+            "operatingCashflow": None,
+        }
+        # 1e9 rupees == 100 crore
+        cash_flow_df = pd.DataFrame(
+            {pd.Timestamp("2025-03-31"): [1e9, 2e9]},
+            index=["FreeCashFlow", "OperatingCashFlow"],
+        )
+        mock_ticker.get_cash_flow.return_value = cash_flow_df
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            snap = client.fetch_valuation_snapshot("RELIANCE")
+        assert snap.free_cash_flow == 100.0  # 1e9 / 1e7
+        assert snap.operating_cash_flow == 200.0  # 2e9 / 1e7
+
+    def test_peg_ratio_falls_back_to_trailing(self):
+        """pegRatio is missing for many NSE tickers; trailingPegRatio is the
+        documented fallback."""
+        mock_ticker = MagicMock()
+        mock_ticker.info = {
+            "quoteType": "EQUITY",
+            "currentPrice": 100.0,
+            "pegRatio": None,
+            "trailingPegRatio": 2.75,
+        }
+        mock_ticker.get_cash_flow.return_value = pd.DataFrame()
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            snap = client.fetch_valuation_snapshot("ITC")
+        assert snap.peg_ratio == 2.75
+
+    def test_peg_ratio_prefers_primary_over_trailing(self):
+        """When both pegRatio and trailingPegRatio are present, keep pegRatio."""
+        mock_ticker = MagicMock()
+        mock_ticker.info = {
+            "quoteType": "EQUITY",
+            "currentPrice": 100.0,
+            "pegRatio": 0.82,
+            "trailingPegRatio": 2.75,
+        }
+        mock_ticker.get_cash_flow.return_value = pd.DataFrame()
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            snap = client.fetch_valuation_snapshot("RELIANCE")
+        assert snap.peg_ratio == 0.82
+
 
 class TestTickerCache:
     """Test _ticker cache with 5-minute TTL."""
