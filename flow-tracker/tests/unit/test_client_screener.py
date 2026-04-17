@@ -200,6 +200,164 @@ class TestParseAnnualFinancials:
         assert result == []
 
 
+class TestOperatingProfitAndExpensesDerivation:
+    """
+    Regression — Screener's Data Sheet tab has NO 'Operating Profit' or
+    'Expenses' aggregate rows (those live in the 'Profit & Loss' tab as
+    Excel formulas that openpyxl returns as None with data_only=True).
+    The parser must DERIVE these from the component rows instead of
+    label-matching them, and must match Screener's actual Data Sheet
+    labels for the expense subcategories (not the aliases the old
+    parser used).
+    """
+
+    def test_operating_profit_populated_and_equals_ebit(
+        self, screener_client, golden_excel
+    ):
+        """operating_profit is populated as EBIT (= PBT + Interest)."""
+        results = screener_client.parse_annual_financials("SBIN", golden_excel)
+        populated = [
+            r
+            for r in results
+            if r.operating_profit is not None
+            and r.profit_before_tax is not None
+            and r.interest is not None
+        ]
+        assert populated, "operating_profit never populated — parser regressed"
+        for r in populated:
+            expected_ebit = r.profit_before_tax + r.interest
+            assert abs(r.operating_profit - expected_ebit) < 0.01, (
+                f"FY{r.fiscal_year_end}: operating_profit={r.operating_profit} "
+                f"!= PBT+Interest={expected_ebit}"
+            )
+
+    def test_operating_profit_not_equal_depreciation(
+        self, screener_client, golden_excel
+    ):
+        """
+        Safeguard against the E1 bug shape: if operating_profit were None
+        and a consumer computed EBITDA as `(op or 0) + dep`, EBITDA would
+        silently equal depreciation. The populated op must differ from dep
+        wherever both are present.
+        """
+        results = screener_client.parse_annual_financials("SBIN", golden_excel)
+        for r in results:
+            if r.operating_profit is None or r.depreciation is None:
+                continue
+            assert (
+                abs(r.operating_profit - r.depreciation) > 0.01
+                or r.depreciation == 0
+            ), f"FY{r.fiscal_year_end}: op==dep regression"
+
+    def test_total_expenses_populated_and_matches_identity(
+        self, screener_client, golden_excel
+    ):
+        """total_expenses = revenue - operating_profit - depreciation + other_income."""
+        results = screener_client.parse_annual_financials("SBIN", golden_excel)
+        populated = [
+            r
+            for r in results
+            if r.total_expenses is not None
+            and r.revenue is not None
+            and r.operating_profit is not None
+        ]
+        assert populated, "total_expenses never populated — parser regressed"
+        for r in populated:
+            expected = (
+                r.revenue
+                - r.operating_profit
+                - (r.depreciation or 0)
+                + (r.other_income or 0)
+            )
+            assert abs(r.total_expenses - expected) < 0.01
+
+    def test_operating_profit_without_pbt_is_none(self, screener_client):
+        """When PBT is missing the derivation yields None, not 0."""
+        import datetime as _dt
+        import io
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        wb.active.title = "Data Sheet"
+        ws = wb["Data Sheet"]
+        # Minimal sections so the parser's section-scan finds the P&L block.
+        ws.append(["PROFIT & LOSS"])
+        ws.append(["Report Date", _dt.datetime(2025, 3, 31)])
+        ws.append(["Sales", 1000.0])
+        ws.append(["Other Income", 10.0])
+        # Deliberately omit Profit before tax + Interest
+        ws.append(["Depreciation", 50.0])
+        ws.append(["BALANCE SHEET"])
+        ws.append(["CASH FLOW:"])
+        ws.append(["PRICE:", 100.0])
+        ws.append(["DERIVED:"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        wb.close()
+        results = screener_client.parse_annual_financials("SBIN", buf.getvalue())
+        for r in results:
+            assert r.operating_profit is None, (
+                f"Expected None when PBT absent, got {r.operating_profit}"
+            )
+            assert r.total_expenses is None
+
+
+class TestExpenseComponentLabels:
+    """
+    Regression — the parser historically used the labels
+    'Power & Fuel Cost', 'Other Manufacturing Expenses', and
+    'Selling and Admin Expenses', which do NOT match Screener's
+    actual Data Sheet rows ('Power and Fuel', 'Other Mfr. Exp',
+    'Selling and admin'). Strict-equality label matching meant
+    100% NULL in production for 4,276 historical records.
+    """
+
+    def test_other_mfr_exp_populated(self, screener_client, golden_excel):
+        results = screener_client.parse_annual_financials("SBIN", golden_excel)
+        assert any(r.other_mfr_exp is not None for r in results), (
+            "Other Mfr. Exp label mismatch regression"
+        )
+
+    def test_selling_and_admin_populated(self, screener_client, golden_excel):
+        results = screener_client.parse_annual_financials("SBIN", golden_excel)
+        assert any(r.selling_and_admin is not None for r in results), (
+            "Selling and admin label mismatch regression"
+        )
+
+    def test_power_and_fuel_populated_when_present(self, screener_client):
+        """
+        SBIN (a bank) has no Power and Fuel expense, so its golden fixture
+        has None. Use a synthetic workbook with the row populated to prove
+        the label now matches Screener's actual 'Power and Fuel'.
+        """
+        import datetime as _dt
+        import io
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        wb.active.title = "Data Sheet"
+        ws = wb["Data Sheet"]
+        ws.append(["PROFIT & LOSS"])
+        ws.append(["Report Date", _dt.datetime(2025, 3, 31)])
+        ws.append(["Sales", 1000.0])
+        ws.append(["Power and Fuel", 25.0])
+        ws.append(["Profit before tax", 200.0])
+        ws.append(["Interest", 30.0])
+        ws.append(["BALANCE SHEET"])
+        ws.append(["CASH FLOW:"])
+        ws.append(["PRICE:", 100.0])
+        ws.append(["DERIVED:"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        wb.close()
+        results = screener_client.parse_annual_financials("SBIN", buf.getvalue())
+        assert results
+        r = results[0]
+        assert r.power_and_fuel == 25.0
+
+
 # ---------------------------------------------------------------------------
 # HTML: parse_quarterly_from_html
 # ---------------------------------------------------------------------------
