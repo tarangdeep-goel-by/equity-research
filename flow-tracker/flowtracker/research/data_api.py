@@ -2651,6 +2651,156 @@ class ResearchDataAPI:
         toc["_meta"] = meta
         return toc
 
+    _AR_SECTIONS = (
+        "chairman_letter",
+        "mdna",
+        "risk_management",
+        "auditor_report",
+        "corporate_governance",
+        "brsr",
+        "related_party",
+        "segmental",
+        "notes_to_financials",
+        "financial_statements",
+    )
+
+    def get_annual_report(
+        self,
+        symbol: str,
+        year: str | None = None,
+        section: str | None = None,
+        include_cross_year: bool = True,
+    ) -> dict:
+        """Get pre-extracted annual report insights from the vault.
+
+        Extraction runs via `flowtrack filings extract-ar`. Per-year JSONs land at
+        ~/vault/stocks/{SYMBOL}/fundamentals/annual_report_FY??.json
+        Cross-year narrative at annual_report_cross_year.json.
+
+        Without year or section: returns TOC — available years + which sections
+        were extracted per year + cross-year narrative summary. <5KB.
+
+        With year='FY25': TOC for that single year + section sizes.
+
+        With section: drills into that section across available years. Valid sections:
+        'chairman_letter', 'mdna', 'risk_management', 'auditor_report',
+        'corporate_governance', 'brsr', 'related_party', 'segmental',
+        'notes_to_financials', 'financial_statements'.
+
+        With year + section: single section for single year.
+        """
+        import json
+        from pathlib import Path
+
+        vault = Path.home() / "vault" / "stocks" / symbol.upper() / "fundamentals"
+        if not vault.exists():
+            return {
+                "error": f"No AR extractions found for {symbol}",
+                "hint": f"Run: flowtrack filings extract-ar -s {symbol}",
+            }
+
+        # Discover per-year JSONs on disk.
+        year_files = sorted(
+            vault.glob("annual_report_FY*.json"),
+            key=lambda p: p.stem,
+            reverse=True,
+        )
+        if not year_files:
+            return {
+                "error": f"No AR extractions found for {symbol}",
+                "hint": f"Run: flowtrack filings extract-ar -s {symbol}",
+            }
+
+        per_year: list[dict] = []
+        for f in year_files:
+            try:
+                per_year.append(json.loads(f.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, OSError):
+                continue
+
+        # Year filter.
+        if year:
+            wanted = year.upper().replace(" ", "")
+            matched = [y for y in per_year if (y.get("fiscal_year") or "").upper() == wanted]
+            if not matched:
+                available = [y.get("fiscal_year") for y in per_year]
+                return {
+                    "error": f"Year '{year}' not found in extractions",
+                    "available_years": available,
+                }
+            per_year = matched
+
+        # Section validation.
+        if section and section not in self._AR_SECTIONS:
+            return {
+                "error": f"Unknown section '{section}'",
+                "valid_sections": list(self._AR_SECTIONS),
+            }
+
+        # Cross-year narrative (optional include).
+        cross_data: dict = {}
+        cross_path = vault / "annual_report_cross_year.json"
+        if include_cross_year and cross_path.exists() and not (year or section):
+            try:
+                cross_data = json.loads(cross_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                cross_data = {}
+
+        # Drill-down: one section across (filtered) years.
+        if section:
+            slices = [
+                {"fiscal_year": y.get("fiscal_year"), section: y.get(section)}
+                for y in per_year
+            ]
+            return {
+                "symbol": symbol.upper(),
+                "section": section,
+                "years": slices,
+            }
+
+        # Default: TOC.
+        toc_years = []
+        for y in per_year:
+            populated = [
+                s for s in self._AR_SECTIONS
+                if y.get(s) and not isinstance(y.get(s), dict) or
+                (isinstance(y.get(s), dict) and y.get(s) and "section_not_found_or_empty" not in str(y.get(s)))
+            ]
+            # Tighter: only include sections whose payload has real content.
+            populated = []
+            for s in self._AR_SECTIONS:
+                v = y.get(s)
+                if not v:
+                    continue
+                if isinstance(v, dict) and v.get("status") == "section_not_found_or_empty":
+                    continue
+                if isinstance(v, dict) and "extraction_error" in v:
+                    continue
+                populated.append(s)
+            toc_years.append({
+                "fiscal_year": y.get("fiscal_year"),
+                "extraction_status": y.get("extraction_status", "unknown"),
+                "pages_chars": y.get("pages_chars"),
+                "sections_populated": populated,
+                "section_index": y.get("section_index", []),
+            })
+
+        toc = {
+            "symbol": symbol.upper(),
+            "years_on_file": [y["fiscal_year"] for y in toc_years],
+            "years": toc_years,
+            "available_sections": list(self._AR_SECTIONS),
+            "hint": (
+                "Call with section='<name>' to drill into one section across years "
+                "(e.g. section='auditor_report' for KAMs). Pass year='FY25' to narrow. "
+                "Valid sections in available_sections."
+            ),
+        }
+        if cross_data.get("narrative"):
+            toc["cross_year_narrative"] = cross_data["narrative"]
+            toc["cross_year_years"] = cross_data.get("years_analyzed", [])
+        return toc
+
     def get_sector_kpis(self, symbol: str, kpi_key: str | None = None) -> dict:
         """Extract sector-specific KPIs from concall data using canonical field names.
 
