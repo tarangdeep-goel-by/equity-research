@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from flowtracker.research.data_api import ResearchDataAPI
+from flowtracker.research.deck_extractor import _find_deck_pdfs
 from flowtracker.store import FlowStore
 
 
@@ -84,6 +85,34 @@ def _decks_without_topics() -> list[dict]:
     for q in qs:
         q.pop("slide_topics", None)
     return qs
+
+
+class TestFindDeckPDFs:
+    def test_returns_paths_not_tuples_and_newest_first(self, vault_home):
+        """Regression: _find_deck_pdfs used to return d[1] which tried to
+        subscript a PosixPath — crashed with TypeError at runtime."""
+        base = vault_home / "vault" / "stocks" / "TESTCO" / "filings"
+        for fy_q in ("FY25-Q1", "FY25-Q2", "FY26-Q1"):
+            d = base / fy_q
+            d.mkdir(parents=True)
+            (d / "investor_deck.pdf").write_bytes(b"fake")
+
+        result = _find_deck_pdfs("TESTCO", quarters=4)
+        assert len(result) == 3
+        assert all(isinstance(p, Path) for p in result)
+        assert result[0].parent.name == "FY26-Q1"
+        assert result[-1].parent.name == "FY25-Q1"
+
+    def test_truncates_to_requested_quarter_count(self, vault_home):
+        base = vault_home / "vault" / "stocks" / "TESTCO" / "filings"
+        for fy_q in ("FY25-Q1", "FY25-Q2", "FY25-Q3", "FY25-Q4", "FY26-Q1"):
+            d = base / fy_q
+            d.mkdir(parents=True)
+            (d / "investor_deck.pdf").write_bytes(b"fake")
+
+        result = _find_deck_pdfs("TESTCO", quarters=2)
+        assert len(result) == 2
+        assert [p.parent.name for p in result] == ["FY26-Q1", "FY25-Q4"]
 
 
 # --- Error paths --------------------------------------------------------------
