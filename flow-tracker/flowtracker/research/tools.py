@@ -2052,7 +2052,7 @@ async def calculate(args):
                 result = {"cagr_pct": round(cagr_pct, 2),
                           "calculation": f"({b} / {a}) ** (1 / {years}) - 1 = {cagr_pct / 100:.4f} = {cagr_pct:.2f}%"}
             else:
-                result = {"error": f"cagr requires a (start), b (end), and years (>0). Got a={a} b={b} years={years}"}
+                result = {"note": f"cagr requires a (start), b (end), and years (>0). Got a={a} b={b} years={years}. Pass years via the 'years' kwarg or via inputs_as_of='years:N'."}
         elif op == "mcap_cr":
             result = {"mcap_cr": round(a * b / 1e7, 2),
                       "calculation": f"{a} * {b} / 10000000 = {a * b / 1e7:.2f}"}
