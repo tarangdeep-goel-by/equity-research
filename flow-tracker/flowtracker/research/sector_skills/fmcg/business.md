@@ -6,8 +6,9 @@ FMCG is an umbrella covering at least six economically distinct archetypes. The 
 | Subtype | Primary revenue engine | Unit of production | Distribution model |
 | :--- | :--- | :--- | :--- |
 | **Personal care / HPC (home & personal care)** | Volume × realization × premium-mix; soaps, detergents, skin, hair | per-SKU volume; per-outlet throughput | GT-heavy (8-12 lakh outlets for leaders) + rising MT / QC |
-| **Food & beverages (packaged)** | Volume × realization × category-mix; biscuits, dairy, beverages, chocolates | per-SKU volume; per-plant capacity utilisation | GT + MT; cold-chain dependency for dairy / chocolates |
-| **Packaged staples (edible oil, flour, salt, sugar)** | Volume × realization with thin fixed margin on commodity spread | per-MT processed; per-refinery utilisation | GT + MT; bulk B2B side business |
+| **Food & beverages (packaged)** | Volume × realization × category-mix; biscuits, dairy, beverages, chocolates | per-SKU volume; per-plant capacity utilisation | GT + MT + HORECA (hotels / restaurants / café — 15-25% of volume for beverage and packaged-food leaders); cold-chain dependency for dairy / chocolates |
+| **Packaged staples — branded / value-added (atta, branded salt, packaged tea)** | Volume × realization × brand-premium; moat is brand + distribution | per-SKU volume; per-plant throughput | GT + MT |
+| **Packaged staples — mass / commodity (edible oil, flour, sugar)** | Volume × realization with thin fixed margin on commodity spread | per-MT processed; per-refinery utilisation | GT + MT; bulk B2B side business |
 | **Tobacco / alcobev (sin-goods)** | Stick / case volume × realization; state-excise-regulated pricing | per-stick / per-case volume | State-auctioned distribution (alcobev) or licensed WD network (tobacco) |
 | **OTC / wellness / consumer healthcare** | Volume × realization × category-mix; health supplements, ayurveda, ethical OTC | per-SKU volume; per-pharmacy + GT outlet | Pharmacy + GT dual channel; rising e-pharmacy |
 | **D2C / digital-native** | Customer × order frequency × AOV; subscription skew in wellness | per-customer LTV; per-order contribution margin | D2C website + marketplace + QC; GT build-out Phase 2 |
@@ -30,7 +31,8 @@ Moat lenses differ across FMCG sub-types; enumerate the one that applies before 
 Aggregate EBITDA-margin comparison across FMCG sub-types is misleading; use sub-type-specific benchmarks:
 - **HPC leaders** — EBITDA margin 18-28%, gross margin 48-55%, ad-spend 8-13% of revenue (the moat-signal line).
 - **Food & beverages** — EBITDA margin 8-15%, gross margin 30-42%, ad-spend 5-9% (lower advertising intensity in biscuits / dairy).
-- **Packaged staples (edible oil, flour)** — EBITDA margin 4-8%, gross margin 10-18%; commodity-spread business, not a brand business despite the branded-product optics.
+- **Packaged staples — mass / commodity (edible oil, flour, sugar)** — EBITDA margin 4-8%, gross margin 10-18%; commodity-spread business, not a brand business despite the branded-product optics.
+- **Packaged staples — branded / value-added (atta, branded salt, packaged tea)** — EBITDA margin 12-16%, gross margin 30-45%; brand-premium category that benchmarks closer to food & beverages than to commodity staples. Keep the two sub-tiers separate in peer comps.
 - **Tobacco / alcobev** — EBITDA margin 30-40% (tax-gross), 15-25% (post-excise net); pricing power regulated but persistent.
 - **OTC / wellness** — EBITDA margin 14-20%, gross margin 50-60%; trade-margin heavier than HPC.
 - **D2C** — contribution margin 40-60% (direct), EBITDA typically negative 5-20% while in growth-investment phase; state the burn-runway.
