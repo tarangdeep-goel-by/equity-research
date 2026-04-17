@@ -23,7 +23,7 @@ Indian conglomerates do not sit on a single league table; tier by structural arc
 
 - **Top-5 diversified-operating conglomerates** by consolidated market cap — genuine multi-vertical operating businesses with disclosed segment P&L and 3+ material verticals
 - **Top-3 promoter-group-linked structures** — parent + many listed sister entities under a common promoter-group umbrella, with group-aggregate market cap tracked separately from parent market cap
-- **Holding-company specialists / pure holdcos** — limited-to-no operating business at the parent, value entirely in listed-sub stakes; usually trade at structurally wider holdco discounts (30-45%)
+- **Holding-company specialists / pure holdcos** — limited-to-no operating business at the parent, value entirely in listed-sub stakes; structurally the widest holdco discount cohort. Indian listed pure-holdcos (treasury + listed-stake only, no operating P&L) have historically traded at **40-65% discount to NAV**, materially wider than operating-plus-holdings structures (20-35%). The wider discount reflects no operating cash-flow optionality, full tax leakage on dividend upstreaming, and the absence of a standalone re-rating catalyst beyond NAV compression
 - **Focused multi-vertical operating companies (2 verticals)** — often mis-classified as conglomerates when they are actually two-vertical businesses; SOTP mechanics still apply but the complexity discount is lower
 
 Where the stock sits in this hierarchy determines the peer set. A holdco-style name should be compared to other holdcos on discount-vs-NAV, not to operating conglomerates on PE.

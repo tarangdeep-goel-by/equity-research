@@ -10,13 +10,13 @@ Governance stress in conglomerates typically surfaces through balance-sheet tele
 - **Inter-company loans flowing FROM listed entity TO promoter-group unlisted entities** — extract from `get_fundamentals(section='balance_sheet_detail')` and the related-party disclosure in `get_company_context(section='filings', sub_section='notes_to_accounts')`. A listed cash-generator parent extending ICDs / advances to unlisted group entities that do not service them from standalone CFO is the canonical cash-siphoning pattern
 - **Board-composition without independent majority** — particularly critical for promoter-group-linked structures where related-party approvals are frequent
 - **Auditor-resignation clusters** — cross-check via `get_events_actions(section='material_events')` and the filings trail; auditor rotation that lands in a quarter of ratings-watch, SEBI correspondence, or large RPT approval requirement is the forensic-grade tell
-- **Material RPT as % of revenue rising above 10%** — or RPT as % of net worth rising above 15-20%; sustained rise across 4-6 quarters is a governance-drift pattern. SEBI LODR threshold for material-RPT is 10% of consolidated turnover or ₹1,000 Cr (whichever is lower)
+- **Material RPT as % of revenue rising above 10%** — or RPT as % of net worth rising above 15-20%; sustained rise across 4-6 quarters is a governance-drift pattern. SEBI LODR threshold for material-RPT is 10% of consolidated turnover or ₹1,000 Cr (whichever is lower). Material RPTs require **prior shareholder approval via special resolution** (post-2022 LODR amendment); this creates a disclosed 21-30 day timeline constraint on group restructurings — flag pending AGM / EGM resolutions covering material RPTs via get_events_actions
 - **Non-Disposal Undertakings (NDUs)** in place of formal pledge — conglomerates frequently use NDU structures to bypass SEBI pledge-disclosure norms; the ownership agent's findings on NDUs should flow into the risk narrative
 
 ### Regulatory Risk Taxonomy — Multi-Regulator Inherent
 Conglomerates carry inherent multi-regulator exposure: SEBI at the holdco level, RBI for any NBFC / bank subsidiary, IRDAI for any insurance subsidiary, plus sector-specific regulators (CERC for power, TRAI for telecom, DoT for spectrum, MoEF for environmental clearances, CCI for anti-trust). Name the specific regulator and, where possible, the specific circular when a risk crystallises:
 
-- **SEBI** — LODR (Listing Obligations and Disclosure Requirements) Chapter IV on related-party transactions; Chapter V on material-event disclosure; insider-trading norms; takeover-code thresholds at 25% and 26%
+- **SEBI** — LODR (Listing Obligations and Disclosure Requirements) Chapter IV on related-party transactions; Chapter V on material-event disclosure; insider-trading norms; SAST (takeover-code) open-offer trigger at 25% acquisition and creeping-acquisition limit of 5% per year beyond 25% up to 75%
 - **RBI** (for NBFC / bank subs) — Basel III, PCA framework, Large Exposure Framework, IRAC provisioning norms
 - **IRDAI** (for insurance subs) — solvency minima, EoM / commission caps, product-approval
 - **CCI** — M&A clearance for any intra-group restructuring; group-control tests
@@ -40,6 +40,7 @@ Historical conglomerate drawdowns have recurring triggers; use them as the scaff
 - **Promoter-pledge margin call** — cross-check via `margin_call_analysis` in `get_ownership(section='promoter_pledge')`; a 20-30% stock-price fall triggering margin calls on pledged promoter stake creates forced selling that compounds the fall
 - **Regulatory action on a flagship subsidiary** — licence suspension, capital-raise mandate, or operating restriction on the highest-NAV subsidiary reprices the SOTP NAV and widens the holdco discount simultaneously
 - **Counterparty / customer concentration event** — default or exit of a top customer / borrower / counterparty that was disproportionately supporting group-level revenue or CFO
+- **Cross-default / group-rating linkage** — rating downgrade at the unlisted parent holdco (or a sister group entity) triggers cross-default clauses or rating-watch at this listed entity even when its standalone financials are unchanged; historical precedents include promoter-group debt spirals where opco spreads widened 150-300 bps on holdco rating actions alone
 
 Quantify each bear case as a thesis-breaker: the specific metric threshold beyond which the base-case thesis is invalidated.
 
