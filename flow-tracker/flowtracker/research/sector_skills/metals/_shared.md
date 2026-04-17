@@ -23,3 +23,15 @@ PE is inverted for commodity companies — the lowest PE often marks the cycle p
 **Emphasize:** Net Debt/EBITDA trajectory, commodity price sensitivity, capex cycle (expansion vs maintenance), EBITDA margins vs historical range, capacity utilization, and cost curve position.
 
 **Concall KPIs to surface if available:** Production volumes, realization per tonne, cost per tonne, capacity utilization %, expansion capex vs maintenance capex.
+
+### Mandatory — Commodity Trend Backbone
+
+Metals equity price action is a lagging derivative of the underlying commodity. Every metals report from the **sector** and **technical** agents must cite:
+- The relevant LME / benchmark commodity spot trend (copper, aluminium, zinc, lead, iron ore 62% Fe, HRC steel, coking coal) for the last 6-12 months, via `get_market_context(section='macro')`. Commodity break of 50-DMA / 200-DMA routinely front-runs equity price action by 3-10 sessions — this is not optional flavour, it is the primary technical input for the sector.
+- The marginal-cost-of-production context: is current commodity price above / below the 2nd-quartile cost curve? Above = full cycle pricing; below = imminent supply rationalization.
+
+A metals sector or technical report that does NOT open with the commodity trend is structurally incomplete — peer-relative returns and stock-level indicators are secondary to the commodity.
+
+### Data Workaround — EBITDA Source
+
+`get_quality_scores(section='all')` has historically returned mis-mapped values for metals (depreciation-as-EBITDA). Until the sector-aware field router ships, pull metals EBITDA from `get_fundamentals(section='annual_financials')` → operating-profit line, reconciled against the concall `financial_metrics` quoted EBITDA. For a cyclical, always cross-check EBITDA-per-tonne (quoted in concall) × production volume = EBITDA — if the recomputation differs from the quality-score EBITDA by >15%, trust the concall recomputation.
