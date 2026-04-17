@@ -37,6 +37,7 @@ Platforms carry 2-4% weight in Nifty as the post-IPO cohort has listed; the flow
 - **DII growing exposure as profitability materialises** — pre-2023, DII under-weighted the platform cohort because of the loss-making profile. Post-2024 path-to-EBITDA clarity, DII allocation is rising, especially MF equity-scheme fresh inflows.
 - **Passive ETF flows** — as platforms enter Nifty 50 / Nifty Next 50, mechanical passive inflows add a stability bid. Index-entry events compress historical volatility.
 - **Pre-IPO VC unlock cycles** — 30-day, 6-month, 12-month lock-up expiries are outsized technical events in this sector because the pre-IPO roster is concentrated. A single fund's exit can absorb 3-6 months of steady-state volume.
+- **Private-peer funding marks as a forward valuation catalyst** — when a private peer raises at an up-round (or down-round), the public listed cohort re-rates in sympathy within weeks — positive marks set a new implicit floor on EV/GMV or EV/Revenue comps and negative marks compress the band. Track private-peer primary / secondary round valuations as a forward-looking re-rating catalyst for listed names; the mark-transmission is fastest in sub-sectors where the private-peer is the closest operating comparable (quick-commerce, e-commerce vertical, insurtech).
 
 Cross-check the sector flow via `get_market_context(section='fii_dii_flows')` and `section='fii_dii_streak')` before claiming sector-level institutional rotation.
 
@@ -54,6 +55,7 @@ Name the structural shift and tie it to the specific sub-type that benefits or i
 ### Sector KPIs for Comparison — Always Cite Percentile
 When benchmarking, pull from `get_peer_sector(section='benchmarks')` and state the company's percentile rank within the sub-sector, not only the absolute number. Platform-relevant KPIs:
 - **All platforms** — GMV growth%, take-rate%, orders growth%, MTU / MAU growth%, AOV trend, contribution margin per order, operating EBITDA margin%, cash burn / runway (months), cohort retention M1 / M6 / M12.
+- **Marketplace liquidity KPIs (leading indicators)** — zero-result-search rate, fulfilment rate (orders fulfilled ÷ orders placed), ETA accuracy, NPS — these front-run GMV trajectory by 1-2 quarters; peer-relative percentile on liquidity KPIs is more predictive of forward share-gain than trailing GMV growth itself.
 - **Food-delivery / quick-commerce** — orders per MAU per month, contribution margin per order, dark-store count (quick-commerce), orders per store per day (quick-commerce).
 - **E-commerce** — active-buyer growth, repeat-rate, private-label mix%, ad-revenue % of revenue.
 - **Payments** — TPV growth, MDR-revenue share, lending-distribution revenue share, merchant base growth.

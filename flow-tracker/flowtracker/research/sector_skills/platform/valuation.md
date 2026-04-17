@@ -26,8 +26,14 @@ For loss-making platforms, valuation is a scenario exercise on three pivots: (i)
 ### Cash Runway as Valuation Floor
 If `net_cash / quarterly_net_burn < 18 months`, the platform is in fundraise pressure and the implied dilution must be reflected in the forward share count. Compute: `Months runway = net_cash_cr ÷ quarterly_net_burn_cr × 3`. 12-24 months is fundraise pressure, 24-36 months is steady, >36 months is comfortable. Apply dilution-adjusted forward share count in fair-value per share only when runway signals imminent raise; otherwise use the current share count plus disclosed ESOP vesting.
 
-### Peer-Premium Decomposition
+### Peer-Premium Decomposition — Anchored to g / WACC
 If the stock trades at an EV/GMV or EV/Revenue premium vs sector median from `get_peer_sector(section='benchmarks')`, decompose the delta into at most four drivers: (a) **take-rate delta** — a sustained 100-200 bps of take-rate advantage is a moat signal worth 15-25% premium; (b) **frequency delta** — 2 orders/month per MAU vs 1 order/month is ~2× LTV, justifying a 20-40% premium; (c) **cohort retention delta** — if M12 repeat is 15-20 pp above peer, the LTV advantage compounds; (d) **CAC efficiency** — blended CAC below peer with organic-share above peer is worth 10-20% premium. If (a) through (d) together do not account for more than half of the observed premium, the multiple is vulnerable to mean-reversion and the bull case is leaning on re-rating rather than on unit-economic improvement.
+
+At mature-scale the premium must also reconcile with a BFSI-style Gordon tie — the justified steady-state multiple is bounded by take-rate, sustainable GMV growth, and cost of capital:
+```
+Justified EV/GMV ≈ take-rate × (1 + g_gmv) / (WACC − g_gmv)
+```
+where `g_gmv` is the sustainable-GMV-growth rate (not the trailing 2-year burst). **Worked example:** peer median take-rate 20%, `g_gmv` 12%, WACC 14% → justified EV/GMV ≈ 0.20 × 1.12 / 0.02 ≈ 11.2×. Subject stock at 14× trades at a 25% premium; decompose: +150 bps take-rate spread (≈+18%) + 200 bps g_gmv spread pulls the denominator from 2% to 0% and dominates; WACC spread typically <50 bps for domestic names. If take-rate, g, and WACC spreads do not arithmetically rebuild the 25%, the residual is re-rating risk. Run the tie through `calculate` with named inputs `take_rate_pct`, `g_gmv_pct`, `wacc_pct`.
 
 ### Duration Discipline — Don't Mix Trailing and Forward
 The Pattern C4 discipline from the valuation eval: do not compute an SOTP on trailing FY25 basis and then compare to a peer EV/Revenue computed on forward FY26 basis — duration mixing produces a false re-rating signal. Anchor the valuation framework to a single fiscal year. For platforms, this especially applies to ad-tech sub-segment valuation (trailing) bolted onto core-business EV/Revenue (forward) — build both on the same fiscal reference period or state the mix-basis explicitly.

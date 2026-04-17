@@ -31,11 +31,13 @@ A food-delivery moat is not a payments moat is not a quick-commerce moat. Enumer
 Aggregate revenue growth without contribution-margin-per-order improvement is a cash-burn thesis wearing a growth mask. Benchmarks by sub-type:
 - **Food-delivery at scale** — contribution margin per order 2-6% of GMV; at 4%+ and rising, operating leverage to EBITDA positive within 4-6 quarters.
 - **Quick-commerce** — contribution margin per order turned positive in 2024 for category leaders; -1% to +2% of GMV is the current range; dark-store throughput (orders per store per day) is the proximate lever.
+- **Dark-store capex economics (quick-commerce)** — per-store capex ₹15-25L (fit-out, cold chain, racking, WMS integration), with 6-12 month payback at mature utilisation. Breakeven throughput is ~40-50 orders/day/store; at ~80-120 orders/day a metro dark-store compounds contribution margin into meaningful fixed-cost amortisation. Geographic-density multiplier is load-bearing: metros sustain 2-3 stores/sq-km at full density, and store-count per city below the ~50-store threshold means diseconomies of fulfilment (longer rider routes, higher per-order logistics cost). Dark-store network economics therefore flip regime at city-level saturation — model each metro's saturation cohort separately, not aggregate store count.
 - **E-commerce horizontal** — contribution margin 5-10% post-fulfilment; private-label and ad-tech mix expand it.
 - **Mobility** — contribution margin 3-7% of GMV; utilisation (trips per driver-hour) and surge-pricing discipline drive it.
 - **CAC payback** — 12-36 months is the target band for sustainability; >36 months on blended CAC at steady state signals either low LTV or adverse selection.
 - **LTV/CAC** — target >2.5-3× for steady-state economics; <2× means the platform is buying revenue, not building a franchise.
 - **Order-frequency** — mature food-delivery 2-4 orders/month/MAU, quick-commerce 3-6 at maturity, e-commerce horizontal 1-2 orders/month/active-buyer.
+- **Marketplace liquidity KPIs** — zero-result-search rate, fulfilment rate (orders fulfilled ÷ orders placed), ETA accuracy (promised-vs-actual delivery time), and NPS are the liquidity signals that precede GMV trajectory by 1-2 quarters; degradation here front-runs growth deceleration even when headline MTU / GMV is still strong.
 
 Extract via `get_company_context(section='concall_insights', sub_section='operational_metrics')`. If operational_metrics returns aggregate-only data, derive per-order metrics via `calculate` using order count and segment revenue.
 
