@@ -31,7 +31,14 @@ class MacroClient:
         )
 
     def fetch_snapshot(self, days: int = 5) -> list[MacroSnapshot]:
-        """Fetch recent N days of macro data from yfinance + CCIL."""
+        """Fetch recent N days of macro data from yfinance + CCIL.
+
+        CCIL only publishes today\'s 10Y yield snapshot. Without carry-forward,
+        prior-day rows get gsec_10y=None permanently (this function never
+        revisits them). The 10Y yield moves <5bps/day typically, so we carry
+        today\'s value back to every day in the window — well within
+        analytical tolerance.
+        """
         period = f"{days}d"
         tickers = [_VIX_TICKER, _USDINR_TICKER, _BRENT_TICKER]
 
@@ -49,7 +56,7 @@ class MacroClient:
             except Exception as e:
                 logger.warning("Failed to fetch %s: %s", ticker_sym, e)
 
-        # Try to get today's G-sec yield
+        # Try to get today\'s G-sec yield (also used to backfill prior days)
         gsec = self._fetch_gsec_yield()
 
         snapshots: list[MacroSnapshot] = []
@@ -60,13 +67,18 @@ class MacroClient:
                 india_vix=vals.get(_VIX_TICKER),
                 usd_inr=vals.get(_USDINR_TICKER),
                 brent_crude=vals.get(_BRENT_TICKER),
-                gsec_10y=gsec if d == date.today().isoformat() else None,
+                gsec_10y=gsec,
             ))
 
         return snapshots
 
     def fetch_history(self, start: str = "2008-01-01") -> list[MacroSnapshot]:
-        """Fetch full history via yfinance. G-sec only for today."""
+        """Fetch full history via yfinance. G-sec only assigned to most-recent row.
+
+        Historical 10Y G-sec yields can\'t be reconstructed from CCIL (they
+        only publish today\'s snapshot), so historical rows leave gsec_10y
+        as None. Today\'s scraped value is assigned to the latest row.
+        """
         end = date.today().isoformat()
         data: dict[str, dict[str, float]] = {}
 
@@ -82,14 +94,19 @@ class MacroClient:
             except Exception as e:
                 logger.warning("Failed to fetch history for %s: %s", ticker_sym, e)
 
+        gsec = self._fetch_gsec_yield()
+        sorted_dates = sorted(data.keys())
+        latest_date = sorted_dates[-1] if sorted_dates else None
+
         snapshots: list[MacroSnapshot] = []
-        for d in sorted(data.keys()):
+        for d in sorted_dates:
             vals = data[d]
             snapshots.append(MacroSnapshot(
                 date=d,
                 india_vix=vals.get(_VIX_TICKER),
                 usd_inr=vals.get(_USDINR_TICKER),
                 brent_crude=vals.get(_BRENT_TICKER),
+                gsec_10y=gsec if d == latest_date else None,
             ))
 
         return snapshots
