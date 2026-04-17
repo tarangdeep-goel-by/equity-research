@@ -1883,7 +1883,8 @@ class TestCalculateTool:
         data = _parse(result)
         # 1e8 × 500 / 1e7 = 5000 Cr
         assert data["value_cr"] == 5000.0
-        assert data["unit"] == "₹ Cr"
+        # `unit` field was deliberately removed in prior commit
+        # ("strip rupee symbol + unit labels from calculate output")
         assert "calculation" in data
 
     @pytest.mark.asyncio

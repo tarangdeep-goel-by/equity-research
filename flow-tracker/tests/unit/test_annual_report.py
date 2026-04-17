@@ -9,6 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from flowtracker.research.annual_report_extractor import (
+    _atomic_write_json,
+    _section_is_complete,
+)
 from flowtracker.research.ar_downloader import _period_to_fy_label, find_ar_pdfs
 from flowtracker.research.data_api import ResearchDataAPI
 from flowtracker.store import FlowStore
@@ -189,3 +193,134 @@ class TestARInsightsDrill:
         assert len(result["years"]) == 1
         assert result["years"][0]["fiscal_year"] == "FY24"
         assert "FY24 chairman summary" in result["years"][0]["chairman_letter"]["summary"]
+
+
+# --- Resilience helpers (introduced in fix/ar-per-section-resilience) --------
+
+
+class TestSectionCompleteCheck:
+    def test_none_is_not_complete(self):
+        assert _section_is_complete(None) is False
+
+    def test_non_dict_is_not_complete(self):
+        assert _section_is_complete("string") is False
+        assert _section_is_complete(["list"]) is False
+
+    def test_dict_without_error_is_complete(self):
+        assert _section_is_complete({"opinion": "unqualified"}) is True
+
+    def test_dict_with_extraction_error_is_not_complete(self):
+        assert _section_is_complete({"extraction_error": "timeout"}) is False
+
+    def test_section_not_found_or_empty_is_complete(self):
+        """Stable 'nothing here' result — don't retry it."""
+        assert _section_is_complete({"status": "section_not_found_or_empty", "chars": 0}) is True
+
+
+class TestAtomicWriteJson:
+    def test_writes_via_tmp_and_rename(self, tmp_path):
+        target = tmp_path / "nested" / "file.json"
+        _atomic_write_json(target, {"k": "v"})
+        assert target.exists()
+        assert json.loads(target.read_text())["k"] == "v"
+        # No leftover .tmp file.
+        assert not target.with_suffix(".json.tmp").exists()
+
+    def test_overwrites_existing_atomically(self, tmp_path):
+        target = tmp_path / "file.json"
+        target.write_text(json.dumps({"old": True}))
+        _atomic_write_json(target, {"new": True})
+        assert json.loads(target.read_text()) == {"new": True}
+
+
+class TestSingleARResilience:
+    """Drive _extract_single_ar with a mocked section extractor + extract_to_markdown
+    to verify: section crash doesn't abort others, JSON persists per section,
+    re-runs skip already-complete sections and retry errored ones."""
+
+    @pytest.mark.asyncio
+    async def test_crashed_section_doesnt_wipe_others_and_rerun_retries(
+        self, vault_home, monkeypatch
+    ):
+        import flowtracker.research.annual_report_extractor as ar_mod
+        from flowtracker.research.doc_extractor import ExtractionResult
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake pdf bytes")
+
+        # Mock Docling — return a fake markdown with two canonical headings.
+        fake_md = (
+            "## INDEPENDENT AUDITOR'S REPORT\n\n"
+            + ("auditor body " * 100) + "\n\n"
+            "## CORPORATE GOVERNANCE REPORT\n\n"
+            + ("cg body " * 100) + "\n\n"
+            "## RISK MANAGEMENT\n\n"
+            + ("risk body " * 100) + "\n\n"
+        )
+        from flowtracker.research.doc_extractor import _scan_headings
+        fake_headings = _scan_headings(fake_md)
+        monkeypatch.setattr(
+            ar_mod, "extract_to_markdown",
+            lambda pdf, cache_dir: ExtractionResult(
+                markdown=fake_md, headings=fake_headings,
+                backend="docling", degraded=False, elapsed_s=0.0, from_cache=True,
+            ),
+        )
+
+        # First run — auditor succeeds, corporate_governance crashes, risk succeeds.
+        call_log: list[str] = []
+
+        async def fake_extract_section(sec, slice_text, sym, fy, model):
+            call_log.append(f"run1:{sec}")
+            if sec == "corporate_governance":
+                raise RuntimeError("simulated SDK subprocess crash")
+            return {"ok": True, "section": sec, "first_run": True}
+
+        monkeypatch.setattr(ar_mod, "_extract_section", fake_extract_section)
+
+        result1 = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report", "corporate_governance", "risk_management"),
+        )
+
+        # First run partial — auditor + risk done, cg errored, JSON persisted.
+        assert result1["extraction_status"] == "partial"
+        assert result1["auditor_report"]["ok"] is True
+        assert "extraction_error" in result1["corporate_governance"]
+        assert result1["risk_management"]["ok"] is True
+        assert "corporate_governance" in result1["extraction_errors"]
+
+        out_path = vault_home / "vault" / "stocks" / symbol / "fundamentals" / f"annual_report_{fy_label}.json"
+        assert out_path.exists()
+        on_disk = json.loads(out_path.read_text())
+        assert on_disk["extraction_status"] == "partial"
+
+        # Second run — patch so all sections succeed. Already-complete sections
+        # should be skipped; only corporate_governance should re-run.
+        call_log.clear()
+
+        async def fake_extract_section_v2(sec, slice_text, sym, fy, model):
+            call_log.append(f"run2:{sec}")
+            return {"ok": True, "section": sec, "first_run": False}
+
+        monkeypatch.setattr(ar_mod, "_extract_section", fake_extract_section_v2)
+
+        result2 = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report", "corporate_governance", "risk_management"),
+        )
+
+        # Only the errored section should have re-run.
+        assert call_log == ["run2:corporate_governance"]
+        # Now fully complete.
+        assert result2["extraction_status"] == "complete"
+        # auditor_report + risk_management preserved from run1 (first_run=True).
+        assert result2["auditor_report"]["first_run"] is True
+        assert result2["risk_management"]["first_run"] is True
+        # corporate_governance re-extracted (first_run=False).
+        assert result2["corporate_governance"]["first_run"] is False
+        # No error map when all sections succeed.
+        assert "extraction_errors" not in result2
