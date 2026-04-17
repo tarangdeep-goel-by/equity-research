@@ -1949,7 +1949,8 @@ async def get_stock_news(args):
     "  'pe_from_price_eps'      a=price, b=eps -> pe (ratio)\n"
     "  'eps_from_pat_shares'    a=pat_cr, b=shares (raw count) -> eps\n"
     "  'fair_value'             a=pe_multiple, b=eps -> fair_value (per share)\n"
-    "  'growth_rate'            a=old, b=new -> growth_pct (percent)\n"
+    "  'growth_rate'            a=old, b=new -> growth_pct (percent; single-period)\n"
+    "  'cagr'                   a=start, b=end, years=<N> -> cagr_pct (compound annual growth rate; use 'years' kwarg OR pass years as third positional via inputs_as_of='years:5')\n"
     "  'mcap_cr'                a=price, b=shares (raw count) -> mcap_cr (in crores)\n"
     "  'margin_of_safety'       a=fair_value, b=current_price -> mos_pct (percent)\n"
     "  'annualize_quarterly'    a=quarterly_value -> annualized (x4); leave b='0'\n"
@@ -1968,7 +1969,8 @@ async def get_stock_news(args):
     # calculate(operation='expr', a='74 - 47.67') on BHARTIARTL ownership run.
     # inputs_as_of / mcap_as_of are optional timestamp strings for historical-flow
     # discipline; see Tenet 16 (OWNERSHIP_SYSTEM_V2).
-    {"operation": str, "a": str, "b": str, "inputs_as_of": str, "mcap_as_of": str},
+    # years: optional kwarg for cagr operation.
+    {"operation": str, "a": str, "b": str, "inputs_as_of": str, "mcap_as_of": str, "years": str},
     annotations=READ_ONLY,
 )
 async def calculate(args):
@@ -2036,8 +2038,21 @@ async def calculate(args):
             result = {"growth_pct": round((b - a) / a * 100, 2) if a else 0,
                       "calculation": f"({b} - {a}) / {a} * 100 = {(b - a) / a * 100:.2f}" if a else "division by zero"}
         elif op == "cagr":
-            # a = start value, b = end value, need years via expression
-            result = {"note": "Use 'expr' for CAGR: ((end/start)^(1/years)-1)*100"}
+            # a = start, b = end, years = number of periods
+            years_str = args.get("years") or ""
+            # Allow 'years:N' fallback via inputs_as_of if kwarg missing
+            if not years_str and args.get("inputs_as_of", "").startswith("years:"):
+                years_str = args["inputs_as_of"].split(":", 1)[1]
+            try:
+                years = float(years_str) if years_str else 0.0
+            except (TypeError, ValueError):
+                years = 0.0
+            if a and years and b:
+                cagr_pct = ((b / a) ** (1 / years) - 1) * 100
+                result = {"cagr_pct": round(cagr_pct, 2),
+                          "calculation": f"({b} / {a}) ** (1 / {years}) - 1 = {cagr_pct / 100:.4f} = {cagr_pct:.2f}%"}
+            else:
+                result = {"note": f"cagr requires a (start), b (end), and years (>0). Got a={a} b={b} years={years}. Pass years via the 'years' kwarg or via inputs_as_of='years:N'."}
         elif op == "mcap_cr":
             result = {"mcap_cr": round(a * b / 1e7, 2),
                       "calculation": f"{a} * {b} / 10000000 = {a * b / 1e7:.2f}"}
