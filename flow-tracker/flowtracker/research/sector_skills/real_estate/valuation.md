@@ -9,7 +9,7 @@ The recurring valuation error in real estate is defaulting to a PE + EV/EBITDA t
 | **Commercial / Office REIT** (EMBASSY, MINDSPACE, BIRET) | **NOI / Cap rate** (direct cap) | Distribution yield, P/NAV | PE, EV/EBITDA without cap-rate anchor |
 | **Retail-Mall REIT** (NEXUS) | **NOI / Cap rate** (8-10% cap) | Distribution yield, P/NAV | PE on percentage-rent tail in a recovery year |
 | **Integrated developer** (PRESTIGE, BRIGADE, DLF) | **SOTP**: residential NAV + leasing NOI/cap + hospitality multiple | P/NAV consolidated | Single-engine multiple — destroys annuity vs transactional signal |
-| **Land-bank / township** (ANANTRAJ, ARVIND-SMART) | **NAV per acre × monetisation discount** | P/Adj-Book | PE (pre-monetisation), DCF |
+| **Land-bank / township** (ANANTRAJ, ARVSMART) | **NAV per acre × monetisation discount** | P/Adj-Book | PE (pre-monetisation), DCF |
 | **Specialty — warehousing / data-centre** (EMBASSY-like specialty, emerging plays) | **NOI / Cap rate** (7-8% warehousing, 9-11% data-centre) | P/FFO, distribution yield | PE on ramp-year earnings |
 
 ### NAV per sqft — The Primary Valuation Metric for Developers

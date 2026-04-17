@@ -10,7 +10,8 @@
 | **Commercial / Office REIT** (EMBASSY, MINDSPACE, BIRET) | Leased area × rent psf × occupancy | rent roll + occupancy | NOI per sqft, WALE, cap rate 6-9% |
 | **Retail-Mall REIT** (NEXUS) | Rent (minimum guarantee + % of tenant sales) × leasable area | footfall × tenant sales × rent bps | NOI per sqft, cap rate 8-10% |
 | **Integrated developer** (BRIGADE, PRESTIGE, DLF) | Residential presales + leasing annuity + hospitality / mgmt fee | multi-engine mix | mix-weighted EBITDA, annuity share of EBITDA |
-| **Land-bank / township** (ANANTRAJ, ARVIND-SMART, large-land holders) | Multi-decade land monetisation, JDA + outright mix | land-bank NAV × monetisation velocity | NAV per acre, monetisation rate |
+| **Land-bank / township** (ANANTRAJ, ARVSMART, large-land holders) | Multi-decade land monetisation, JDA + outright mix | land-bank NAV × monetisation velocity | NAV per acre, monetisation rate |
+| **Plotted development** (DLF, GODREJPROP, ARVSMART plotted exposure) | Sale of land parcels with basic infra (roads, utilities), short 6-12M turnaround | plot size × realization × approval speed | Revenue per acre, cash-conversion cycle (vs 3-4Y for vertical) |
 | **Specialty — warehousing** (emerging listed plays) | Leased logistics parks, built-to-suit + multi-client | rent psf × occupancy × client tenure | NOI per sqft, cap rate 7-8% |
 | **Specialty — data-centre** (emerging) | MW-leased × rent per MW × uptime | power-capacity × tenancy | revenue per MW, cap rate 9-11% |
 
@@ -20,6 +21,9 @@ For residential developers the reported revenue line understates business moment
 - **Presales (booking value)** `= new-bookings volume (sqft) × realization per sqft × segment-mix`. Presales leads revenue by 2-3 years and is the current-demand signal.
 
 For commercial / REIT operators: `NOI = leased area × rent per sqft × occupancy − operating expenses`, with `Revenue = leased area × rent per sqft × occupancy`. For integrated developers, split the annuity (leasing) EBITDA from the transactional (residential) EBITDA — the annuity is a higher-quality cash stream that deserves a different multiple. Pull via `get_fundamentals(section='revenue_segments')` and `get_company_context(section='concall_insights', sub_section='operational_metrics')`.
+
+### JDA vs Outright — The Asset-Light Lever Behind ROE
+Indian developers increasingly source projects via **Joint Development Agreements (JDAs)** rather than outright land purchase, and the economic structure drives ROE more than any margin line. Two common forms: **Area Share** (developer receives X% of built-up inventory in exchange for construction + branding; landowner retains the balance) and **Revenue Share** (developer keeps Y% of topline with no upfront land payment). JDAs are typically accompanied by **refundable security deposits** (not land cost) that recycle across projects. The asset-light JDA model explains why GODREJPROP, LODHA, and PRESTIGE post ROEs materially above what outright-acquisition developers achieve. Extract the JDA-share-of-pipeline GDV from investor presentations; a developer shifting from 30% JDA to 60% JDA over 3 years is structurally re-rating ROE by 400-800 bps without margin expansion.
 
 ### Realization per sqft — Extract Explicitly, Not Just Named
 Prior valuation evals flagged realization-per-sqft as the single most-named-but-never-extracted operational signal (GODREJPROP was the cited pattern). It is the clean read on pricing power and product-mix shift to premium and should be pulled explicitly with the quarter and cited source. Sources: `get_company_context(section='concall_insights', sub_section='operational_metrics')`, segment disclosure within `get_fundamentals(section='revenue_segments')`, or investor-presentation uploads in `filings`. Track 8-quarter trajectory — rising realization at flat volume is pricing power or premium mix-shift; rising realization at falling volume is affordability stress.

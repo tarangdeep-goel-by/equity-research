@@ -23,7 +23,7 @@ Sector reports collapse when they treat "real estate" as monolithic. Tier the su
 - **Integrated developer pure-plays** — PRESTIGE, BRIGADE, DLF combine residential + leasing + hospitality on one balance sheet; analytically distinct from pure-residential or pure-REIT peers.
 - **City-specialist developers** — Bengaluru-heavy (SOBHA, BRIGADE, PRESTIGE), NCR-heavy (DLF, ANANTRAJ, SIGNATURE), Mumbai-heavy (OBEROIRLTY, LODHA, SUNTECK), Pune-heavy (KOLTEPATIL, PURVANKARA Pune exposure).
 - **Specialty — warehousing specialist** post-2020 listed cohort; **data-centre** emerging listings.
-- **ARVIND-SMART** sits in an integrated-township category distinct from pure-residential.
+- **ARVSMART** sits in an integrated-township category distinct from pure-residential.
 
 ### Institutional-Flow Patterns — Real-Estate-Specific
 Real estate is ~2-3% of Nifty weight; flows have sector-specific mechanics that the sector and ownership agents should both reflect:
@@ -53,6 +53,7 @@ When benchmarking, pull from `get_peer_sector(section='benchmarks')` and state t
 - **REITs (retail)** — NOI, cap rate, trading-density (footfall × conversion), tenant-sales growth, minimum-guarantee vs percentage-rent mix, anchor-tenant concentration.
 - **Specialty — warehousing** — occupancy, WALE, rent psf, built-to-suit vs multi-client mix, top-tenant concentration.
 - **Specialty — data-centre** — MW commissioned, MW under construction, occupancy by MW, cap rate, revenue per MW.
+- **Hospitality blocks (integrated developers — CHALET, hotel wings of PRESTIGE / BRIGADE)** — ARR (Average Room Rate), occupancy %, RevPAR (= ARR × occupancy), EBITDA per room, and rooms-under-construction pipeline. Apply EV / Room or EV / EBITDA for the hospitality slice in SOTPs.
 
 A number quoted without sector percentile (e.g., "presales ₹5,000 Cr") omits whether that is top-quartile, median, or bottom-quartile; the re-rating thesis depends on the percentile, not the absolute.
 
