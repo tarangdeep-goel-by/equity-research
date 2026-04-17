@@ -6,6 +6,8 @@ The most common valuation error in auto is defaulting to trailing PE for every s
 | Subtype | Primary multiple | Commonly-misapplied multiples that fail |
 | :--- | :--- | :--- |
 | **Mature ICE OEM — 4W / 2W / CV (cyclical)** | PE on **mid-cycle** EPS + EV/EBITDA on normalized volume | PE on peak-cycle earnings (over-values); DCF without mid-cycle normalization |
+| **OEM — 3W (mature ICE Bajaj/M&M duopoly)** | PE on mid-cycle EPS + EV/EBITDA | PE on peak-cycle; ignoring EV-transition terminal value (EV share already >50%) |
+| **OEM — 3W (pure-EV focused)** | EV/EBITDA on normalized margin + EV/Revenue band; cash runway if loss-making | Trailing PE (EV unit economics still scaling); peer-PE vs mature ICE 3W (wrong cohort) |
 | **Premium 4W / SOTP-heavy OEM** | SOTP (per-business multiple) + holdco discount | Blended PE on consolidated earnings (blurs sub-business quality) |
 | **EV pure-play (loss-making)** | EV/Revenue band + cash runway months | PE (no E); P/B (intangible capex heavy) |
 | **EV pure-play (cash-flow positive, early)** | EV/Revenue + P/S + forward PE on disclosed guidance | Trailing PE on first year of positive E (overstates stability) |
@@ -47,13 +49,18 @@ For auto majors housing JLR-style overseas luxury businesses, listed tech / R&D 
 ### Peer-Premium / Discount Decomposition
 If the stock trades at a PE premium or discount vs sub-type peer median via `get_peer_sector(section='benchmarks')`, decompose the delta into at most four drivers: (a) **volume-CAGR differential** — 500-800 bps of sustained volume advantage justifies 15-25% premium, (b) **segment-mix premium** — premium-4W earns 2-3× ancillary multiples, so a mix shift toward premium is a multiple driver even at constant EBITDA margin, (c) **export-mix / FX optionality** — >25% export mix with INR-tailwind justifies 10-15% premium, (d) **EV / structural-transition credibility** — a disclosed EV roadmap with funded capex and on-plan volume milestones carries a 10-20% premium. If (a) through (d) together do not account for more than half of the observed premium, the multiple is leaning on re-rating rather than on earnings growth and is vulnerable to mean-reversion.
 
-### Justified PE — Carry g Through
-For a mature ICE OEM, the Gordon-derived justified PE is `1 ÷ (CoE − g)` adjusted for payout; for a franchise with stable growth: `Justified PE = payout_ratio ÷ (CoE − g)`. Indian auto `g` in nominal terms sits in the 8-12% range (combination of volume growth, realization lift, and segment-mix premium). **Always carry `g` through**:
-- Mass 4W OEM at cycle mid: CoE 13%, g 10%, payout 35% → justified PE = 0.35 / (0.13 − 0.10) = ~12× (vs a 20× market PE would be stretched unless ROE is expanding).
-- 2W leader: CoE 12%, g 9%, payout 50% → justified PE = 0.50 / (0.12 − 0.09) = ~17×.
-- Tier-1 ancillary with platform lock-in: CoE 12%, g 11%, payout 30% → justified PE = 0.30 / (0.12 − 0.11) = 30× (so a 30× market PE IS defensible here).
+### Justified PE — Carry g and Payout Through (Sub-type-Calibrated)
+For a mature ICE OEM, the Gordon-derived justified PE is `1 ÷ (CoE − g)` adjusted for payout; for a franchise with stable growth: `Justified PE ≈ payout × (1 + g) / (CoE − g)`. Indian auto `g` in nominal terms sits in the 8-12% range (combination of volume growth, realization lift, and segment-mix premium). **Payout ratio varies sharply by sub-type and is as load-bearing as `g`** — do not default to a single payout assumption across sub-types:
+- **Tier-1 OEMs (mass 4W / 2W / CV)** — payout **30-50%** (tax-heavy PAT with meaningful dividend distribution; mature franchises return cash).
+- **EV pure-plays** — payout **0%** (cash-preservation mandatory; any dividend at sub-scale economics is a red flag).
+- **Tier-1 ancillaries** — payout **40-60%** (asset-light, high-ROE, low reinvestment need once platform lock-in is established).
 
-A 1-pp shift in `g` moves the justified multiple by 25-40%; the growth assumption is as load-bearing as CoE. Route through `calculate` with `payout`, `CoE`, `g` as named inputs.
+**Always carry `g` AND `payout` through** — three worked lines spanning the sub-type range:
+- **Mass 4W OEM at cycle mid**: CoE 13%, g 10%, payout 40% → justified PE ≈ 0.40 × 1.10 / (0.13 − 0.10) = ~15× (vs a 20× market PE would be stretched unless ROE is expanding).
+- **EV pure-play (cash-preservation, 0% payout)**: PE formula collapses (numerator → 0 as payout → 0); justified PE is undefined at 0% payout, confirming that for pre-cash-return EV players the primary multiple must be EV/Revenue + cash runway, not PE. Once the company crosses to cash-return phase (typically 2-4 years post-breakeven), re-evaluate with payout 10-20%.
+- **Tier-1 ancillary with platform lock-in**: CoE 12%, g 11%, payout 50% → justified PE ≈ 0.50 × 1.11 / (0.12 − 0.11) = ~55× (ceiling case; a market PE of 30-40× IS defensible for best-in-class ancillaries with sticky OEM platforms).
+
+A 1-pp shift in `g` moves the justified multiple by 25-40%; a 10-pp shift in payout moves it by ~20%. Route through `calculate` with `payout`, `CoE`, `g` as named inputs.
 
 ### What Fails for Auto — Name These Explicitly
 - **DCF on a cyclical ICE OEM without mid-cycle normalization** — terminal value is dominated by the assumed steady-state margin, and using peak-cycle margin inflates TV by 30-60%.

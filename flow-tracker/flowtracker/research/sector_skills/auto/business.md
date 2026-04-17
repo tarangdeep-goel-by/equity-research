@@ -8,6 +8,7 @@
 | **OEM — Passenger 4W (mass / premium split)** | Volume × Realization × Mix | cycle + segment mix | EBITDA/vehicle: mass ₹30-80k, premium ₹100-200k; per-plant utilization |
 | **OEM — 2W (commuter / premium / scooter)** | Volume × Realization; rural-skewed for commuter | rural real wages + fuel price | EBITDA/vehicle: commuter ₹6-12k, premium ₹40-50k (e.g., Royal Enfield archetype); per-dealer throughput |
 | **OEM — Commercial Vehicle (M&HCV / LCV)** | Volume × Realization; infra-capex linked | infra order-book + freight rates | EBITDA/vehicle ₹150-400k; per-plant utilization |
+| **OEM — 3W (three-wheeler passenger / cargo)** | Volume × Realization × Mix (ICE vs EV); Bajaj/M&M duopoly (fastest-EV-adopting segment in India, >50% EV penetration already achieved) | last-mile logistics demand + EV-mandate tailwind + fuel-parity TCO | EBITDA/vehicle ₹25-45k; per-plant utilization |
 | **OEM — Tractor / Farm Equipment** | Volume × Realization; monsoon + farm-cycle linked | monsoon + rural real wages | EBITDA/vehicle ₹70-120k (ASP ₹6-8L, not comparable to CV); per-plant utilization |
 | **EV pure-play** | Revenue = Volume × ASP; unit economics negative until scale | cash runway + cell-cost curve | EBITDA/vehicle typically negative; runway in months |
 | **Auto ancillary — Tier-1 (platform-integrated)** | Content-per-vehicle × OEM volume × OEM-share | customer concentration + content-mix | EBITDA margin 10-18%; per-OEM revenue share |
