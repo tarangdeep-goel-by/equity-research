@@ -1940,27 +1940,27 @@ async def get_stock_news(args):
 
 @tool(
     "calculate",
-    "Financial calculator — use for ALL math, never compute in your head. Returns result + full calculation string for citation. "
-    "Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574'). "
-    "\n\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n"
-    "  'shares_to_value_cr'     a=shares (raw count), b=price (₹) → value in ₹ Cr\n"
-    "  'per_share_to_total_cr'  a=per_share_value (₹), b=shares (raw count) → total ₹ Cr\n"
-    "  'total_cr_to_per_share'  a=total_cr (₹ Cr), b=shares (raw count) → per share (₹)\n"
-    "  'pe_from_price_eps'      a=price (₹), b=eps (₹) → PE ratio\n"
-    "  'eps_from_pat_shares'    a=pat_cr (₹ Cr), b=shares (raw count) → EPS (₹)\n"
-    "  'fair_value'             a=pe_multiple, b=eps (₹) → fair value / share (₹)\n"
-    "  'growth_rate'            a=old value, b=new value → growth %\n"
-    "  'mcap_cr'                a=price (₹), b=shares (raw count) → market cap ₹ Cr\n"
-    "  'margin_of_safety'       a=fair_value (₹), b=current_price (₹) → MoS %\n"
-    "  'annualize_quarterly'    a=quarterly_value → annualized (×4); leave b='0'\n"
-    "  'pct_of'                 a=part, b=whole → percentage\n"
-    "  'ratio'                  a=numerator, b=denominator → ratio\n"
+    "Financial calculator — use for ALL math, never compute in your head. Returns numeric result + plain calculation string for citation. Output is pure numeric — no currency symbols, no unit labels. Field name indicates unit (e.g. value_cr means crores, pe is PE ratio, growth_pct is percent). Wrap numbers in your own prose units in the report.\n"
+    "Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574').\n"
+    "\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n"
+    "  'shares_to_value_cr'     a=shares (raw count), b=price -> value_cr (in crores)\n"
+    "  'per_share_to_total_cr'  a=per_share_value, b=shares (raw count) -> total_cr\n"
+    "  'total_cr_to_per_share'  a=total_cr, b=shares (raw count) -> per_share\n"
+    "  'pe_from_price_eps'      a=price, b=eps -> pe (ratio)\n"
+    "  'eps_from_pat_shares'    a=pat_cr, b=shares (raw count) -> eps\n"
+    "  'fair_value'             a=pe_multiple, b=eps -> fair_value (per share)\n"
+    "  'growth_rate'            a=old, b=new -> growth_pct (percent)\n"
+    "  'mcap_cr'                a=price, b=shares (raw count) -> mcap_cr (in crores)\n"
+    "  'margin_of_safety'       a=fair_value, b=current_price -> mos_pct (percent)\n"
+    "  'annualize_quarterly'    a=quarterly_value -> annualized (x4); leave b='0'\n"
+    "  'pct_of'                 a=part, b=whole -> pct (percent)\n"
+    "  'ratio'                  a=numerator, b=denominator -> ratio\n"
     "\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n"
     "  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n"
     "  Only numbers and + - * / ( ) are permitted in the expression.\n"
-    "\nPrefer named operations over 'expr' where a matching op exists — named ops emit Indian-unit-aware calculation strings you can cite verbatim; 'expr' returns a raw number.\n"
+    "\nPrefer named operations over 'expr' when a matching op exists — named ops carry unit-aware field names (value_cr, mcap_cr, pct) that are self-documenting.\n"
     "\nTIMESTAMP DISCIPLINE (for historical flow-value math) — pass optional inputs_as_of and mcap_as_of:\n"
-    "  When multiplying a historical %pt change by a market cap to derive ₹Cr flow value, pass inputs_as_of (ISO quarter or date of the %pt context, e.g. '2023-Q4') AND mcap_as_of (ISO quarter or date of the mcap context, e.g. '2026-Q1'). If they differ, the tool returns a HISTORICAL_MCAP_MISMATCH warning that you MUST echo verbatim in prose before citing the ₹Cr figure — because current mcap × historical %pt can be off by 20-50%.\n"
+    "  When multiplying a historical %pt change by a market cap to derive a flow value, pass inputs_as_of (ISO quarter or date of the %pt context, e.g. '2023-Q4') AND mcap_as_of (ISO quarter or date of the mcap context, e.g. '2026-Q1'). If they differ, the tool returns a HISTORICAL_MCAP_MISMATCH warning that you MUST echo verbatim in prose before citing the flow-value figure — because current mcap x historical %pt can be off by 20-50%.\n"
     "  Omit both args (back-compat) for current-period math. See Tenet 16.",
     # Schema: a/b declared as str to allow the 'expr' operation to pass an expression
     # string without MCP validation rejecting it. Numeric ops parse a/b via float().
@@ -2015,44 +2015,44 @@ async def calculate(args):
 
     try:
         if op == "shares_to_value_cr":
-            result = {"value_cr": round(a * b / 1e7, 2), "unit": "₹ Cr",
-                      "calculation": f"{a:,.0f} shares × ₹{b:,.2f} ÷ 1,00,00,000 = ₹{a * b / 1e7:,.2f} Cr"}
+            result = {"value_cr": round(a * b / 1e7, 2),
+                      "calculation": f"{a} * {b} / 10000000 = {a * b / 1e7:.2f}"}
         elif op == "per_share_to_total_cr":
-            result = {"total_cr": round(a * b / 1e7, 2), "unit": "₹ Cr",
-                      "calculation": f"₹{a:,.2f}/share × {b:,.0f} shares ÷ 1,00,00,000 = ₹{a * b / 1e7:,.2f} Cr"}
+            result = {"total_cr": round(a * b / 1e7, 2),
+                      "calculation": f"{a} * {b} / 10000000 = {a * b / 1e7:.2f}"}
         elif op == "total_cr_to_per_share":
-            result = {"per_share": round(a * 1e7 / b, 2) if b else 0, "unit": "₹",
-                      "calculation": f"₹{a:,.2f} Cr × 1,00,00,000 ÷ {b:,.0f} shares = ₹{a * 1e7 / b:,.2f}" if b else "division by zero"}
+            result = {"per_share": round(a * 1e7 / b, 2) if b else 0,
+                      "calculation": f"{a} * 10000000 / {b} = {a * 1e7 / b:.2f}" if b else "division by zero"}
         elif op == "pe_from_price_eps":
-            result = {"pe": round(a / b, 2) if b else 0, "unit": "x",
-                      "calculation": f"₹{a:,.2f} ÷ ₹{b:,.2f} = {a / b:,.2f}x" if b else "division by zero"}
+            result = {"pe": round(a / b, 2) if b else 0,
+                      "calculation": f"{a} / {b} = {a / b:.2f}" if b else "division by zero"}
         elif op == "eps_from_pat_shares":
-            result = {"eps": round(a * 1e7 / b, 2) if b else 0, "unit": "₹",
-                      "calculation": f"₹{a:,.2f} Cr × 1,00,00,000 ÷ {b:,.0f} shares = ₹{a * 1e7 / b:,.2f}" if b else "division by zero"}
+            result = {"eps": round(a * 1e7 / b, 2) if b else 0,
+                      "calculation": f"{a} * 10000000 / {b} = {a * 1e7 / b:.2f}" if b else "division by zero"}
         elif op == "fair_value":
-            result = {"fair_value": round(a * b, 2), "unit": "₹",
-                      "calculation": f"{a:,.1f}x PE × ₹{b:,.2f} EPS = ₹{a * b:,.2f}"}
+            result = {"fair_value": round(a * b, 2),
+                      "calculation": f"{a} * {b} = {a * b:.2f}"}
         elif op == "growth_rate":
-            result = {"growth_pct": round((b - a) / a * 100, 2) if a else 0, "unit": "%",
-                      "calculation": f"({b:,.2f} - {a:,.2f}) ÷ {a:,.2f} × 100 = {(b - a) / a * 100:,.2f}%" if a else "division by zero"}
+            result = {"growth_pct": round((b - a) / a * 100, 2) if a else 0,
+                      "calculation": f"({b} - {a}) / {a} * 100 = {(b - a) / a * 100:.2f}" if a else "division by zero"}
         elif op == "cagr":
             # a = start value, b = end value, need years via expression
             result = {"note": "Use 'expr' for CAGR: ((end/start)^(1/years)-1)*100"}
         elif op == "mcap_cr":
-            result = {"mcap_cr": round(a * b / 1e7, 2), "unit": "₹ Cr",
-                      "calculation": f"₹{a:,.2f} × {b:,.0f} shares ÷ 1,00,00,000 = ₹{a * b / 1e7:,.2f} Cr"}
+            result = {"mcap_cr": round(a * b / 1e7, 2),
+                      "calculation": f"{a} * {b} / 10000000 = {a * b / 1e7:.2f}"}
         elif op == "margin_of_safety":
-            result = {"mos_pct": round((a - b) / a * 100, 2) if a else 0, "unit": "%",
-                      "calculation": f"(₹{a:,.2f} - ₹{b:,.2f}) ÷ ₹{a:,.2f} × 100 = {(a - b) / a * 100:,.2f}%" if a else "division by zero"}
+            result = {"mos_pct": round((a - b) / a * 100, 2) if a else 0,
+                      "calculation": f"({a} - {b}) / {a} * 100 = {(a - b) / a * 100:.2f}" if a else "division by zero"}
         elif op == "annualize_quarterly":
-            result = {"annualized": round(a * 4, 2), "unit": "same as input",
-                      "calculation": f"{a:,.2f} × 4 = {a * 4:,.2f}"}
+            result = {"annualized": round(a * 4, 2),
+                      "calculation": f"{a} * 4 = {a * 4:.2f}"}
         elif op == "pct_of":
-            result = {"pct": round(a / b * 100, 2) if b else 0, "unit": "%",
-                      "calculation": f"{a:,.2f} ÷ {b:,.2f} × 100 = {a / b * 100:,.2f}%" if b else "division by zero"}
+            result = {"pct": round(a / b * 100, 2) if b else 0,
+                      "calculation": f"{a} / {b} * 100 = {a / b * 100:.2f}" if b else "division by zero"}
         elif op == "ratio":
-            result = {"ratio": round(a / b, 4) if b else 0, "unit": "x",
-                      "calculation": f"{a:,.2f} ÷ {b:,.2f} = {a / b:,.4f}x" if b else "division by zero"}
+            result = {"ratio": round(a / b, 4) if b else 0,
+                      "calculation": f"{a} / {b} = {a / b:.4f}" if b else "division by zero"}
         elif op == "expr":
             # Safe arithmetic eval — only allow numbers and basic operators.
             # raw_a is the original string from the agent (e.g. '74 - 47.67').
@@ -2074,7 +2074,7 @@ async def calculate(args):
     # Timestamp discipline for historical flow-value math (Tenet 16).
     # If the agent passed both inputs_as_of and mcap_as_of and they differ,
     # attach a HISTORICAL_MCAP_MISMATCH warning to the result. The agent must
-    # echo this string verbatim in prose before citing the ₹Cr figure.
+    # echo this string verbatim in prose before citing the flow-value figure.
     inputs_as_of = args.get("inputs_as_of") or None
     mcap_as_of = args.get("mcap_as_of") or None
     if (
@@ -2085,8 +2085,8 @@ async def calculate(args):
         result["timestamp_discipline"] = (
             f"HISTORICAL_MCAP_MISMATCH: inputs from {inputs_as_of} combined with mcap from {mcap_as_of}. "
             f"Result is at {mcap_as_of} mcap — actual historical flow value may differ 20-50%. "
-            f"Either pass mcap_as_of matching inputs_as_of, or report the change in %pt only. "
-            f"You must echo this caveat verbatim in prose before citing the ₹Cr figure."
+            f"Either pass mcap_as_of matching inputs_as_of, or report the change in pp only. "
+            f"You must echo this caveat verbatim in prose before citing the flow-value figure."
         )
 
     return _with_dedup("calculate", {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}, args)
