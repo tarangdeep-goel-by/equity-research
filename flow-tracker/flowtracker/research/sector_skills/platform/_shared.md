@@ -25,4 +25,13 @@ This is a platform/marketplace/internet business. Standard manufacturing metrics
 - Track quarterly cash burn rate and remaining cash runway
 - Dilution risk: how many equity raises have there been? What's the annual dilution rate?
 
+### Mandatory — Operational-Metrics Fallback Chain
+
+Platform KPIs (GMV, take rate, AOV, MTU / MAU, order frequency, CAC, contribution margin) are routinely absent from `get_sector_kpis(symbol, sub_section=...)` because the structured-KPI extractor has sparse coverage for internet businesses. Do NOT silently skip these metrics — they are the primary operating reality of a platform and cannot be substituted with P&L ratios. The fallback chain:
+
+1. **First:** `get_sector_kpis(symbol, sub_section='gmv')` (also `take_rate`, `mau`, `order_frequency`).
+2. **Fallback 1:** `get_company_context(section='concall_insights', sub_section='operational_metrics')` — management routinely quotes these; the concall extractor surfaces them even when the sector-KPI extractor misses.
+3. **Fallback 2:** `get_company_context(section='concall_insights', sub_section='financial_metrics')` — revenue, contribution margin, and GMV-implied take rate.
+4. **Only if all three return empty** — raise as an open question ("What is this quarter's GMV / take rate? Investor deck suggests X but management has not confirmed.") and continue the report. A platform section that entirely omits GMV and take rate when the data is recoverable via concall is a mandatory-metric gap.
+
 **Emphasize:** GMV growth, take rate trajectory, unit economics improvement, customer acquisition cost trends, competitive moat (network effects, switching costs), and path to EBITDA breakeven.
