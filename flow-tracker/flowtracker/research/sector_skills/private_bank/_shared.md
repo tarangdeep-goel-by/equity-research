@@ -46,6 +46,10 @@ Every private-bank report — from both the ownership and financials agents — 
 - **CASA ratio** — liability-franchise strength driver
 - **Fee-income share** — cross-sell moat indicator (>25% strong, 15-25% moderate, <15% thin)
 - **Slippage ratio** — fresh NPA additions % of advances
+- **Credit-cost trajectory (≥5 quarters)** — not a single-quarter number; with provisioning-cycle context (see `bfsi/_shared.md` mandatory rules)
+- **Non-interest-income split (fee / treasury / recoveries)** — extracted from concall `financial_metrics`, not estimated from consolidated non-int-inc
+- **LCR (Liquidity Coverage Ratio)** — vs 100% regulatory floor; private banks typically 115–135%; <110% is balance-sheet-stress signal
+- **Aggregate foreign holding (FDI + FPI + ADR/GDR + NRI)** — explicit breakdown vs the 74% cap. Do NOT report the FPI component in isolation for large private banks; the four-component aggregate is the binding constraint. When aggregate >70% note the passive-flow ceiling (MSCI/FTSE rebalance demand substantially consumed)
 - **RoA / RoE** — decomposed via bank DuPont (see bfsi/financials.md)
 - **SOTP value** — where listed subsidiaries contribute >15% of standalone mcap
 
