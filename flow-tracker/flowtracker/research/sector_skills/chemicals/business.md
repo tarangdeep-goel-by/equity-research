@@ -9,6 +9,7 @@
 | **CDMO / CRAMS** | Contract-manufacturing pipeline of innovator molecules | 20-30% | 180-250 | innovator-client retention, commercial-vs-development mix |
 | **Agrochem** | Active-ingredient portfolio × formulation leverage × B2F seasonality | 12-22% (10-12% in deep-destock years like FY24-25) | 120-180 | AI/FMLG split, monsoon/export cycle |
 | **Commodity bulk** | Feedstock spread × process efficiency × cycle position | 8-14% | 80-120 | utilization, input-output pass-through |
+| **Downstream-tethered commodity** (carbon black, TiO2, methanol, silicon chloride) | Feedstock spread × auto-tyre / paints / construction demand × ocean-freight logistics | 10-18% (carbon black ₹15-25k EBITDA/t; TiO2 higher on pigment cycle) | 90-130 | downstream-segment demand (tyres / paints / coatings), not broader chemicals macro |
 | **Fluorochem** | Specialty-mass hybrid; HFC/HFO portfolio + refrigerant-regulation cycle | 20-32% | 140-200 | Montreal Protocol phase-down, HFO capex |
 | **Pigments / dyes** | Export-led formulation + textile/auto demand cycle | 12-20% | 130-190 | global textile cycle, REACH registration |
 | **Custom synthesis** | Multi-step bespoke intermediates for pharma/agrochem innovators | 22-32% | 150-220 | process-complexity moat, single-molecule risk |
@@ -16,7 +17,7 @@
 ### Revenue Decomposition — Always (Volume × Realization × Mix)
 Aggregate revenue growth without decomposition is the single most common business-agent error in chemicals. Decompose `Revenue = Volume × Realization × Mix` and separate the three drivers before claiming "growth momentum":
 - **Volume** — tonnes shipped, tracked via concall "volume growth" disclosures and linked to plant utilization (not capacity nameplate).
-- **Realization** — ₹/kg or ₹/tonne, heavily influenced by feedstock pass-through and product-basket weighting within the reported segment.
+- **Realization** — ₹/kg or ₹/tonne, heavily influenced by feedstock pass-through and product-basket weighting within the reported segment. For exports, distinguish **FOB vs CIF pricing**: ocean-freight volatility directly expands or compresses realised margins for exporters selling on CIF terms while competing against Chinese FOB pricing; state the contract-mix when realization is decomposed.
 - **Mix** — shift from commodity to specialty, from bulk AI to formulated agrochem, from development-phase to commercial-phase CRAMS revenue. Mix shift is the margin-expansion engine, but it often hides inside a flat-volume, flat-realization top line.
 
 Break down by **molecule tier** (niche / scale / bulk) and **geography** (domestic / LATAM / North America / Europe / rest-of-world). Exporters run 40-70% of revenue overseas, so INR moves, REACH registration status, and destination-market demand cycles swing the reported realization independently of India fundamentals. Source via `get_fundamentals(section='revenue_segments')` and `get_company_context(section='concall_insights', sub_section='operational_metrics')`.
@@ -40,6 +41,8 @@ Extract via `get_company_context(section='concall_insights', sub_section='operat
 
 ### Capital-Cycle Position — State the Phase
 Chemicals capex moves in 2-3Y domestic cycles overlaid by long-cycle global waves. FY21-23 China+1 boom drove specialty EBITDA margins to 25-35% peaks; FY24-25 brought normalization, China destocking, and fluorochem price resets; FY26 is the stabilization base case for most specialty sub-sectors. Earnings reported in the peak window cannot be extrapolated forward — normalize to through-cycle margin before forecasting. State the cycle phase (capex-build / ramp / peak / destock / stabilization) explicitly in the business narrative.
+
+Within capex-build, distinguish **brownfield debottlenecking** (12-18 month commissioning, ROIC-accretive because incremental tonnes ride installed fixed costs) from **greenfield integrated complexes** (3-4 year silent phase, ROIC-dilutive during build as gross block inflates ahead of revenue). A name running debottlenecking-led capex has a different margin and FAT trajectory than one mid-greenfield; set expectations accordingly.
 
 ### Sector-Specific Red Flags for Business Quality
 Business-quality stress surfaces in operating disclosures earlier than in reported P&L:

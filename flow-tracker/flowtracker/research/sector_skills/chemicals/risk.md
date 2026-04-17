@@ -19,6 +19,8 @@ Regulatory risk in chemicals is concrete, not vague. Tie each risk to the specif
 - **USFDA cGMP** — pharma-intermediate plants require cGMP-compliant facilities; Form 483 observations, warning letters, or import alerts trigger revenue halts for affected molecule-plant combinations.
 - **CII / BIS standards** — domestic product quality norms relevant for agrochem and industrial specialty.
 - **Montreal Protocol HFC phase-down** — structurally reshapes the fluorochem portfolio over 5-10 years; HFC-23 byproduct rules and HFO transition capex are sub-sector-defining rather than cyclical.
+- **K-REACH (South Korea)** — analogous registration regime for molecules exported to Korean downstream customers (auto, electronics); tonnage-threshold registration and joint-submission timelines periodically tighten.
+- **India CMSR / Draft Chemicals (Management and Safety) Rules — the "India REACH"** — the domestic regulatory filter under draft / phased notification as of FY26, will force registration, compliance capex, and local-portfolio rationalization once in force. Track the notification cadence and the transition-period timeline at the MoEFCC / CPCB level; non-compliant SKUs face domestic-market withdrawal.
 
 Name the relevant regime when the risk crystallises; vague "environmental regulations" framing loses the traceability that makes the risk actionable.
 

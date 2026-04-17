@@ -45,6 +45,7 @@ Cyclical reads miss the slow-moving structural shifts reshaping chemicals econom
 - **Regulatory tightening globally** — REACH restriction-list extensions, TSCA enforcement, and USFDA cGMP standards have all tightened over 3-5Y. Compliant Indian players gain share from non-compliant regional competitors.
 - **Backward integration to KSM** — post-FY20 China disruption, Indian specialty has collectively capex'd into earlier stages of the synthesis chain; sector-wide KSM self-sufficiency has risen 10-15pp in 4-5 years.
 - **CRAMS innovator re-sourcing** — structural shift of innovator CMC (chemistry-manufacturing-controls) spend from Western CMOs to Indian CRAMS at 20-30% cost advantage continues beyond any single cycle.
+- **Specialty / agrochem patent-cliff opportunity** — a pipeline of global active-ingredient molecules (specialty and crop-protection) worth roughly $4-6B in originator revenue goes off-patent over 2024-2028. Indian generic-AI and custom-synthesis manufacturers with qualified process-IP and registered molecules capture a structural addressable-market expansion; this is distinct from (and complementary to) CRAMS innovator-re-sourcing and is a different risk profile from the innovator-insourcing CRAMS downside.
 
 Name the structural shift and tie it to the specific sub-type that benefits; generic "China+1" framing without sub-type tie is noise.
 

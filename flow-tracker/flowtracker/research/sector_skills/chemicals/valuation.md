@@ -45,6 +45,7 @@ If the four-to-five drivers together do not account for more than half of the ob
 Real specialty chemicals peak at **Fixed Asset Turnover (FAT) of ~1.2-1.8×** (Revenue / Gross Block). Commodity runs >2×. CRAMS runs 1.0-1.5× given higher capital intensity. A name claiming specialty margins with FAT >2.5× is either asset-light formulation (a different archetype deserving a different peer set) or mis-classified — apply peer multiples accordingly, not by headline margin.
 - Compute FAT via `calculate` on data from `get_fundamentals(section='ratios')` or `balance_sheet_detail`.
 - Benchmark against peers via `get_peer_sector(section='benchmarks')`.
+- **ZLD / ESG-compliance capex caveat** — mandated zero-liquid-discharge, effluent upgrade, and carbon-reduction capex inflates gross block without adding revenue capacity, mechanically lowering the peak FAT ceiling for compliant players vs their own pre-2020 historical bands. A 10-20% FAT compression from this source is structural, not a mix-degradation signal.
 
 ### What Fails for Chemicals — Name These Explicitly
 - **Simple PE without EV/EBITDA triangulation** — mis-signals during capex-build and ramp phases; depreciation step-ups distort earnings.
