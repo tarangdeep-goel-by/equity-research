@@ -23,13 +23,14 @@ Regulated utilities are the textbook Gordon-growth case. `Justified P/B = (ROE_r
 **Always carry `g` through the formula** — dropping it under-estimates fair value by 50-70% (BFSI pilot lesson). For transmission in build-out phase, g is load-bearing; a 100 bps error in g shifts justified multiple by 25-40%. Pull CoE from `get_market_context(section='macro')` or the WACC helper; run ROE/CoE/g through `calculate` with named inputs.
 
 ### Dividend Yield vs 10Y G-sec Spread — Bond-Proxy Lens for Mature Payers
-Mature PSU generators and transmission utilities trade as bond-proxies for yield-seeking DIIs and pension pools. Use dividend yield vs 10Y G-sec as a secondary anchor alongside P/B:
+Mature PSU generators and transmission utilities trade as bond-proxies for yield-seeking DIIs and pension pools, but Indian utility dividend yields currently sit *below* the 10Y G-sec — the re-rating of PSU names in 2021-24 compressed yields into a 3-5% range vs G-sec at ~7%. The signal is the **discount to G-sec**, not a premium over it. Use dividend yield vs 10Y G-sec as a secondary anchor alongside P/B:
 
-- **Normal spread:** 200-400 bps over 10Y G-sec for mature regulated payers.
-- **<200 bps spread** = stock is rich / priced for capacity-growth optionality; risk of yield compression via multiple re-rating.
-- **>400 bps spread** = stock is cheap / market is pricing regulatory risk, discom-receivable risk, or execution doubt. Investigate which.
+- **Normal discount regime:** dividend yield 200-400 bps *below* 10Y G-sec for mature regulated PSU payers — market pays up for the RAB-growth optionality embedded in PSUs with visible capex pipelines.
+- **Discount >400 bps (yield well below G-sec)** = stock is rich / priced for capacity-growth optionality + dividend-sustainability; risk of yield compression via multiple re-rating if growth slips.
+- **Discount <100 bps or zero/positive spread to G-sec** = stock is cheap / market is pricing regulatory risk, discom-receivable risk, or dividend-payout-cut risk. Investigate which.
+- **Narrow/inverted spread (yield above G-sec)** historically signals either distressed-franchise priced value or a structural yield trap (payout about to be cut for capex funding).
 
-Call `get_market_context(section='macro')` for the current 10Y G-sec yield; then compute the specific spread on trailing + forward dividend yield. Cross-check the dividend payout trajectory via `get_fundamentals(section='dividend_history')` — a stock appearing cheap on trailing yield but with a declining payout (e.g., capex-driven payout cut) is a yield trap. Route through `calculate` with current yield, G-sec yield, and payout-ratio inputs.
+Call `get_market_context(section='macro')` for the current 10Y G-sec yield; then compute the specific discount on trailing + forward dividend yield. Cross-check the dividend payout trajectory via `get_fundamentals(section='dividend_history')` — a stock appearing cheap on trailing yield but with a declining payout (e.g., capex-driven payout cut) is a yield trap. Route through `calculate` with current yield, G-sec yield, and payout-ratio inputs.
 
 ### SOTP With Recent-IPO Subsidiaries — Mandatory Decomposition
 Parent-PSU utilities with recently listed renewable arms (e.g., parent → green-subsidiary IPO) or InvIT monetization vehicles must be decomposed. The subsidiary trades on growth multiples while the parent-standalone trades on regulated-yield multiples; aggregating them at a single parent P/B under-prices both parts.
@@ -46,7 +47,7 @@ Regulated-power valuation is especially WACC-sensitive because CoE drives both t
 - **Reverse-DCF implied growth** — at the new WACC, what growth rate does the current market price imply? If the implied growth now looks unreasonable, that is the signal.
 - **Justified P/B** from `(ROE − g) ÷ (CoE − g)` with the new CoE substituted.
 - **Peer-relative multiple implications** — if you changed WACC for this name, check whether the same WACC rationale applies to peers; an inconsistent WACC across peers makes the peer-relative conclusion meaningless.
-- **Dividend-yield-vs-G-sec target spread** — a higher WACC regime implies a wider target spread (risk-premium re-pricing), not just the same 200-400 bps baseline.
+- **Dividend-yield-vs-G-sec target discount** — a higher WACC regime implies a *narrower* discount (i.e., dividend yield moves closer to or above G-sec as the risk-premium re-prices), not the same 200-400 bps below-G-sec baseline.
 
 Do NOT leave some dependent outputs at the original WACC and some at the new — that produces an incoherent fair-value triangle. Route the override through `calculate` with the WACC delta as a named input and recompute all four dependent outputs within the same section.
 

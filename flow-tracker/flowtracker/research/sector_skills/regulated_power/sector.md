@@ -25,6 +25,7 @@ Sector reports collapse when they treat regulated_power as monolithic. Tier the 
 - **Renewable pure-plays** — listed platforms focused on solar + wind with aggressive capex, QIP-funded growth, FII-anchored cap tables.
 - **State-owned listed discoms** — a handful of state distribution utilities trade publicly; post-RDSS regime is the current investability lens.
 - **Power-finance-institution lenders** — dedicated central-PSU power-sector financiers (power-finance, rural-electrification, renewable-dedicated) sit adjacent to the sector as the financiers to distribution, generation, transmission, and renewable projects; their asset quality mirrors sector health directly.
+- **Pumped-Hydro Storage (PHS) operators** — central + state hydro PSUs plus integrated private renewables players sanctioning multi-GW PHS capacity on tolling-style contracts; early-stage listed exposure, but strategically significant as the primary long-duration grid-firming class through 2030.
 
 ### Institutional-Flow Patterns — Regulated-Power-Specific
 Regulated power runs 2-4% of Nifty 50 weight and 4-7% of broader market-cap index weight, with flow mechanics distinct from BFSI:
@@ -40,6 +41,7 @@ Cross-check the sector flow via `get_market_context(section='fii_dii_flows')` an
 Cyclical reads miss the slow-moving structural shifts reshaping regulated-power economics over 3-5 years:
 - **Renewable transition acceleration** — the 500 GW non-fossil target by 2030 implies ~40-50 GW/year capacity addition run-rate vs current ~15-20 GW/year; financing + grid-evacuation + land-aggregation are the binding constraints.
 - **Battery-storage integration and ancillary-services market** — CERC's 2022 ancillary-services regulation creates a new revenue line for flexible-generation assets (thermal, pumped-hydro) and a new business model for standalone battery storage; early commercial rollout phase.
+- **Pumped-Hydro Storage (PHS) capacity-build** — PHS is emerging as the primary long-duration (6-12 hour) grid-firming asset class alongside BESS. Central + state PSU hydro operators + integrated private renewables players are sanctioning 5-10 GW of PHS over 2025-30 on tolling-style tariff contracts. Unit economics differ from conventional hydro (round-trip efficiency 70-80%, peak-offpeak price spread, capacity charges) and need a distinct sub-type lens rather than being bucketed with "renewable" or "hydro". CEA's PHS roadmap targets ~18-20 GW by 2032.
 - **Green-hydrogen opportunity** — the National Green Hydrogen Mission (2023) targets 5 MMT/year green-H2 production by 2030, adding a long-duration demand sink for dedicated renewable capacity; uptake depends on electrolyzer + downstream-industrial commercial economics.
 - **Distribution-privatization pilots expanding** — the Delhi + Mumbai private-discom model is being referenced for other metros; a successful replication re-rates listed private-discom names materially.
 - **Green bonds and sustainability-linked financing** — sovereign + corporate green-bond issuance lowers WACC for renewable developers by 50-100 bps vs conventional corporate debt; accelerates renewable pipeline IRR.
@@ -56,6 +58,7 @@ When benchmarking, pull from `get_peer_sector(section='benchmarks')` and state t
 - **Private IPPs (merchant + PPA)** — MW, PPA-vs-merchant mix %, weighted offtake tariff, fuel cost/kWh, merchant realization, ICR.
 - **Distribution** — AT&C losses %, ACS-ARR gap paise/kWh, collection efficiency %, receivable-days, subsidy-booked-to-realized %.
 - **Power-finance institutions (PFIs)** — AUM ₹ Cr, stage-3 assets %, GNPA %, incremental sanctions by borrower-class, yield-on-book %.
+- **Pumped-Hydro Storage (PHS)** — GW capacity operational + sanctioned, round-trip efficiency %, cycles per day, tolling-tariff ₹/MW/month vs merchant peak-off-peak spread capture.
 
 A number quoted without sector percentile (e.g., "PLF of 72%") omits whether that is top-quartile, median, or bottom-quartile; re-rating thesis depends on the percentile, not the absolute.
 
