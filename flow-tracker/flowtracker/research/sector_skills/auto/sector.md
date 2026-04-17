@@ -64,5 +64,5 @@ If `get_peer_sector(section='sector_overview')` returns a sparse peer set (fewer
 - "Where is the sector in the volume cycle, the commodity cycle, and the EV-transition cycle, and are the three phases aligned or divergent?"
 - "What is the current 2W and 4W EV share of sales, and is the sector on, above, or below the 2027-30 inflection trajectory?"
 - "What is the rural real-wage and monsoon context currently, and is it consistent with the 2W / tractor volume guidance from the top players?"
-- "Are any BS7, CAFE-Phase-3, scrappage, or FAME / PLI policy revisions in draft consultation that would reprice capex or demand for this sub-type?"
+- "Are any BS7, CAFE-Phase-3, scrappage, PM E-DRIVE (the active EV demand-incentive scheme; FAME-II expired March 2024), or EV-PLI / Auto-PLI policy revisions in draft consultation that would reprice capex or demand for this sub-type?"
 - "For structural shifts (ADAS penetration, shared mobility, right-to-repair): what share of incremental growth is from the new channel vs legacy origination, and is the incumbent's moat being challenged?"
