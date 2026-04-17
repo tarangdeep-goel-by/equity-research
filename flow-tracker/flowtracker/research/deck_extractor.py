@@ -212,7 +212,8 @@ def _extract_json(text: str) -> dict:
 
 def _find_deck_pdfs(symbol: str, quarters: int = 4) -> list[Path]:
     """Return the most recent N investor_deck.pdf paths for a symbol, newest first."""
-    base = _VAULT_BASE / symbol / "filings"
+    # Resolve at call-time so tests monkeypatching HOME work.
+    base = Path.home() / "vault" / "stocks" / symbol / "filings"
     if not base.exists():
         return []
     decks: list[tuple[tuple[int, int], Path]] = []
@@ -230,7 +231,7 @@ def _find_deck_pdfs(symbol: str, quarters: int = 4) -> list[Path]:
         except (ValueError, IndexError):
             continue
     decks.sort(key=lambda t: t[0], reverse=True)
-    return [d[1] for _, d in decks[:quarters]]
+    return [path for _, path in decks[:quarters]]
 
 
 def _quarter_label_from_path(pdf_path: Path) -> str:
