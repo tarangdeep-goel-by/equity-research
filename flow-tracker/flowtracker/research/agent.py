@@ -516,6 +516,17 @@ async def _run_specialist(
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
     model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
 
+    # Capture subprocess stderr for diagnostics — SDK otherwise hides it
+    # behind a hard-coded "Check stderr output for details" placeholder
+    # (see https://github.com/anthropics/claude-agent-sdk-python/issues/800).
+    # Needed to diagnose the reproducible valuation-agent crash pattern
+    # (https://github.com/anthropics/claude-agent-sdk-python/issues/701).
+    _stderr_buffer: list[str] = []
+    def _stderr_cb(line: str) -> None:
+        _stderr_buffer.append(line)
+        # Also log at DEBUG so live tail can see it
+        logger.debug("[%s] cli-stderr: %s", name, line.rstrip())
+
     # Build options — only create MCP server when agent has tools
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -523,6 +534,7 @@ async def _run_specialist(
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
+        stderr=_stderr_cb,
     )
     effort = effort or DEFAULT_EFFORT.get(name)
     if effort:
@@ -728,6 +740,13 @@ async def _run_specialist(
         # Claude CLI may exit with code 1 after delivering results.
         # If we already captured text, proceed with what we have.
         has_content = bool(report_text or text_blocks)
+        # Surface the captured subprocess stderr (SDK bug #800 hides it by default)
+        stderr_tail = "\n".join(_stderr_buffer[-50:]).strip()
+        if stderr_tail:
+            logger.warning(
+                "Agent '%s' for %s CLI stderr (last 50 lines):\n%s",
+                name, symbol, stderr_tail,
+            )
         if has_content:
             logger.warning(
                 "Agent '%s' for %s raised %s after producing content — proceeding with partial output",
