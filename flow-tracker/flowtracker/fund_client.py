@@ -153,9 +153,53 @@ class FundClient:
             ))
         return results
 
+    def _latest_cash_flow(self, symbol: str) -> tuple[float | None, float | None]:
+        """Fall back to annual cash flow statement when ``info`` fields are empty.
+
+        ``info.get('freeCashflow')`` and ``info.get('operatingCashflow')`` are
+        routinely ``None`` for NSE listings, but the annual cash-flow statement
+        (``ticker.get_cash_flow(freq='yearly')``) reliably exposes
+        ``FreeCashFlow`` / ``OperatingCashFlow`` rows. Returns ``(ocf, fcf)`` in
+        raw rupees; callers still need to convert to crores.
+        """
+        try:
+            df = self._ticker(symbol).get_cash_flow(freq="yearly")
+        except Exception:
+            return None, None
+        if df is None or df.empty or len(df.columns) == 0:
+            return None, None
+        latest_col = df.columns[0]
+
+        def _extract(row: str) -> float | None:
+            try:
+                val = df.loc[row, latest_col]
+            except (KeyError, TypeError):
+                return None
+            if val is None or str(val) == "nan":
+                return None
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return None
+
+        return _extract("OperatingCashFlow"), _extract("FreeCashFlow")
+
     def fetch_valuation_snapshot(self, symbol: str) -> ValuationSnapshot:
         """Fetch today's valuation metrics for storage."""
         info = self._info(symbol)
+        ocf_raw = info.get("operatingCashflow")
+        fcf_raw = info.get("freeCashflow")
+        if ocf_raw is None or fcf_raw is None:
+            ocf_fallback, fcf_fallback = self._latest_cash_flow(symbol)
+            if ocf_raw is None:
+                ocf_raw = ocf_fallback
+            if fcf_raw is None:
+                fcf_raw = fcf_fallback
+        # pegRatio is frequently missing for NSE listings; trailingPegRatio is
+        # the documented fallback and populated more consistently.
+        peg = info.get("pegRatio")
+        if peg is None:
+            peg = info.get("trailingPegRatio")
         return ValuationSnapshot(
             symbol=symbol,
             date=date.today().isoformat(),
@@ -173,7 +217,7 @@ class FundClient:
             ev_ebitda=info.get("enterpriseToEbitda"),
             ev_revenue=info.get("enterpriseToRevenue"),
             ps_ratio=info.get("priceToSalesTrailing12Months"),
-            peg_ratio=info.get("pegRatio"),
+            peg_ratio=peg,
             # Profitability
             gross_margin=_to_pct(info.get("grossMargins")),
             operating_margin=_to_pct(info.get("operatingMargins")),
@@ -193,8 +237,8 @@ class FundClient:
             total_debt=_to_cr(info.get("totalDebt")),
             book_value_per_share=info.get("bookValue"),
             # Cash flow
-            free_cash_flow=_to_cr(info.get("freeCashflow")),
-            operating_cash_flow=_to_cr(info.get("operatingCashflow")),
+            free_cash_flow=_to_cr(fcf_raw),
+            operating_cash_flow=_to_cr(ocf_raw),
             # Per-share
             revenue_per_share=info.get("revenuePerShare"),
             cash_per_share=info.get("totalCashPerShare"),
