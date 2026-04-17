@@ -159,9 +159,16 @@ class InsiderClient:
             if quantity == 0 and value == 0:
                 return None
 
-            # Parse holding percentages
-            before_pct = _parse_float_safe(item.get("befAcqSharesPerc"))
-            after_pct = _parse_float_safe(item.get("afterAcqSharesPerc"))
+            # Parse holding percentages.
+            # NSE's actual JSON keys are 'befAcqSharesPer' / 'afterAcqSharesPer'
+            # (no trailing 'c'). Keep the 'Perc' variants as a fallback in case
+            # NSE adds the longer form later — _parse_float_safe tolerates None.
+            before_pct = _parse_float_safe(
+                item.get("befAcqSharesPer") or item.get("befAcqSharesPerc")
+            )
+            after_pct = _parse_float_safe(
+                item.get("afterAcqSharesPer") or item.get("afterAcqSharesPerc")
+            )
 
             return InsiderTransaction(
                 date=parsed_date,

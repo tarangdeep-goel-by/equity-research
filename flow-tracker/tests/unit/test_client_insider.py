@@ -166,6 +166,34 @@ class TestParseTrade:
         assert trade is None
         client.close()
 
+    def test_holding_pct_with_real_nse_keys(self):
+        """
+        NSE's live JSON response uses 'befAcqSharesPer' / 'afterAcqSharesPer'
+        (NO trailing 'c'). The parser historically read 'befAcqSharesPerc'
+        / 'afterAcqSharesPerc' and silently produced NULL holding_before_pct
+        and holding_after_pct for ALL 313k+ historical insider transactions.
+        Verified empirically by hitting the live NSE endpoint. Keep this test
+        whenever NSE's schema might shift.
+        """
+        client = InsiderClient()
+        item = {
+            "symbol": "360ONE",
+            "acqfromDt": "08-Apr-2026",
+            "tdpTransactionType": "Pledge",
+            "secAcq": "10000",
+            "secVal": "9717000",
+            "acqName": "RONAK RAMESH SHETH",
+            "personCategory": "Employees/Designated Employees",
+            "acqMode": "Pledge Creation",
+            "befAcqSharesPer": "0.03",
+            "afterAcqSharesPer": "0.03",
+        }
+        trade = client._parse_trade(item)
+        assert trade is not None
+        assert trade.holding_before_pct == 0.03
+        assert trade.holding_after_pct == 0.03
+        client.close()
+
     def test_missing_date_returns_none(self):
         client = InsiderClient()
         item = {**_INSIDER_ITEM, "acqfromDt": "", "intimDt": ""}
