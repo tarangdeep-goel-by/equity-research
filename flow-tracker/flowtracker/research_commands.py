@@ -20,6 +20,67 @@ app = typer.Typer(
 console = Console()
 
 
+async def _run_document_pipeline(symbol: str, industry: str | None, console_: Console) -> dict:
+    """Run concall + AR + deck extractors concurrently.
+
+    All three read independent PDFs and write to independent vault paths, so
+    they're safe to gather. Each has its own semaphore internally. Returns a
+    dict with per-extractor results or exceptions (return_exceptions=True).
+    """
+    from flowtracker.research.annual_report_extractor import ensure_annual_report_data
+    from flowtracker.research.concall_extractor import ensure_concall_data
+    from flowtracker.research.deck_extractor import ensure_deck_data
+
+    concall_res, ar_res, deck_res = await asyncio.gather(
+        ensure_concall_data(symbol, quarters=4, industry=industry),
+        ensure_annual_report_data(
+            symbol, years=2, model="claude-sonnet-4-6", full=False, industry=industry
+        ),
+        ensure_deck_data(symbol, quarters=4, model="claude-sonnet-4-6", industry=industry),
+        return_exceptions=True,
+    )
+
+    # Per-extractor logging — interleaves naturally since gather finished.
+    if isinstance(concall_res, Exception):
+        console_.print(f"  [yellow]⚠[/] Concall extraction failed: {concall_res}")
+        console_.print("  [dim]Agents will work without concall data[/]")
+    elif concall_res:
+        _new_q = concall_res.get("_new_quarters_extracted", 0)
+        _total_q = concall_res.get("quarters_analyzed", 0)
+        if _new_q > 0:
+            console_.print(f"  [green]✓[/] Concall: {_new_q} new quarter(s) ({_total_q} total)")
+        else:
+            console_.print(f"  [dim]Concall cached ({_total_q} quarters)[/]")
+    else:
+        console_.print(f"  [dim]No concall PDFs for {symbol}. Agents proceed without concall.[/]")
+
+    if isinstance(ar_res, Exception):
+        console_.print(f"  [yellow]⚠[/] AR extraction: {ar_res}")
+    elif ar_res:
+        _ar_new = ar_res.get("_new_years_extracted", 0)
+        _ar_total = len(ar_res.get("years_analyzed", []))
+        if _ar_new > 0:
+            console_.print(f"  [green]✓[/] AR: {_ar_new} new year(s) ({_ar_total} total)")
+        else:
+            console_.print(f"  [dim]AR cached ({_ar_total} years)[/]")
+    else:
+        console_.print(f"  [dim]No AR PDFs for {symbol}. Agents proceed without AR.[/]")
+
+    if isinstance(deck_res, Exception):
+        console_.print(f"  [yellow]⚠[/] Deck extraction: {deck_res}")
+    elif deck_res:
+        _deck_new = deck_res.get("_new_quarters_extracted", 0)
+        _deck_total = deck_res.get("quarters_analyzed", 0)
+        if _deck_new > 0:
+            console_.print(f"  [green]✓[/] Deck: {_deck_new} new quarter(s) ({_deck_total} total)")
+        else:
+            console_.print(f"  [dim]Deck cached ({_deck_total} quarters)[/]")
+    else:
+        console_.print(f"  [dim]No investor decks for {symbol}. Agents proceed without decks.[/]")
+
+    return {"concall": concall_res, "ar": ar_res, "deck": deck_res}
+
+
 @app.command()
 def fundamentals(
     symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")],
@@ -246,7 +307,7 @@ def thesis(
         trace.phases.append(p0)
 
     # Phase 0b: Concall extraction (per-quarter cached)
-    console.print(f"\n[bold]Phase 0b: Concall Pipeline[/]")
+    console.print(f"\n[bold]Phase 0b: Document Pipeline (Concalls + AR + Decks)[/]")
     p0b = PhaseEvent(phase="concall", started_at=_dt.now(_tz.utc).isoformat())
     p0b_start = _time.monotonic()
 
@@ -265,31 +326,32 @@ def thesis(
         except Exception as e:
             console.print(f"  [yellow]⚠[/] Filing download: {e}")
 
-    # Per-quarter cached extraction — only extracts new quarters
+    # Resolve industry once for all extractors.
+    from flowtracker.research.data_api import ResearchDataAPI
+    _industry = None
     try:
-        from flowtracker.research.concall_extractor import ensure_concall_data
-        from flowtracker.research.data_api import ResearchDataAPI
-        _industry = None
+        with ResearchDataAPI() as _api:
+            _industry = _api._get_industry(symbol)
+            if _industry == "Unknown":
+                _industry = None
+    except Exception:
+        pass
+
+    # AR PDF download (sync; writes PDFs that ensure_annual_report_data then reads).
+    if not skip_fetch:
         try:
-            with ResearchDataAPI() as _api:
-                _industry = _api._get_industry(symbol)
-                if _industry == "Unknown":
-                    _industry = None
-        except Exception:
-            pass
-        _concall_result = asyncio.run(ensure_concall_data(symbol, quarters=4, industry=_industry))
-        if _concall_result:
-            _new_q = _concall_result.get("_new_quarters_extracted", 0)
-            _total_q = _concall_result.get("quarters_analyzed", 0)
-            if _new_q > 0:
-                console.print(f"  [green]✓[/] Extracted {_new_q} new quarter(s) ({_total_q} total)")
-            else:
-                console.print(f"  [dim]Concall data cached ({_total_q} quarters)[/]")
-        else:
-            console.print(f"  [dim]No concall PDFs found for {symbol}. Agents will work without concall data.[/]")
+            from flowtracker.research.ar_downloader import ensure_annual_reports
+            n_downloaded = ensure_annual_reports(symbol, max_years=3)
+            if n_downloaded:
+                console.print(f"  [green]✓[/] AR PDFs: {n_downloaded} downloaded")
+        except Exception as e:
+            console.print(f"  [yellow]⚠[/] AR download: {e}")
+
+    # Parallel extraction: concall + AR + deck run concurrently.
+    try:
+        asyncio.run(_run_document_pipeline(symbol, _industry, console))
     except Exception as e:
-        console.print(f"  [yellow]⚠[/] Concall extraction failed: {e}")
-        console.print("  [dim]Agents will work without concall data[/]")
+        console.print(f"  [yellow]⚠[/] Document pipeline: {e}")
 
     p0b.finished_at = _dt.now(_tz.utc).isoformat()
     p0b.duration_seconds = _time.monotonic() - p0b_start
@@ -886,32 +948,32 @@ def run_agent(
         p0.duration_seconds = _time.monotonic() - p0_start
         trace.phases.append(p0)
 
-    # Ensure concall data is available (per-quarter cached)
+    # Document pipeline: concall + AR + deck extraction in parallel.
     if specialist_agents and not skip_fetch:
-        console.print(f"\n[bold]Ensuring concall data for {symbol}...[/]")
+        console.print(f"\n[bold]Document Pipeline (Concalls + AR + Decks) for {symbol}...[/]")
+        from flowtracker.research.data_api import ResearchDataAPI
+        _industry = None
         try:
-            from flowtracker.research.concall_extractor import ensure_concall_data
-            from flowtracker.research.data_api import ResearchDataAPI
-            _industry = None
-            try:
-                with ResearchDataAPI() as _api:
-                    _industry = _api._get_industry(symbol)
-                    if _industry == "Unknown":
-                        _industry = None
-            except Exception:
-                pass
-            _concall_result = asyncio.run(ensure_concall_data(symbol, quarters=4, industry=_industry))
-            if _concall_result:
-                _new_q = _concall_result.get("_new_quarters_extracted", 0)
-                _total_q = _concall_result.get("quarters_analyzed", 0)
-                if _new_q > 0:
-                    console.print(f"  [green]✓[/] Extracted {_new_q} new quarter(s) ({_total_q} total)")
-                else:
-                    console.print(f"  [dim]Concall data cached ({_total_q} quarters)[/]")
-            else:
-                console.print(f"  [dim]No concall PDFs available for {symbol}[/]")
+            with ResearchDataAPI() as _api:
+                _industry = _api._get_industry(symbol)
+                if _industry == "Unknown":
+                    _industry = None
+        except Exception:
+            pass
+
+        # AR PDF download (sync; writes PDFs that ensure_annual_report_data reads).
+        try:
+            from flowtracker.research.ar_downloader import ensure_annual_reports
+            n_downloaded = ensure_annual_reports(symbol, max_years=3)
+            if n_downloaded:
+                console.print(f"  [green]✓[/] AR PDFs: {n_downloaded} downloaded")
         except Exception as e:
-            console.print(f"  [yellow]⚠[/] Concall: {e}")
+            console.print(f"  [yellow]⚠[/] AR download: {e}")
+
+        try:
+            asyncio.run(_run_document_pipeline(symbol, _industry, console))
+        except Exception as e:
+            console.print(f"  [yellow]⚠[/] Document pipeline: {e}")
 
     # Run specialist agents
     total_cost = 0.0

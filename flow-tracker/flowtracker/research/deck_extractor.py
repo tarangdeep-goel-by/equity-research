@@ -35,6 +35,50 @@ logger = logging.getLogger(__name__)
 _VAULT_BASE = Path.home() / "vault" / "stocks"
 MAX_CONCURRENT_DECK_EXTRACTIONS = 3
 
+# --- Sector-specific extraction hint ---
+
+
+def build_extraction_hint(industry: str | None) -> str:
+    """Return a short sector-specific mandate paragraph for the deck extraction prompt.
+
+    Decks are visual/headline-driven, so hints are lighter than for ARs — focused on
+    must-include chart types and slide categories. Empty string when industry has no
+    matching rule.
+    """
+    if not industry:
+        return ""
+    ind = industry.lower()
+
+    if "bank" in ind or "financial" in ind:
+        return (
+            "Sector mandate (BFSI): `charts_described` MUST include the NIM trajectory "
+            "chart and the GNPA / NNPA trajectory chart when present in the deck."
+        )
+    if "pharma" in ind or "drug" in ind:
+        return (
+            "Sector mandate (Pharmaceuticals): `strategic_priorities` MUST capture the "
+            "pipeline / R&D slide content (ANDA filings, key launches, USFDA status) "
+            "when shown in the deck."
+        )
+    if "metal" in ind or "mining" in ind or "steel" in ind or "oil" in ind or "gas" in ind:
+        return (
+            "Sector mandate (Metals / Oil & Gas): `charts_described` MUST include any "
+            "realization / spread chart and any volume / production chart when present."
+        )
+    if "it" in ind.split() or "software" in ind or "it - software" in ind or "computers" in ind:
+        return (
+            "Sector mandate (IT Services): `segment_performance` MUST capture the "
+            "geography mix and vertical mix slides when shown."
+        )
+    if "auto" in ind:
+        return (
+            "Sector mandate (Auto): `segment_performance` MUST capture volumes by "
+            "segment (PV / CV / 2W as relevant); `strategic_priorities` MUST capture "
+            "EV roadmap slides when shown."
+        )
+    return ""
+
+
 # --- JSON schema ---
 
 _DECK_EXTRACTION_SCHEMA = {
@@ -242,6 +286,7 @@ async def _extract_single_deck(
     pdf_path: Path,
     symbol: str,
     model: str,
+    industry: str | None = None,
 ) -> dict:
     """Extract one deck PDF → structured JSON. Handles Docling + Claude extraction."""
     import time as _time
@@ -274,8 +319,14 @@ async def _extract_single_deck(
         f"{extraction.markdown}"
     )
 
+    sector_hint = build_extraction_hint(industry)
+    system_prompt = (
+        f"{DECK_EXTRACTION_PROMPT}\n\n{sector_hint}"
+        if sector_hint
+        else DECK_EXTRACTION_PROMPT
+    )
     response = await _call_claude(
-        DECK_EXTRACTION_PROMPT, user_prompt, model,
+        system_prompt, user_prompt, model,
         max_budget=0.40, max_turns=1,
         output_format=_DECK_EXTRACTION_SCHEMA,
     )
@@ -305,6 +356,7 @@ async def extract_decks(
     symbol: str,
     quarters: int = 4,
     model: str = "claude-sonnet-4-6",
+    industry: str | None = None,
 ) -> dict:
     """Extract the last N decks for a symbol, save combined JSON to vault."""
     import time as _time
@@ -322,7 +374,7 @@ async def extract_decks(
 
     async def _with_sem(pdf: Path) -> dict:
         async with sem:
-            return await _extract_single_deck(pdf, symbol, model)
+            return await _extract_single_deck(pdf, symbol, model, industry)
 
     quarter_results = list(await asyncio.gather(*[_with_sem(p) for p in pdfs]))
 
@@ -347,6 +399,7 @@ async def ensure_deck_data(
     symbol: str,
     quarters: int = 4,
     model: str = "claude-sonnet-4-6",
+    industry: str | None = None,
 ) -> dict | None:
     """Incremental extraction — only re-extract decks that don't have a cached quarter.
 
@@ -377,6 +430,8 @@ async def ensure_deck_data(
     to_extract = [pdf for label, pdf in available.items() if label not in cached_quarters]
     if not to_extract:
         logger.info("[deck_ensure] %s: all %d quarters cached", symbol, len(available))
+        existing.setdefault("quarters_analyzed", len(existing.get("quarters", [])))
+        existing["_new_quarters_extracted"] = 0
         return existing
 
     logger.info("[deck_ensure] %s: extracting %d new quarter(s)", symbol, len(to_extract))
@@ -384,7 +439,7 @@ async def ensure_deck_data(
 
     async def _with_sem(pdf: Path) -> dict:
         async with sem:
-            return await _extract_single_deck(pdf, symbol, model)
+            return await _extract_single_deck(pdf, symbol, model, industry)
 
     new_results = list(await asyncio.gather(*[_with_sem(p) for p in to_extract]))
 
@@ -406,6 +461,7 @@ async def ensure_deck_data(
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+    result["_new_quarters_extracted"] = len(new_results)
     return result
 
 

@@ -68,6 +68,55 @@ FULL_ONLY_SECTIONS = (
 SECTION_CHAR_CAP = 120_000
 
 
+# --- Sector-specific extraction hint ---
+
+
+def build_extraction_hint(industry: str | None) -> str:
+    """Return sector-specific mandate paragraph for the AR extraction system prompt.
+
+    Mirrors `concall_extractor.build_extraction_hint` (which delegates to
+    `sector_kpis.build_extraction_hint`) but adds *section-level* mandates that
+    are AR-specific — what each canonical section MUST surface for a given
+    sector. Empty string when the industry doesn't match any rule.
+    """
+    if not industry:
+        return ""
+    ind = industry.lower()
+
+    if "bank" in ind or "financial" in ind:
+        return (
+            "Sector mandate (BFSI): the `segmental` section MUST surface CASA ratio, "
+            "GNPA, NNPA, and PCR (provision coverage ratio) when disclosed. The "
+            "`risk_management` section MUST capture capital adequacy — CET-1, Tier-1, "
+            "and CRAR — with the exact disclosed values."
+        )
+    if "pharma" in ind or "drug" in ind:
+        return (
+            "Sector mandate (Pharmaceuticals): the `mdna` section MUST capture R&D "
+            "spend (absolute and as % of revenue), pipeline / ANDA milestones, and "
+            "USFDA inspection outcomes (483s, warning letters, EIRs) when disclosed."
+        )
+    if "metal" in ind or "mining" in ind or "steel" in ind or "oil" in ind or "gas" in ind:
+        return (
+            "Sector mandate (Metals / Oil & Gas): the `risk_management` section MUST "
+            "capture commodity-hedging policy and the open hedge position (volume "
+            "hedged, tenor, average hedged price) when disclosed."
+        )
+    if "it" in ind.split() or "software" in ind or "it - software" in ind or "computers" in ind:
+        return (
+            "Sector mandate (IT Services): the `segmental` section MUST capture "
+            "client-geography split (US / Europe / RoW) and top-5 / top-10 client "
+            "concentration when disclosed."
+        )
+    if "auto" in ind:
+        return (
+            "Sector mandate (Auto): the `mdna` section MUST capture volumes by "
+            "segment (PV / CV / 2W / tractor as relevant), ASP / realization trends, "
+            "and EV transition commentary (capex earmarked, model launches, mix %)."
+        )
+    return ""
+
+
 # --- Per-section prompts + schemas ---
 
 _SECTION_PROMPTS = {
@@ -298,7 +347,12 @@ def _extract_json(text: str) -> dict:
 
 
 async def _extract_section(
-    section_name: str, section_md: str, symbol: str, fy_label: str, model: str,
+    section_name: str,
+    section_md: str,
+    symbol: str,
+    fy_label: str,
+    model: str,
+    industry: str | None = None,
 ) -> dict:
     """Run a single Claude extraction pass for one AR section."""
     prompt = _SECTION_PROMPTS.get(section_name)
@@ -321,9 +375,12 @@ async def _extract_section(
         f"Company: {symbol}\nFiscal year: {fy_label}\nSection: {section_name}\n\n"
         f"{prompt}\n\n## Section markdown\n\n{section_md}"
     )
+    sector_hint = build_extraction_hint(industry)
+    base_system = "You are a buy-side analyst extracting structured data from an Indian listed company's annual report. Return ONLY valid JSON — no prose, no fences."
+    system_prompt = f"{base_system}\n\n{sector_hint}" if sector_hint else base_system
     try:
         resp = await _call_claude(
-            system_prompt="You are a buy-side analyst extracting structured data from an Indian listed company's annual report. Return ONLY valid JSON — no prose, no fences.",
+            system_prompt=system_prompt,
             user_prompt=user_prompt,
             model=model,
             max_budget=0.35,
@@ -372,6 +429,7 @@ async def _extract_single_ar(
     symbol: str,
     model: str,
     sections: tuple[str, ...],
+    industry: str | None = None,
 ) -> dict:
     """Extract one AR PDF → structured JSON with per-section payloads.
 
@@ -450,7 +508,7 @@ async def _extract_single_ar(
             if not slice_text or len(slice_text) < 200:
                 return sec, {"status": "section_not_found_or_empty", "chars": len(slice_text)}
             try:
-                data = await _extract_section(sec, slice_text, symbol, fy_label, model)
+                data = await _extract_section(sec, slice_text, symbol, fy_label, model, industry)
                 return sec, data
             except Exception as e:
                 logger.warning("[ar] %s %s: section '%s' crashed: %s: %s",
@@ -580,6 +638,7 @@ async def extract_annual_reports(
     years: int = 2,
     model: str = "claude-sonnet-4-6",
     full: bool = False,
+    industry: str | None = None,
 ) -> dict:
     """Extract the last N ARs for a symbol + cross-year narrative. Save per-year JSONs."""
     import time as _time
@@ -600,7 +659,7 @@ async def extract_annual_reports(
 
     async def _with_sem(pdf: Path) -> dict:
         async with sem:
-            return await _extract_single_ar(pdf, symbol, model, sections)
+            return await _extract_single_ar(pdf, symbol, model, sections, industry)
 
     year_results = list(await asyncio.gather(*[_with_sem(p) for p in pdfs]))
 
@@ -644,6 +703,7 @@ async def ensure_annual_report_data(
     years: int = 2,
     model: str = "claude-sonnet-4-6",
     full: bool = False,
+    industry: str | None = None,
 ) -> dict | None:
     """Incremental: re-extract only AR years that don't have a complete cached JSON."""
     symbol = symbol.upper()
@@ -682,6 +742,7 @@ async def ensure_annual_report_data(
             "years_analyzed": [y.get("fiscal_year") for y in cached_years],
             "per_year": cached_years,
             "cross_year_narrative": cross_data,
+            "_new_years_extracted": 0,
         }
 
     logger.info("[ar_ensure] %s: extracting %d new year(s)", symbol, len(needing_extraction))
@@ -691,7 +752,7 @@ async def ensure_annual_report_data(
 
     async def _with_sem(pdf: Path) -> dict:
         async with sem:
-            return await _extract_single_ar(pdf, symbol, model, sections)
+            return await _extract_single_ar(pdf, symbol, model, sections, industry)
 
     new_results = list(await asyncio.gather(*[_with_sem(p) for p in needing_extraction]))
     all_results = cached_years + new_results
@@ -720,6 +781,7 @@ async def ensure_annual_report_data(
         "years_analyzed": [y.get("fiscal_year") for y in all_results],
         "per_year": all_results,
         "cross_year_narrative": cross,
+        "_new_years_extracted": len(new_results),
     }
 
 

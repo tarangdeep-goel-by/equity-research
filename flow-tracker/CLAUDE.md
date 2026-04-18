@@ -126,17 +126,24 @@ Every feature module follows:
 ### Research Layer (multi-agent architecture)
 
 ```
-Phase 0:  Data Refresh → 6 sources + peers + concall extraction
-Phase 1:  7 Specialist Agents (parallel) → 7 standalone technical reports + briefings
-Phase 1.5: 7 Verification Agents (parallel) → spot-check data accuracy + corrections
-Phase 1.7: Web Research Agent → resolves open questions from specialists via WebSearch/WebFetch
+Phase 0:  Data Refresh → 6 sources + peers
+Phase 0b: Document Pipeline → concall + annual report + investor deck extraction (parallel)
+Phase 1:  7 Specialist Agents (parallel, pipelined with verification) → 7 briefings
+Phase 1.5: 7 Verification Agents → spot-check accuracy + AR/deck citations (pipelined)
+Phase 1.7: Web Research Agent → resolves open questions (vault-first, then WebSearch/WebFetch)
 Phase 2:  Synthesis Agent → Verdict + Executive Summary + Key Signals
 Phase 3:  Assembly → Technical Markdown + HTML
 Phase 4:  Explainer Agent → Beginner-friendly annotations → Final HTML (skip with --technical)
 (Comparison Agent also available for multi-stock comparative reports)
 ```
 
-**7 specialist agents** (Business, Financials, Ownership, Valuation, Risk, Technical, Sector) each have an expert persona, curated MCP tools, and produce a standalone technical report. A **news agent** gathers recent developments. Verification agents independently spot-check data accuracy using a different model. The **web research agent** then resolves open questions surfaced by specialists (no MCP tools — uses WebSearch/WebFetch builtins only). The synthesis agent cross-references all 7 briefings + news + web research for the final verdict. The explainer agent adds beginner-friendly annotations to the assembled report. A **comparison agent** supports multi-stock comparative analysis.
+**7 specialist agents** (Business, Financials, Ownership, Valuation, Risk, Technical, Sector) each have an expert persona, curated MCP tools, and produce a standalone technical report. A **news agent** gathers recent developments. Verification agents independently spot-check data accuracy using a different model; they also verify every `(source: FY?? AR, ...)` and `(source: FY??-Q? deck, ...)` citation against the vault JSON. The **web research agent** resolves open questions — vault tools (`get_concall_insights`, `get_annual_report`, `get_deck_insights`) first, then WebSearch/WebFetch for anything genuinely not on file. The synthesis agent cross-references all briefings + web research for the final verdict. The explainer agent adds beginner-friendly annotations to the assembled report. A **comparison agent** supports multi-stock comparative analysis.
+
+**Annual Report & Investor Deck consult is scoped-mandatory:** Business, Financials, Risk, Valuation, Ownership agents MUST consult the annual report; Business, Financials, Valuation also MUST consult the latest investor deck. Each agent cites as `(source: FY25 AR, <section>)` or `(source: FY26-Q3 deck, <sub_section>)`. Null-findings ("no auditor qualifications flagged") count — silent skipping of a mandated section is a workflow violation. See `SHARED_PREAMBLE_V2` in `research/prompts.py` for the full rule.
+
+**Phase 0b extractors are cached + industry-aware:** `ensure_concall_data`, `ensure_annual_report_data`, and `ensure_deck_data` all take an `industry` hint that drives sector-specific canonical-section mandates (BFSI AR must populate CASA/NPA; Pharma AR must surface R&D pipeline). Re-runs skip cached complete years/quarters; the three extractors run in parallel via `asyncio.gather`.
+
+**Every specialist prompt gets a temporal anchor:** `build_specialist_prompt` prepends `today = YYYY-MM-DD` + per-source freshness + AR/deck periods on file. Relative time language ("recently", "last year") without an anchor is a hard fail. Also prepended to the web research agent so it knows what's in vault.
 
 Key files in `research/`:
 - `refresh.py` — `refresh_for_research(symbol)` fetches live data from 6 sources + peers + concalls before agents run

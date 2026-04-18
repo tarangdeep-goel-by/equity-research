@@ -80,6 +80,7 @@ Check 5-8 key numerical claims in the report against the evidence log:
 - If report says "~25%" and data shows 24.7%, that's a pass
 - Focus on material NUMERICAL errors only: wrong order of magnitude, wrong direction, wrong company, fabricated numbers
 - Analytical disagreements are NOT errors — never flag "weak reasoning" or "questionable logic"
+- Any (source: FY?? AR, ...) or (source: FY??-Q? deck, ...) inline citation in the report must be re-fetched via get_annual_report / get_deck_insights and the quoted content verified against the tool response. Hallucinated section references or misquoted numbers from AR/deck are a hard fail — flag these as `ar_deck_citation_unverified`.
 - 8 turns max
 
 ## Output

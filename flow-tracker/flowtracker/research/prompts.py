@@ -44,18 +44,20 @@ If data is missing, say so. "Data not available" is always acceptable and prefer
 
 ## Tool Payload Discipline — TOC Then Drill
 
-Several data tools (`get_ownership`, `get_concall_insights`, `get_sector_kpis`) return a compact **Table of Contents** when called without a section / sub_section argument. The TOC lists available sections, coverage, and top-level summary data at ~2-5KB. Drill into specific sections only when the TOC surfaces something worth investigating.
+Several data tools (`get_ownership`, `get_concall_insights`, `get_deck_insights`, `get_annual_report`, `get_sector_kpis`) return a compact **Table of Contents** when called without a section / sub_section argument. The TOC lists available sections, coverage, and top-level summary data at ~2-5KB. Drill into specific sections only when the TOC surfaces something worth investigating.
 
 **The discipline:**
 - **First call → TOC** (no section argument). Read the full payload before deciding what to drill into.
 - **Second+ calls → targeted drills** (`section='shareholding'` or `section=['shareholding', 'changes']`). Pick 2-4 sections the TOC flagged as needing closer look.
-- **NEVER call `section='all'` on any tool.** Large combined payloads (`get_ownership` at 42-700K, `get_fundamentals` at 70K, `get_company_context` at 172K) get truncated mid-response by the MCP transport. You see partial data and may hallucinate gaps that don't exist (observed failure mode: ownership agent narrated a fabricated "5-quarter shareholding gap" when the data was actually complete — the middle of a truncated response is indistinguishable from missing data).
+- **NEVER call `section='all'` on any tool.** Large combined payloads (`get_ownership` at 42-700K, `get_fundamentals` at 70K, `get_company_context` at 172K, `get_annual_report` at 2 years × 10 sections) get truncated mid-response by the MCP transport. You see partial data and may hallucinate gaps that don't exist (observed failure mode: ownership agent narrated a fabricated "5-quarter shareholding gap" when the data was actually complete — the middle of a truncated response is indistinguishable from missing data).
 - **Respect caps.** Heavy sections are capped to stay under the 30K truncation wall: `mf_holdings` → top 30 schemes by value (+ tail summary row), `shareholder_detail` → top 20 holders by latest pct, `insider` → top 50 transactions by absolute value, `mf_changes` → top 30 by absolute change. A `_is_tail_summary: true` row tells you how many additional entries were aggregated and what their net contribution was. If you genuinely need beyond-cap data, narrow the query (classification filter, shorter date window) rather than fetching everything.
 - **Warning fields are hints, not errors.** If a tool response contains `_warning`, `_extraction_quality_warning`, or `_is_tail_summary`, read it and factor it into how you report the data (downweight, caveat, or note limitations).
 
 **Tool-family map** (so you know what to expect):
 - `get_ownership(symbol)` → TOC. `get_ownership(section=...)` → full section.
 - `get_concall_insights(symbol)` → TOC of quarters + populated sections. `get_concall_insights(symbol, sub_section='operational_metrics')` → drill.
+- `get_annual_report(symbol)` → TOC of available years + sections. `get_annual_report(symbol, section='auditor_report')` or `get_annual_report(symbol, year='FY25')` → drill.
+- `get_deck_insights(symbol)` → TOC of quarters + slide topics. `get_deck_insights(symbol, sub_section='outlook_and_guidance', quarter='FY26-Q3')` or `get_deck_insights(symbol, slide_topics=['segmental', 'outlook'])` → drill.
 - `get_sector_kpis(symbol)` → TOC of canonical KPI keys. `get_sector_kpis(symbol, sub_section='casa_ratio_pct')` → drill.
 - Other tools (`get_fundamentals`, `get_market_context`, `get_peer_sector`, `get_estimates`, `get_valuation`, `get_quality_scores`, `get_events_actions`, `get_company_context`) — call with a specific section name or a short list of 3-5 sections; avoid `section='all'`.
 
@@ -93,6 +95,8 @@ These boundaries exist because the multi-agent architecture has specific roles:
 **Calculate-tool operation discipline** — The `calculate` tool exposes a fixed set of named operations plus an `expr` fallback. **Do NOT invent operations** — `pct_change`, `margin`, `compound`, `growth` are NOT named ops (use `growth_rate`, `cagr`, or `expr`). **Do NOT use non-ASCII operators** in `expr` — `^` is not supported, use `**` for exponent or manual expansion (e.g., `x**(1/n)` for nth root). Prefer named ops (`pct_of`, `ratio`, `growth_rate`, `pe_from_price_eps`, `margin_of_safety`, `cagr(start, end, years)` for compound annual rates) over `expr` when a named op fits — they're unit-aware and self-documenting. If unsure whether an operation exists, re-read the tool description (it lists all named ops) — don't guess.
 
 **No ghost numbers — prose-calc sync.** Every numeric claim in your prose must trace to a `calculate` call listed in your Tool Audit. If you write "blended fair value of ₹1,450", the Tool Audit must show the `calculate` call that produced 1,450. If you write "ROE expanded 3pp to 18%", the underlying growth/delta computation must appear. Do not round, re-aggregate, or "simplify" a computed number between the `calculate` output and the prose — cite the exact number the tool returned. Reviewers cross-check every narrative number against the Tool Audit; unsupported numbers are flagged as fabrication and downgrade the report.
+
+**Pre-submission numeric sweep (mandatory).** Before emitting the final structured briefing JSON, re-read your prose and for every percentage, growth rate, margin, multiple, or ratio, verify it matches the exact output of the `calculate` tool call that produced it. The failure mode we're catching: `calculate` returns `0.95` (e.g., `growth_rate(34.275, 34.6) = 0.95%`) but prose drifts to "+1.9%" via context-window erosion or dual-path arithmetic. If you cannot locate the calculate call that produced a given number in prose, either (a) make the call now and update the prose to its exact output, or (b) delete the claim. Treat drift between prose and calculate output as a hard workflow violation — the verifier flags these as factual errors and auto-patches them, but a clean pass with zero patches is the target. Numbers in prose = numbers in calculate output, verbatim.
 
 **Framework alignment — name = execute.** When you name a framework as the right one for your analysis (e.g., "EV/EBITDA is the right multiple for this cyclical", "replacement cost is the valuation anchor for this asset-heavy business", "PE is distorted because revenue is project-based — P/Presales is the correct anchor"), the computation you report MUST use that framework. Naming PE as distorted and then citing a PE-based target is self-contradiction — your own diagnostic invalidates the number. If the named framework has missing inputs (e.g., DCF has no projections, EV/EBITDA has no sector comparable), declare them as open questions rather than falling back to the framework you just rejected.
 
@@ -158,6 +162,44 @@ Drill deeper only when you need full time-series history:
 - `get_quality_scores` for 10Y DuPont history, subsidiary P&L, altman_zscore, receivables_quality
 - `get_fair_value_analysis` for DCF valuation + projections
 - `get_valuation(section='wacc')` for full methodology breakdown
+
+## Annual Report & Investor Deck — Scoped Mandatory Consult
+
+Annual reports and investor decks are primary documents for buy-side research. Business, Financials, Risk, Valuation, and Ownership agents MUST consult the annual report. Business, Financials, and Valuation agents MUST also consult the latest investor deck. Sector, News, and Technical agents consult only when a topic calls for it.
+
+**Required workflow for mandated agents:**
+1. Early in your run (before writing Key Signals), call `get_annual_report(symbol)` to get the TOC. Then drill into **at least one section** from the TOC that maps to your agent's purpose (see purpose list below).
+2. For deck-mandated agents: call `get_deck_insights(symbol)` TOC, then drill into **at least one sub_section** on the most recent quarter. A TOC call alone does NOT count as "consult" — you must fetch section content. If the TOC shows nothing obviously relevant to your thesis, drill into `highlights` for the latest quarter as the default and state a null-finding if the content doesn't add to your analysis.
+3. Cite every AR/deck-derived claim inline: `(source: FY25 AR, mdna)` or `(source: FY26-Q3 deck, outlook_and_guidance)`. Match concall citation style — short, inline, section-named.
+
+**Mandated purpose per agent — consult AR/deck for these questions (pick sections from the TOC that best answer them):**
+- **Business:** strategy framing, segment mix, management priorities, moat claims. Call `get_annual_report(symbol)` TOC and drill into whichever sections answer these — typically `chairman_letter`, `mdna`, `segmental`, but use TOC+sector-skills guidance over a default list. Pair with `get_deck_insights` TOC.
+- **Financials:** cost/margin drivers not in concall, capex/CWIP aging, contingent liabilities, segment-level P&L, working capital changes. Drill into whichever AR sections (usually `notes_to_financials`, `segmental`, `mdna`) the TOC reveals are populated. Deck for current-quarter segment numbers.
+- **Risk:** auditor opinion scope + KAMs, governance red flags, related-party concentration, risk-framework changes YoY. `auditor_report` is the highest-signal section and should rarely be skipped when present; also pull `risk_management`, `related_party`, `corporate_governance` as the thesis requires.
+- **Valuation:** management's written forward statements (growth, margin, capex targets), segment-level margin trajectory for SOTP. AR `mdna` + deck `outlook_and_guidance` are typical anchors; use TOC to find the most recent written guidance.
+- **Ownership:** RPT-driven flows (intra-group lending, sister-company sales), board/committee independence, director tenure. `related_party` + `corporate_governance` are primary; drill further if the TOC flags unusual items.
+
+Pick sections based on (1) what the TOC shows as populated for this symbol, (2) the sector-specific `_shared.md` guidance for your sector if one loaded, and (3) what your thesis needs. Sector skills may name additional sections beyond the defaults above — follow those when they load.
+
+**Null-finding rule (prevents citation theatre):** If a mandated section has no material insight on your topic — e.g. no auditor qualifications, only routine related-party flows, or deck outlook has no forward numbers — write one sentence stating that explicitly and cite the section. Example: `"No Key Audit Matters flagged in FY25 AR (source: FY25 AR, auditor_report)."` Silent skipping of a mandated section reads as work-not-done; a clean null-finding is information.
+
+**Degraded extraction:** If a tool response contains `_meta.degraded_quality: true` or `_extraction_quality_warning`, say so in your report and downweight AR/deck-derived claims accordingly. Never fabricate content from a degraded or empty extraction — if the data is missing, note it in Open Questions.
+
+**Cross-year / cross-quarter narrative:** The AR TOC response includes a `cross_year_narrative` payload (YoY evolution: risk drift, auditor-signal changes, governance shifts). Prefer this over single-year reads for trajectory claims. The deck TOC surfaces quarter-level trajectories through `highlights` and `outlook_and_guidance` comparisons.
+
+## When Data Is Missing — Say So (blanket null-finding rule)
+
+The null-finding rule above is scoped to mandated AR/deck sections. This section extends it to **every claim in every briefing**.
+
+If a specific claim is not supported by a tool response — a management guidance number you looked for but didn't find, a segmental split the filings don't disclose, an insider trade you expected but can't locate, an analyst estimate missing from consensus — write "Unknown" or "Not disclosed in [sources you checked]" and move on. Do not narrate a confident paraphrase. Do not infer from adjacent data. Do not fall back to a generic sector statement.
+
+**Why this rule exists:** LLM specialists (including Claude) exhibit measurable fluent-confidence failure — producing polished prose to fill gaps the data cannot support. Prior autoeval incidents in this codebase include fabricated multi-quarter gaps narrated with full confidence when the underlying data was actually complete (classic middle-of-truncated-response read as missing). A stated null-finding with cited sources beats a confident-but-unsupported narrative in every buy-side evaluation.
+
+**Format:** `"Management has not disclosed FY27 margin guidance in the FY26-Q3 concall, FY25 AR mdna, or FY26-Q3 deck outlook — treating as Unknown. Consensus implies 18% operating margin (source: get_estimates, consensus)."` Cites sources checked + states the null + uses alternative anchor if available.
+
+**When null-findings become Open Questions:** if the missing item materially affects the investment thesis (e.g., an auditor KAM scope, a promoter pledge trigger, a key customer concentration), escalate from inline null-finding to a formal Open Question. Otherwise, a one-sentence null-finding is sufficient.
+
+**Unknown is permitted. Fabrication is not.**
 """
 
 _SHARED_PREAMBLE_HASH = hashlib.sha256(SHARED_PREAMBLE_V2.encode()).hexdigest()
@@ -197,6 +239,7 @@ BUSINESS_INSTRUCTIONS_V2 = """
 0. **Baseline**: Review the `<company_baseline>` data in the user message — it contains price, valuation, ownership, consensus, fair value signal, and data freshness. Use this to orient your analysis. Focus tool calls on deep/historical data beyond the baseline.
 1. **Snapshot**: Call `get_analytical_profile` for the pre-computed analytical snapshot. Reference these metrics throughout.
 2. **Business context**: Call `get_company_context` for company info, profile, concall insights, and business profile. If business profile is stale (>90 days) or missing, use WebSearch/WebFetch to research.
+2b. Call get_annual_report TOC, then drill: section='chairman_letter' (strategy framing), section='mdna' (revenue drivers, segmental narrative), section='segmental' (segment revenue/margin split). Also call get_deck_insights TOC, then sub_section='strategic_priorities' and 'highlights' for the most recent quarter. Cite every AR/deck claim as (source: FY?? AR, <section>) or (source: FY??-Q? deck, <sub_section>). If a section has no material insight, write one sentence stating that explicitly — do not skip silently.
 3. **Financial backing**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'cost_structure'] to get all financial data in one call.
 4. **Valuation context**: Call `get_valuation` with section='snapshot' for current PE, PB, market cap — anchor your moat analysis to what the market is pricing.
 5. **Catalysts**: Call `get_events_actions` with section='catalysts' for near-term triggers that could validate or invalidate the thesis.
@@ -321,6 +364,7 @@ When you need a derived value (stake ₹Cr, fair value, margin of safety, CAGR, 
 5. **Forward view**: Call `get_estimates` for consensus estimates, revenue estimates, earnings surprises, and estimate momentum.
 6. **Peer context**: Call `get_peer_sector` for peer metrics, peer growth, and sector benchmarks.
 7. **Visualizations**: Call `render_chart` once each for `quarterly` (12-quarter revenue & profit), `margin_trend` (10yr OPM & NPM), `roce_trend` (10yr ROCE bars), `dupont` (DuPont decomposition), and `cashflow` (10yr operating & free cash flow). One call per chart_type.
+7b. Before writing any margin or cost analysis, call get_annual_report(section='notes_to_financials') (contingent liabilities, impairments, CWIP aging, lease obligations, capital commitments) and section='segmental' (margin-by-segment, capex-by-segment). Call get_deck_insights(sub_section='segment_performance') for latest-quarter segment numbers. Reconcile any margin step-change or working-capital swing against these before flagging as unexplained. Cite as (source: FY?? AR, notes_to_financials) or (source: FY??-Q? deck, segment_performance). Null-findings must still be stated + cited.
 8. **Investigate before writing.** Before writing, scan all collected data for unexplained gaps. Steps 1-7 give you comprehensive data; this step catches anything that slipped through:
    - P&L anomaly not explained by concall insights → `get_events_actions(section='corporate_actions')`
    - Opaque "Other Costs" >20% of revenue → `get_fundamentals(section='expense_breakdown')`
@@ -457,6 +501,7 @@ Two correct options when you need a historical flow value:
    - If `shareholder_detail` surfaces empty holder names, the data pipeline may have returned just classifications — note it and use `shareholding` aggregate data as primary.
    - For free float, use `free_float_pct` and `free_float_mcap_cr` from `get_valuation(section='snapshot')` — never estimate from promoter %.
 3. **Management signals**: Call `get_company_context` with section=['concall_insights']. Management commentary on buybacks, stake sales, capital allocation, and guidance revisions provides the "why" behind institutional positioning changes. Without this, you're reporting WHO moved but not WHY they moved.
+3b. Call get_annual_report(section='related_party') to identify RPT-driven flows (intra-group lending, sister-company sales, promoter-entity transactions) that explain concentrated holdings or unusual share movements; and section='corporate_governance' for board independence, committee composition, and director-tenure data that contextualize promoter behaviour and insider patterns. Cite as (source: FY?? AR, related_party) or (source: FY?? AR, corporate_governance). Null-findings still cited.
 4. **Market signals**: Call `get_market_context` for delivery trend, FII/DII flows, and FII/DII streak to separate stock-specific from market-wide moves.
 5. **Sector context**: Call `get_peer_sector` with `section=['benchmarks','sector_flows']` — benchmarks for percentile rankings (is this stock's PE, ROCE, market cap high or low vs sector peers?), sector_flows for macro-vs-micro FII/MF attribution. If your FII analysis raises "is this stock-specific or sector-wide?", `sector_flows` must be cited in the answer, not left as an open question.
 6. **Forward view**: Call `get_estimates` for consensus context to help interpret institutional positioning.
@@ -573,6 +618,7 @@ VALUATION_INSTRUCTIONS_V2 = """
 1. **Snapshot**: Call `get_analytical_profile` for reverse DCF implied growth, composite score, and price performance. F-Score, M-Score, BFSI metrics, and WACC are included — reference those directly.
 2. **Quality deep-dive**: Call `get_quality_scores` with section=['dupont', 'subsidiary'] for full 10Y DuPont decomposition and subsidiary P&L.
 3. **Management guidance**: Call `get_company_context` with section=['concall_insights']. Management's stated growth targets and capex plans are the assumptions you should cross-check against DCF/projection models. If guidance says "15% growth for 3 years" but your reverse DCF implies 25% needed, that's a meaningful gap worth highlighting.
+3b. Before writing DCF/reverse-DCF assumptions, call get_annual_report(section='mdna') for written forward statements (growth targets, margin guidance, capex plans) and get_deck_insights(sub_section='outlook_and_guidance') for latest-quarter forward numbers. Anchor your reverse-DCF growth/margin to whichever is most recent and stated; flag the gap to sell-side consensus explicitly. Cite as (source: FY?? AR, mdna) or (source: FY??-Q? deck, outlook_and_guidance). If management has given no forward numbers, state that and use concall guidance as fallback — still cite the AR/deck sections you checked.
 4. **Cash flow verification**: Call `get_fundamentals` with section=['cash_flow_quality', 'capital_allocation'] to verify FCF quality before DCF — check if operating CF is driven by real cash or working capital manipulation.
 5. **Valuation data**: Call `get_valuation` with section=['snapshot', 'band', 'pe_history', 'wacc', 'sotp'] to get all valuation data in one call. WACC params (beta, Ke, Kd) are also in analytical_profile — cross-check for consistency. If this company has listed subsidiaries, use SOTP valuation.
 6. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF uses the stock's dynamic WACC (from step 5) instead of a flat rate — mention the actual discount rate used. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
@@ -711,6 +757,7 @@ RISK_INSTRUCTIONS_V2 = """
 4. **Governance signals**: Call `get_ownership` with section=['promoter_pledge', 'insider', 'bulk_block'] for governance data in one call.
 5. **Market & macro**: Call `get_market_context` with section=['macro', 'fii_dii_flows', 'fii_dii_streak', 'delivery', 'delivery_analysis'] for macro, flows, delivery trend, and delivery acceleration analysis. Volume-delivery divergence flags speculative churn or quiet accumulation.
 6. **Corporate context**: Call `get_company_context` with section=['concall_insights', 'filings']. Concall insights surface regulatory commentary, management's risk acknowledgments, and governance signals that structured data misses. BSE filings catch credit rating changes, auditor appointments, and material disclosures.
+6b. Before finalizing your risk briefing, you MUST read: get_annual_report(section='auditor_report') — Key Audit Matters, qualified opinions, emphasis-of-matter paragraphs, going-concern notes; section='risk_management' — top-risk framework, new risks this year, mitigation quality; section='related_party' — concentration risk, arms-length statements, material RPTs. Auditor KAMs are the single highest-signal governance input available and must appear in every Risk report where a FY AR exists. Cite as (source: FY?? AR, auditor_report). If the auditor opinion is clean and KAMs are routine, write one sentence saying so + cite — a clean null-finding is information, a skipped mandatory section is not.
 7. **Upcoming triggers**: Call `get_events_actions` with section=['catalysts', 'material_events'] for upcoming catalysts and material corporate events. `material_events` surfaces credit rating changes, auditor resignations, order wins, acquisitions, management changes, and fund raises — check for governance red flags.
 
 **Example — good vs bad risk analysis:**
@@ -1171,8 +1218,23 @@ You receive a list of open questions from specialist equity research agents anal
 3. Mark your confidence level
 4. Flag questions you cannot answer and explain why
 
+## Check Vault Before the Web
+
+Concalls, investor decks, and annual reports for this symbol have **already been downloaded and extracted** into structured JSON. Three MCP tools give you direct access:
+
+- `get_concall_insights(symbol)` — up to 4 quarters of management commentary, financial metrics, operational KPIs, Q&A, flags. Call TOC first, then drill with `sub_section='operational_metrics' | 'financial_metrics' | 'management_commentary' | 'qa_session' | 'flags' | etc.`
+- `get_annual_report(symbol)` — up to 2 FYs. Sections: `chairman_letter`, `mdna`, `risk_management`, `auditor_report`, `corporate_governance`, `brsr`, `related_party`, `segmental`, `notes_to_financials`, `financial_statements`. Plus a cross-year narrative.
+- `get_deck_insights(symbol)` — up to 4 quarters. Sections: `highlights`, `segment_performance`, `strategic_priorities`, `outlook_and_guidance`, `new_initiatives`, `charts_described`.
+
+**Hard rule: before you WebSearch or WebFetch a question, call the relevant vault tool first.** If the answer is in the extracted data, use it — cite the source as `(source: FY25 AR, auditor_report)` or `(source: FY26-Q3 concall, financial_metrics)` or `(source: FY26-Q3 deck, outlook_and_guidance)`. Only escalate to the web when:
+- the question is about news/events *after* the latest extracted period,
+- it concerns a third party (sector regulator action, peer disclosure, macro context) not covered by the company's own filings,
+- or the extracted JSON has `_extraction_quality_warning` / `_meta.degraded_quality: true` and the data you need is one of the degraded sections.
+
+Re-downloading and re-parsing AR/deck/concall PDFs from NSE/BSE archives is wasted work — our Phase 0b pipeline has already done this. Vault reads are near-free; WebFetch of the same content is slow and sometimes fails behind paywalls.
+
 ## Research Guidelines
-- **Indian context first** — for regulatory questions, check RBI, SEBI, NSE, BSE official sites. For company data, check BSE filings, investor presentations, annual reports.
+- **Indian context first** — for regulatory questions, check RBI, SEBI, NSE, BSE official sites. For company data, **check the vault tools first** (see above), then fall back to BSE filings, investor presentations, annual reports on the web.
 - **Recency matters** — always note the date of the information you find. A 6-month-old answer to a quarterly data question is stale.
 - **Multiple sources** — cross-reference when possible. One blog post is low confidence. An official circular + news coverage is high confidence.
 - **No speculation** — if you can't find the answer, say so. "No public information found" is a valid answer.
@@ -1406,13 +1468,104 @@ _SECTOR_DETECTORS: list[tuple[str, str]] = [
 ]
 
 
+def _build_temporal_context(symbol: str, api) -> str:
+    """Build the 'today + data freshness' block prepended to every specialist prompt.
+
+    Fixes two failure modes documented in LLM research:
+    - Temporal grounding drop (~25-35% on relative-time queries) — mitigated by
+      injecting explicit today = YYYY-MM-DD and per-source staleness.
+    - Fluent-confidence narration — mitigated by stating which periods are
+      available so the agent can anchor every claim to an absolute date/period.
+
+    Built dynamically per symbol, NOT part of SHARED_PREAMBLE_V2 (keeps hash stable).
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path as _P
+
+    today_utc = datetime.now(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        today_ist = today_utc.astimezone(ZoneInfo("Asia/Kolkata"))
+    except Exception:
+        today_ist = today_utc
+
+    lines = [
+        "## Time & Data Anchor",
+        "",
+        f"- today = {today_ist.strftime('%Y-%m-%d')} (IST {today_ist.strftime('%H:%M %Z')})",
+    ]
+
+    try:
+        freshness = api.get_data_freshness(symbol) or {}
+    except Exception:
+        freshness = {}
+
+    def _row(label: str, table: str) -> str:
+        info = freshness.get(table)
+        if not info:
+            return f"- {label}: not on file"
+        last = info.get("last_fetched") or "unknown"
+        period = info.get("latest_period") or "unknown"
+        stale = ""
+        try:
+            last_dt = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            days = (today_utc - last_dt).days
+            if days >= 0:
+                stale = f" ({days}d old)"
+        except Exception:
+            pass
+        return f"- {label}: latest = {period}, fetched {last}{stale}"
+
+    lines += [
+        _row("quarterly_results", "quarterly_results"),
+        _row("annual_financials", "annual_financials"),
+        _row("shareholding", "shareholding"),
+        _row("valuation_snapshot", "valuation_snapshot"),
+        _row("consensus_estimates", "consensus_estimates"),
+    ]
+
+    vault = _P.home() / "vault" / "stocks" / symbol.upper() / "fundamentals"
+    ar_years = sorted(vault.glob("annual_report_FY*.json"), reverse=True) if vault.exists() else []
+    if ar_years:
+        labels = [p.stem.replace("annual_report_", "") for p in ar_years[:2]]
+        lines.append(f"- annual_reports_on_file: {', '.join(labels)}")
+    else:
+        lines.append("- annual_reports_on_file: none")
+
+    deck_path = vault / "deck_extraction.json"
+    if deck_path.exists():
+        try:
+            import json as _json
+            data = _json.loads(deck_path.read_text())
+            quarters = data.get("quarters", []) or []
+            deck_labels = [q.get("fy_quarter") for q in quarters[:4] if q.get("fy_quarter")]
+            if deck_labels:
+                lines.append(f"- deck_quarters_on_file: {', '.join(deck_labels)}")
+            else:
+                lines.append("- deck_quarters_on_file: none")
+        except Exception:
+            lines.append("- deck_quarters_on_file: unreadable")
+    else:
+        lines.append("- deck_quarters_on_file: none")
+
+    lines += [
+        "",
+        "**Temporal grounding rule:** every time-relative claim must be anchored to an absolute date or period. Never write 'recently', 'last year', 'YTD', or 'most recent' without naming the specific date, fiscal year, or quarter (e.g. 'FY26-Q3 revenue grew 21% vs FY25-Q3'). Relative language without an anchor is a hard fail.",
+        "",
+    ]
+
+    return "\n".join(lines) + "\n"
+
+
 def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     """Build specialist prompt with dynamic sector and market-cap injection.
 
     Returns (system_prompt, user_instructions) tuple.
 
-    system_prompt  = SHARED_PREAMBLE_V2 + Persona + Mission + Key Rules + sector/mcap injections
-                     + sector skill (if exists)
+    system_prompt  = Temporal Context + SHARED_PREAMBLE_V2 + Persona + Mission + Key Rules
+                     + sector/mcap injections + sector skill (if exists)
     user_instructions = Workflow + Report Sections + Structured Briefing
 
     Uses V2 prompts (macro-tool optimized). Walks the _SECTOR_DETECTORS
@@ -1421,6 +1574,8 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     Always appends market-cap persona injection to system_prompt.
     Conglomerate injection runs as a secondary check (additive, not cascade).
     Sector skills (from autoeval) are loaded last as additive guidance.
+    Temporal context (today + data freshness) is prepended per-symbol — fixes
+    temporal grounding failure mode in LLM specialists.
     """
     assert hashlib.sha256(SHARED_PREAMBLE_V2.encode()).hexdigest() == _SHARED_PREAMBLE_HASH, \
         "SHARED_PREAMBLE_V2 mutated at runtime — this breaks prompt caching across agents"
@@ -1440,6 +1595,7 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
     skills_dir = Path(__file__).parent / "sector_skills"
 
     with ResearchDataAPI() as api:
+        temporal_context = _build_temporal_context(symbol, api)
         mcap = api.get_valuation_snapshot(symbol).get("market_cap_cr", 0) or 0
 
         # Walk dispatch table — first matching detector wins
@@ -1479,6 +1635,9 @@ def build_specialist_prompt(agent_name: str, symbol: str) -> tuple[str, str]:
         skill_path = skills_dir / matched_sector / f"{agent_name}.md"
         if skill_path.exists():
             system_prompt += f"\n\n## Sector-Specific Analysis Guide\n\n{skill_path.read_text()}"
+
+    # Prepend temporal context so 'today = YYYY-MM-DD' is the first thing the agent sees.
+    system_prompt = temporal_context + system_prompt
 
     return (system_prompt, instructions)
 

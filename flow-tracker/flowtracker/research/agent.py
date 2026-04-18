@@ -147,6 +147,14 @@ _DISALLOWED_BUILTINS = [
     "NotebookEdit", "Agent", "TodoWrite", "AskUserQuestion",
     "Skill", "ReadMcpResourceTool", "ListMcpResourcesTool",
     "WebSearch", "WebFetch",  # only web_research/news agents get these
+    # Claude Code session-internal tools that leak into subprocess tool registries.
+    # Observed in the INOX run: web_research agent invoked Monitor + ToolSearch +
+    # TaskOutput to run curl pipelines, bypassing the WebSearch/WebFetch-only design.
+    "Monitor", "ToolSearch",
+    "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskStop", "TaskOutput",
+    "CronCreate", "CronDelete", "CronList",
+    "EnterPlanMode", "ExitPlanMode", "EnterWorktree", "ExitWorktree",
+    "LSP", "PushNotification", "RemoteTrigger", "ScheduleWakeup",
     # External user-level MCP servers that leak into the subprocess
     "mcp__gemini-bridge__gemini_chat_end",
     "mcp__gemini-bridge__gemini_chat_list",
@@ -1221,38 +1229,68 @@ async def run_all_agents(
 
         return result
 
-    # Build tasks for all agents that have prompts
+    # Phase 1 + 1.5 pipelined: as soon as a specialist finishes, kick off its verifier.
+    # Separate semaphores keep specialist and verifier concurrency caps independent —
+    # no increase in peak Claude subprocess count (≤3 specialists + ≤3 verifiers in flight).
+    # Sequential specialist-only then verifier-only wastes wall time waiting for the
+    # slowest specialist before any verifier starts; pipelining removes that stall.
+    from flowtracker.research.verifier import _run_verifier, apply_corrections
+    verify_sem = asyncio.Semaphore(MAX_CONCURRENT)
+
+    async def _run_specialist_then_verify(
+        name: str, sys_prompt: str, instr: str
+    ) -> tuple[str, BriefingEnvelope | Exception, AgentTrace | None, object]:
+        """Run a specialist and, on success, immediately verify — pipelined."""
+        spec_name, envelope_or_exc, agent_trace = await _run_with_abort(name, sys_prompt, instr)
+
+        # Skip verification for failed / empty / exception specialists
+        if not verify or isinstance(envelope_or_exc, Exception):
+            return (spec_name, envelope_or_exc, agent_trace, None)
+        envelope = envelope_or_exc
+        if not envelope.report or len(envelope.report.strip()) < 100:
+            return (spec_name, envelope, agent_trace, None)
+        if getattr(envelope, "status", None) in ("skipped", "failed"):
+            return (spec_name, envelope, agent_trace, None)
+
+        try:
+            async with verify_sem:
+                vdata = await _run_verifier(spec_name, symbol, envelope, model=verify_model)
+            return (spec_name, envelope, agent_trace, vdata)
+        except Exception as vexc:
+            return (spec_name, envelope, agent_trace, vexc)
+
+    # Build pipelined tasks for all agents that have prompts
     specialist_tasks = []
     for name in agent_names:
         system_prompt, instructions = build_specialist_prompt(name, symbol)
         if not system_prompt:
             continue
-        specialist_tasks.append(_run_with_abort(name, system_prompt, instructions))
+        specialist_tasks.append(_run_specialist_then_verify(name, system_prompt, instructions))
 
-    # Run with concurrency limit — gather still handles parallelism,
-    # but the semaphore ensures only MAX_CONCURRENT run at once
     results = await asyncio.gather(*specialist_tasks)
 
-    # Collect successful results and traces
+    # Collect specialist envelopes + traces
     envelopes: dict[str, BriefingEnvelope] = {}
-    for name, result, agent_trace in results:
+    verification_payloads: dict[str, object] = {}  # name -> vdata (or Exception / None)
+    for name, envelope_or_exc, agent_trace, vdata in results:
         if agent_trace:
             trace.agents[name] = agent_trace
-        if isinstance(result, Exception):
-            print(f"  ⚠ {name} agent failed: {result}")
+        if isinstance(envelope_or_exc, Exception):
+            print(f"  ⚠ {name} agent failed: {envelope_or_exc}")
             envelopes[name] = BriefingEnvelope(
                 agent=name, symbol=symbol,
-                status="failed", failure_reason=str(result),
+                status="failed", failure_reason=str(envelope_or_exc),
             )
-        elif not result.report or len(result.report.strip()) < 100:
+        elif not envelope_or_exc.report or len(envelope_or_exc.report.strip()) < 100:
             envelopes[name] = BriefingEnvelope(
                 agent=name, symbol=symbol,
                 status="empty", failure_reason="Agent produced no substantive output",
-                report=result.report, briefing=result.briefing,
-                evidence=result.evidence, cost=result.cost,
+                report=envelope_or_exc.report, briefing=envelope_or_exc.briefing,
+                evidence=envelope_or_exc.evidence, cost=envelope_or_exc.cost,
             )
         else:
-            envelopes[name] = result
+            envelopes[name] = envelope_or_exc
+        verification_payloads[name] = vdata
 
     specialists_phase.finished_at = datetime.now(timezone.utc).isoformat()
     specialists_phase.duration_seconds = sum(
@@ -1260,28 +1298,14 @@ async def run_all_agents(
     )
     trace.phases.append(specialists_phase)
 
-    # Phase 1.5: Verification (with concurrency limit)
+    # Phase 1.5: Apply verification corrections (verifier Claude calls already ran in pipeline above)
     if verify and envelopes:
-        from flowtracker.research.verifier import _run_verifier, apply_corrections
-
-        verify_sem = asyncio.Semaphore(MAX_CONCURRENT)
         verification_questions: list[dict] = []  # missing data issues -> web research
 
-        async def _verify_with_limit(name: str, envelope: BriefingEnvelope):
-            async with verify_sem:
-                return name, await _run_verifier(name, symbol, envelope, model=verify_model)
-
-        verify_tasks = []
-        for name, envelope in envelopes.items():
-            verify_tasks.append(_verify_with_limit(name, envelope))
-
-        verify_results = await asyncio.gather(*verify_tasks, return_exceptions=True)
-
-        # Apply corrections
-        for vresult in verify_results:
-            if isinstance(vresult, Exception):
-                continue
-            name, vdata = vresult
+        # Iterate over verify payloads collected from the pipeline
+        for name, vdata in verification_payloads.items():
+            if vdata is None:
+                continue  # specialist was skipped/failed/empty — no verifier ran
             if isinstance(vdata, Exception):
                 print(f"  ⚠ {name} verifier failed: {vdata}")
                 continue
@@ -1540,8 +1564,14 @@ async def run_web_research_agent(
     Loads existing briefings from vault, collects all open_questions,
     and uses WebSearch/WebFetch to find answers.
     """
-    from flowtracker.research.prompts import WEB_RESEARCH_AGENT_PROMPT
+    from flowtracker.research.prompts import WEB_RESEARCH_AGENT_PROMPT, _build_temporal_context
     from flowtracker.research.briefing import load_all_briefings
+    from flowtracker.research.data_api import ResearchDataAPI
+    from flowtracker.research.tools import (
+        get_annual_report as _vault_ar_tool,
+        get_concall_insights as _vault_concall_tool,
+        get_deck_insights as _vault_deck_tool,
+    )
 
     symbol = symbol.upper()
     briefings = load_all_briefings(symbol)
@@ -1596,9 +1626,21 @@ async def run_web_research_agent(
         f"Research the following {len(question_map)} open questions about {symbol} "
         f"(an Indian-listed stock). Each question is tagged with the specialist agent(s) that asked it.\n\n"
         + "\n".join(question_lines)
-        + "\n\nAnswer every question. Use WebSearch and WebFetch to find factual, sourced answers. "
-        "Produce your structured JSON briefing at the end."
+        + "\n\nCheck vault first (get_concall_insights / get_annual_report / get_deck_insights) "
+        "before WebSearch/WebFetch. Answer every question. Produce your structured JSON briefing at the end."
     )
+
+    # Prepend temporal context so the web_research agent knows today's date + which
+    # AR/deck/concall periods are on file — stops re-fetching documents we've already
+    # extracted. build_specialist_prompt doesn't cover this agent; inject manually.
+    try:
+        with ResearchDataAPI() as _api:
+            temporal_ctx = _build_temporal_context(symbol, _api)
+    except Exception as exc:
+        logger.warning("[web_research] temporal context unavailable: %s", exc)
+        temporal_ctx = ""
+
+    system_prompt = temporal_ctx + WEB_RESEARCH_AGENT_PROMPT
 
     model = model or DEFAULT_MODELS.get("web_research", "claude-sonnet-4-6")
 
@@ -1609,8 +1651,11 @@ async def run_web_research_agent(
     return await _run_specialist(
         name="web_research",
         symbol=symbol,
-        system_prompt=WEB_RESEARCH_AGENT_PROMPT,
-        tools=[],  # no MCP tools — only WebSearch/WebFetch builtins
+        system_prompt=system_prompt,
+        # Vault-read MCP tools let the agent consult extracted concalls/AR/decks
+        # before WebFetching NSE/BSE archives for the same content. WebSearch +
+        # WebFetch builtins still available via AGENT_ALLOWED_BUILTINS["web_research"].
+        tools=[_vault_concall_tool, _vault_ar_tool, _vault_deck_tool],
         max_turns=dynamic_turns,
         model=model,
         user_prompt=user_prompt,

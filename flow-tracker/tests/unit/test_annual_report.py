@@ -273,7 +273,7 @@ class TestSingleARResilience:
         # First run — auditor succeeds, corporate_governance crashes, risk succeeds.
         call_log: list[str] = []
 
-        async def fake_extract_section(sec, slice_text, sym, fy, model):
+        async def fake_extract_section(sec, slice_text, sym, fy, model, industry=None):
             call_log.append(f"run1:{sec}")
             if sec == "corporate_governance":
                 raise RuntimeError("simulated SDK subprocess crash")
@@ -302,7 +302,7 @@ class TestSingleARResilience:
         # should be skipped; only corporate_governance should re-run.
         call_log.clear()
 
-        async def fake_extract_section_v2(sec, slice_text, sym, fy, model):
+        async def fake_extract_section_v2(sec, slice_text, sym, fy, model, industry=None):
             call_log.append(f"run2:{sec}")
             return {"ok": True, "section": sec, "first_run": False}
 
@@ -324,3 +324,52 @@ class TestSingleARResilience:
         assert result2["corporate_governance"]["first_run"] is False
         # No error map when all sections succeed.
         assert "extraction_errors" not in result2
+
+
+class TestEnsureAnnualReportDataCacheSkip:
+    """Verify ensure_annual_report_data short-circuits when every requested year
+    already has a complete cached JSON — Claude must NOT be invoked."""
+
+    def test_ensure_annual_report_data_cached_returns_zero_new(
+        self, vault_home, monkeypatch
+    ):
+        import asyncio
+
+        import flowtracker.research.annual_report_extractor as ar_mod
+
+        symbol = "TESTCO"
+        # Point module-level _VAULT_BASE at the tmp vault (set at import time).
+        tmp_vault_stocks = vault_home / "vault" / "stocks"
+        monkeypatch.setattr(ar_mod, "_VAULT_BASE", tmp_vault_stocks)
+
+        # Seed PDF (find_ar_pdfs uses Path.home() at call-time).
+        pdf_path = tmp_vault_stocks / symbol / "filings" / "FY25" / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake pdf")
+
+        # Seed cached AR JSON with extraction_status=complete.
+        _write_ar_year(vault_home / "vault", symbol, "FY25")
+        # Force the cached JSON status to "complete" (the helper writes "complete"
+        # already, but be explicit so the test's intent is obvious).
+        cached = vault_home / "vault" / "stocks" / symbol / "fundamentals" / "annual_report_FY25.json"
+        data = json.loads(cached.read_text())
+        assert data["extraction_status"] == "complete"
+
+        # Seed cross-year file so _generate_cross_year_narrative isn't invoked.
+        _write_cross_year(vault_home / "vault", symbol, ["FY25"])
+
+        # Any Claude call must blow up loudly — cache path must skip extraction.
+        async def boom(*args, **kwargs):
+            raise AssertionError("Claude called for cached year")
+
+        monkeypatch.setattr(ar_mod, "_call_claude", boom)
+
+        result = asyncio.run(
+            ar_mod.ensure_annual_report_data(
+                symbol, years=1, industry="Banks - Private Sector",
+            )
+        )
+
+        assert result is not None
+        assert result["_new_years_extracted"] == 0
+        assert "FY25" in result["years_analyzed"]
