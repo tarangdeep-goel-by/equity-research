@@ -1,12 +1,14 @@
 """Tests for flowtracker.research.peer_refresh.
 
+Post-inversion (2026-04-18): Yahoo Finance is the source of truth for peer
+selection (peer_links table); company_snapshot supplies all benchmark metrics.
+
 Covers:
-- _resolve_peer_symbol: all three resolution strategies + failure.
 - _has_fmp_data / _has_fresh_valuation: DB cache checks.
-- _get_latest_metric: peer_comparison vs date-ordered tables, bad columns.
-- _compute_benchmarks: metric iteration and sector_benchmarks upsert.
-- refresh_peers end-to-end: empty peers, cached peers, fetch path with
-  yfinance + FMP mocking, FMP init failure (403-like), benchmark counts.
+- _get_snapshot_metric: company_snapshot reads, bad columns, NaN/NULL handling.
+- _compute_benchmarks: reads from company_snapshot, writes sector_benchmarks.
+- refresh_peers end-to-end: <3 Yahoo peers early-return, cached peers,
+  fetch path with yfinance + FMP mocking, FMP init failure, benchmark counts.
 """
 
 from __future__ import annotations
@@ -14,7 +16,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
 import respx
 
@@ -22,13 +23,11 @@ from flowtracker.fund_models import ValuationSnapshot
 from flowtracker.research.peer_refresh import (
     _BENCHMARK_METRICS,
     _compute_benchmarks,
-    _get_latest_metric,
+    _get_snapshot_metric,
     _has_fmp_data,
     _has_fresh_valuation,
-    _resolve_peer_symbol,
     refresh_peers,
 )
-from flowtracker.scan_models import IndexConstituent
 from flowtracker.store import FlowStore
 
 
@@ -36,15 +35,48 @@ from flowtracker.store import FlowStore
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _seed_peer_comparison(store: FlowStore, symbol: str, peers: list[dict]) -> int:
-    """Insert rows into peer_comparison for a subject symbol."""
-    return store.upsert_peers(symbol, peers)
+def _seed_peer_links(store: FlowStore, symbol: str, peers: list[dict]) -> int:
+    """Insert Yahoo peers into peer_links for a subject symbol."""
+    return store.upsert_peer_links(symbol, peers)
+
+
+def _seed_snapshot(
+    store: FlowStore,
+    symbol: str,
+    *,
+    pe_trailing: float | None = None,
+    market_cap: float | None = None,
+    roce: float | None = None,
+    div_yield: float | None = None,
+    pb: float | None = None,
+    beta: float | None = None,
+) -> None:
+    """Write minimal company_snapshot rows via the store's upsert methods."""
+    screener_data: dict = {}
+    if pe_trailing is not None:
+        screener_data["pe_trailing"] = pe_trailing
+    if market_cap is not None:
+        screener_data["market_cap"] = market_cap
+    if roce is not None:
+        screener_data["roce"] = roce
+    if screener_data:
+        store.upsert_snapshot_screener(symbol, screener_data)
+
+    yf_data: dict = {}
+    if div_yield is not None:
+        yf_data["div_yield"] = div_yield
+    if pb is not None:
+        yf_data["pb"] = pb
+    if beta is not None:
+        yf_data["beta"] = beta
+    if yf_data:
+        store.upsert_snapshot_yfinance(symbol, yf_data)
 
 
 def _seed_valuation_today(
     store: FlowStore, symbol: str, *, days_ago: int = 0, pe: float = 10.0
 ) -> None:
-    """Insert a valuation_snapshot row N days ago."""
+    """Insert a valuation_snapshot row N days ago (yfinance cache check)."""
     d = (date.today() - timedelta(days=days_ago)).isoformat()
     snap = ValuationSnapshot(
         symbol=symbol,
@@ -59,52 +91,6 @@ def _seed_valuation_today(
 
 
 # ---------------------------------------------------------------------------
-# _resolve_peer_symbol
-# ---------------------------------------------------------------------------
-
-class TestResolvePeerSymbol:
-    """Symbol resolution has 3 branches: explicit, index lookup, ticker-like fallback."""
-
-    def test_uses_explicit_peer_symbol(self, store: FlowStore):
-        """peer_symbol set → used directly, exchange suffix stripped."""
-        peer = {"peer_symbol": "RELIANCE.NS", "peer_name": "Reliance Industries"}
-        assert _resolve_peer_symbol(peer, store._conn) == "RELIANCE"
-
-    def test_strips_bo_suffix(self, store: FlowStore):
-        """BSE .BO suffix also gets stripped."""
-        peer = {"peer_symbol": "TCS.BO", "peer_name": "TCS"}
-        assert _resolve_peer_symbol(peer, store._conn) == "TCS"
-
-    def test_falls_back_to_index_constituents(self, store: FlowStore):
-        """No peer_symbol → look up name in index_constituents."""
-        store.upsert_index_constituents([
-            IndexConstituent(
-                symbol="INFY",
-                index_name="NIFTY 50",
-                company_name="Infosys Ltd",
-                industry="IT - Software",
-            ),
-        ])
-        peer = {"peer_symbol": None, "peer_name": "Infosys"}
-        assert _resolve_peer_symbol(peer, store._conn) == "INFY"
-
-    def test_returns_none_for_empty_name(self, store: FlowStore):
-        """No peer_symbol and empty peer_name → None."""
-        peer = {"peer_symbol": None, "peer_name": ""}
-        assert _resolve_peer_symbol(peer, store._conn) is None
-
-    def test_ticker_like_fallback(self, store: FlowStore):
-        """No symbol, no index match, but name matches ticker regex."""
-        peer = {"peer_symbol": None, "peer_name": "NAUKRI"}
-        assert _resolve_peer_symbol(peer, store._conn) == "NAUKRI"
-
-    def test_returns_none_when_no_match(self, store: FlowStore):
-        """Company-like name that's not in constituents and not a ticker → None."""
-        peer = {"peer_symbol": None, "peer_name": "Some Random Company Ltd"}
-        assert _resolve_peer_symbol(peer, store._conn) is None
-
-
-# ---------------------------------------------------------------------------
 # _has_fmp_data / _has_fresh_valuation
 # ---------------------------------------------------------------------------
 
@@ -112,72 +98,46 @@ class TestCacheChecks:
     """Cache-hit predicates used to skip network fetches."""
 
     def test_has_fmp_data_true_when_row_exists(self, populated_store: FlowStore):
-        """populated_store seeds fmp_key_metrics for SBIN → cache hit."""
         assert _has_fmp_data(populated_store._conn, "fmp_key_metrics", "SBIN") is True
 
     def test_has_fmp_data_false_when_empty(self, store: FlowStore):
-        """Empty table → False."""
         assert _has_fmp_data(store._conn, "fmp_key_metrics", "SBIN") is False
 
     def test_has_fresh_valuation_today(self, store: FlowStore):
-        """Snapshot today → fresh (within 7 days)."""
         _seed_valuation_today(store, "SBIN", days_ago=0)
         assert _has_fresh_valuation(store._conn, "SBIN", days=7) is True
 
     def test_has_fresh_valuation_stale(self, store: FlowStore):
-        """Snapshot 10 days old → not fresh with 7-day window."""
         _seed_valuation_today(store, "SBIN", days_ago=10)
         assert _has_fresh_valuation(store._conn, "SBIN", days=7) is False
 
     def test_has_fresh_valuation_no_row(self, store: FlowStore):
-        """No snapshot at all → False."""
         assert _has_fresh_valuation(store._conn, "NOPE", days=7) is False
 
 
 # ---------------------------------------------------------------------------
-# _get_latest_metric
+# _get_snapshot_metric
 # ---------------------------------------------------------------------------
 
-class TestGetLatestMetric:
-    """Metric readers handle peer_comparison, valuation_snapshot, and fmp_* tables."""
+class TestGetSnapshotMetric:
+    """Reads a single column from company_snapshot for a symbol."""
 
-    def test_peer_comparison_by_peer_symbol(self, store: FlowStore):
-        """For peers, value is looked up via peer_symbol column."""
-        _seed_peer_comparison(store, "SBIN", [
-            {"name": "HDFC Bank", "peer_symbol": "HDFCBANK", "pe": 18.5, "market_cap": 900000.0},
-        ])
-        val = _get_latest_metric(store._conn, "peer_comparison", "pe", "HDFCBANK")
-        assert val == pytest.approx(18.5)
-
-    def test_peer_comparison_missing_returns_none(self, store: FlowStore):
-        """No peer row for this symbol → None."""
-        assert _get_latest_metric(store._conn, "peer_comparison", "pe", "NOPE") is None
-
-    def test_valuation_snapshot_uses_latest_date(self, store: FlowStore):
-        """Picks the most recent row by date."""
-        _seed_valuation_today(store, "SBIN", days_ago=5, pe=8.0)
-        _seed_valuation_today(store, "SBIN", days_ago=0, pe=9.5)
-        val = _get_latest_metric(store._conn, "valuation_snapshot", "pe_trailing", "SBIN")
+    def test_returns_value_when_present(self, store: FlowStore):
+        _seed_snapshot(store, "SBIN", pe_trailing=9.5)
+        val = _get_snapshot_metric(store._conn, "pe_trailing", "SBIN")
         assert val == pytest.approx(9.5)
 
-    def test_fmp_table_returns_value(self, populated_store: FlowStore):
-        """populated_store seeds fmp_key_metrics.roe=18.5 for SBIN."""
-        val = _get_latest_metric(populated_store._conn, "fmp_key_metrics", "roe", "SBIN")
-        assert val == pytest.approx(18.5)
+    def test_returns_none_when_symbol_missing(self, store: FlowStore):
+        assert _get_snapshot_metric(store._conn, "pe_trailing", "NOPE") is None
 
-    def test_bad_column_swallows_error(self, store: FlowStore):
+    def test_returns_none_when_column_null(self, store: FlowStore):
+        _seed_snapshot(store, "SBIN", market_cap=5000.0)  # row exists, pe_trailing unset
+        assert _get_snapshot_metric(store._conn, "pe_trailing", "SBIN") is None
+
+    def test_returns_none_for_invalid_column(self, store: FlowStore):
         """Non-existent column → exception caught → None returned."""
-        # _BENCHMARK_METRICS declares valuation_snapshot.profit_margins which doesn't
-        # exist on the schema — the broad except in _get_latest_metric must handle it.
-        _seed_valuation_today(store, "SBIN")
-        assert _get_latest_metric(store._conn, "valuation_snapshot", "profit_margins", "SBIN") is None
-
-    def test_null_value_returns_none(self, store: FlowStore):
-        """Row exists but column is NULL → None."""
-        _seed_peer_comparison(store, "SBIN", [
-            {"name": "X", "peer_symbol": "XPEER", "pe": None, "market_cap": 5000.0},
-        ])
-        assert _get_latest_metric(store._conn, "peer_comparison", "pe", "XPEER") is None
+        _seed_snapshot(store, "SBIN", pe_trailing=9.5)
+        assert _get_snapshot_metric(store._conn, "no_such_col", "SBIN") is None
 
 
 # ---------------------------------------------------------------------------
@@ -185,51 +145,41 @@ class TestGetLatestMetric:
 # ---------------------------------------------------------------------------
 
 class TestComputeBenchmarks:
-    """Benchmark computation iterates _BENCHMARK_METRICS and writes sector_benchmarks."""
+    """Benchmarks iterate _BENCHMARK_METRICS and read from company_snapshot."""
 
     def test_benchmarks_written_for_available_metrics(self, store: FlowStore):
-        """Subject + peer data present → sector_benchmarks populated with median/pct."""
-        # Seed the subject
-        _seed_peer_comparison(store, "SBIN", [
-            {"name": "HDFC Bank", "peer_symbol": "HDFCBANK", "pe": 18.0, "market_cap": 900000.0,
-             "roce": 16.0, "div_yield": 1.2},
-            {"name": "ICICI Bank", "peer_symbol": "ICICIBANK", "pe": 17.0, "market_cap": 700000.0,
-             "roce": 17.5, "div_yield": 0.8},
-        ])
-        # Subject row needs to live in peer_comparison keyed by peer_symbol=SBIN too,
-        # because _get_latest_metric always reads peer_comparison via peer_symbol.
-        # Seed by linking SBIN as a peer-of-peers (any parent symbol works).
-        store.upsert_peers("PARENT", [
-            {"name": "SBI", "peer_symbol": "SBIN", "pe": 9.5, "market_cap": 730000.0,
-             "roce": 18.0, "div_yield": 1.5},
-        ])
+        """Subject + peer snapshots present → sector_benchmarks populated."""
+        _seed_snapshot(store, "SBIN", pe_trailing=9.5, market_cap=730000.0,
+                       roce=18.0, div_yield=1.5)
+        _seed_snapshot(store, "HDFCBANK", pe_trailing=18.0, market_cap=900000.0,
+                       roce=16.0, div_yield=1.2)
+        _seed_snapshot(store, "ICICIBANK", pe_trailing=17.0, market_cap=700000.0,
+                       roce=17.5, div_yield=0.8)
 
         count = _compute_benchmarks(store, "SBIN", ["HDFCBANK", "ICICIBANK"], console=None)
 
-        # At minimum, the 4 peer_comparison metrics should yield benchmarks
+        # pe_trailing, market_cap, roce, div_yield all have data
         assert count >= 4
 
-        bench = store.get_sector_benchmark("SBIN", "pe")
+        bench = store.get_sector_benchmark("SBIN", "pe_trailing")
         assert bench is not None
         assert bench["peer_count"] == 2
         assert bench["sector_median"] == pytest.approx(17.5)
-        # SBIN pe=9.5, both peers higher → percentile 0
+        # SBIN pe_trailing=9.5, both peers higher → percentile 0
         assert bench["percentile"] == pytest.approx(0.0)
 
     def test_skips_metrics_with_no_data(self, store: FlowStore):
-        """No rows anywhere → no benchmarks written."""
         count = _compute_benchmarks(store, "EMPTY", ["ALSO_EMPTY"], console=None)
         assert count == 0
-        assert store.get_sector_benchmark("EMPTY", "pe") is None
+        assert store.get_sector_benchmark("EMPTY", "pe_trailing") is None
 
     def test_benchmark_metrics_registry_shape(self):
-        """Sanity-check the metric registry — required for downstream iteration."""
+        """Registry is a flat list of snapshot column names."""
         assert len(_BENCHMARK_METRICS) > 10
-        for metric, table, column in _BENCHMARK_METRICS:
+        for metric in _BENCHMARK_METRICS:
             assert isinstance(metric, str) and metric
-            assert table in {"peer_comparison", "valuation_snapshot",
-                             "fmp_key_metrics", "fmp_financial_growth"}
-            assert isinstance(column, str) and column
+            # Must be lowercase snake_case — matches company_snapshot columns
+            assert metric.islower()
 
 
 # ---------------------------------------------------------------------------
@@ -237,16 +187,14 @@ class TestComputeBenchmarks:
 # ---------------------------------------------------------------------------
 
 class TestRefreshPeers:
-    """High-level orchestration including caching + yfinance + FMP mocking."""
+    """Yahoo peer_links drives the pipeline; <3 peers triggers early-return."""
 
     def _point_flowstore_at(self, monkeypatch: pytest.MonkeyPatch, tmp_db) -> None:
-        """Force refresh_peers' FlowStore() to use the test DB."""
         monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
 
     def test_returns_zeros_when_no_peers(self, tmp_db, monkeypatch: pytest.MonkeyPatch):
-        """No rows in peer_comparison → early-return dict with zeros."""
+        """Empty peer_links → early return zeros (< 3 threshold)."""
         self._point_flowstore_at(monkeypatch, tmp_db)
-        # Stub FMPClient init so missing fmp.env doesn't matter on the early-return path.
         with patch("flowtracker.fmp_client._load_api_key", return_value="test_key"):
             result = refresh_peers("NOPEERS")
         assert result == {
@@ -257,52 +205,65 @@ class TestRefreshPeers:
             "benchmarks_computed": 0,
         }
 
+    def test_returns_zeros_when_less_than_three_peers(
+        self, tmp_db, monkeypatch: pytest.MonkeyPatch
+    ):
+        """<3 Yahoo peers → skip benchmarks, agent can call get_screener_peers."""
+        self._point_flowstore_at(monkeypatch, tmp_db)
+        with FlowStore(db_path=tmp_db) as s:
+            _seed_peer_links(s, "SBIN", [
+                {"peer_symbol": "HDFCBANK", "score": 0.1},
+                {"peer_symbol": "ICICIBANK", "score": 0.2},
+            ])
+
+        with patch("flowtracker.fmp_client._load_api_key", return_value="test_key"):
+            result = refresh_peers("SBIN")
+
+        assert result["peers_found"] == 2
+        assert result["peers_fetched"] == 0
+        assert result["benchmarks_computed"] == 0
+
     def test_skips_peers_with_fresh_cache(self, tmp_db, monkeypatch: pytest.MonkeyPatch):
-        """A peer with a fresh valuation_snapshot is counted as cached, no fetch."""
+        """Peers with fresh valuation_snapshot are counted as cached, no fetch."""
         self._point_flowstore_at(monkeypatch, tmp_db)
 
-        # Seed peer_comparison + cached valuation for the peer
         with FlowStore(db_path=tmp_db) as s:
-            _seed_peer_comparison(s, "SBIN", [
-                {"name": "HDFC Bank", "peer_symbol": "HDFCBANK", "pe": 18.0,
-                 "market_cap": 900000.0},
+            _seed_peer_links(s, "SBIN", [
+                {"peer_symbol": "HDFCBANK", "score": 0.1},
+                {"peer_symbol": "ICICIBANK", "score": 0.2},
+                {"peer_symbol": "AXISBANK", "score": 0.3},
             ])
-            _seed_valuation_today(s, "HDFCBANK", days_ago=0)
+            for sym in ("HDFCBANK", "ICICIBANK", "AXISBANK"):
+                _seed_valuation_today(s, sym, days_ago=0)
 
-        # FMP and Fund clients should NOT be hit because the peer is cached.
         fund_mock = MagicMock()
         with (
             patch("flowtracker.fmp_client._load_api_key", return_value="test_key"),
             patch("flowtracker.fund_client.FundClient", return_value=fund_mock),
             respx.mock(assert_all_called=False) as rsx,
         ):
-            # Any FMP call that *did* happen would 403 — proves we didn't call it.
             rsx.get(url__regex=r"financialmodelingprep\.com").respond(403)
             result = refresh_peers("SBIN")
 
-        assert result["peers_found"] == 1
-        assert result["peers_cached"] == 1
+        assert result["peers_found"] == 3
+        assert result["peers_cached"] == 3
         assert result["peers_fetched"] == 0
         fund_mock.fetch_valuation_snapshot.assert_not_called()
 
     def test_fetches_peer_when_not_cached(
         self, tmp_db, monkeypatch: pytest.MonkeyPatch
     ):
-        """Peer without cache triggers yfinance + FMP fetch (both mocked)."""
+        """Peers without cache trigger yfinance + FMP fetch (both mocked)."""
         self._point_flowstore_at(monkeypatch, tmp_db)
 
         with FlowStore(db_path=tmp_db) as s:
-            _seed_peer_comparison(s, "SBIN", [
-                {"name": "HDFC Bank", "peer_symbol": "HDFCBANK", "pe": 18.0,
-                 "market_cap": 900000.0, "roce": 16.0, "div_yield": 1.2},
+            _seed_peer_links(s, "SBIN", [
+                {"peer_symbol": "HDFCBANK", "score": 0.1},
+                {"peer_symbol": "ICICIBANK", "score": 0.2},
+                {"peer_symbol": "AXISBANK", "score": 0.3},
             ])
-            # Seed subject in peer_comparison too (as any parent's peer)
-            s.upsert_peers("ANY", [
-                {"name": "SBI", "peer_symbol": "SBIN", "pe": 9.5, "market_cap": 730000.0,
-                 "roce": 18.0, "div_yield": 1.5},
-            ])
+            _seed_snapshot(s, "SBIN", pe_trailing=9.5, market_cap=730000.0)
 
-        # Mock yfinance snapshot fetch
         fake_snap = ValuationSnapshot(
             symbol="HDFCBANK",
             date=date.today().isoformat(),
@@ -318,10 +279,9 @@ class TestRefreshPeers:
         with (
             patch("flowtracker.fmp_client._load_api_key", return_value="test_key"),
             patch("flowtracker.fund_client.FundClient", return_value=fund_mock),
-            patch("flowtracker.research.peer_refresh.time.sleep"),  # skip sleeps
+            patch("flowtracker.research.peer_refresh.time.sleep"),
             respx.mock(assert_all_called=False) as rsx,
         ):
-            # FMP endpoints return empty → fetch path runs without errors but stores nothing.
             rsx.get(url__regex=r"financialmodelingprep\.com/api/v3/key-metrics.*").respond(
                 200, json=[]
             )
@@ -330,12 +290,10 @@ class TestRefreshPeers:
             ).respond(200, json=[])
             result = refresh_peers("SBIN")
 
-        assert result["peers_found"] == 1
-        assert result["peers_fetched"] == 1
+        assert result["peers_found"] == 3
+        assert result["peers_fetched"] == 3
         assert result["peers_cached"] == 0
-        fund_mock.fetch_valuation_snapshot.assert_called_once_with("HDFCBANK")
-        # Benchmarks should have been computed for at least the Screener-peer metrics.
-        assert result["benchmarks_computed"] >= 1
+        assert fund_mock.fetch_valuation_snapshot.call_count == 3
 
     def test_fmp_init_failure_allows_fetch_to_continue(
         self, tmp_db, monkeypatch: pytest.MonkeyPatch
@@ -344,9 +302,10 @@ class TestRefreshPeers:
         self._point_flowstore_at(monkeypatch, tmp_db)
 
         with FlowStore(db_path=tmp_db) as s:
-            _seed_peer_comparison(s, "SBIN", [
-                {"name": "HDFC Bank", "peer_symbol": "HDFCBANK", "pe": 18.0,
-                 "market_cap": 900000.0},
+            _seed_peer_links(s, "SBIN", [
+                {"peer_symbol": "HDFCBANK", "score": 0.1},
+                {"peer_symbol": "ICICIBANK", "score": 0.2},
+                {"peer_symbol": "AXISBANK", "score": 0.3},
             ])
 
         fake_snap = ValuationSnapshot(
@@ -367,47 +326,21 @@ class TestRefreshPeers:
         ):
             result = refresh_peers("SBIN")
 
-        assert result["peers_fetched"] == 1
-        fmp_ctor.assert_called_once()  # attempted, failed gracefully
-        fund_mock.fetch_valuation_snapshot.assert_called_once()
-
-    def test_unresolvable_peer_is_skipped(
-        self, tmp_db, monkeypatch: pytest.MonkeyPatch
-    ):
-        """A peer row with no peer_symbol and no match anywhere is dropped."""
-        self._point_flowstore_at(monkeypatch, tmp_db)
-
-        with FlowStore(db_path=tmp_db) as s:
-            # Raw dict insert so we can bypass upsert_peers' field remapping
-            s._conn.execute(
-                "INSERT INTO peer_comparison (symbol, peer_name, peer_symbol) "
-                "VALUES (?, ?, ?)",
-                ("SBIN", "Mystery Co Pvt Ltd", None),
-            )
-            s._conn.commit()
-
-        with (
-            patch("flowtracker.fmp_client._load_api_key", return_value="test_key"),
-            patch("flowtracker.fund_client.FundClient", return_value=MagicMock()),
-            patch("flowtracker.research.peer_refresh.time.sleep"),
-        ):
-            result = refresh_peers("SBIN")
-
-        assert result["peers_found"] == 1
-        # Not resolved → not fetched, not cached
-        assert result["peers_fetched"] == 0
-        assert result["peers_cached"] == 0
+        assert result["peers_fetched"] == 3
+        fmp_ctor.assert_called_once()
+        assert fund_mock.fetch_valuation_snapshot.call_count == 3
 
     def test_yfinance_exception_is_swallowed(
         self, tmp_db, monkeypatch: pytest.MonkeyPatch
     ):
-        """yfinance raising does not break the pipeline — peer is still counted fetched."""
+        """yfinance raising does not break the pipeline — peers still counted fetched."""
         self._point_flowstore_at(monkeypatch, tmp_db)
 
         with FlowStore(db_path=tmp_db) as s:
-            _seed_peer_comparison(s, "SBIN", [
-                {"name": "HDFC Bank", "peer_symbol": "HDFCBANK", "pe": 18.0,
-                 "market_cap": 900000.0},
+            _seed_peer_links(s, "SBIN", [
+                {"peer_symbol": "HDFCBANK", "score": 0.1},
+                {"peer_symbol": "ICICIBANK", "score": 0.2},
+                {"peer_symbol": "AXISBANK", "score": 0.3},
             ])
 
         fund_mock = MagicMock()
@@ -422,6 +355,5 @@ class TestRefreshPeers:
             rsx.get(url__regex=r"financialmodelingprep\.com").respond(200, json=[])
             result = refresh_peers("SBIN")
 
-        # peer_refresh catches inner yfinance errors and continues, marking peer as fetched
-        assert result["peers_fetched"] == 1
+        assert result["peers_fetched"] == 3
         assert result["peers_skipped"] == 0

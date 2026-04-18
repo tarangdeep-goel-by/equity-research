@@ -1628,8 +1628,39 @@ class ResearchDataAPI:
         """
         return self._store.get_chart_data(symbol, chart_type)
 
-    def get_peer_comparison(self, symbol: str) -> list[dict]:
-        """Peer comparison: CMP, P/E, MCap, ROCE, etc. for sector peers."""
+    def get_peer_comparison(self, symbol: str) -> dict:
+        """Peer comparison for the subject vs Yahoo-recommended peers.
+
+        Yahoo picks the peer set; company_snapshot supplies the data columns
+        (Screener-sourced financials + yfinance valuation). Returns subject
+        snapshot + list of peer snapshots with Yahoo similarity scores.
+
+        If the agent suspects the Yahoo peer set is sector-mismatched, it can
+        call get_screener_peers as an explicit cross-reference.
+        """
+        subject = self._store.get_company_snapshot(symbol) or {"symbol": symbol}
+        peer_links = self._store.get_peer_links(symbol)
+        peer_symbols = [p["peer_symbol"] for p in peer_links]
+        peer_snapshots = (
+            self._store.get_company_snapshots(peer_symbols) if peer_symbols else []
+        )
+        score_map = {p["peer_symbol"]: p["score"] for p in peer_links}
+        for snap in peer_snapshots:
+            snap["yahoo_score"] = score_map.get(snap["symbol"])
+        return {
+            "subject": _clean(subject),
+            "peers": _clean(peer_snapshots),
+            "peer_count": len(peer_snapshots),
+            "source": "yahoo_recommendations",
+        }
+
+    def get_screener_peers(self, symbol: str) -> list[dict]:
+        """Screener.in-recommended peers from peer_comparison table.
+
+        Explicit fallback when the Yahoo peer set from get_peer_comparison
+        looks sector-mismatched. Returns raw Screener rows (CMP, P/E, MCap,
+        ROCE, div_yield, quarterly sales/NP with YoY variance).
+        """
         return self._store.get_peers(symbol)
 
     def get_shareholder_detail(
@@ -2156,50 +2187,46 @@ class ResearchDataAPI:
 
         return {"subject": subject, "peers": peer_data, "peer_count": len(peer_data)}
 
+    # Matrix metrics must match company_snapshot column names. Dropped
+    # ev_revenue + ps_ratio (not present in company_snapshot); renamed
+    # pb_ratio->pb, peg_ratio->peg, dividend_yield->div_yield.
     _MATRIX_METRICS = [
-        "pe_trailing", "pe_forward", "pb_ratio", "ev_ebitda", "ev_revenue",
-        "ps_ratio", "peg_ratio", "roe", "roa", "operating_margin", "net_margin",
-        "debt_to_equity", "dividend_yield", "revenue_growth", "earnings_growth",
+        "pe_trailing", "pe_forward", "pb", "ev_ebitda",
+        "peg", "roe", "roa", "operating_margin", "net_margin",
+        "debt_to_equity", "div_yield", "revenue_growth", "earnings_growth",
         "market_cap",
     ]
 
     def get_valuation_matrix(self, symbol: str) -> dict:
-        """Multi-metric valuation comparison matrix: subject vs all peers."""
-        peers = self._store.get_peers(symbol)
+        """Multi-metric valuation matrix: subject vs Yahoo peers, using company_snapshot."""
+        peer_links = self._store.get_peer_links(symbol)
+        peer_syms = [p["peer_symbol"] for p in peer_links if p.get("peer_symbol") != symbol]
 
-        def _latest_snapshot(sym: str) -> dict | None:
-            rows = self._store.get_valuation_history(sym, days=7)
-            if not rows:
-                return None
-            d = _clean(rows[-1].model_dump())
-            return {k: d.get(k) for k in self._MATRIX_METRICS if d.get(k) is not None}
-
-        # Subject
-        subject_data = _latest_snapshot(symbol) or {}
+        subject_snap = self._store.get_company_snapshot(symbol) or {}
+        subject_data: dict = {
+            k: subject_snap.get(k)
+            for k in self._MATRIX_METRICS
+            if subject_snap.get(k) is not None
+        }
         subject_data["symbol"] = symbol
 
-        # Peers
-        peer_data = []
-        for p in peers:
-            psym = p.get("peer_symbol") or p.get("peer_name")
-            if not psym or psym == symbol:
+        peer_snaps = self._store.get_company_snapshots(peer_syms) if peer_syms else []
+        peer_data: list[dict] = []
+        for snap in peer_snaps:
+            row = {k: snap.get(k) for k in self._MATRIX_METRICS if snap.get(k) is not None}
+            if not row:
                 continue
-            snap = _latest_snapshot(psym)
-            if snap:
-                snap["symbol"] = psym
-                peer_data.append(snap)
+            row["symbol"] = snap.get("symbol")
+            peer_data.append(row)
 
-        # Collect all entries for sector stats
         all_entries = [subject_data] + peer_data
-
-        # Sector stats + subject percentiles
         sector_stats: dict = {}
         subject_percentiles: dict = {}
         for metric in self._MATRIX_METRICS:
             values = [e[metric] for e in all_entries if metric in e and e[metric] is not None]
             if len(values) < 2:
                 continue
-            quantiles = statistics.quantiles(values, n=4)  # [p25, median, p75]
+            quantiles = statistics.quantiles(values, n=4)
             sector_stats[metric] = {
                 "median": quantiles[1],
                 "p25": quantiles[0],
@@ -2225,26 +2252,8 @@ class ResearchDataAPI:
         return _clean(snap) if snap else {}
 
     def get_yahoo_peer_comparison(self, symbol: str) -> dict:
-        """Yahoo-recommended peers with company snapshots.
-
-        Returns subject snapshot + list of peer snapshots with similarity scores.
-        Uses company_snapshot table for instant lookups (no HTTP calls).
-        """
-        subject = self._store.get_company_snapshot(symbol) or {"symbol": symbol}
-        peer_links = self._store.get_peer_links(symbol)
-        peer_symbols = [p["peer_symbol"] for p in peer_links]
-        peer_snapshots = self._store.get_company_snapshots(peer_symbols) if peer_symbols else []
-
-        score_map = {p["peer_symbol"]: p["score"] for p in peer_links}
-        for snap in peer_snapshots:
-            snap["yahoo_score"] = score_map.get(snap["symbol"])
-
-        return {
-            "subject": _clean(subject),
-            "peers": _clean(peer_snapshots),
-            "peer_count": len(peer_snapshots),
-            "source": "yahoo_recommendations",
-        }
+        """Alias for get_peer_comparison (kept for back-compat)."""
+        return self.get_peer_comparison(symbol)
 
     # Top-level concall quarter sections that can be requested via sub_section
     _CONCALL_SECTIONS = (

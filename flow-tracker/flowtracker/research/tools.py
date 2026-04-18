@@ -526,6 +526,23 @@ async def get_yahoo_peers(args):
 
 
 @tool(
+    "get_screener_peers",
+    "Get Screener.in-recommended peer companies with basic financials. "
+    "EXPLICIT FALLBACK ONLY — use this when the default peer set returned by "
+    "get_peer_sector (Yahoo-recommended) looks sector-mismatched (e.g. food-delivery "
+    "subject returned financials/insurance peers). Screener's peer list is often "
+    "too narrow or off-sector; prefer Yahoo peers by default.",
+    {"symbol": str},
+    annotations=READ_ONLY,
+)
+async def get_screener_peers(args):
+    symbol = args["symbol"].upper()
+    with ResearchDataAPI() as api:
+        data = api.get_screener_peers(symbol)
+    return _with_dedup("get_screener_peers", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
     "get_shareholder_detail",
     "Get individual shareholder names and quarterly %: e.g. Vanguard, LIC, etc. Optionally filter by classification.",
     {"symbol": str, "classification": str},
@@ -2173,6 +2190,7 @@ RESEARCH_TOOLS = [
     get_analytical_profile, screen_stocks,
     get_wacc_params,
     get_yahoo_peers,
+    get_screener_peers,
 ]
 
 # V1 agent registries (BUSINESS_TOOLS, *_AGENT_TOOLS, _PEER_TOOLS) removed — see *_AGENT_TOOLS_V2 below
@@ -2181,7 +2199,7 @@ RESEARCH_TOOLS = [
 
 BUSINESS_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_fundamentals,
-    get_peer_sector, get_events_actions, get_yahoo_peers,
+    get_peer_sector, get_events_actions, get_yahoo_peers, get_screener_peers,
     get_valuation, get_chart_data, save_business_profile, render_chart, calculate,
 ]
 
@@ -2200,7 +2218,7 @@ OWNERSHIP_AGENT_TOOLS_V2 = [
 
 VALUATION_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_valuation, get_fair_value_analysis,
-    get_estimates, get_peer_sector, get_events_actions, get_yahoo_peers,
+    get_estimates, get_peer_sector, get_events_actions, get_yahoo_peers, get_screener_peers,
     get_company_context, get_quality_scores, get_market_context,
     get_chart_data, render_chart, calculate,
 ]
@@ -2219,7 +2237,7 @@ TECHNICAL_AGENT_TOOLS_V2 = [
 
 SECTOR_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_peer_sector,
-    get_market_context, get_fundamentals, get_estimates, get_yahoo_peers,
+    get_market_context, get_fundamentals, get_estimates, get_yahoo_peers, get_screener_peers,
     get_valuation, get_chart_data, render_chart, calculate,
 ]
 

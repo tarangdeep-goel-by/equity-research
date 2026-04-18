@@ -138,7 +138,7 @@ Each agent's tool registry distinguishes primary tools from fallbacks. When a pr
 
 Common shared fallbacks:
 - FMP tools return empty → note it, use Screener + yfinance data
-- Few peers (<3) or business-model-mismatched peers → caveat the benchmark, then call `get_yahoo_peers` for global comparables
+- Yahoo peer set (from get_peer_sector) looks sector-mismatched → caveat the benchmark, then call `get_screener_peers` for Screener-curated comparables
 - Narrow time-series window from a banded/historical tool → call `get_chart_data` for the full series
 - Tool errors → log in Data Sources table, work with remaining data
 
@@ -579,7 +579,7 @@ VALUATION_INSTRUCTIONS_V2 = """
 7. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
 8. **Peer context**: Call `get_peer_sector` with section=['benchmarks', 'valuation_matrix', 'peer_metrics', 'peer_growth']. Use `sector_median` and `percentile` from the benchmarks response for all sector comparisons — the pre-computed benchmarks are authoritative.
 9. **Catalysts**: Call `get_events_actions` with section=['catalysts', 'material_events', 'dividends', 'dividend_policy'] for catalyst timeline, material events, dividend history, and dividend policy analysis (payout trend, consistency).
-10. **Fallback resolution pass.** For each primary-tool output that returned partial/empty/narrow data, call the registered fallback tool (see Fallback Tool Map below) before composing the Fair Value Triangle. Do not advance to fair-value composition with a known weak input that has an available fallback. Examples: `get_valuation(band)` returning <30 obs → call `get_chart_data(chart_type='pe')`; `get_peer_sector` returning <3 relevant peers → call `get_yahoo_peers`; empty SOTP from `get_valuation(sotp)` → manually call `get_valuation(snapshot)` per known subsidiary ticker.
+10. **Fallback resolution pass.** For each primary-tool output that returned partial/empty/narrow data, call the registered fallback tool (see Fallback Tool Map below) before composing the Fair Value Triangle. Do not advance to fair-value composition with a known weak input that has an available fallback. Examples: `get_valuation(band)` returning <30 obs → call `get_chart_data(chart_type='pe')`; `get_peer_sector` (Yahoo) returning a sector-mismatched peer set → call `get_screener_peers`; empty SOTP from `get_valuation(sotp)` → manually call `get_valuation(snapshot)` per known subsidiary ticker.
 11. **Visualize**: Call `render_chart` for `pe` (PE ratio history), `fair_value_range` (bear/base/bull vs current price), and `dividend_history` (payout ratio & DPS over time). Embed the returned markdown in the relevant report sections.
 12. **Sector Compliance Gate** — Enumerate each mandatory valuation metric from your sector skill file (primary multiple, historical band, peer premium/discount decomposition, SOTP components for holdcos, WACC basis, margin-of-safety threshold) and populate `mandatory_metrics_status` in your briefing. **extracted** (value + source), **attempted** (2+ tool calls), or **not_applicable**. Open questions must correspond to `attempted` metrics.
 
@@ -589,7 +589,7 @@ VALUATION_INSTRUCTIONS_V2 = """
 |---|---|
 | `get_valuation(band)` returns <30 obs OR <90-day span | `get_chart_data(chart_type='pe')` (7yr) OR `get_valuation(section='pe_history', years=5)` |
 | `get_valuation(band, metric='pb')` empty | `get_chart_data(chart_type='pbv')` |
-| `get_peer_sector` returns <3 relevant peers OR business-model-mismatched peers | `get_yahoo_peers` |
+| `get_peer_sector` (Yahoo) returns a business-model-mismatched peer set (e.g. food-delivery subject with NBFC peers) | `get_screener_peers` |
 | `get_valuation(sotp)` returns "no listed subsidiaries" but subs known to exist (concall, business profile, news) | `get_valuation(snapshot)` per subsidiary ticker manually; for unlisted, value via sector multiples (AMC: 3-5% AUM; insurance: 1.5-3× embedded value; lender: 1.0-2.5× book) |
 | `get_fair_value_analysis(dcf)` empty | Reverse DCF as primary; manual DCF via `calculate` if required for sector (utility, mature consumer); skip DCF entirely for sectors where it doesn't fit (banks, real estate, IPO-stage) |
 | `get_quality_scores(bfsi)` missing GNPA/NNPA/PCR/CASA | `get_company_context(section='concall_insights', sub_section='financial_metrics')` for management-disclosed values |
@@ -879,7 +879,7 @@ SECTOR_INSTRUCTIONS_V2 = """
    - **Step 3b — Waves**:
      - **Wave 1 (~12 KB)**: `get_peer_sector(section=['peer_table', 'peer_metrics', 'peer_growth', 'benchmarks'])` — peer-level comparison.
      - **Wave 2 (~6 KB)**: `get_peer_sector(section=['sector_overview', 'sector_flows', 'sector_valuations'])` — top-down sector context.
-     - **Wave 3 (on-demand)**: `valuation_matrix` + `yahoo_peers` when Screener peer list looks off.
+     - **Wave 3 (on-demand)**: `valuation_matrix` + `get_screener_peers` when Yahoo peer list looks sector-mismatched.
    Never call `section='all'` — 9-section blob is ~50 KB and may truncate.
 4. **Company fundamentals**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'cost_structure'] to understand the company's financial position within its sector — margin trends, growth rates, capital efficiency.
 5. **Valuation anchor**: Call `get_valuation` with section='snapshot' for current PE/PB — is the sector trading at historical premium/discount?
