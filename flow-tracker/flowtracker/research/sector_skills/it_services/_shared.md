@@ -24,3 +24,18 @@ This is an Indian IT services company. Standard manufacturing/asset-heavy metric
 - Debt-to-Equity analysis — IT companies are inherently cash-rich with near-zero debt, so leverage ratios are uninformative
 
 **Concall KPIs:** Deal pipeline commentary, discretionary vs non-discretionary spend trends, pricing environment, visa costs, wage hike cycle impact.
+
+### Annual Report & Investor Deck — IT Services Specifics
+
+**AR high-signal sections:**
+- `segmental` — client-geography split (US/Europe/RoW), vertical split (BFSI/Retail/Mfg/Healthcare), top-5 client concentration (% of revenue).
+- `mdna` — utilization, attrition, on-site/off-site mix, pyramid-cost management, pricing pressure by vertical.
+- `risk_management` — immigration/visa exposure, deal-pipeline seasonality, large-client-concentration risk, currency hedging policy.
+- `notes_to_financials` — contract-asset (unbilled revenue) aging, ESOP cost schedule, deferred-tax on R&D credits.
+- `corporate_governance` — CEO succession context, key technical leadership transitions, ESG/diversity metrics.
+
+**Deck high-signal sub_sections:**
+- `highlights` — deal-TCV wins, large-deal count, annualized revenue run-rate from new deals.
+- `strategic_priorities` — AI/gen-AI positioning, large-deal-ramp timelines, inorganic-vs-organic split.
+
+**Cross-year narrative cues:** `key_evolution_themes` typically track discretionary-vs-non-discretionary-spending trend; `guidance_track_record` credibility matters extra for IT given quarterly guidance cadence.

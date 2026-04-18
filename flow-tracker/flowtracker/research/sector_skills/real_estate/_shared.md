@@ -29,3 +29,18 @@ Real estate revenue is recognized on percentage-of-completion or completed-contr
 **Fallback:** If pre-sales data is not available from concall insights, use P/Adjusted Book Value as primary valuation and flag the absence of operational data as a limitation.
 
 **REITs Note:** If this is a REIT (Embassy, Mindspace, Brookfield), use rental yield framework: P/FFO (Funds From Operations), dividend yield, NAV discount/premium. REITs have predictable cash flows unlike project developers.
+
+### Annual Report & Investor Deck — Real Estate Specifics
+
+**AR high-signal sections:**
+- `notes_to_financials` — revenue-recognition policy (completed-contract vs percentage-of-completion), inventory ageing (finished-goods days), customer-advance balances, JV/JDA accounting treatment.
+- `mdna` — pre-sales (bookings) vs collections vs recognised revenue, project-wise launch schedule, RERA-registered projects, customer-pipeline backlog.
+- `risk_management` — land-bank carrying costs, approval-delay risk, receivables concentration, cyclicality management (residential vs commercial mix).
+- `segmental` — residential vs commercial vs leasing; geography split (MMR/NCR/Bangalore/etc.); ticket-size mix.
+- `auditor_report` — KAMs on revenue-recognition appropriateness, inventory-valuation at net-realizable-value, customer-advance classification.
+
+**Deck high-signal sub_sections:**
+- `highlights` — pre-sales/bookings value YoY, number of launches, collection efficiency.
+- `strategic_priorities` — new-launch pipeline, inventory monetisation plan, leasing-vs-sale tilt for commercial.
+
+**Cross-year narrative cues:** `capital_allocation_shifts` often reveal asset-light pivot vs land-bank expansion; `biggest_concern` tracks absorption-rate deterioration and approval-delay clusters.

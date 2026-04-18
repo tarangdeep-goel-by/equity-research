@@ -2746,17 +2746,69 @@ class ResearchDataAPI:
             except (json.JSONDecodeError, OSError):
                 cross_data = {}
 
+        # Track quality across (filtered) years. Mirrors concall/deck pattern.
+        # A year is "degraded" if extraction_status is partial/recovered/failed,
+        # OR if more than 3 sections returned section_not_found_or_empty / extraction_error
+        # (section-level failures within an otherwise "complete" run).
+        quality_statuses: list[str] = []
+        missing_periods: list[str] = []
+        for y in per_year:
+            status = y.get("extraction_status") or "complete"
+            label = y.get("fiscal_year") or ""
+            section_failures = 0
+            for s in self._AR_SECTIONS:
+                v = y.get(s)
+                if isinstance(v, dict) and (
+                    v.get("status") == "section_not_found_or_empty"
+                    or "extraction_error" in v
+                ):
+                    section_failures += 1
+            year_degraded = status in ("partial", "recovered", "failed") or section_failures > 3
+            # Normalize the status we record so meta_status logic below is consistent —
+            # if section-level failures push us over the threshold but the file says
+            # "complete", surface that as "partial" in the per-year status list.
+            if year_degraded and status not in ("partial", "recovered", "failed"):
+                quality_statuses.append("partial")
+            else:
+                quality_statuses.append(status)
+            if year_degraded and label:
+                missing_periods.append(label)
+
+        degraded = [s for s in quality_statuses if s in ("partial", "recovered", "failed")]
+        extraction_quality_warning = (
+            f"AR extraction was degraded for {len(degraded)}/{len(quality_statuses)} "
+            f"years (statuses: {quality_statuses}). Auditor KAMs, related-party tables, "
+            "and notes detail may be thin. Treat AR-derived analysis as partial and "
+            "flag the data limitation."
+        ) if degraded else None
+
+        if not quality_statuses:
+            meta_status = "empty"
+        elif degraded:
+            meta_status = "partial"
+        else:
+            meta_status = "full"
+        meta = {
+            "extraction_status": meta_status,
+            "missing_periods": missing_periods,
+            "degraded_quality": meta_status == "partial",
+        }
+
         # Drill-down: one section across (filtered) years.
         if section:
             slices = [
                 {"fiscal_year": y.get("fiscal_year"), section: y.get(section)}
                 for y in per_year
             ]
-            return {
+            result = {
                 "symbol": symbol.upper(),
                 "section": section,
                 "years": slices,
             }
+            if extraction_quality_warning:
+                result["_extraction_quality_warning"] = extraction_quality_warning
+            result["_meta"] = meta
+            return result
 
         # Default: TOC.
         toc_years = []
@@ -2799,6 +2851,9 @@ class ResearchDataAPI:
         if cross_data.get("narrative"):
             toc["cross_year_narrative"] = cross_data["narrative"]
             toc["cross_year_years"] = cross_data.get("years_analyzed", [])
+        if extraction_quality_warning:
+            toc["_extraction_quality_warning"] = extraction_quality_warning
+        toc["_meta"] = meta
         return toc
 
     def get_sector_kpis(self, symbol: str, kpi_key: str | None = None) -> dict:

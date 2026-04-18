@@ -33,3 +33,18 @@ This company is a bank, NBFC, or financial services company. Apply BFSI-specific
 **Insider Transactions:** For board-managed banks (0% promoter holding), absence of open-market insider buying is expected — executives are compensated via ESOPs, so they rarely buy on the open market. Track insider selling (ESOP disposals above normal) as the governance signal, not absence of buying.
 
 **Beta Caveat:** yfinance beta is calculated against S&P 500 (global), not Nifty 50. Indian bank betas against Nifty are typically 0.9-1.3x. Citing yfinance beta as-is for Indian market sensitivity analysis is misleading — note the global benchmark limitation.
+
+### Annual Report & Investor Deck — BFSI Specifics
+
+**AR high-signal sections (consult proactively when agent is mandated):**
+- `auditor_report` — Key Audit Matters on loan classification and ECL model governance are standard bank KAMs; non-standard KAMs (forensic audit, restructuring, going-concern) are red flags Risk agent must surface.
+- `notes_to_financials` — stage-wise GNPA/NNPA classification (typically Note 9-15 in Indian banks), PCR composition (provisions vs write-offs), 5-quarter trajectory. Trumps concall summaries for asset-quality trajectory.
+- `risk_management` — mandated CET-1, Tier-1, CRAR disclosure with peer-percentile context. Use to validate capital headroom vs loan-book growth.
+- `related_party` — intra-group lending (bank → NBFC sister, insurance arm) flagged as concentration risk.
+- `segmental` — retail vs wholesale vs treasury vs slippages-by-segment; CASA composition (retail vs wholesale CASA).
+
+**Deck high-signal sub_sections (for Business/Financials/Valuation agents):**
+- `charts_described` — banks show rolling 4-quarter credit-cost chart; NIM trajectory; CASA ratio evolution.
+- `outlook_and_guidance` — credit-cost guidance, NIM guidance, loan-growth target for current FY.
+
+**Cross-year narrative cues:** Watch for `auditor_signals.credibility_trajectory` (declining → concentrate on KAM escalation), `rpt_evolution` (growing intra-group flows), `risk_evolution.escalated_risks` (digital fraud, cybersecurity appearing fresh this year).

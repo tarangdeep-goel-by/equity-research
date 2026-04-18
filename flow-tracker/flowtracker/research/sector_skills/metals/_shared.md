@@ -35,3 +35,18 @@ A metals sector or technical report that does NOT open with the commodity trend 
 ### Data Workaround — EBITDA Source
 
 `get_quality_scores(section='all')` has historically returned mis-mapped values for metals (depreciation-as-EBITDA). Until the sector-aware field router ships, pull metals EBITDA from `get_fundamentals(section='annual_financials')` → operating-profit line, reconciled against the concall `financial_metrics` quoted EBITDA. For a cyclical, always cross-check EBITDA-per-tonne (quoted in concall) × production volume = EBITDA — if the recomputation differs from the quality-score EBITDA by >15%, trust the concall recomputation.
+
+### Annual Report & Investor Deck — Metals Specifics
+
+**AR high-signal sections:**
+- `risk_management` — commodity-hedging policy, open hedge positions, mark-to-market exposure, policy changes YoY (key signal — many Indian metal cos run unhedged positions, increasing or decreasing hedge % is material).
+- `notes_to_financials` — impairment tests on mining assets, restoration/rehabilitation provisions, royalty disputes, deferred-tax implications of capacity expansion.
+- `mdna` — realization per tonne by product (flat vs long vs alloy), energy-cost pass-through lag, EBITDA/tonne target vs achieved, inventory days trajectory.
+- `auditor_report` — going-concern notes on smaller/leveraged players, KAMs on inventory valuation at year-end (spot vs average price).
+- `segmental` — geography + product split, captive-power contribution, downstream vs upstream margin.
+
+**Deck high-signal sub_sections:**
+- `charts_described` — spot-price chart with realized-price overlay, cost-curve position, capacity-utilisation quarterly trajectory.
+- `outlook_and_guidance` — volume guidance, EBITDA/tonne target, capex phasing.
+
+**Cross-year narrative cues:** `capital_allocation_shifts` reveal capex-cycle positioning (expansion vs deleveraging); `narrative_shifts` in hedging language signal policy change worth tracking.

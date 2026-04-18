@@ -2116,6 +2116,7 @@ RESEARCH_TOOLS_V2 = [
     get_market_context, get_company_context, get_events_actions,
     get_analytical_profile, render_chart, get_composite_score,
     screen_stocks, save_business_profile, get_chart_data, calculate,
+    get_annual_report, get_deck_insights,
 ]
 
 # Individual tools kept for CLI `flowtrack research data <tool_name>` and monolith agent
@@ -2183,6 +2184,7 @@ BUSINESS_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_fundamentals,
     get_peer_sector, get_events_actions, get_yahoo_peers,
     get_valuation, get_chart_data, save_business_profile, render_chart, calculate,
+    get_annual_report, get_deck_insights,
 ]
 
 FINANCIAL_AGENT_TOOLS_V2 = [
@@ -2190,12 +2192,14 @@ FINANCIAL_AGENT_TOOLS_V2 = [
     get_quality_scores, get_valuation, get_peer_sector,
     get_estimates, get_events_actions, get_fair_value_analysis,
     get_chart_data, render_chart, calculate,
+    get_annual_report, get_deck_insights,
 ]
 
 OWNERSHIP_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_ownership, get_market_context,
     get_peer_sector, get_company_context, get_estimates,
     get_fundamentals, render_chart, calculate,
+    get_annual_report,
 ]
 
 VALUATION_AGENT_TOOLS_V2 = [
@@ -2203,6 +2207,7 @@ VALUATION_AGENT_TOOLS_V2 = [
     get_estimates, get_peer_sector, get_events_actions, get_yahoo_peers,
     get_company_context, get_quality_scores, get_market_context,
     get_chart_data, render_chart, calculate,
+    get_annual_report, get_deck_insights,
 ]
 
 RISK_AGENT_TOOLS_V2 = [
@@ -2210,6 +2215,7 @@ RISK_AGENT_TOOLS_V2 = [
     get_quality_scores, get_ownership, get_market_context,
     get_peer_sector, get_company_context, get_events_actions,
     get_estimates, render_chart, calculate,
+    get_annual_report,
 ]
 
 TECHNICAL_AGENT_TOOLS_V2 = [
