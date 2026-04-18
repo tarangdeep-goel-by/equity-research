@@ -1618,8 +1618,17 @@ class TestAnalyticalProfile:
 
 
 class TestPeerComparison:
-    def test_returns_list(self, api):
+    def test_returns_yahoo_peer_dict(self, api):
         result = api.get_peer_comparison("SBIN")
+        assert isinstance(result, dict)
+        assert "subject" in result
+        assert "peers" in result
+        assert result.get("source") == "yahoo_recommendations"
+
+
+class TestScreenerPeersFallback:
+    def test_returns_list(self, api):
+        result = api.get_screener_peers("SBIN")
         assert isinstance(result, list)
 
 
