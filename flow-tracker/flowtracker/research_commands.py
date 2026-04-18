@@ -357,9 +357,32 @@ def thesis(
     p0b.duration_seconds = _time.monotonic() - p0b_start
     trace.phases.append(p0b)
 
+    # Phase 0c: Macro anchor refresh (India-wide, not per-stock — shared across runs)
+    console.print(f"\n[bold]Phase 0c: Macro Anchor Pipeline[/]")
+    p0c = PhaseEvent(phase="macro_anchors", started_at=_dt.now(_tz.utc).isoformat())
+    p0c_start = _time.monotonic()
+    try:
+        from flowtracker.research.macro_anchors import ensure_macro_anchors
+        _macro_result = ensure_macro_anchors()
+        _available = _macro_result.get("anchors_available", [])
+        _missing = _macro_result.get("anchors_missing", [])
+        _new = _macro_result.get("newly_extracted", 0)
+        if _new > 0:
+            console.print(f"  [green]✓[/] Macro anchors: {len(_available)} available ({_new} newly extracted), {len(_missing)} unavailable")
+        else:
+            console.print(f"  [dim]Macro anchors cached: {len(_available)} available, {len(_missing)} unavailable[/]")
+        if _missing:
+            console.print(f"  [dim]Unavailable: {', '.join(_missing)} — macro agent will fall back to WebSearch[/]")
+    except Exception as e:
+        console.print(f"  [yellow]⚠[/] Macro anchor refresh failed: {e}")
+        console.print("  [dim]Macro agent will fall back to live WebSearch/WebFetch[/]")
+    p0c.finished_at = _dt.now(_tz.utc).isoformat()
+    p0c.duration_seconds = _time.monotonic() - p0c_start
+    trace.phases.append(p0c)
+
     # Phase 1 + 1.5: Specialist agents (parallel) + Verification
-    console.print(f"\n[bold]Phase 1: Running 7 specialist agents for {symbol}...[/]")
-    console.print("Agents: business, financials, ownership, valuation, risk, technical, sector")
+    console.print(f"\n[bold]Phase 1: Running 8 specialist agents + macro for {symbol}...[/]")
+    console.print("Agents: business, financials, ownership, valuation, risk, technical, sector, news, macro")
     console.print("This may take 3-8 minutes.\n")
 
     envelopes, agent_trace = asyncio.run(run_all_agents(
@@ -862,7 +885,7 @@ def compare(
     webbrowser.open(f"file://{html_path}")
 
 
-VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news"}
+VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro"}
 VALID_AGENTS_WITH_EXTRAS = VALID_AGENTS | {"synthesis", "web_research"}
 
 

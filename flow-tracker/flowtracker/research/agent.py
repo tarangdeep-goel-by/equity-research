@@ -41,6 +41,7 @@ from flowtracker.research.tools import (
     _tool_result_cache,
     BUSINESS_AGENT_TOOLS_V2,
     FINANCIAL_AGENT_TOOLS_V2,
+    MACRO_AGENT_TOOLS_V2,
     NEWS_AGENT_TOOLS_V2,
     OWNERSHIP_AGENT_TOOLS_V2,
     RISK_AGENT_TOOLS_V2,
@@ -65,6 +66,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "technical": "claude-sonnet-4-6",
     "sector": "claude-sonnet-4-6",
     "news": "claude-sonnet-4-6",
+    "macro": "claude-sonnet-4-6",
     "synthesis": "claude-opus-4-6",
     "verifier": "claude-haiku-4-5-20251001",
     "web_research": "claude-sonnet-4-6",
@@ -81,6 +83,7 @@ DEFAULT_EFFORT: dict[str, str] = {
     "ownership": "medium",
     "technical": "medium",
     "news": "medium",
+    "macro": "medium",
     "web_research": "medium",  # fact-retrieval, not deep reasoning
     "explainer": "high",
 }
@@ -94,6 +97,7 @@ AGENT_TOOLS: dict[str, list] = {
     "technical": TECHNICAL_AGENT_TOOLS_V2,
     "sector": SECTOR_AGENT_TOOLS_V2,
     "news": NEWS_AGENT_TOOLS_V2,
+    "macro": MACRO_AGENT_TOOLS_V2,
 }
 
 # Agent failure severity tiers for synthesis confidence capping
@@ -103,7 +107,7 @@ AGENT_TIERS = {
     # Tier 2: Core context — business model and ownership
     "business": 2, "ownership": 2,
     # Tier 3: Enhancers — sector and market timing
-    "sector": 3, "technical": 3, "news": 3,
+    "sector": 3, "technical": 3, "news": 3, "macro": 3,
 }
 
 # Tier-aware retry counts — tier-1 agents are critical, get extra retries
@@ -118,6 +122,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "technical": 30,
     "sector": 25,
     "news": 25,
+    "macro": 25,
     "web_research": 20,
 }
 
@@ -130,6 +135,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "technical": 0.75,
     "sector": 0.60,
     "news": 0.50,
+    "macro": 0.60,
     "web_research": 0.50,
 }
 
@@ -177,6 +183,7 @@ _DISALLOWED_BUILTINS = [
 AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
     "news": ["WebFetch"],  # needs web fetch to read full articles
     "web_research": ["WebSearch", "WebFetch"],
+    "macro": ["WebSearch", "WebFetch"],  # fallback for anchors not in local vault
 }
 
 # Fields to extract from briefings for synthesis context.
@@ -199,6 +206,11 @@ _SYNTHESIS_FIELDS = {
     "sector_growth_signal", "competitive_position", "regulatory_risk",
     # News
     "top_events", "sentiment_signal", "catalysts_identified",
+    # Macro
+    "regime_state", "secular_tailwinds", "secular_headwinds",
+    "cyclical_stage", "india_transmission", "sector_implications",
+    "bull_case_triggers", "bear_case_triggers", "trajectory_checks",
+    "anchors_fetched",
 }
 
 
@@ -553,10 +565,12 @@ async def _run_specialist(
 
     # Block dangerous Claude Code built-ins (Bash, Write, Edit, etc.)
     # MCP tools registered via mcp_servers are available regardless.
-    options.disallowed_tools = list(_DISALLOWED_BUILTINS)
-
-    # Add specific built-ins for agents that need them (e.g. WebSearch for business)
+    # Per-agent allowed built-ins are SUBTRACTED from the disallow list so an
+    # agent with WebSearch allowed isn't simultaneously blocked by the default
+    # deny. Without this, the CLI receives the same tool in both --allowedTools
+    # and --disallowedTools, and deny wins.
     extra_builtins = AGENT_ALLOWED_BUILTINS.get(name, [])
+    options.disallowed_tools = [t for t in _DISALLOWED_BUILTINS if t not in extra_builtins]
     if extra_builtins:
         options.allowed_tools = extra_builtins
 
@@ -1132,7 +1146,7 @@ async def run_all_agents(
     from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
-    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news"]
+    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro"]
 
     pipeline_started = datetime.now(timezone.utc).isoformat()
     pipeline_start_mono = time.monotonic()
@@ -1237,6 +1251,11 @@ async def run_all_agents(
     from flowtracker.research.verifier import _run_verifier, apply_corrections
     verify_sem = asyncio.Semaphore(MAX_CONCURRENT)
 
+    # Agents whose output is web-sourced with inline citations (macro) or
+    # fact-retrieval answers (web_research) don't fit the MCP-data spot-check
+    # model the verifier is designed for — skip them to save cost + avoid noise.
+    _VERIFIER_SKIP = {"web_research", "macro"}
+
     async def _run_specialist_then_verify(
         name: str, sys_prompt: str, instr: str
     ) -> tuple[str, BriefingEnvelope | Exception, AgentTrace | None, object]:
@@ -1250,6 +1269,9 @@ async def run_all_agents(
         if not envelope.report or len(envelope.report.strip()) < 100:
             return (spec_name, envelope, agent_trace, None)
         if getattr(envelope, "status", None) in ("skipped", "failed"):
+            return (spec_name, envelope, agent_trace, None)
+        # Skip verification for web-sourced / fact-retrieval agents
+        if spec_name in _VERIFIER_SKIP:
             return (spec_name, envelope, agent_trace, None)
 
         try:
@@ -1530,10 +1552,51 @@ async def run_synthesis_agent(
         sentiment = news_briefing.get("sentiment_signal", "unknown")
         news_section += f"\nOverall news sentiment: **{sentiment}**\n"
 
+    # Inject macro briefing — placed BEFORE news since macro sets the regime
+    # context against which specialists' bottom-up signals must hold up.
+    macro_section = ""
+    macro_briefing = briefings.get("macro", {})
+    if macro_briefing:
+        regime = macro_briefing.get("regime_state", {}) or {}
+        macro_section = "\n## Macro Backdrop (from macro agent)\n"
+        macro_section += f"- Rate cycle: **{regime.get('rate_cycle', '?')}**\n"
+        macro_section += f"- Growth pulse: {regime.get('growth_pulse', '?')}\n"
+        macro_section += f"- Commodity regime: {regime.get('commodity_regime', '?')}\n"
+        macro_section += f"- INR regime: {regime.get('inr_regime', '?')}\n"
+        macro_section += f"- Cyclical stage: {macro_briefing.get('cyclical_stage', '?')}\n"
+        tailwinds = macro_briefing.get("secular_tailwinds") or []
+        headwinds = macro_briefing.get("secular_headwinds") or []
+        if tailwinds:
+            macro_section += "\n**Secular tailwinds (verified across anchors):**\n"
+            for t in tailwinds[:5]:
+                name = t.get("name", "?") if isinstance(t, dict) else str(t)
+                mech = t.get("mechanism", "") if isinstance(t, dict) else ""
+                macro_section += f"- {name}"
+                if mech:
+                    macro_section += f" — {mech}"
+                macro_section += "\n"
+        if headwinds:
+            macro_section += "\n**Secular headwinds:**\n"
+            for h in headwinds[:5]:
+                name = h.get("name", "?") if isinstance(h, dict) else str(h)
+                mech = h.get("mechanism", "") if isinstance(h, dict) else ""
+                macro_section += f"- {name}"
+                if mech:
+                    macro_section += f" — {mech}"
+                macro_section += "\n"
+        bull = macro_briefing.get("bull_case_triggers") or []
+        bear = macro_briefing.get("bear_case_triggers") or []
+        if bull:
+            macro_section += "\n**Macro bull triggers:** " + "; ".join(str(b) for b in bull[:3]) + "\n"
+        if bear:
+            macro_section += f"**Macro bear triggers:** " + "; ".join(str(b) for b in bear[:3]) + "\n"
+        macro_section += f"\nMacro regime signal: **{macro_briefing.get('signal', 'neutral')}**\n"
+
     user_prompt = (
         f"Synthesize the analysis for {symbol}.\n\n"
         f"## Orchestrator Pre-Analysis (suggestions to investigate, not conclusions)\n{signals_analysis}\n\n"
         f"{web_research_section}"
+        f"{macro_section}"
         f"{news_section}"
         f"## Specialist Briefings\n{briefing_text}\n\n"
         "The orchestrator has flagged potential signals above — treat these as suggestions to investigate, "

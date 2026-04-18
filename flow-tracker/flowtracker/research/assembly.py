@@ -47,7 +47,7 @@ def assemble_final_report(
     parts.append(f"# {company_name or symbol} ({symbol}) — Equity Research Report")
     parts.append(
         f"\n*Generated: {today} | Multi-agent research system"
-        f" (7 specialists + synthesis + verification)*\n"
+        f" (8 specialists + macro + synthesis + verification)*\n"
     )
     parts.append("---\n")
 
@@ -65,6 +65,7 @@ def assemble_final_report(
         ("valuation", "Valuation"),
         ("ownership", "Ownership Intelligence"),
         ("risk", "Risk Assessment"),
+        ("macro", "Macro Backdrop & Secular Tailwinds"),
         ("sector", "Sector & Industry"),
         ("technical", "Technical & Market Context"),
         ("news", "Recent News & Catalysts"),
