@@ -292,21 +292,60 @@ def thesis(
     pipeline_start = _time.monotonic()
     trace = PipelineTrace(symbol=symbol, started_at=_dt.now(_tz.utc).isoformat())
 
-    # Phase 0: Data refresh
-    if not skip_fetch:
+    # Phase 0 + 0c run in PARALLEL (independent):
+    #   - Phase 0 (data refresh): per-stock DB writes; Phase 0b depends on it
+    #   - Phase 0c (macro anchors): India-wide vault writes; fully independent
+    # Phase 0b runs after both because AR downloader reads URLs from Phase 0's DB writes.
+    from flowtracker.research.data_api import ResearchDataAPI
+    from flowtracker.research.macro_anchors import ensure_macro_anchors
+
+    async def _run_phase_0_data_refresh():
+        if skip_fetch:
+            return None
         console.print(f"\n[bold]Phase 0: Data Refresh for {symbol}[/]")
         p0 = PhaseEvent(phase="data_refresh", started_at=_dt.now(_tz.utc).isoformat())
+        t0 = _time.monotonic()
         from flowtracker.research.refresh import refresh_for_research
-        refresh_for_research(symbol, console)
-
-        console.print("\n[bold]Refreshing peer data...[/]")
         from flowtracker.research.peer_refresh import refresh_peers
-        refresh_peers(symbol, console)
+        await asyncio.to_thread(refresh_for_research, symbol, console)
+        console.print("\n[bold]Refreshing peer data...[/]")
+        await asyncio.to_thread(refresh_peers, symbol, console)
         p0.finished_at = _dt.now(_tz.utc).isoformat()
-        p0.duration_seconds = _time.monotonic() - pipeline_start
-        trace.phases.append(p0)
+        p0.duration_seconds = _time.monotonic() - t0
+        return p0
 
-    # Phase 0b: Concall extraction (per-quarter cached)
+    async def _run_phase_0c_macro_anchors():
+        console.print(f"\n[bold]Phase 0c: Macro Anchor Pipeline[/]")
+        p0c = PhaseEvent(phase="macro_anchors", started_at=_dt.now(_tz.utc).isoformat())
+        t0 = _time.monotonic()
+        try:
+            result = await asyncio.to_thread(ensure_macro_anchors)
+            _available = result.get("anchors_available", [])
+            _missing = result.get("anchors_missing", [])
+            _new = result.get("newly_extracted", 0)
+            if _new > 0:
+                console.print(f"  [green]✓[/] Macro anchors: {len(_available)} available ({_new} newly extracted), {len(_missing)} unavailable")
+            else:
+                console.print(f"  [dim]Macro anchors cached: {len(_available)} available, {len(_missing)} unavailable[/]")
+            if _missing:
+                console.print(f"  [dim]Unavailable: {', '.join(_missing)} — macro agent will fall back to WebSearch[/]")
+        except Exception as e:
+            console.print(f"  [yellow]⚠[/] Macro anchor refresh failed: {e}")
+            console.print("  [dim]Macro agent will fall back to live WebSearch/WebFetch[/]")
+        p0c.finished_at = _dt.now(_tz.utc).isoformat()
+        p0c.duration_seconds = _time.monotonic() - t0
+        return p0c
+
+    # Gather — each prints its own section header; console output may interleave
+    _p0, _p0c = asyncio.run(asyncio.gather(
+        _run_phase_0_data_refresh(),
+        _run_phase_0c_macro_anchors(),
+    ))
+    if _p0:
+        trace.phases.append(_p0)
+    trace.phases.append(_p0c)
+
+    # Phase 0b: Document pipeline (Concalls + AR + Decks) — depends on Phase 0
     console.print(f"\n[bold]Phase 0b: Document Pipeline (Concalls + AR + Decks)[/]")
     p0b = PhaseEvent(phase="concall", started_at=_dt.now(_tz.utc).isoformat())
     p0b_start = _time.monotonic()
@@ -327,7 +366,6 @@ def thesis(
             console.print(f"  [yellow]⚠[/] Filing download: {e}")
 
     # Resolve industry once for all extractors.
-    from flowtracker.research.data_api import ResearchDataAPI
     _industry = None
     try:
         with ResearchDataAPI() as _api:
@@ -356,29 +394,6 @@ def thesis(
     p0b.finished_at = _dt.now(_tz.utc).isoformat()
     p0b.duration_seconds = _time.monotonic() - p0b_start
     trace.phases.append(p0b)
-
-    # Phase 0c: Macro anchor refresh (India-wide, not per-stock — shared across runs)
-    console.print(f"\n[bold]Phase 0c: Macro Anchor Pipeline[/]")
-    p0c = PhaseEvent(phase="macro_anchors", started_at=_dt.now(_tz.utc).isoformat())
-    p0c_start = _time.monotonic()
-    try:
-        from flowtracker.research.macro_anchors import ensure_macro_anchors
-        _macro_result = ensure_macro_anchors()
-        _available = _macro_result.get("anchors_available", [])
-        _missing = _macro_result.get("anchors_missing", [])
-        _new = _macro_result.get("newly_extracted", 0)
-        if _new > 0:
-            console.print(f"  [green]✓[/] Macro anchors: {len(_available)} available ({_new} newly extracted), {len(_missing)} unavailable")
-        else:
-            console.print(f"  [dim]Macro anchors cached: {len(_available)} available, {len(_missing)} unavailable[/]")
-        if _missing:
-            console.print(f"  [dim]Unavailable: {', '.join(_missing)} — macro agent will fall back to WebSearch[/]")
-    except Exception as e:
-        console.print(f"  [yellow]⚠[/] Macro anchor refresh failed: {e}")
-        console.print("  [dim]Macro agent will fall back to live WebSearch/WebFetch[/]")
-    p0c.finished_at = _dt.now(_tz.utc).isoformat()
-    p0c.duration_seconds = _time.monotonic() - p0c_start
-    trace.phases.append(p0c)
 
     # Phase 1 + 1.5: Specialist agents (parallel) + Verification
     console.print(f"\n[bold]Phase 1: Running 8 specialist agents + macro for {symbol}...[/]")

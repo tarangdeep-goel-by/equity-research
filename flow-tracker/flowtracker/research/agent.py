@@ -187,23 +187,41 @@ AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
 }
 
 # Fields to extract from briefings for synthesis context.
-# Full briefings can exceed 100K tokens; synthesis only needs structured signals.
+# Full briefings can exceed 100K tokens (nested evidence, long report text);
+# synthesis only needs structured signals + key numerical metrics. The whitelist
+# keeps compact scalar/list/dict fields that drive synthesis reasoning — drop
+# only the long narrative `report` body + detailed nested evidence.
 _SYNTHESIS_FIELDS = {
     "agent", "symbol", "confidence", "signal", "key_findings", "open_questions",
+    "mandatory_metrics_status",  # data-quality flag from specialists
     # Business
     "business_model", "moat_strength", "moat_type", "revenue_drivers", "management_quality",
-    # Financial
-    "revenue_cagr_5yr", "opm_trend", "dupont_driver", "fcf_positive", "growth_trajectory", "quality_signal",
+    "company_name", "key_metrics", "key_risks", "industry_growth", "revenue_mix",
+    # Financial — keep hard numbers, not just trend labels
+    "revenue_cagr_5yr", "opm_trend", "dupont_driver", "fcf_positive",
+    "growth_trajectory", "quality_signal",
+    "opm_current", "roce_current", "debt_equity", "earnings_beat_ratio",
+    "net_debt_cr", "cash_conversion",
     # Ownership
-    "promoter_pct", "promoter_trend", "fii_pct", "fii_trend", "mf_trend", "institutional_handoff", "insider_signal", "pledge_pct",
+    "promoter_pct", "promoter_trend", "fii_pct", "fii_trend", "mf_pct", "mf_trend",
+    "institutional_handoff", "insider_signal", "pledge_pct",
+    "delivery_signal", "mf_scheme_count",
     # Valuation
-    "current_pe", "pe_percentile", "fair_value_base", "fair_value_bear", "fair_value_bull", "margin_of_safety_pct", "valuation_signal", "vs_peers",
+    "current_pe", "pe_percentile", "fair_value_base", "fair_value_bear", "fair_value_bull",
+    "margin_of_safety_pct", "valuation_signal", "vs_peers",
+    "analyst_count", "analyst_dispersion", "peg_ratio", "forward_pe",
     # Risk
-    "composite_score", "top_risks", "governance_signal", "bear_case_trigger", "macro_sensitivity",
-    # Technical
+    "composite_score", "top_risks", "governance_signal", "bear_case_trigger",
+    "macro_sensitivity", "financial_health",
+    "m_score", "z_score",  # dealbreaker thresholds
+    # Technical — keep hard values, not just labels
     "rsi_signal", "trend_strength", "accumulation_signal", "timing_suggestion",
-    # Sector
+    "rsi", "price_vs_sma50", "price_vs_sma200", "delivery_avg_7d",
+    # Sector — industry field is CRITICAL for macro-vs-micro routing
     "sector_growth_signal", "competitive_position", "regulatory_risk",
+    "industry", "sector_valuation_signal", "median_pe", "median_roce",
+    "key_sector_tailwinds", "key_sector_headwinds", "top_sector_picks",
+    "institutional_flow", "sector_size_cr", "stock_count",
     # News
     "top_events", "sentiment_signal", "catalysts_identified",
     # Macro
@@ -1037,95 +1055,260 @@ async def run_single_agent(
     )
 
 
-def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
-    """Pre-analyze briefings to find agreements, contradictions, and cross-signals.
+def _safe_float(val) -> float | None:
+    """Safely extract a float from LLM-generated values like '25.5%', '1.5x', 'N/A', ''.
 
-    This gives the synthesis agent a directed starting point instead of raw data.
-    The orchestrator does the pattern-matching; the synthesis agent resolves and narrates.
+    Returns None on any failure — callers must check for None, not truthiness
+    (0.0 is falsy but valid).
+    """
+    if val is None:
+        return None
+    try:
+        import re as _re
+        cleaned = _re.sub(r"[^\d.\-]", "", str(val))
+        # Reject multi-decimal like '1.2.3' or empty/just-minus
+        if not cleaned or cleaned in ("-", ".", "-.") or cleaned.count(".") > 1:
+            return None
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return None
+
+
+def _has_word(blob: str, keywords: tuple) -> bool:
+    """Word-boundary match for industry keyword detection.
+
+    Avoids false positives like 'oil' matching 'foil' or 'boiler', 'auto' matching
+    'auto ancillary' when we only want auto OEM, 'bank' matching 'powerbank'.
+    Multi-word keywords are matched as phrases.
+    """
+    import re as _re
+    for k in keywords:
+        # Escape + use \b boundaries; multi-word keywords (with spaces) match as-is
+        if _re.search(r"\b" + _re.escape(k) + r"\b", blob, _re.IGNORECASE):
+            return True
+    return False
+
+
+def _analyze_briefing_signals(briefings: dict[str, dict]) -> str:
+    """Pre-analyze briefings for cross-signal forcing functions to the synthesis agent.
+
+    The orchestrator does deterministic pattern-matching; the synthesis agent resolves
+    and narrates. Every flag becomes a DIRECTIVE in the synthesis user prompt so Opus
+    cannot silently skip high-signal tensions.
+
+    Hardened per Gemini code review:
+    - `_safe_float` for dirty LLM-emitted numeric strings (percents, 'x' suffixes)
+    - `_has_word` for word-boundary industry matching (no 'foil' → 'oil' false positive)
+    - Financial institutions exempted from Altman Z-score (ratio is meaningless for banks)
+    - All nested-dict accesses use `(x or {}).get(...)` (LLMs emit explicit None)
+    - All string comparisons case-insensitive
+    - Directives framed as DIRECTIVE: (stronger than 'investigate')
     """
     lines = []
+    cross_signals: list[str] = []
 
-    # Collect signals from each agent
-    signals = {}
-    for name, b in briefings.items():
-        signals[name] = b.get("signal", "unknown")
+    # --- Normalize signals (lowercase, safe extraction) ---
+    signals = {name: str((b or {}).get("signal", "unknown")).lower() for name, b in briefings.items()}
 
-    # Count agreement
-    signal_values = [s for s in signals.values() if s != "unknown"]
-    if signal_values:
+    # --- Safe extraction of all briefing objects ---
+    biz = briefings.get("business") or {}
+    fin = briefings.get("financials") or {}
+    own = briefings.get("ownership") or {}
+    val = briefings.get("valuation") or {}
+    risk = briefings.get("risk") or {}
+    tech = briefings.get("technical") or {}
+    macro = briefings.get("macro") or {}
+    sector = briefings.get("sector") or {}
+    news = briefings.get("news") or {}
+
+    biz_metrics = biz.get("key_metrics") or {}
+    regime = macro.get("regime_state") or {}
+    india_transmission = macro.get("india_transmission") or {}
+
+    # Industry blob for keyword-based routing — case-insensitive
+    sector_name = str(biz.get("sector") or "")
+    industry_str = str(sector.get("industry") or "")
+    biz_industry = str(biz.get("industry") or "")
+    industry_blob = f"{sector_name} {industry_str} {biz_industry}".lower()
+
+    val_signal = signals.get("valuation", "")
+    tech_signal = signals.get("technical", "")
+    risk_signal = signals.get("risk", "")
+    macro_signal = signals.get("macro", "")
+
+    # --- Agreement + dissent (framed as divergence, not a vote) ---
+    valid_signals = [s for s in signals.values() if s not in ("unknown", "neutral", "")]
+    if valid_signals:
         from collections import Counter
-        counts = Counter(signal_values)
-        majority = counts.most_common(1)[0]
-        agreement = majority[1] / len(signal_values) * 100
-        lines.append(f"**Suggested signal (orchestrator analysis):** {len(signal_values)} agents responded. "
-                      f"Majority signal appears {majority[0]} ({majority[1]}/{len(signal_values)} = {agreement:.0f}%). "
-                      f"Please validate — do the underlying briefing details support this?")
-        lines.append(f"**Signal breakdown:** {dict(counts)}")
+        counts = Counter(valid_signals)
+        majority_sig, majority_count = counts.most_common(1)[0]
+        agreement = majority_count / len(valid_signals) * 100
+        lines.append(
+            f"**Signal landscape:** {len(valid_signals)} agents responded. "
+            f"Leaning {majority_sig.upper()} ({majority_count}/{len(valid_signals)} = {agreement:.0f}%). "
+            f"Breakdown: {dict(counts)}."
+        )
+        dissenters = [
+            (n, s) for n, s in signals.items()
+            if s not in (majority_sig, "unknown", "neutral", "")
+        ]
+        if dissenters:
+            lines.append(
+                f"**DIRECTIVE — divergence detected:** "
+                f"{', '.join(f'{n}={s}' for n, s in dissenters)} vs majority {majority_sig}. "
+                f"Verdict MUST explicitly address the dissenting agents' concerns, not average them away."
+            )
 
-        # Flag contradictions
-        if len(counts) > 1:
-            dissenters = [(name, sig) for name, sig in signals.items() if sig != majority[0] and sig != "unknown"]
-            if dissenters:
-                lines.append(f"**Potential contradiction:** {', '.join(f'{n} says {s}' for n, s in dissenters)} "
-                              f"vs majority {majority[0]}. Investigate whether these reflect genuinely conflicting evidence or different timeframes/scopes.")
+    # --- Growth vs ownership ---
+    growth = str(fin.get("growth_trajectory") or biz.get("signal", "")).lower()
+    mf_trend = str(own.get("mf_trend", "")).lower()
+    fii_trend = str(own.get("fii_trend", "")).lower()
+    insider = str(own.get("insider_signal", "")).lower()
 
-    # Cross-signal detection
-    cross_signals = []
+    if "decelerat" in growth and "increas" in mf_trend:
+        cross_signals.append("Growth decelerating BUT DIIs/MFs accumulating — smart money sees value or turnaround despite slowing growth. Investigate the thesis institutions are pricing in.")
+    if "decreas" in fii_trend and "increas" in mf_trend:
+        cross_signals.append("FII selling + DII/MF buying = institutional handoff. Historically a strong support base in Indian equities 2022-2025.")
 
-    biz = briefings.get("business", {})
-    fin = briefings.get("financials", {})
-    own = briefings.get("ownership", {})
-    val = briefings.get("valuation", {})
-    risk = briefings.get("risk", {})
-    tech = briefings.get("technical", {})
+    # --- Promoter/insider amplifier (new per review) ---
+    if "net_buying" in insider and ("decreas" in fii_trend or "decreas" in mf_trend):
+        cross_signals.append("Promoter/insider buying WHILE FIIs/MFs sell — management sees intrinsic value institutions are missing. High-conviction contrarian signal in Indian markets.")
+    if "net_buying" in insider and "bearish" in tech_signal:
+        cross_signals.append("Insider buying into technical weakness — management conviction at a price level institutions are exiting.")
 
-    # Growth vs ownership: decelerating growth + institutional accumulation = contrarian signal
-    growth = fin.get("growth_trajectory") or biz.get("signal", "")
-    mf_trend = own.get("mf_trend", "")
-    fii_trend = own.get("fii_trend", "")
-    if "decelerat" in str(growth).lower() and mf_trend == "increasing":
-        cross_signals.append("Growth decelerating BUT MF accumulating — smart money sees value despite slowing growth?")
-    if fii_trend == "decreasing" and mf_trend == "increasing":
-        cross_signals.append("FII selling + MF buying = institutional handoff. Historically medium-term bullish in Indian markets.")
+    # --- Quality vs valuation ---
+    roce_val = _safe_float(biz_metrics.get("roce_pct")) or _safe_float(fin.get("roce_current"))
+    if roce_val is not None and roce_val > 20 and "undervalued" in val_signal:
+        cross_signals.append(f"High ROCE ({roce_val}%) + undervalued = classic Quality-at-Reasonable-Price (QARP) setup.")
 
-    # Quality vs valuation: high ROCE + low PE = quality at reasonable price
-    roce = biz.get("key_metrics", {}).get("roce_pct") or fin.get("roce_current")
-    val_signal = val.get("signal", "")
-    if roce and float(roce) > 20 and "UNDERVALUED" in str(val_signal).upper():
-        cross_signals.append(f"High ROCE ({roce}%) + undervalued signal = quality at reasonable price.")
+    # --- Falling knife guard (new per review) ---
+    if "undervalued" in val_signal and "bearish" in tech_signal:
+        cross_signals.append("DIRECTIVE — Falling knife risk: Undervalued AND technicals bearish. Require explicit technical bottoming signal or a named near-term fundamental catalyst before assigning BUY. PSU/legacy stocks frequently trap investors in this pattern.")
 
-    # Insider + technical: insider buying at weakness
-    insider = own.get("insider_signal", "")
-    tech_signal = tech.get("signal", "")
-    if insider == "net_buying" and "bearish" in str(tech_signal).lower():
-        cross_signals.append("Insider buying while technicals are bearish — management conviction at weakness.")
+    # --- Risk vs valuation (value trap — distinct from governance cap below) ---
+    if "bearish" in risk_signal and "undervalued" in val_signal:
+        cross_signals.append("Risk bearish + valuation undervalued — potential value trap. Explicitly determine whether the market has already priced the risks or whether they are underappreciated.")
 
-    # Risk vs valuation: high risk + cheap = value trap or opportunity
-    risk_signal = risk.get("signal", "")
-    if "bearish" in str(risk_signal).lower() and "UNDERVALUED" in str(val_signal).upper():
-        cross_signals.append("Risk agent bearish but valuation says undervalued — potential value trap. Dig into whether risks are priced in.")
-
-    # Sector signals
-    sector = briefings.get("sector", {})
-    sector_signal = sector.get("sector_growth_signal", "")
-    sector_valuation = sector.get("sector_valuation_signal", "")
-
-    if sector_signal == "growing" and "UNDERVALUED" in str(val_signal).upper():
+    # --- Sector × stock ---
+    sector_signal = str(sector.get("sector_growth_signal", "")).lower()
+    sector_valuation = str(sector.get("sector_valuation_signal", "")).lower()
+    if "growing" in sector_signal and "undervalued" in val_signal:
         cross_signals.append("Sector growing + stock undervalued = riding sector tailwind at a discount.")
+    if "expensive" in sector_valuation and "expensive" in val_signal:
+        cross_signals.append("Both sector and stock expensive — mean-reversion risk amplified if either rerates down.")
 
-    if sector_valuation == "expensive" and "EXPENSIVE" in str(val_signal).upper():
-        cross_signals.append("Both sector and stock are expensive — correction risk is amplified.")
+    # --- News sentiment contrarian ---
+    news_sentiment = str(news.get("sentiment_signal", "")).lower()
+    if "negative" in news_sentiment and "increas" in mf_trend:
+        cross_signals.append("Negative news sentiment BUT DIIs/MFs accumulating — smart money buying the dip. Identify what institutions are pricing in that headlines aren't.")
+    if "positive" in news_sentiment and "decreas" in fii_trend:
+        cross_signals.append("Positive news flow BUT FII selling — institutions see something headlines miss. Identify the disconnect.")
 
-    # News sentiment + ownership: contrarian signals
-    news = briefings.get("news", {})
-    news_sentiment = news.get("sentiment_signal", "")
-    if news_sentiment == "negative" and mf_trend == "increasing":
-        cross_signals.append("Negative news sentiment BUT MF accumulating — smart money buying the dip?")
-    if news_sentiment == "positive" and fii_trend == "decreasing":
-        cross_signals.append("Positive news flow BUT FII selling — institutions see something headlines don't?")
+    # --- Quality-trajectory guard ---
+    quality_sig = str(fin.get("quality_signal", "")).lower()
+    dupont = str(fin.get("dupont_driver", "")).lower()
+    is_quality_declining = any(w in quality_sig + " " + dupont for w in ("declin", "deterior", "weaken", "compress", "erod"))
+    if is_quality_declining and "undervalued" in val_signal:
+        cross_signals.append("DIRECTIVE — Quality trajectory declining (ROCE/margins/FCF eroding) + undervalued = deterioration already priced in. Require a specific reversal catalyst (management change, capacity commissioning, cycle turn) before assigning BUY. Otherwise: value trap.")
+    if is_quality_declining and roce_val is not None and roce_val > 20:
+        cross_signals.append(f"ROCE {roce_val}% high but trajectory declining — Ambit/Marathon capital-cycle quality degradation. A single-year high does NOT equal secular quality; synthesis must weight trajectory over snapshot.")
 
+    # --- Macro regime × business model routers ---
+    # Financial institution detection — needed for Z-score exemption AND rate-sensitivity
+    is_financial = _has_word(industry_blob, ("bank", "nbfc", "finance", "housing finance", "insurance", "asset management"))
+
+    # Rate-sensitivity: include banks/NBFCs/HFCs/REITs/auto OEMs. Exclude auto ancillary (B2B, export-driven).
+    is_rate_sensitive = is_financial or _has_word(industry_blob, ("real estate", "realty", "reit", "auto oem", "two wheeler", "passenger vehicle"))
+    rate_cycle = str(regime.get("rate_cycle", "")).lower()
+    if is_rate_sensitive and "hiking" in rate_cycle:
+        cross_signals.append(f"DIRECTIVE — Rate-sensitive business in {rate_cycle} regime. Bottom-up thesis must explicitly model margin compression + demand moderation from rising cost of funds/EMIs. Require stronger evidence before BUY.")
+    if is_rate_sensitive and "cutting" in rate_cycle:
+        cross_signals.append(f"Rate-sensitive business in {rate_cycle} regime — macro tailwind via NIM expansion (financials) or demand acceleration (autos/real estate). Verify the bottom-up thesis quantifies this benefit.")
+
+    # Macro × micro tension
+    bottom_up_bullish_count = sum(1 for a in (biz, fin, own, val) if str((a or {}).get("signal", "")).lower() == "bullish")
+    if macro_signal == "bearish" and bottom_up_bullish_count >= 2:
+        cross_signals.append("DIRECTIVE — Macro-vs-micro tension: macro regime BEARISH but 2+ bottom-up specialists BULLISH. Require 5+ confirming signals (not 3) + explicit reasoning on why the bottom-up thesis survives the macro regime.")
+    if macro_signal == "bullish" and "bearish" in risk_signal:
+        cross_signals.append("Macro tailwind BUT risk agent bearish — idiosyncratic concern dominates a favorable regime. The company-specific risk is the binding constraint.")
+
+    # Input-cost tension
+    input_cost = str(india_transmission.get("input_cost", "")).lower()
+    opm_trend = str(fin.get("opm_trend", "")).lower()
+    if input_cost == "headwind" and "expand" in opm_trend:
+        cross_signals.append("Macro flags input-cost HEADWIND but financials show margin expansion — either pricing power is exceptional (confirm) or the shock hasn't hit reported financials yet (check recency: financials latest period vs today).")
+
+    # FX × export/import (regex word boundaries to avoid false positives)
+    inr_regime = str(regime.get("inr_regime", "")).lower()
+    exporter_keywords = (
+        "it services", "software", "it consulting", "bpo", "ites",
+        "pharma", "drug manufacturer", "cdmo", "specialty chemical", "apl",
+        "textile", "apparel", "leather", "engineering export",
+    )
+    importer_keywords = (
+        "refinery", "refineries", "oil marketing", "fertilizer",
+        "electronic component", "edible oil", "lng import",
+    )
+    is_exporter = _has_word(industry_blob, exporter_keywords)
+    is_importer = _has_word(industry_blob, importer_keywords)
+
+    if "weaken" in inr_regime and is_exporter:
+        cross_signals.append("INR weakening + export-heavy industry — revenue translation TAILWIND. Verify the bottom-up thesis explicitly quantifies the FX benefit (esp. EBITDA margin impact from USD-billed revenue against INR cost base).")
+    if "weaken" in inr_regime and is_importer:
+        cross_signals.append("INR weakening + import-dependent industry — margin HEADWIND via imported-input cost inflation. Check hedging policy, pass-through ability, and whether current margins already reflect the FX shock.")
+    if "strengthen" in inr_regime and is_exporter:
+        cross_signals.append("INR strengthening + exporter — revenue translation HEADWIND. Verify guidance has been re-based for stronger INR; legacy ₹83-84 assumptions will overstate.")
+
+    # Commodity regime × producer/consumer (new per review)
+    commodity_regime = str(regime.get("commodity_regime", "")).lower()
+    commodity_consumer = _has_word(industry_blob, (
+        "fmcg", "paint", "adhesive", "packaging", "tyre", "auto oem", "consumer durable",
+        "personal care", "food", "beverage",
+    ))
+    commodity_producer = _has_word(industry_blob, (
+        "metal", "mining", "steel", "aluminium", "copper", "zinc",
+        "oil exploration", "oil and gas", "cement", "sugar",
+    ))
+    if ("inflation" in commodity_regime or "inflationary" in commodity_regime) and commodity_consumer:
+        cross_signals.append("DIRECTIVE — Commodity regime inflationary + consumer-facing industry (FMCG/autos/paints): gross-margin HEADWIND via raw-material cost. Bottom-up thesis must demonstrate price-pass-through ability or premiumisation shield.")
+    if ("inflation" in commodity_regime or "inflationary" in commodity_regime) and commodity_producer:
+        cross_signals.append("Commodity regime inflationary + commodity producer (metals/energy/cement): realization TAILWIND on output prices. Check whether volumes + realizations are captured in recent quarter earnings.")
+    if ("disinflation" in commodity_regime or "deflation" in commodity_regime) and commodity_consumer:
+        cross_signals.append("Commodity regime disinflationary + consumer sector: gross-margin TAILWIND via input-cost relief. Check whether financials show expanding OPM.")
+    if ("disinflation" in commodity_regime or "deflation" in commodity_regime) and commodity_producer:
+        cross_signals.append("DIRECTIVE — Commodity regime disinflationary + producer sector: revenue realization HEADWIND. Even volume growth may not offset price declines. Require explicit price/volume decomposition.")
+
+    # --- Governance & distress cap (Ambit/Marcellus style) ---
+    gov_signal = str(risk.get("governance_signal", "")).lower()
+    m_score = _safe_float(risk.get("m_score"))
+    z_score = _safe_float(risk.get("z_score"))
+    pledge_pct = _safe_float(own.get("pledge_pct"))
+
+    gov_triggers: list[str] = []
+    if m_score is not None and m_score > -2.22:
+        gov_triggers.append(f"M-Score {m_score} > -2.22 (Beneish earnings-manipulation zone)")
+    # Altman Z-score is designed for non-financial firms; the ratios (WC/Assets, Sales/Assets)
+    # are meaningless for banks/NBFCs/insurers. Exempt them explicitly.
+    if z_score is not None and z_score < 1.8 and not is_financial:
+        gov_triggers.append(f"Altman Z-Score {z_score} < 1.8 (distress zone — non-financial firms only)")
+    if pledge_pct is not None and pledge_pct > 20:
+        gov_triggers.append(f"Promoter pledge {pledge_pct}% > 20%")
+    if "red_flag" in gov_signal or "deteriorat" in gov_signal:
+        gov_triggers.append(f"Qualitative governance signal: {gov_signal}")
+
+    if gov_triggers:
+        triggers_str = "; ".join(gov_triggers)
+        cross_signals.append(
+            f"**🔴 GOVERNANCE / DISTRESS CAP TRIGGERED** — {triggers_str}. "
+            f"DIRECTIVE: Verdict MUST cap at HOLD regardless of other signals unless a verified "
+            f"change-in-management or change-in-auditor catalyst exists. Indian institutional investors "
+            f"heavily penalize these metrics — governance failures destroy portfolio returns faster than "
+            f"valuation mistakes."
+        )
+
+    # --- Emit ---
     if cross_signals:
-        lines.append("\n**Potential cross-signals (orchestrator suggestions — validate against briefing data):**")
+        lines.append("\n**SYNTHESIS DIRECTIVES & CROSS-SIGNALS (From Orchestrator — must be addressed in Verdict):**")
         for i, sig in enumerate(cross_signals, 1):
             lines.append(f"  {i}. {sig}")
     else:
