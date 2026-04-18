@@ -9,6 +9,7 @@ from claude_agent_sdk import tool
 from mcp.types import ToolAnnotations
 
 from flowtracker.research.data_api import ResearchDataAPI
+from flowtracker.research.macro_anchors import get_anchor_content, list_current_anchors
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True)
 
@@ -905,6 +906,71 @@ async def get_annual_report(args):
             section=args.get("section"),
         )
     return _with_dedup("get_annual_report", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+get_macro_anchor = tool(
+    "get_macro_anchor",
+    "Fetch pre-extracted content from canonical India macro anchor documents. "
+    "Available doc_types: "
+    "'economic_survey' (Economic Survey of India, annual pre-budget), "
+    "'budget_speech' (Union Budget Speech, annual Feb), "
+    "'budget_at_a_glance' (Union Budget receipts + expenditure summary), "
+    "'rbi_mpr' (RBI Monetary Policy Report, biannual Apr/Oct), "
+    "'rbi_ar_assessment' (RBI Annual Report — Ch 1: Assessment & Outlook), "
+    "'rbi_ar_economic' (RBI Annual Report — Ch 2: Economic Review, GDP/inflation/real sector), "
+    "'rbi_ar_monetary' (RBI Annual Report — Ch 3: Monetary Policy Operations, liquidity/rates). "
+    "First call WITHOUT section returns a compact TOC (available headings + metadata). "
+    "Second call WITH section='<heading substring>' returns that section's markdown content "
+    "(case-insensitive substring match on heading text). "
+    "If a doc_type is unavailable (e.g., fetch failed), the tool returns status='unavailable' with a fallback hint.",
+    {"doc_type": str, "section": str},
+    annotations=READ_ONLY,
+)
+
+
+@get_macro_anchor
+async def get_macro_anchor(args):
+    doc_type = args["doc_type"]
+    section = args.get("section")
+    data = get_anchor_content(doc_type, section)
+    return _with_dedup(
+        "get_macro_anchor",
+        {"content": [{"type": "text", "text": json.dumps(data, default=str)}]},
+        args,
+    )
+
+
+get_macro_catalog = tool(
+    "get_macro_catalog",
+    "List all macro anchor documents currently available in the vault. "
+    "Returns each anchor's status, title, url, heading_count, and extraction backend. "
+    "Use this FIRST before calling get_macro_anchor to see which docs are cached and ready.",
+    {},
+    annotations=READ_ONLY,
+)
+
+
+@get_macro_catalog
+async def get_macro_catalog(args):
+    catalog = list_current_anchors()
+    summary = {
+        "anchors": [
+            {
+                "doc_type": k,
+                "title": v.get("title") if isinstance(v, dict) else None,
+                "status": v.get("status") if isinstance(v, dict) else "unknown",
+                "heading_count": v.get("heading_count") if isinstance(v, dict) else None,
+                "url": v.get("url") if isinstance(v, dict) else None,
+            }
+            for k, v in catalog.get("anchors", {}).items()
+            if isinstance(v, dict)
+        ],
+    }
+    return _with_dedup(
+        "get_macro_catalog",
+        {"content": [{"type": "text", "text": json.dumps(summary, default=str)}]},
+        args,
+    )
 
 
 @tool(
@@ -2250,4 +2316,9 @@ SECTOR_AGENT_TOOLS_V2 = [
 NEWS_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context,
     get_stock_news, get_events_actions,
+]
+
+MACRO_AGENT_TOOLS_V2 = [
+    get_macro_catalog,  # lists available anchors + their heading counts
+    get_macro_anchor,   # TOC + section drill for a specific anchor
 ]
