@@ -169,6 +169,13 @@ class TestLockRecovery:
         SQLite WAL mode with default busy_timeout should allow the second writer
         to retry and succeed once the first commits.
         """
+        # Dynamic dates relative to today. Hard-coded dates drift out of the
+        # 30-day window that get_flows(days=30) filters on as calendar time
+        # advances, producing a spurious "assert 1 == 2" once the dates age
+        # past 30 days. Anchoring to today keeps both rows inside the window.
+        slow_date = (date.today() - timedelta(days=2)).isoformat()
+        fast_date = (date.today() - timedelta(days=1)).isoformat()
+
         barrier = threading.Barrier(2, timeout=10)
         errors: list[Exception] = []
 
@@ -180,7 +187,8 @@ class TestLockRecovery:
                 conn.execute("BEGIN IMMEDIATE")
                 conn.execute(
                     "INSERT OR REPLACE INTO daily_flows (date, category, buy_value, sell_value, net_value) "
-                    "VALUES ('2026-03-20', 'FII', 10000, 11000, -1000)"
+                    "VALUES (?, 'FII', 10000, 11000, -1000)",
+                    (slow_date,),
                 )
                 barrier.wait()  # Signal that we hold the lock
                 time.sleep(0.3)  # Hold lock briefly
@@ -195,7 +203,7 @@ class TestLockRecovery:
                 barrier.wait()  # Wait until slow_writer has the lock
                 # SQLite will retry internally thanks to the timeout
                 with FlowStore(db_path=db_path) as store:
-                    store.upsert_flows([make_daily_flow(dt="2026-03-21")])
+                    store.upsert_flows([make_daily_flow(dt=fast_date)])
             except Exception as e:
                 errors.append(e)
 
