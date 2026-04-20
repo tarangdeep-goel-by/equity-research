@@ -29,8 +29,8 @@ class TestSchemaSnapshot:
             "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence'"
         ).fetchall()
         count = len(tables)
-        # Currently ~40-46 tables. Allow a tight range.
-        assert 35 <= count <= 50, f"Expected 35-50 tables, got {count}"
+        # Currently ~50-52 tables (Sprint 1 added historical_states + analog_forward_returns).
+        assert 35 <= count <= 60, f"Expected 35-60 tables, got {count}"
 
     def test_column_names_snapshot(self, store: FlowStore, snapshot):
         """Column names per table must match the recorded snapshot."""
