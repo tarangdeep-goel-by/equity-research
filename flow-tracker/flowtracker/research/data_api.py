@@ -177,6 +177,64 @@ class ResearchDataAPI:
     def __exit__(self, *a):
         self.close()
 
+    # --- Historical Analog Agent ---
+
+    def get_setup_feature_vector(self, symbol: str, as_of_date: str | None = None) -> dict:
+        """Return the 16-feature fingerprint for (symbol, as_of_date).
+
+        Used by the Historical Analog Agent to inspect the target setup.
+        Default as_of_date = today. Strict temporal cutoff — every input
+        filtered to date <= as_of_date to prevent data leakage.
+        """
+        from flowtracker.research.analog_builder import compute_feature_vector
+        from datetime import date
+        if as_of_date is None:
+            as_of_date = date.today().isoformat()
+        return compute_feature_vector(self._store, symbol, as_of_date)
+
+    def get_historical_analogs(
+        self, symbol: str, k: int = 20, as_of_date: str | None = None,
+    ) -> dict:
+        """Retrieve top-K historical analogs for `symbol`'s current setup.
+
+        Each analog has: (symbol, quarter_end), feature vector, z-scored
+        distance, forward returns (3m/6m/12m absolute + vs sector/nifty),
+        outcome label (recovered / sideways / blew_up). Hard-filtered to
+        same industry + same mcap bucket; excludes target's own rows
+        within 2 years (leakage guard).
+        """
+        from flowtracker.research.analog_builder import (
+            compute_feature_vector, retrieve_top_k_analogs,
+        )
+        from datetime import date
+        if as_of_date is None:
+            as_of_date = date.today().isoformat()
+        target_vec = compute_feature_vector(self._store, symbol, as_of_date)
+        analogs = retrieve_top_k_analogs(
+            self._store, target_symbol=symbol, target_date=as_of_date,
+            target_features=target_vec, k=k,
+        )
+        return {
+            "symbol": symbol.upper(),
+            "as_of_date": as_of_date,
+            "target_features": target_vec,
+            "analog_count": len(analogs),
+            "analogs": analogs,
+        }
+
+    def get_analog_cohort_stats(
+        self, symbol: str, k: int = 50, as_of_date: str | None = None,
+    ) -> dict:
+        """Aggregate base rates across the analog cohort (recovery rate,
+        median 12m return, blow-up rate, p10/p90 tails). Larger K gives a
+        richer cohort for statistics; default 50 vs 20 for the detailed list.
+        """
+        from flowtracker.research.analog_builder import cohort_stats
+        result = self.get_historical_analogs(symbol, k=k, as_of_date=as_of_date)
+        stats = cohort_stats(result["analogs"])
+        result["cohort_stats"] = stats
+        return result
+
     # --- Adjusted close (computed path, independent of stored adj_close column) ---
 
     def get_adjusted_close_series(

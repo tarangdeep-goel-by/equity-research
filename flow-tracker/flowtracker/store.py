@@ -736,6 +736,57 @@ CREATE TABLE IF NOT EXISTS corporate_actions (
     PRIMARY KEY (symbol, ex_date, action_type, source)
 );
 
+-- Historical Analog Agent (Sprint 1): per-(symbol, quarter-end) feature
+-- fingerprints used as the retrieval space for finding "similar setups" in
+-- the last 10 years. Populated by scripts/materialize_analog_states.py.
+CREATE TABLE IF NOT EXISTS historical_states (
+    symbol TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    -- Valuation
+    pe_trailing REAL,
+    pe_percentile_10y REAL,
+    -- Quality
+    roce_current REAL,
+    roce_3yr_delta REAL,
+    revenue_cagr_3yr REAL,
+    opm_trend REAL,
+    -- Ownership
+    promoter_pct REAL,
+    fii_pct REAL,
+    fii_delta_2q REAL,
+    mf_pct REAL,
+    mf_delta_2q REAL,
+    pledge_pct REAL,
+    -- Technical
+    price_vs_sma200 REAL,
+    delivery_pct_6m REAL,
+    rsi_14 REAL,
+    -- Categorical
+    industry TEXT,
+    mcap_bucket TEXT,
+    computed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, quarter_end)
+);
+CREATE INDEX IF NOT EXISTS idx_historical_states_ind ON historical_states(industry, mcap_bucket);
+CREATE INDEX IF NOT EXISTS idx_historical_states_qtr ON historical_states(quarter_end);
+
+-- Historical Analog Agent (Sprint 1): forward returns aligned to
+-- historical_states rows. Reads daily_stock_data.adj_close (Sprint 0
+-- split/bonus adjusted) so cliffs don't pollute analog outcomes.
+CREATE TABLE IF NOT EXISTS analog_forward_returns (
+    symbol TEXT NOT NULL,
+    as_of_date TEXT NOT NULL,
+    return_3m_pct REAL,
+    return_6m_pct REAL,
+    return_12m_pct REAL,
+    excess_3m_vs_sector REAL,
+    excess_12m_vs_sector REAL,
+    excess_12m_vs_nifty REAL,
+    outcome_label TEXT,  -- recovered | sideways | blew_up | null (no 12m data)
+    computed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, as_of_date)
+);
+
 CREATE TABLE IF NOT EXISTS estimate_revisions (
     symbol TEXT NOT NULL,
     date TEXT NOT NULL,

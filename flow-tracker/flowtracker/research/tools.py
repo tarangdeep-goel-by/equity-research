@@ -2322,3 +2322,69 @@ MACRO_AGENT_TOOLS_V2 = [
     get_macro_catalog,  # lists available anchors + their heading counts
     get_macro_anchor,   # TOC + section drill for a specific anchor
 ]
+
+
+# -- Historical Analog Agent (Sprint 1) --
+
+@tool(
+    "get_setup_feature_vector",
+    "Return the target stock's current 16-feature fingerprint: valuation (pe_trailing, "
+    "pe_percentile_10y), quality (roce_current, roce_3yr_delta, revenue_cagr_3yr, opm_trend), "
+    "ownership (promoter_pct, fii_pct/delta, mf_pct/delta, pledge_pct), technical "
+    "(price_vs_sma200, delivery_pct_6m, rsi_14), and categoricals (industry, mcap_bucket). "
+    "Use this to describe the setup you're pattern-matching.",
+    {"symbol": str, "as_of_date": str},
+    annotations=READ_ONLY,
+)
+async def get_setup_feature_vector(args):
+    with ResearchDataAPI() as api:
+        data = api.get_setup_feature_vector(args["symbol"], args.get("as_of_date"))
+    return _with_dedup("get_setup_feature_vector",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_historical_analogs",
+    "Retrieve top-K historical analogs for the target. Each analog is a past "
+    "(symbol, quarter-end) point from the last 10 years in the same industry + "
+    "mcap bucket whose feature vector is closest (z-scored Euclidean distance). "
+    "Returns each analog's features + forward returns (3m/6m/12m absolute + excess "
+    "vs sector/nifty) + outcome label (recovered | sideways | blew_up). Target's own "
+    "rows within 2 years are excluded to prevent data leakage. Default k=20.",
+    {"symbol": str, "k": int, "as_of_date": str},
+    annotations=READ_ONLY,
+)
+async def get_historical_analogs(args):
+    with ResearchDataAPI() as api:
+        data = api.get_historical_analogs(
+            args["symbol"], args.get("k", 20), args.get("as_of_date"),
+        )
+    return _with_dedup("get_historical_analogs",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_analog_cohort_stats",
+    "Aggregate base rates across the analog cohort (default k=50 for richer stats): "
+    "recovery_rate_pct (% of analogs with +20%+ 12m return), blow_up_rate_pct (% with "
+    "-20%+), median_return_12m_pct, p10/p90 tails. Use these as your empirical prior "
+    "before making bull/base/bear calibration.",
+    {"symbol": str, "k": int, "as_of_date": str},
+    annotations=READ_ONLY,
+)
+async def get_analog_cohort_stats(args):
+    with ResearchDataAPI() as api:
+        data = api.get_analog_cohort_stats(
+            args["symbol"], args.get("k", 50), args.get("as_of_date"),
+        )
+    return _with_dedup("get_analog_cohort_stats",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+HISTORICAL_ANALOG_AGENT_TOOLS_V2 = [
+    get_setup_feature_vector,
+    get_historical_analogs,
+    get_analog_cohort_stats,
+    # Plus shared context tools for understanding the target stock
+    get_analytical_profile, get_company_context,
+]
