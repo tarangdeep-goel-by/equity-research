@@ -294,6 +294,8 @@
       'sell_value',
     ]),
     'daily_stock_data': list([
+      'adj_close',
+      'adj_factor',
       'close',
       'date',
       'delivery_pct',

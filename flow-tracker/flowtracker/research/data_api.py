@@ -158,18 +158,97 @@ _CONGLOMERATE_KEYWORDS = {
 class ResearchDataAPI:
     """Unified data access for equity research — wraps FlowStore for agent tools."""
 
-    def __init__(self):
-        self._store = FlowStore()
-        self._store.__enter__()
+    def __init__(self, store: FlowStore | None = None):
+        if store is not None:
+            self._store = store
+            self._owns_store = False
+        else:
+            self._store = FlowStore()
+            self._store.__enter__()
+            self._owns_store = True
 
     def close(self):
-        self._store.__exit__(None, None, None)
+        if self._owns_store:
+            self._store.__exit__(None, None, None)
 
     def __enter__(self):
         return self
 
     def __exit__(self, *a):
         self.close()
+
+    # --- Adjusted close (computed path, independent of stored adj_close column) ---
+
+    def get_adjusted_close_series(
+        self,
+        symbol: str,
+        from_date: str,
+        to_date: str,
+    ) -> list[tuple[str, float]]:
+        """Return [(date, adjusted_close)] computed dynamically from raw close
+        + corporate_actions, with the same price-cliff verification used by
+        FlowStore.recompute_adj_close.
+
+        Independent of daily_stock_data.adj_close — used for drift verification
+        against the stored path and for ad-hoc what-if queries. Must produce
+        identical output to the stored path (the drift sweep asserts this).
+        """
+        symbol = symbol.upper()
+        rows = self._store._conn.execute(
+            "SELECT date, close FROM daily_stock_data "
+            "WHERE symbol = ? AND date BETWEEN ? AND ? ORDER BY date",
+            (symbol, from_date, to_date),
+        ).fetchall()
+        if not rows:
+            return []
+
+        raw_actions = [
+            a for a in self._store.get_split_bonus_actions(symbol)
+            if a.get("multiplier")
+        ]
+
+        # Group by ex_date, compose combined multiplier, then verify each
+        # date's combined multiplier against the observed price cliff. Same
+        # tolerance as recompute_adj_close (see docstring there).
+        from collections import defaultdict
+        per_date: dict[str, float] = defaultdict(lambda: 1.0)
+        for a in raw_actions:
+            per_date[a["ex_date"]] *= a["multiplier"]
+
+        verified: list[tuple[str, float]] = []
+        conn = self._store._conn
+        for ex_date, composed_mult in per_date.items():
+            px = conn.execute(
+                "SELECT close, prev_close FROM daily_stock_data "
+                "WHERE symbol = ? AND date = ?",
+                (symbol, ex_date),
+            ).fetchone()
+            if px and px["close"] and px["prev_close"] and px["prev_close"] > 0:
+                observed_ratio = px["close"] / px["prev_close"]
+                expected_ratio = 1.0 / composed_mult
+                # Mirror the recompute_adj_close verification rules exactly.
+                if composed_mult > 1.0 and observed_ratio > 0.85:
+                    continue
+                if composed_mult < 1.0 and observed_ratio < 1.15:
+                    continue
+                if abs(observed_ratio - expected_ratio) > 0.3 * expected_ratio:
+                    continue
+            verified.append((ex_date, composed_mult))
+
+        verified_desc = sorted(verified, key=lambda a: a[0], reverse=True)
+
+        result: list[tuple[str, float]] = []
+        for row in rows:
+            date = row["date"]
+            close = row["close"]
+            factor = 1.0
+            for ex_date, mult in verified_desc:
+                if ex_date > date:
+                    factor *= mult
+                else:
+                    break
+            result.append((date, close / factor if factor else close))
+        return result
 
     # --- SOTP: Listed Subsidiaries ---
 
@@ -1879,10 +1958,14 @@ class ResearchDataAPI:
         if rows:
             return _clean([r.model_dump() for r in rows])
 
-        # Fallback: compute basic technicals from daily_stock_data (bhavcopy)
+        # Fallback: compute basic technicals from daily_stock_data (bhavcopy).
+        # Use adj_close — SMA-50/SMA-200/RSI-14 over 200 days are directly
+        # distorted by unadjusted split/bonus cliffs. Fallback to raw close
+        # if adj_close not yet populated (pre-backfill).
         conn = self._store._conn
         prices = conn.execute(
-            "SELECT date, close FROM daily_stock_data WHERE symbol = ? ORDER BY date DESC LIMIT 200",
+            "SELECT date, COALESCE(adj_close, close) AS close "
+            "FROM daily_stock_data WHERE symbol = ? ORDER BY date DESC LIMIT 200",
             (symbol,),
         ).fetchall()
         if len(prices) < 50:
@@ -6160,10 +6243,14 @@ class ResearchDataAPI:
             ("1M", 30), ("3M", 90), ("6M", 180), ("1Y", 365),
         ]
 
-        # Get stock prices from DB (daily_stock_data)
+        # Get split/bonus-adjusted stock prices from DB. adj_close collapses
+        # discontinuity cliffs at ex-dates; raw close produces phantom drops
+        # (splits) or phantom gains (reverse splits) in multi-period returns.
+        # Fall back to raw close when adj_close is NULL (pre-backfill symbols).
         conn = self._store._conn
         stock_rows = conn.execute(
-            "SELECT date, close FROM daily_stock_data WHERE symbol = ? ORDER BY date DESC LIMIT 400",
+            "SELECT date, COALESCE(adj_close, close) AS price FROM daily_stock_data "
+            "WHERE symbol = ? ORDER BY date DESC LIMIT 400",
             (symbol.upper(),)
         ).fetchall()
 
@@ -6209,21 +6296,9 @@ class ResearchDataAPI:
                     return prices_dict[d]
             return None
 
-        # Get split adjustments — multiply old prices by cumulative split ratio
-        split_rows = conn.execute(
-            "SELECT ex_date, multiplier FROM corporate_actions "
-            "WHERE symbol = ? AND action_type = 'split' AND multiplier IS NOT NULL "
-            "ORDER BY ex_date",
-            (symbol.upper(),),
-        ).fetchall()
-
-        def split_adjustment(from_date, to_date) -> float:
-            """Cumulative split multiplier between two dates (divide old price by this)."""
-            factor = 1.0
-            for row in split_rows:
-                if from_date < row["ex_date"] <= str(to_date):
-                    factor *= row["multiplier"]
-            return factor
+        # stock_prices are already split/bonus-adjusted via daily_stock_data.adj_close
+        # (see FlowStore.recompute_adj_close + Sprint 0 hybrid architecture).
+        # No per-call adjustment needed — it's a property of the read.
 
         periods = []
         for label, days in period_defs:
@@ -6232,11 +6307,6 @@ class ResearchDataAPI:
             stock_start = find_price(stock_prices, start_date)
             if stock_start is None or stock_start <= 0:
                 continue
-
-            # Adjust for splits between start and now
-            adj = split_adjustment(str(start_date), today)
-            if adj > 1:
-                stock_start = stock_start / adj
 
             stock_return = round((latest_price - stock_start) / stock_start * 100, 2)
 

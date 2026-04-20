@@ -1019,6 +1019,7 @@ class FlowStore:
         self._migrate_quarterly_and_annual()
         self._migrate_analytical_snapshot()
         self._migrate_company_snapshot()
+        self._migrate_daily_stock_data()
 
     def _migrate_analytical_snapshot(self) -> None:
         """Add new columns to analytical_snapshot if they don't exist."""
@@ -1074,6 +1075,25 @@ class FlowStore:
         for col_name, col_type in [("sector", "TEXT")]:
             if col_name not in existing:
                 self._conn.execute(f"ALTER TABLE company_snapshot ADD COLUMN {col_name} {col_type}")
+        self._conn.commit()
+
+    def _migrate_daily_stock_data(self) -> None:
+        """Add adj_close + adj_factor columns for split/bonus-adjusted prices.
+
+        adj_close: close price back-adjusted for all splits and bonuses that
+            occurred AFTER the row's date. Canonical adjusted-price surface.
+        adj_factor: cumulative multiplier applied to derive adj_close from close
+            (adj_close = close / adj_factor).
+        """
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(daily_stock_data)").fetchall()
+        }
+        for col_name, col_type in [("adj_close", "REAL"), ("adj_factor", "REAL")]:
+            if col_name not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE daily_stock_data ADD COLUMN {col_name} {col_type}"
+                )
         self._conn.commit()
 
     def _migrate_quarterly_and_annual(self) -> None:
@@ -2593,6 +2613,9 @@ class FlowStore:
                     AND s3.quarter_end < s1.quarter_end
                 )
             LEFT JOIN (
+                -- Outlier filter excludes split/bonus ex-dates where raw
+                -- close/prev_close ratio reflects mechanical adjustment, not
+                -- real price movement (NSE bhavcopy stores both unadjusted).
                 SELECT ic2.industry,
                     AVG(d.delivery_pct) as avg_delivery_pct,
                     AVG((d.close - d.prev_close) / NULLIF(d.prev_close, 0) * 100) as avg_price_change_pct
@@ -2600,6 +2623,7 @@ class FlowStore:
                 INNER JOIN index_constituents ic2 ON d.symbol = ic2.symbol
                 WHERE d.date >= date('now', '-30 days')
                     AND d.delivery_pct IS NOT NULL
+                    AND abs((d.close - d.prev_close) / NULLIF(d.prev_close, 0)) < 0.30
                 GROUP BY ic2.industry
             ) del_stats ON ic.industry = del_stats.industry
             WHERE ic.industry IS NOT NULL
@@ -2644,11 +2668,14 @@ class FlowStore:
                 )
             ) vs ON ic.symbol = vs.symbol
             LEFT JOIN (
+                -- Outlier filter excludes split/bonus ex-dates (mechanical
+                -- price ratio, not real movement — see get_sector_summary).
                 SELECT symbol,
                     AVG(delivery_pct) as avg_delivery_pct,
                     AVG((close - prev_close) / NULLIF(prev_close, 0) * 100) as avg_price_change_pct
                 FROM daily_stock_data
                 WHERE date >= date('now', '-30 days') AND delivery_pct IS NOT NULL
+                    AND abs((close - prev_close) / NULLIF(prev_close, 0)) < 0.30
                 GROUP BY symbol
             ) del_stats ON ic.symbol = del_stats.symbol
             WHERE ic.industry = ?
@@ -3085,6 +3112,28 @@ class FlowStore:
                     count += 1
         self._conn.commit()
         return count
+
+    def invalidate_screener_price_charts(self, symbol: str) -> int:
+        """Delete cached Screener price chart rows for symbol.
+
+        Called after a split/bonus corporate action lands: Screener's stored
+        price series becomes stale (pre-adjustment) until the next fetch, and
+        a discontinuity cliff at ex-date will skew any downstream chart/
+        analysis. Deletion forces the next `fund chart` / scheduled refresh
+        to re-fetch the now-post-adjusted series from Screener.
+
+        Only invalidates chart_type='price' — PE is a ratio (P/E), where both
+        numerator and denominator halve together on split/bonus, so the ratio
+        is adjustment-invariant. No cascade needed for chart_type='pe'.
+
+        Returns rows deleted.
+        """
+        cur = self._conn.execute(
+            "DELETE FROM screener_charts WHERE symbol = ? AND chart_type = 'price'",
+            (symbol.upper(),),
+        )
+        self._conn.commit()
+        return cur.rowcount
 
     def get_chart_data(self, symbol: str, chart_type: str) -> list[dict]:
         """Get stored chart data grouped by metric."""
@@ -3867,9 +3916,20 @@ class FlowStore:
 
     # -- Corporate Actions --
 
-    def upsert_corporate_actions(self, actions: list[dict]) -> int:
-        """Store corporate actions."""
+    def upsert_corporate_actions(
+        self, actions: list[dict], recompute_adj_close: bool = True,
+    ) -> int:
+        """Store corporate actions.
+
+        Sync hook: by default, recomputes daily_stock_data.adj_close for every
+        symbol whose actions were modified. This keeps the adjusted-price
+        surface consistent with corporate_actions the moment new rows land.
+
+        Pass recompute_adj_close=False from batch backfill paths that do their
+        own end-of-run recompute (avoids redundant work across many symbols).
+        """
         count = 0
+        touched_symbols: set[str] = set()
         for a in actions:
             self._conn.execute(
                 "INSERT OR REPLACE INTO corporate_actions "
@@ -3879,7 +3939,18 @@ class FlowStore:
                  a.get("multiplier"), a.get("dividend_amount"), a["source"]),
             )
             count += 1
+            if a["action_type"] in ("split", "bonus"):
+                touched_symbols.add(a["symbol"].upper())
         self._conn.commit()
+
+        if recompute_adj_close and touched_symbols:
+            for sym in touched_symbols:
+                self.recompute_adj_close(sym)
+                # Invalidate any cached Screener price chart — it's now stale
+                # (pre-adjustment). Next fund chart fetch will repopulate from
+                # Screener's post-adjusted series. PE chart stays valid (ratio).
+                self.invalidate_screener_price_charts(sym)
+
         return count
 
     def get_corporate_actions(self, symbol: str) -> list[dict]:
@@ -3890,35 +3961,215 @@ class FlowStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_split_bonus_actions(self, symbol: str) -> list[dict]:
-        """Get only split and bonus actions (for adjustment factor computation).
+    def recompute_adj_close(self, symbol: str) -> int:
+        """Populate daily_stock_data.adj_close + adj_factor for symbol.
 
-        Deduplicates: if BSE has a bonus on a date, yfinance split on the same
-        date is skipped (yfinance can't distinguish bonus from split).
+        For each price row at date D:
+            adj_factor = product of effective multipliers for all split/bonus
+                         actions with ex_date > D (convention: ex_date row is
+                         already post-action, so actions apply strictly to
+                         dates BEFORE ex_date).
+            adj_close  = close / adj_factor
+
+        **Price-cliff verification**: before applying an action's multiplier,
+        cross-check against the actual close/prev_close ratio at ex_date. If
+        the observed ratio is inconsistent with the declared multiplier (either
+        no cliff — NSE already reconciled the historical series — or large
+        mismatch — data-quality issue), the action is skipped. This guards
+        against:
+          • Old actions where NSE bhavcopy historical data is pre-adjusted
+            (e.g. BAJFINANCE 2016-09-08 has action recorded but price ratio
+            is 1.02, not 0.2 — applying would phantom-amplify pre-2016 by 10x).
+          • Corporate_actions rows with stale/wrong multipliers.
+
+        Note: actions with NULL or missing close/prev_close at ex_date pass
+        through unchecked (can't verify without price data). Compound actions
+        on same ex_date are verified against the combined multiplier.
+
+        Returns number of rows updated.
         """
+        symbol = symbol.upper()
+        rows = self._conn.execute(
+            "SELECT date, close FROM daily_stock_data WHERE symbol = ? ORDER BY date DESC",
+            (symbol,),
+        ).fetchall()
+        if not rows:
+            return 0
+
+        raw_actions = [a for a in self.get_split_bonus_actions(symbol) if a.get("multiplier")]
+
+        # Group actions by ex_date → compose combined multiplier per date.
+        # Verify against observed price cliff at ex_date before accepting.
+        from collections import defaultdict
+        per_date: dict[str, float] = defaultdict(lambda: 1.0)
+        for a in raw_actions:
+            per_date[a["ex_date"]] *= a["multiplier"]
+
+        verified_actions: list[tuple[str, float]] = []
+        for ex_date, composed_mult in per_date.items():
+            px = self._conn.execute(
+                "SELECT close, prev_close FROM daily_stock_data "
+                "WHERE symbol = ? AND date = ?",
+                (symbol, ex_date),
+            ).fetchone()
+            if px and px["close"] and px["prev_close"] and px["prev_close"] > 0:
+                observed_ratio = px["close"] / px["prev_close"]
+                expected_ratio = 1.0 / composed_mult
+                # Forward splits/bonuses: expected_ratio < 1 (price drops).
+                # Reverse splits: expected_ratio > 1 (price jumps — multiplier
+                # < 1, e.g. GESHIP 2006-10-16 0.8 means 5:4 consolidation).
+                # Verification rules:
+                #   (a) Forward action (mult > 1) with no cliff present
+                #       (observed > 0.85) — data already reconciled. Skip.
+                #   (b) Reverse action (mult < 1) with no jump present
+                #       (observed < 1.15) — same pattern. Skip.
+                #   (c) Cliff/jump direction matches but magnitude way off
+                #       (more than ±30% of expected). Skip.
+                if composed_mult > 1.0 and observed_ratio > 0.85:
+                    continue
+                if composed_mult < 1.0 and observed_ratio < 1.15:
+                    continue
+                if abs(observed_ratio - expected_ratio) > 0.3 * expected_ratio:
+                    continue
+            # No price data to verify (e.g. pre-bhavcopy era, weekend ex_date),
+            # OR verification passed.
+            verified_actions.append((ex_date, composed_mult))
+
+        if not verified_actions:
+            self._conn.execute(
+                "UPDATE daily_stock_data SET adj_close = close, adj_factor = 1.0 "
+                "WHERE symbol = ?",
+                (symbol,),
+            )
+            self._conn.commit()
+            return len(rows)
+
+        # Sort latest-first for the two-pointer walk.
+        actions_desc = sorted(verified_actions, key=lambda a: a[0], reverse=True)
+
+        running_factor = 1.0
+        action_idx = 0
+        updates: list[tuple[float, float, str, str]] = []
+
+        for row in rows:  # latest → earliest
+            date = row["date"]
+            close = row["close"]
+            while action_idx < len(actions_desc) and actions_desc[action_idx][0] > date:
+                running_factor *= actions_desc[action_idx][1]
+                action_idx += 1
+            adj_close = close / running_factor if running_factor else close
+            updates.append((adj_close, running_factor, symbol, date))
+
+        self._conn.executemany(
+            "UPDATE daily_stock_data SET adj_close = ?, adj_factor = ? "
+            "WHERE symbol = ? AND date = ?",
+            updates,
+        )
+        self._conn.commit()
+        return len(updates)
+
+    def get_split_bonus_actions(self, symbol: str) -> list[dict]:
+        """Get split + bonus actions for adjustment factor computation.
+
+        Dedup is per (ex_date, action_type) — not per ex_date — so a genuine
+        compound action (split AND bonus on same ex_date, e.g. BAJFINANCE
+        2025-06-16: 1:2 split × 1:4 bonus → total multiplier 10) is preserved.
+        Within each (ex_date, action_type) group, BSE wins over yfinance
+        because yfinance can't distinguish bonus from split and often
+        mis-classifies the event type.
+
+        NULL-multiplier inference: if a split/bonus row has a NULL multiplier
+        but the daily_stock_data shows a real price cliff at ex_date (close/
+        prev_close < 0.80), the multiplier is inferred as prev_close / close.
+        This recovers actions that were captured structurally but lost their
+        ratio metadata (e.g. ANGELONE 2026-02-26, BEML 2025-11-03, ADANIPOWER
+        2025-09-22 — all show 50%+ single-day drops with no declared
+        multiplier). Inferred rows are tagged with source='inferred' so
+        verification downstream can treat them consistently.
+
+        Empirical check: for nearly all symbols with same-date split + bonus
+        reports, the two multipliers match (yfinance + BSE describing the
+        same event). BAJFINANCE is the compound-action exception this dedup
+        strategy correctly handles by keeping both rows.
+        """
+        symbol_upper = symbol.upper()
+
+        # Infer multipliers for NULL-multiplier rows that have a clear cliff.
+        inferred = self._conn.execute(
+            """SELECT ca.ex_date, ca.action_type,
+                      d.prev_close / NULLIF(d.close, 0) AS inferred_mult
+               FROM corporate_actions ca
+               JOIN daily_stock_data d
+                 ON d.symbol = ca.symbol AND d.date = ca.ex_date
+               WHERE ca.symbol = ?
+                 AND ca.action_type IN ('split', 'bonus')
+                 AND ca.multiplier IS NULL
+                 AND d.prev_close > 0
+                 AND d.close / d.prev_close < 0.80""",
+            (symbol_upper,),
+        ).fetchall()
+
         rows = self._conn.execute(
             "SELECT * FROM corporate_actions WHERE symbol = ? "
             "AND action_type IN ('split', 'bonus') AND multiplier IS NOT NULL "
-            "ORDER BY ex_date ASC, source ASC",
-            (symbol.upper(),),
+            "ORDER BY ex_date ASC, action_type ASC, source ASC",
+            (symbol_upper,),
         ).fetchall()
-        # Deduplicate: BSE source wins per date
-        seen_dates: dict[str, str] = {}  # date -> source that claimed it
-        result: list[dict] = []
+
+        # Key by (ex_date, action_type). BSE wins within a group.
+        by_key: dict[tuple[str, str], dict] = {}
         for r in rows:
             d = dict(r)
-            ex = d["ex_date"]
-            src = d["source"]
-            if ex in seen_dates:
-                # Skip yfinance if BSE already covers this date
-                if src == "yfinance":
-                    continue
-                # If BSE arrives after yfinance, replace (shouldn't happen with ASC sort, but safe)
-                if seen_dates[ex] == "yfinance" and src == "bse":
-                    result = [x for x in result if x["ex_date"] != ex]
-            seen_dates[ex] = src
-            result.append(d)
-        return result
+            key = (d["ex_date"], d["action_type"])
+            existing = by_key.get(key)
+            if existing is None:
+                by_key[key] = d
+            elif existing["source"] == "yfinance" and d["source"] == "bse":
+                by_key[key] = d
+            # Otherwise keep the existing row (BSE already claimed it, or
+            # yfinance after BSE arriving late — first-write-wins).
+
+        # Merge in inferred multipliers for NULL-multiplier rows where we
+        # detected a real price cliff. Only inject when no explicit row
+        # already exists for (ex_date, action_type) — respects existing data.
+        for inf in inferred:
+            key = (inf["ex_date"], inf["action_type"])
+            if key in by_key:
+                continue
+            by_key[key] = {
+                "symbol": symbol_upper,
+                "ex_date": inf["ex_date"],
+                "action_type": inf["action_type"],
+                "multiplier": round(inf["inferred_mult"], 6),
+                "ratio_text": "inferred_from_cliff",
+                "dividend_amount": None,
+                "source": "inferred",
+            }
+
+        # Cross-type collision: when yfinance reports type X with multiplier M
+        # and BSE reports type Y (different) on the same date with the SAME
+        # multiplier, they're describing the same event — drop the yfinance
+        # duplicate to avoid double-multiplying. Match is heuristic but safe:
+        # multiplier equality on same date across opposing types strongly
+        # implies a single event.
+        dates_with_bse_multipliers: dict[str, set[float]] = {}
+        for (ex_date, at), row in by_key.items():
+            if row["source"] == "bse":
+                dates_with_bse_multipliers.setdefault(ex_date, set()).add(row["multiplier"])
+        filtered: dict[tuple[str, str], dict] = {}
+        for key, row in by_key.items():
+            ex_date = key[0]
+            if (
+                row["source"] == "yfinance"
+                and ex_date in dates_with_bse_multipliers
+                and row["multiplier"] in dates_with_bse_multipliers[ex_date]
+            ):
+                # BSE already has an action on this date with the same multiplier
+                # — assume it's the same event reported twice, skip the yfinance row.
+                continue
+            filtered[key] = row
+
+        return sorted(filtered.values(), key=lambda r: r["ex_date"])
 
     def upsert_estimate_revisions(self, data: dict) -> int:
         """Upsert estimate revision data (all periods for one symbol)."""
