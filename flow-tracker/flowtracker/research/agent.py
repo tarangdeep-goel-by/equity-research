@@ -41,6 +41,7 @@ from flowtracker.research.tools import (
     _tool_result_cache,
     BUSINESS_AGENT_TOOLS_V2,
     FINANCIAL_AGENT_TOOLS_V2,
+    HISTORICAL_ANALOG_AGENT_TOOLS_V2,
     MACRO_AGENT_TOOLS_V2,
     NEWS_AGENT_TOOLS_V2,
     OWNERSHIP_AGENT_TOOLS_V2,
@@ -67,6 +68,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "sector": "claude-sonnet-4-6",
     "news": "claude-sonnet-4-6",
     "macro": "claude-sonnet-4-6",
+    "historical_analog": "claude-sonnet-4-6",
     "synthesis": "claude-opus-4-6",
     "verifier": "claude-haiku-4-5-20251001",
     "web_research": "claude-sonnet-4-6",
@@ -84,6 +86,7 @@ DEFAULT_EFFORT: dict[str, str] = {
     "technical": "medium",
     "news": "medium",
     "macro": "medium",
+    "historical_analog": "medium",  # structured pattern matching, not deep reasoning
     "web_research": "medium",  # fact-retrieval, not deep reasoning
     "explainer": "high",
 }
@@ -98,6 +101,7 @@ AGENT_TOOLS: dict[str, list] = {
     "sector": SECTOR_AGENT_TOOLS_V2,
     "news": NEWS_AGENT_TOOLS_V2,
     "macro": MACRO_AGENT_TOOLS_V2,
+    "historical_analog": HISTORICAL_ANALOG_AGENT_TOOLS_V2,
 }
 
 # Agent failure severity tiers for synthesis confidence capping
@@ -106,8 +110,8 @@ AGENT_TIERS = {
     "risk": 1, "financials": 1, "valuation": 1,
     # Tier 2: Core context — business model and ownership
     "business": 2, "ownership": 2,
-    # Tier 3: Enhancers — sector and market timing
-    "sector": 3, "technical": 3, "news": 3, "macro": 3,
+    # Tier 3: Enhancers — sector, market timing, historical analog priors
+    "sector": 3, "technical": 3, "news": 3, "macro": 3, "historical_analog": 3,
 }
 
 # Tier-aware retry counts — tier-1 agents are critical, get extra retries
@@ -123,6 +127,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "sector": 25,
     "news": 25,
     "macro": 25,
+    "historical_analog": 20,  # 3-5 tool calls + clustering + report
     "web_research": 20,
 }
 
@@ -136,6 +141,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "sector": 0.60,
     "news": 0.50,
     "macro": 0.60,
+    "historical_analog": 0.50,
     "web_research": 0.50,
 }
 
@@ -229,6 +235,10 @@ _SYNTHESIS_FIELDS = {
     "cyclical_stage", "india_transmission", "sector_implications",
     "bull_case_triggers", "bear_case_triggers", "trajectory_checks",
     "anchors_fetched",
+    # Historical Analog (Sprint 1) — base-rate priors for synthesis
+    "target_features", "analog_count", "analog_lookback_years",
+    "base_rates", "cluster_summary", "top_analogs",
+    "differentiators", "directional_adjustments", "regime_caveat",
 }
 
 
@@ -1329,7 +1339,7 @@ async def run_all_agents(
     from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
-    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro"]
+    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro", "historical_analog"]
 
     pipeline_started = datetime.now(timezone.utc).isoformat()
     pipeline_start_mono = time.monotonic()
