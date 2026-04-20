@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Nightly universe-wide recompute of daily_stock_data.adj_close + drift sweep.
+  Chains after daily-fetch (19:00 weekdays). Runs at 21:00 so valuation
+  snapshot + bhavcopy fetches have settled. Weekends included so weekend
+  corrections to corporate_actions propagate.
+
+  Install:
+      cp scripts/plists/com.flowtracker.nightly-adj-close.plist ~/Library/LaunchAgents/
+      launchctl load ~/Library/LaunchAgents/com.flowtracker.nightly-adj-close.plist
+
+  Verify:
+      launchctl list | grep flowtracker.nightly-adj-close
+
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.flowtracker.nightly-adj-close.plist
+      rm ~/Library/LaunchAgents/com.flowtracker.nightly-adj-close.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowtracker.nightly-adj-close</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/tarang/.local/share/flowtracker/scripts/nightly-adj-close.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/tarang/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+</dict>
+</plist>
