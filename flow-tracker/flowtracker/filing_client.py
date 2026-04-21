@@ -396,12 +396,13 @@ class FilingClient:
         elif "analyst" in sc and ("presentation" in hl or "investor" in hl):
             # "Analyst / Investor Meet" with presentation-like headline = investor deck
             ftype = "investor_deck"
-        elif "financial result" in sc or ("financial result" in hl and "newspaper" not in hl):
-            ftype = "results"
         elif "annual report" in hl:
             ftype = "annual_report"
         else:
-            ftype = _safe_dirname(filing.subcategory or filing.category)
+            # Only concall / investor_deck / annual_report are consumed by the
+            # research pipeline. Everything else (results, newspaper, analyst
+            # meets, etc.) is skipped to keep the vault lean.
+            return None
 
         # Determine FY quarter from filing date
         fy_quarter = _filing_date_to_fy_quarter(filing.filing_date)
@@ -411,15 +412,12 @@ class FilingClient:
         dir_path.mkdir(parents=True, exist_ok=True)
         file_path = dir_path / f"{ftype}.pdf"
 
-        # Skip if primary file already exists (same type for this quarter)
+        # First download for this (symbol, quarter, type) wins. Subsequent
+        # re-files of the same type are treated as duplicates and skipped —
+        # we previously wrote {ftype}_{date}.pdf for "different-size"
+        # refilings, which the extractors never read.
         if file_path.exists() and file_path.stat().st_size > 0:
-            # Check if this is likely the same file (size-based dedup)
-            if filing.file_size and abs(file_path.stat().st_size - filing.file_size) < 1024:
-                return file_path
-            # Different file for same type+quarter — append date
-            file_path = dir_path / f"{ftype}_{filing.filing_date}.pdf"
-            if file_path.exists() and file_path.stat().st_size > 0:
-                return file_path
+            return file_path
 
         import time
 

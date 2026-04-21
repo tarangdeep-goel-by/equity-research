@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-CLI tool (`flowtrack`) for tracking FII/DII institutional flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and FMP valuation data in Indian markets. Includes a multi-agent AI research system (7 specialist agents + news + verification + web research + synthesis + explainer + comparison) that generates comprehensive equity research reports, plus portfolio tracking, alerts, catalyst events, and thesis condition tracking. Includes an autoeval loop (Gemini-graded) for iteratively improving agent prompts per sector. Single-user research tool — SQLite-backed, CLI-first, no server.
+CLI tool (`flowtrack`) for tracking FII/DII institutional flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and FMP valuation data in Indian markets. Includes a multi-agent AI research system (8 specialist agents + news + verification + web research + synthesis + explainer + comparison) that generates comprehensive equity research reports, plus portfolio tracking, alerts, catalyst events, and thesis condition tracking. Includes an autoeval loop (Gemini-graded) for iteratively improving agent prompts per sector. Single-user research tool — SQLite-backed, CLI-first, no server.
 
 ## Commands
 
@@ -13,7 +13,7 @@ uv run flowtrack <command>         # or ./flowtrack <command>
 uv sync                            # install dependencies
 
 # Research commands (most commonly used)
-uv run flowtrack research thesis -s INDIAMART        # full multi-agent pipeline (7 specialists + verify + synthesis)
+uv run flowtrack research thesis -s INDIAMART        # full multi-agent pipeline (8 specialists + verify + synthesis)
 uv run flowtrack research run business -s INDIAMART  # run single specialist agent
 uv run flowtrack research verify financial -s INDIAMART  # verify an existing report
 uv run flowtrack research fundamentals -s INDIAMART  # data-only HTML report
@@ -126,10 +126,11 @@ Every feature module follows:
 ### Research Layer (multi-agent architecture)
 
 ```
-Phase 0:  Data Refresh → 6 sources + peers
+Phase 0:  Data Refresh → 6 sources + peers (parallel with Phase 0c)
 Phase 0b: Document Pipeline → concall + annual report + investor deck extraction (parallel)
-Phase 1:  7 Specialist Agents (parallel, pipelined with verification) → 7 briefings
-Phase 1.5: 7 Verification Agents → spot-check accuracy + AR/deck citations (pipelined)
+Phase 0c: India Anchor Docs → Economic Survey + RBI MPR/Annual + Union Budget (parallel with Phase 0)
+Phase 1:  8 Specialist Agents (parallel, pipelined with verification) → 8 briefings
+Phase 1.5: Verification Agents → spot-check accuracy + AR/deck/anchor citations (pipelined)
 Phase 1.7: Web Research Agent → resolves open questions (vault-first, then WebSearch/WebFetch)
 Phase 2:  Synthesis Agent → Verdict + Executive Summary + Key Signals
 Phase 3:  Assembly → Technical Markdown + HTML
@@ -137,7 +138,7 @@ Phase 4:  Explainer Agent → Beginner-friendly annotations → Final HTML (skip
 (Comparison Agent also available for multi-stock comparative reports)
 ```
 
-**7 specialist agents** (Business, Financials, Ownership, Valuation, Risk, Technical, Sector) each have an expert persona, curated MCP tools, and produce a standalone technical report. A **news agent** gathers recent developments. Verification agents independently spot-check data accuracy using a different model; they also verify every `(source: FY?? AR, ...)` and `(source: FY??-Q? deck, ...)` citation against the vault JSON. The **web research agent** resolves open questions — vault tools (`get_concall_insights`, `get_annual_report`, `get_deck_insights`) first, then WebSearch/WebFetch for anything genuinely not on file. The synthesis agent cross-references all briefings + web research for the final verdict. The explainer agent adds beginner-friendly annotations to the assembled report. A **comparison agent** supports multi-stock comparative analysis.
+**8 specialist agents** (Business, Financials, Ownership, Valuation, Risk, Technical, Sector, Macro) each have an expert persona, curated MCP tools, and produce a standalone technical report. The **macro agent** (added in PR #64) is a senior global-macro strategist that grounds India macro claims in official anchor docs (Economic Survey, RBI Annual Report, RBI MPR, Union Budget) via `get_macro_catalog` / `get_macro_anchor` — anchor exhaustion is enforced (any anchor marked `status='complete'` must be drilled + cited or null-findinged). A **news agent** gathers recent developments. Verification agents independently spot-check data accuracy using a different model; they also verify every `(source: FY?? AR, ...)`, `(source: FY??-Q? deck, ...)`, and anchor citation against the vault JSON. The **web research agent** resolves open questions — vault tools (`get_concall_insights`, `get_annual_report`, `get_deck_insights`, `get_macro_anchor`) first, then WebSearch/WebFetch for anything genuinely not on file. The synthesis agent cross-references all briefings + web research for the final verdict. The explainer agent adds beginner-friendly annotations to the assembled report. A **comparison agent** supports multi-stock comparative analysis.
 
 **Annual Report & Investor Deck consult is scoped-mandatory:** Business, Financials, Risk, Valuation, Ownership agents MUST consult the annual report; Business, Financials, Valuation also MUST consult the latest investor deck. Each agent cites as `(source: FY25 AR, <section>)` or `(source: FY26-Q3 deck, <sub_section>)`. Null-findings ("no auditor qualifications flagged") count — silent skipping of a mandated section is a workflow violation. See `SHARED_PREAMBLE_V2` in `research/prompts.py` for the full rule.
 
@@ -148,17 +149,20 @@ Phase 4:  Explainer Agent → Beginner-friendly annotations → Final HTML (skip
 Key files in `research/`:
 - `refresh.py` — `refresh_for_research(symbol)` fetches live data from 6 sources + peers + concalls before agents run
 - `data_api.py` — `ResearchDataAPI` wraps FlowStore into ~150 methods (incl. fair value model, DuPont decomposition, WACC)
-- `tools.py` — 83 MCP tools organized into specialist registries (via `claude_agent_sdk.tool`)
+- `tools.py` — 85 MCP tools organized into specialist registries (via `claude_agent_sdk.tool`)
 - `agent.py` — `_run_specialist()`, `run_all_agents()`, `run_synthesis_agent()`, `run_explainer_agent()`, directed synthesis orchestration
-- `prompts.py` — agent prompts (7 specialists + news + web_research + synthesis + explainer + comparison), shared preamble, sector-specific injection via `sector_skills/` markdown files (22 sectors)
+- `prompts.py` — agent prompts (8 specialists + news + web_research + synthesis + explainer + comparison), shared preamble, sector-specific injection via `sector_skills/` markdown files (24 sectors)
 - `briefing.py` — `BriefingEnvelope` model, save/load, parse briefing from markdown
 - `verifier.py` — Verification agent, correction flow
 - `assembly.py` — Final report assembly, HTML rendering with mermaid.js
-- `charts.py` — 27 chart types via matplotlib (stock, sector, comparison, dividend)
+- `charts.py` — 25 chart types via matplotlib (stock, sector, comparison, dividend)
 - `peer_refresh.py` — Peer data refresh (Screener + yfinance), sector benchmarks computation
-- `concall_extractor.py` — PDF extraction pipeline via Agent SDK (4 quarters of management commentary)
+- `concall_extractor.py` / `annual_report_extractor.py` / `deck_extractor.py` — Agent SDK-driven PDF extractors (concalls, AR, investor decks) feeding industry-aware JSON caches
+- `ar_downloader.py` / `doc_extractor.py` / `heading_toc.py` — AR discovery + download + ToC heuristics for extractor pre-analysis
+- `macro_anchors.py` — Fetcher + cache for India anchor docs (Economic Survey, RBI Annual Report, RBI MPR, Union Budget); powers Phase 0c and `get_macro_catalog` / `get_macro_anchor` tools
+- `snapshot_builder.py` / `fundamentals.py` — company snapshot + fundamentals aggregation for specialist consumption
 - `thesis_tracker.py` — YAML frontmatter thesis conditions evaluated against live data
-- `sector_kpis.py` — Sector-specific KPI definitions and routing (14 sectors with formal KPI configs; 22 sectors have skill files)
+- `sector_kpis.py` — Sector-specific KPI definitions and routing (14 sectors with formal KPI configs; 24 sectors have skill files)
 - `wacc.py` — Weighted average cost of capital computation
 - `projections.py` — Revenue/earnings projection models
 - `data_collector.py` — Legacy collector for HTML fundamentals report (separate from agent path)
@@ -176,7 +180,7 @@ research/sector_skills/
     business.md      ← business-agent-specific guidance (from autoeval)
   metals/
     _shared.md
-  ... (22 sectors total)
+  ... (24 sectors total)
 ```
 
 `build_specialist_prompt()` loads `_shared.md` + `{agent}.md` for the detected sector. `_build_mcap_injection()` is the only remaining Python injection (has dynamic logic). Sector-specific fixes go in skill files; general fixes go in `prompts.py`.
@@ -204,8 +208,8 @@ Key files in `research/autoeval/`: `evaluate.py` (harness), `eval_matrix.yaml` (
 
 ### Shared Infrastructure
 
-- `store.py` (~3800 lines) — Single `FlowStore` class wrapping SQLite. 48 tables, ~147 methods. DB at `~/.local/share/flowtracker/flows.db`.
-- `screener_client.py` (1340 lines) — Screener.in HTTP client. 11 API methods: HTML scraping, Excel export, Chart API, Peers API, Shareholders API, Schedules API.
+- `store.py` (~4200 lines) — Single `FlowStore` class wrapping SQLite. 50 tables, ~150 methods. DB at `~/.local/share/flowtracker/flows.db`.
+- `screener_client.py` (~1420 lines) — Screener.in HTTP client. 11 API methods: HTML scraping, Excel export, Chart API, Peers API, Shareholders API, Schedules API.
 - `fmp_client.py` — FMP API client (httpx). DCF, technicals, key metrics, growth, analyst grades, price targets. Uses `/stable/` endpoints. Key at `~/.config/flowtracker/fmp.env`.
 - `screener_engine.py` — 8-factor composite scoring engine (ownership, insider, valuation, earnings, quality, delivery, estimates, risk). Valuation factor incorporates DCF margin of safety when FMP data available.
 - `alert_engine.py` — Evaluates alert conditions against cached store data. 10 condition types.
@@ -232,13 +236,18 @@ Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-sou
 
 `scripts/` contains shell wrappers for scheduled fetches, managed via macOS LaunchAgents at `~/.local/share/flowtracker/scripts/`:
 - `daily-fetch.sh` — FII/DII, gold, MF daily, macro, bhavcopy, deals, insider, valuation (weekdays 7pm IST, 3 retries)
+- `alert-check.sh` — Alert engine sweep (chained after daily fetch)
 - `weekly-valuation.sh` — Consensus estimates + earnings surprises (Sunday 2:30pm)
+- `weekly-nifty250.sh` — Weekly valuation + estimates refresh for all Nifty index stocks (Sunday 9pm IST)
 - `monthly-mf.sh` — AMFI monthly flows (6th of month)
 - `monthly-mfportfolio.sh` — MF scheme holdings from 5 AMCs (12th of month)
 - `quarterly-scan.sh` — Nifty 250 shareholding + pledges (quarterly)
 - `quarterly-results.sh` — Screener financials + ratios + BSE filings (20th of month)
+- `quarterly-filings.sh` — Concall + investor deck download for Nifty index stocks (25th of Feb/May/Aug/Nov 10am IST)
 - `compute-analytics.py` — Weekly analytics computation (Sunday 9pm IST)
 - `setup-crons.sh` — Registers all LaunchAgent plists
+
+Ad-hoc scripts (not scheduled): `backfill_fii_dii.py`, `backfill_fundamentals.py`, `backfill_quarterly_nse.py`, `backfill-index-prices.py`, `backfill-nifty250.py`, `batch-download-filings.py`, `check-freshness.py`, `migrate-pct.py`, `migrate-units.py`.
 
 ## Key Patterns
 

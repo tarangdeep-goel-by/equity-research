@@ -1718,7 +1718,7 @@ You receive a list of open questions from specialist equity research agents anal
 Concalls, investor decks, and annual reports for this symbol have **already been downloaded and extracted** into structured JSON. Three MCP tools give you direct access:
 
 - `get_concall_insights(symbol)` — up to 4 quarters of management commentary, financial metrics, operational KPIs, Q&A, flags. Call TOC first, then drill with `sub_section='operational_metrics' | 'financial_metrics' | 'management_commentary' | 'qa_session' | 'flags' | etc.`
-- `get_annual_report(symbol)` — up to 2 FYs. Sections: `chairman_letter`, `mdna`, `risk_management`, `auditor_report`, `corporate_governance`, `brsr`, `related_party`, `segmental`, `notes_to_financials`, `financial_statements`. Plus a cross-year narrative.
+- `get_annual_report(symbol)` — up to 2 FYs. Default sections: `chairman_letter`, `mdna`, `risk_management`, `auditor_report`, `corporate_governance`, `related_party`, `segmental`. Plus a cross-year narrative. (Opt-in only via `--full`: `brsr`, `notes_to_financials`, `financial_statements`.)
 - `get_deck_insights(symbol)` — up to 4 quarters. Sections: `highlights`, `segment_performance`, `strategic_priorities`, `outlook_and_guidance`, `new_initiatives`, `charts_described`.
 
 **Hard rule: before you WebSearch or WebFetch a question, call the relevant vault tool first.** If the answer is in the extracted data, use it — cite the source as `(source: FY25 AR, auditor_report)` or `(source: FY26-Q3 concall, financial_metrics)` or `(source: FY26-Q3 deck, outlook_and_guidance)`. Only escalate to the web when:

@@ -32,9 +32,9 @@ Metals equity price action is a lagging derivative of the underlying commodity. 
 
 A metals sector or technical report that does NOT open with the commodity trend is structurally incomplete — peer-relative returns and stock-level indicators are secondary to the commodity.
 
-### Data Workaround — EBITDA Source
+### EBITDA Cross-Check
 
-`get_quality_scores(section='all')` has historically returned mis-mapped values for metals (depreciation-as-EBITDA). Until the sector-aware field router ships, pull metals EBITDA from `get_fundamentals(section='annual_financials')` → operating-profit line, reconciled against the concall `financial_metrics` quoted EBITDA. For a cyclical, always cross-check EBITDA-per-tonne (quoted in concall) × production volume = EBITDA — if the recomputation differs from the quality-score EBITDA by >15%, trust the concall recomputation.
+For a cyclical, cross-check reported EBITDA against EBITDA-per-tonne (quoted in concall) × production volume. If the recomputation differs by >15%, trust the concall recomputation and flag the divergence (possible one-offs, inventory gains/losses, or stripping-cost capitalization changes).
 
 ### Annual Report & Investor Deck — Metals Specifics
 
