@@ -28,6 +28,8 @@ from pathlib import Path
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
+    CLIConnectionError,
+    ProcessError,
     RateLimitEvent,
     ResultMessage,
     query,
@@ -69,6 +71,174 @@ FULL_ONLY_SECTIONS = (
 # to Claude. Realistic section sizes: MD&A 20-80KB, Risk 10-40KB, Auditor 10-20KB,
 # CG 20-40KB, BRSR 30-80KB. Notes can be 200-500KB (hence opt-in).
 SECTION_CHAR_CAP = 120_000
+
+# --- Retry + chunking config (post-eval v2 E14) ---
+# Retry schedule (seconds) for transient per-section extraction failures —
+# SDK subprocess crashes, connection drops, OSError on the pipe, timeouts.
+# Three retries on top of the initial attempt.
+RETRY_DELAYS_SEC: tuple[int, ...] = (30, 60, 120)
+
+# Section chunking: sections larger than this get split before extraction, so
+# a single Claude call never sees more than CHUNK_SIZE_BYTES of context at once.
+# Thresholds tuned to match realistic section sizes — MD&A / BRSR / CG sometimes
+# exceed 80KB on large ARs.
+CHUNK_TRIGGER_BYTES = 80_000
+CHUNK_SIZE_BYTES = 60_000
+
+# Exceptions considered transient — retry on these.
+_TRANSIENT_EXC = (CLIConnectionError, ProcessError, TimeoutError, OSError, ConnectionError)
+
+
+def _split_section_text(text: str, chunk_size: int = CHUNK_SIZE_BYTES) -> list[str]:
+    """Split a section's markdown into chunks <= chunk_size, preferring paragraph
+    boundaries (double newline). Falls back to hard splits when a single paragraph
+    exceeds chunk_size.
+    """
+    if len(text) <= chunk_size:
+        return [text]
+    paragraphs = text.split("\n\n")
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for para in paragraphs:
+        # +2 for the "\n\n" separator we'll re-insert.
+        extra = len(para) + (2 if current else 0)
+        if current and current_len + extra > chunk_size:
+            chunks.append("\n\n".join(current))
+            current = [para]
+            current_len = len(para)
+        elif len(para) > chunk_size and not current:
+            # Paragraph alone exceeds chunk size — hard-split it.
+            for i in range(0, len(para), chunk_size):
+                chunks.append(para[i:i + chunk_size])
+            current = []
+            current_len = 0
+        else:
+            current.append(para)
+            current_len += extra
+    if current:
+        chunks.append("\n\n".join(current))
+    return chunks
+
+
+def _merge_chunk_payloads(payloads: list[dict]) -> dict:
+    """Merge per-chunk extraction dicts into one. For each key across chunks:
+      - list values: concatenate
+      - dict values: shallow-merge (later chunks override earlier scalars,
+        union list-of-dict sub-fields where keys collide with lists)
+      - scalar values: take the latest non-null
+    Keys starting with '_' (metadata like _chars_extracted_from) are handled
+    specially: _chars_extracted_from is summed.
+    """
+    merged: dict = {}
+    for p in payloads:
+        if not isinstance(p, dict):
+            continue
+        for key, value in p.items():
+            if key == "_chars_extracted_from":
+                merged[key] = merged.get(key, 0) + (value or 0)
+                continue
+            if key not in merged:
+                merged[key] = value
+                continue
+            existing = merged[key]
+            if isinstance(existing, list) and isinstance(value, list):
+                merged[key] = existing + value
+            elif isinstance(existing, dict) and isinstance(value, dict):
+                # Shallow merge — inner lists concatenate, scalars override when non-null.
+                combined = dict(existing)
+                for k2, v2 in value.items():
+                    if k2 in combined and isinstance(combined[k2], list) and isinstance(v2, list):
+                        combined[k2] = combined[k2] + v2
+                    elif v2 is not None:
+                        combined[k2] = v2
+                merged[key] = combined
+            elif value is not None:
+                merged[key] = value
+    return merged
+
+
+async def _extract_with_retry(
+    section_name: str,
+    section_md: str,
+    symbol: str,
+    fy_label: str,
+    model: str,
+    industry: str | None = None,
+) -> tuple[dict, bool]:
+    """Call _extract_section with retry on transient subprocess/network failures.
+
+    Returns (payload_dict, retried_flag). retried_flag=True if we needed ANY
+    retry attempt before succeeding. Raises the last exception if all attempts
+    fail — caller wraps in try/except to record the section as failed.
+    """
+    last_exc: BaseException | None = None
+    retried = False
+    attempts = 1 + len(RETRY_DELAYS_SEC)
+    for attempt in range(attempts):
+        if attempt > 0:
+            delay = RETRY_DELAYS_SEC[attempt - 1]
+            retried = True
+            logger.info(
+                "[ar] %s %s: section '%s' retry attempt %d/%d after %ds...",
+                symbol, fy_label, section_name, attempt, len(RETRY_DELAYS_SEC), delay,
+            )
+            await asyncio.sleep(delay)
+        try:
+            data = await _extract_section(
+                section_name, section_md, symbol, fy_label, model, industry,
+            )
+            return data, retried
+        except _TRANSIENT_EXC as exc:
+            last_exc = exc
+            logger.warning(
+                "[ar] %s %s: section '%s' transient failure (attempt %d): %s: %s",
+                symbol, fy_label, section_name, attempt, type(exc).__name__, exc,
+            )
+    logger.error(
+        "[ar] %s %s: section '%s' gave up after %d attempts: %s",
+        symbol, fy_label, section_name, attempts, last_exc,
+    )
+    raise last_exc if last_exc is not None else RuntimeError("retry exhausted")
+
+
+async def _extract_section_chunked(
+    section_name: str,
+    section_md: str,
+    symbol: str,
+    fy_label: str,
+    model: str,
+    industry: str | None = None,
+) -> tuple[dict, bool]:
+    """Chunking wrapper: if section_md exceeds CHUNK_TRIGGER_BYTES, split into
+    smaller chunks, run retry-wrapped extraction per chunk, then merge payloads.
+
+    Returns (merged_payload, retried_flag).
+    """
+    if len(section_md) <= CHUNK_TRIGGER_BYTES:
+        return await _extract_with_retry(
+            section_name, section_md, symbol, fy_label, model, industry,
+        )
+    chunks = _split_section_text(section_md, CHUNK_SIZE_BYTES)
+    logger.info(
+        "[ar] %s %s: section '%s' %d chars -> %d chunks",
+        symbol, fy_label, section_name, len(section_md), len(chunks),
+    )
+    payloads: list[dict] = []
+    any_retried = False
+    for idx, chunk in enumerate(chunks, start=1):
+        logger.info(
+            "[ar] %s %s: section '%s' chunk %d/%d (%d chars)",
+            symbol, fy_label, section_name, idx, len(chunks), len(chunk),
+        )
+        data, retried = await _extract_with_retry(
+            section_name, chunk, symbol, fy_label, model, industry,
+        )
+        any_retried = any_retried or retried
+        payloads.append(data)
+    merged = _merge_chunk_payloads(payloads)
+    merged["_chunked"] = len(chunks)
+    return merged, any_retried
 
 
 # --- Sector-specific extraction hint ---
@@ -493,6 +663,13 @@ async def _extract_single_ar(
     pending = [sec for sec in sections if sec not in result]
     if not pending:
         result["extraction_status"] = "complete"
+        # Preserve any existing _meta from the cached JSON; otherwise mark clean.
+        existing_meta = existing.get("_meta") if isinstance(existing.get("_meta"), dict) else None
+        result["_meta"] = existing_meta or {
+            "degraded_quality": False,
+            "missing_sections": [],
+            "retried_sections": [],
+        }
         result["_elapsed_s"] = round(_time.time() - t0, 1)
         _atomic_write_json(out_path, result)
         logger.info("[ar] %s %s: all sections cached, skipped", symbol, fy_label)
@@ -504,22 +681,25 @@ async def _extract_single_ar(
     # Per-section extraction — concurrency bounded, each section wrapped in
     # try/except so a single subprocess crash can't wipe out the rest.
     sem = asyncio.Semaphore(2)
+    retried_sections: list[str] = []
 
-    async def _one(sec: str) -> tuple[str, dict]:
+    async def _one(sec: str) -> tuple[str, dict, bool]:
         async with sem:
             slice_text = slice_section(md, section_index, sec)
             if not slice_text or len(slice_text) < 200:
-                return sec, {"status": "section_not_found_or_empty", "chars": len(slice_text)}
+                return sec, {"status": "section_not_found_or_empty", "chars": len(slice_text)}, False
             try:
-                data = await _extract_section(sec, slice_text, symbol, fy_label, model, industry)
-                return sec, data
+                data, retried = await _extract_section_chunked(
+                    sec, slice_text, symbol, fy_label, model, industry,
+                )
+                return sec, data, retried
             except Exception as e:
                 logger.warning("[ar] %s %s: section '%s' crashed: %s: %s",
                                symbol, fy_label, sec, type(e).__name__, e)
                 return sec, {
                     "extraction_error": f"{type(e).__name__}: {e}",
                     "chars_attempted": len(slice_text),
-                }
+                }, False
 
     # gather with return_exceptions=True so no single failure aborts the whole.
     raw = await asyncio.gather(
@@ -533,8 +713,10 @@ async def _extract_single_ar(
             logger.error("[ar] %s %s: unexpected gather exception: %s",
                          symbol, fy_label, item)
             continue
-        sec, data = item
+        sec, data, retried = item
         result[sec] = data
+        if retried:
+            retried_sections.append(sec)
         _atomic_write_json(out_path, result)  # persist after each section
 
     # Final status — 'partial' when any section errored.
@@ -543,6 +725,16 @@ async def _extract_single_ar(
     result["extraction_status"] = "partial" if errored else "complete"
     if errored:
         result["extraction_errors"] = {sec: result[sec]["extraction_error"] for sec in errored}
+
+    # Post-eval v2 E14: structured quality flags for downstream callers.
+    missing_sections = list(errored)
+    degraded_quality = bool(missing_sections) or bool(retried_sections)
+    result["_meta"] = {
+        "degraded_quality": degraded_quality,
+        "missing_sections": missing_sections,
+        "retried_sections": retried_sections,
+    }
+
     result["_elapsed_s"] = round(_time.time() - t0, 1)
     _atomic_write_json(out_path, result)
     return result
