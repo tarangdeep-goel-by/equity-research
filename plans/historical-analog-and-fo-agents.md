@@ -453,6 +453,77 @@ Ship the narrowest version that's useful:
 
 ---
 
+## Part 1.5 — Historical Analog hardening (post-Sprint-1 follow-up)
+
+**Status:** Pending. Surfaced by smoke-testing Sprint 1 on TMPV (Tata Motors Passenger Vehicles — newly-listed demerger ticker with 125 trading days of history). Gemini review on 2026-04-21 flagged three CRITICAL gaps and two HIGH. Scope is ~6 hours, targeted as a single follow-up PR before Sprint 2.
+
+### 1.5.1 Trigger case — what TMPV exposed
+
+Running `get_analog_cohort_stats('TMPV', k=30)` produced superficially reasonable output that masked three problems:
+
+1. **23 rows, 2 unique symbols.** Hard industry (`Passenger Cars & Utility Vehicles`) + mcap (`largecap`) filter starved the cohort — only MARUTI + FORCEMOT across 23 quarter-ends. M&M and Hyundai are in different industry codes. Reporting N=23 is technically accurate but statistically misleading.
+2. **Informative N ≈ 3.** 20 of 23 analogs are 2025-Q2 or later, so their 12m forward window is still in the future. `cohort_stats` aggregates only outcome_label-populated rows (3 analogs), but the agent prompt has no discipline forcing it to cite the *informative* N instead of the gross retrieval count. p10/p90 on N=3 is mathematically meaningless.
+3. **Retrospective feature data.** TMPV listed 2025-10-24. Yet `roce_3yr_delta = +13.48` surfaces because Screener/yfinance backfilled PV-segment accounting to pre-listing quarter-ends under the TMPV ticker. The agent has no way to distinguish this from a genuine 3-year ROCE trajectory — it treats pre-listing accounting as a lived market setup.
+
+### 1.5.2 Fix list (Gemini-prioritized)
+
+**CRITICAL:**
+
+| # | Fix | File(s) | One-liner |
+|---|---|---|---|
+| 1 | **Similarity-ring fallback** when `unique_symbols < 5` → widen to sector (or cross-mcap) | `analog_builder.py::retrieve_top_k_analogs` | Pass-1 strict filter; if unique_symbols(pass_1) < 5, pass-2 with relaxed industry or mcap; tag `relaxation_level`. |
+| 2 | **Surface `informative_N` vs gross N** + prompt constraint "cite only informative_N for base rates" | `analog_builder.py::cohort_stats`, `prompts.py::HISTORICAL_ANALOG_INSTRUCTIONS_V2` | Return `informative_N_{3m,6m,12m}` + `unique_symbols`; prompt Section 2 forces informative_N as the N in base-rate citations. |
+| 3 | **Retrospective-data flag** `is_backfilled` exposed in the feature vector | `analog_builder.py::compute_feature_vector` + prompt | Compute `is_backfilled = (listed_days < 1000 AND roce_3yr_delta is not None)` from `MIN(date) FROM daily_stock_data` vs today; agent's Section 7 must cite if True. |
+
+**HIGH:**
+
+| # | Fix | File(s) | One-liner |
+|---|---|---|---|
+| 4 | **Missing-feature imputation** using sector-median in distance calc | `analog_builder.py::feature_distance` | When target OR candidate has NULL, impute cohort/sector median for that feature before z-score — distance currently skips the dim, which biases toward partial-match candidates. |
+| 5 | **Dynamic base-rate horizons**: compute 3m/6m stats in parallel to 12m when `informative_N_12m < 5` | `analog_builder.py::cohort_stats` | Return stats dict keyed by horizon; prompt picks the shortest horizon with informative_N ≥ 5. |
+| 6 | **Toxic-intersection prompt clause** — explicitly evaluate non-linear feature combos (extreme RSI + margin contraction + MF outflow = classic "crowded into deterioration" setup) | `prompts.py::HISTORICAL_ANALOG_INSTRUCTIONS_V2` Step 5 | Add instruction: "Before emitting clusters, evaluate whether the target exhibits a toxic intersection (RSI > 80 + opm_trend < −1 + mf_delta_2q < 0) and flag it even if the cohort cluster stats don't isolate it." |
+
+**MEDIUM:**
+
+| # | Fix | File(s) | One-liner |
+|---|---|---|---|
+| 7 | **Symmetric time-skew detection** — flag when >70% informative cohort is post-2024, not just pre-2020 | `prompts.py` + `cohort_stats` metadata | Prompt G5 currently catches pre-2020 clustering; also catch >70% post-2024 as "recency regime lock-in." |
+| 8 | **Unique-symbol count as first-class stat** in briefing JSON | `briefing schema in prompts.py` | Already via fix #2, but surface as its own top-level field — reviewers should see symbol concentration at a glance. |
+
+**LOW:**
+
+| # | Fix | File(s) | One-liner |
+|---|---|---|---|
+| 9 | **Small-sample loudness controls**: if `informative_N < 5`, suppress p10/p90 and emit individual outcomes instead | `prompts.py` Section 2 | Distribution thresholds on N=3 are fabricated precision; listing the 3 actual outcomes is more honest. |
+
+### 1.5.3 What Gemini explicitly DISMISSED (keep-list)
+
+- Auto-specific features (dealer inventory, order book) — sector-knowledge leak, violates G8 sector-agnostic rule.
+- Regime snapshot at analog timestamp (pulling macro anchors into each row) — over-engineering.
+- p25/p75 differentiator analysis — current binary tail inspection is sufficient.
+
+### 1.5.4 Effort
+
+| Task | Effort |
+|---|---|
+| Fix #1 similarity-ring fallback + tests | 2h |
+| Fix #2 informative_N + unique_symbols + prompt update | 1h |
+| Fix #3 is_backfilled flag + listed_days derivation | 1h |
+| Fixes #4–6 (imputation, multi-horizon, toxic-intersection) | 2h |
+| Fixes #7–9 (MEDIUM/LOW polish) | 1h |
+| Autoeval re-sweep to confirm no regressions | 1h |
+| **Total** | **~8h (one day)** |
+
+### 1.5.5 Exit criteria
+
+- [ ] TMPV smoke produces `unique_symbols ≥ 5` or a `relaxation_level` flag.
+- [ ] TMPV output shows `informative_N_12m: 3` + `informative_N_3m: ~20` — agent reports 3m base rates with informative_N, not gross N.
+- [ ] TMPV output includes `is_backfilled: true` flag with 125 `listed_days`; agent's Section 7 cites it.
+- [ ] All 8 Sprint 1 unit tests still pass + 3-4 new tests for fixes #1/#2/#3.
+- [ ] Autoeval sweep on 2-3 sectors shows no grade regression from Sprint 1 baseline.
+
+---
+
 ## Part 2 — F&O Positioning Agent
 
 ### 2.1 What it does
@@ -751,15 +822,25 @@ Both agents hit the existing CLI smoke suite (`tests/unit/test_smoke.py`) via `-
 
 ## Summary for decision
 
-| Sprint | Effort | Scope | Unblocks |
-|---|---|---|---|
-| **Sprint 0** | ~3 days | Corporate-action infra (hybrid adj_close, bonus fix, screener refresh, sync+nightly hooks, test suite) | Sprint 1; also fixes live `get_price_performance` bonus bug |
-| **Sprint 1** | ~5 days | Historical Analog agent: 16-feature vectors, k-NN retrieval, LLM narration, 3 tools, briefing integration | Empirical conviction calibration in every synth run |
-| **Sprint 2** | ~4.5 days | F&O ingestion: NSE bhavcopy + participant OI, 3 tables, 5 store methods, CLI, cron, 90-day backfill | Sprint 3 |
-| **Sprint 3** | ~4 days | F&O Positioning agent: 5 tools, eligible-only universe, autoeval | Unique positioning dimension across ~200 liquid stocks |
+| Sprint | Status | Effort | Scope | Unblocks |
+|---|---|---|---|---|
+| **Sprint 0** | ✅ Merged 2026-04-20 (PR #65, #66) | ~3 days | Corporate-action infra | Sprint 1 |
+| **Sprint 1** | ✅ Merged 2026-04-20 (PR #67) | ~5 days | Historical Analog agent | Empirical conviction calibration in synthesis |
+| **Part 1.5** | 🔄 **Queued — resume here** | ~1 day | Post-Sprint-1 hardening from Gemini review of TMPV smoke test (similarity-ring fallback, informative_N, is_backfilled flag, imputation, multi-horizon stats, toxic-intersection prompt clause) | Robust output on narrow-industry and recently-listed tickers |
+| **Sprint 2** | Pending | ~4.5 days | F&O ingestion pipeline | Sprint 3 |
+| **Sprint 3** | Pending | ~4 days | F&O Positioning agent | Unique positioning dimension |
 
-**Total: ~16.5 days.** Sprints 1 and 2 can parallelize in worktrees after Sprint 0 lands.
+**Remaining effort: ~9.5 days.**
 
 Both new agents are tier-3 (failures non-blocking). Both are pure additions — no existing agent changes required. `_SYNTHESIS_FIELDS` expansions land cleanly.
 
-If approved: begin Sprint 0 in a worktree (`equity-research-adj-close`), then proceed to Sprint 1 once exit criteria pass.
+### Next-session resume card
+
+**Start here:** Part 1.5 (§1.5.2 fix list). Three CRITICAL items (similarity-ring fallback, informative_N, is_backfilled flag) are the most leveraged — shipping just those would already lift edge-case output quality. Re-run the TMPV smoke + exit criteria in §1.5.5 to verify.
+
+**After Part 1.5:** Sprint 2 ingestion work can start in a separate worktree (`equity-research-fno-ingest`). Sprint 2 has zero dependency on Part 1.5, so the two can parallelize if bandwidth allows.
+
+**Context anchors:**
+- TMPV smoke output that triggered Part 1.5: in session log 2026-04-21 around commit `f5d0f93` (Sprint 1 merge).
+- Gemini review verdict: see §1.5.2 table + §1.5.3 keep-list.
+- Production DB has 17,701 materialized state rows — no re-materialization needed unless `analog_builder.py` feature-vector logic changes (fixes #1/#2/#5 don't change features; fix #3/#4 do — plan a re-run if those ship).
