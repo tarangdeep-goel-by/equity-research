@@ -178,6 +178,108 @@ class TestBfsiAssetQualityCoverage:
 
 
 # ---------------------------------------------------------------------------
+# E2.2 + E13 — canonical KPI keys registered in sector_kpis.py must cover
+# the expanded BFSI asset-quality / pharma / FMCG / telecom KPI sets.
+# ---------------------------------------------------------------------------
+class TestBfsiKpisInCanonicalList:
+    """E2.2 — banks sector must expose the full asset-quality + capital set.
+
+    These checks guard against accidental removal of aliases / canonical keys
+    from SECTOR_KPI_CONFIG['banks']. Accepts canonical key OR alias, since
+    downstream resolution treats them equivalently.
+    """
+
+    _REQUIRED_KEYS = (
+        "gnpa_pct",
+        "nnpa_pct",
+        "pcr_pct",
+        "crar_pct",
+        "cet1_pct",
+        "lcr_pct",
+        "casa_pct",
+    )
+
+    def test_bfsi_kpis_in_canonical_list(self):
+        from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
+
+        banks = SECTOR_KPI_CONFIG["banks"]["kpis"]
+        lookup: set[str] = set()
+        for kpi in banks:
+            lookup.add(kpi["key"])
+            lookup.update(kpi.get("aliases") or [])
+
+        for required in self._REQUIRED_KEYS:
+            assert required in lookup, f"banks KPI registry missing '{required}'"
+
+    def test_cet1_pct_is_first_class_canonical_key(self):
+        """CET-1 is a distinct Basel III ratio, must be canonical not just alias."""
+        from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
+
+        canonical = {k["key"] for k in SECTOR_KPI_CONFIG["banks"]["kpis"]}
+        assert "cet1_pct" in canonical
+
+
+class TestPharmaKpisInCanonicalList:
+    """E13 — pharma canonical keys for R&D %, USFDA status, ANDA approvals,
+    pipeline molecules must be registered."""
+
+    _REQUIRED_KEYS = (
+        "rd_pct_of_revenue",
+        "usfda_facility_status",
+        "anda_approvals_ltm",
+        "key_molecule_pipeline",
+    )
+
+    def test_pharma_kpis_in_canonical_list(self):
+        from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
+
+        canonical = {k["key"] for k in SECTOR_KPI_CONFIG["pharma"]["kpis"]}
+        for key in self._REQUIRED_KEYS:
+            assert key in canonical, f"pharma canonical KPIs missing '{key}'"
+
+
+class TestFmcgKpisInCanonicalList:
+    """E13 — FMCG canonical keys for volume growth, channel split,
+    rural/urban growth must be registered."""
+
+    _REQUIRED_KEYS = (
+        "uvg_pct",
+        "price_growth_pct",
+        "channel_gt_pct",
+        "channel_mt_pct",
+        "channel_ecom_pct",
+        "rural_growth_pct",
+        "urban_growth_pct",
+    )
+
+    def test_fmcg_kpis_in_canonical_list(self):
+        from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
+
+        canonical = {k["key"] for k in SECTOR_KPI_CONFIG["fmcg"]["kpis"]}
+        for key in self._REQUIRED_KEYS:
+            assert key in canonical, f"fmcg canonical KPIs missing '{key}'"
+
+
+class TestTelecomKpisInCanonicalList:
+    """E13 — telecom canonical keys for ARPU (INR), subscribers, Africa
+    constant-currency growth, Africa FX devaluation must be registered."""
+
+    _REQUIRED_KEYS = (
+        "arpu_inr",
+        "subscribers_mn",
+        "africa_cc_growth_pct",
+        "africa_fx_devaluation_pct",
+    )
+
+    def test_telecom_kpis_in_canonical_list(self):
+        from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
+
+        canonical = {k["key"] for k in SECTOR_KPI_CONFIG["telecom"]["kpis"]}
+        for key in self._REQUIRED_KEYS:
+            assert key in canonical, f"telecom canonical KPIs missing '{key}'"
+
+
+# ---------------------------------------------------------------------------
 # FY quarter sort helpers & Screener period conversion
 # ---------------------------------------------------------------------------
 from pathlib import Path
