@@ -1,0 +1,8 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260420T173923.log
+AutoEval (agent-first): agent=financials sectors=['bfsi']
+Target: grade_numeric >= 90
+
+--- financials / SBIN (bfsi) ---
+  Report: 39226 chars
+  Evidence log loaded (2 lines)
+  Grading with Gemini...

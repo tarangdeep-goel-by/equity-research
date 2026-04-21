@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T19:30:50.540400+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "it_services": {
+      "agent": "business",
+      "stock": "TCS",
+      "sector": "IT services",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Deeply analytical; connects the AI productivity threat directly to the hours-based billing model and highlights the tension between record TCV and sluggish CC growth."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Highly consistent overall, though the distinction between a reported USD revenue decline and +2% CC growth could be clarified to avoid apparent contradiction."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers most critical areas, but lacks exact client concentration metrics (Top 5/10) and utilization rates, which are standard IT services KPIs."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a crystal-clear bull/bear framework centered on the TCV-to-revenue conversion timeline and sets specific catalysts to monitor."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Applies the definitive IT services revenue equation (Headcount \u00d7 Utilization \u00d7 Billing Rate \u00d7 Offshore Mix) and correctly focuses on employee cost gravity."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Transparently cites sources for all major claims, explicitly notes the missing investor deck, and clearly explains the math behind derived metrics."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptional discipline in using the calculate tool 13 times for precise derivations, and gracefully handled the empty response from the investor deck tool."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "Cost reached $0.95 across 41 turns, which is highly inefficient, largely driven by 13 separate sequential calls to the calculate tool."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Money Machine / Investor's Checklist",
+          "issue": "Missing Top 5 / Top 10 client concentration metrics, which are standard for IT services risk assessment.",
+          "suggestion": "Explicitly prompt the agent to extract and report Top 5/10/20 client concentration percentages for IT services companies, looking at historical ARs if current concalls omit them."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution",
+          "issue": "Agent took 41 turns, largely due to 13 sequential calls to the `calculate` tool, driving up costs and latency.",
+          "suggestion": "Instruct the agent to consolidate mathematical derivations or limit `calculate` calls to the most critical 3-5 metrics to improve cost efficiency."
+        }
+      ],
+      "strengths": [
+        "Excellent articulation of the core IT services business model and the specific threat GenAI poses to hours-based billing.",
+        "Strong identification of the $6-7B Sovereign AI data center as a capital misallocation risk that threatens TCS's premium ROCE/PB multiple."
+      ],
+      "summary": "This is a highly analytical and well-structured report that perfectly captures the current strategic tensions at TCS (TCV vs. CC growth, AI productivity vs. billable hours). The primary gap is the excessive cost and turn count driven by inefficient tool usage, alongside minor missing standard KPIs like client concentration. Overall, it provides institutional-grade insights with a clear, actionable framework.",
+      "report_length": 31862,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 36.15953716600052,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Deeply analytical; connects the AI productivity threat directly to the hours-based billing model and highlights the tension between record TCV and sluggish CC growth.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Highly consistent overall, though the distinction between a reported USD revenue decline and +2% CC growth could be clarified to avoid apparent contradiction.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers most critical areas, but lacks exact client concentration metrics (Top 5/10) and utilization rates, which are standard IT services KPIs.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a crystal-clear bull/bear framework centered on the TCV-to-revenue conversion timeline and sets specific catalysts to monitor.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Applies the definitive IT services revenue equation (Headcount \\u00d7 Utilization \\u00d7 Billing Rate \\u00d7 Offshore Mix) and correctly focuses on employee cost gravity.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Transparently cites sources for all major claims, explicitly notes the missing investor deck, and clearly explains the math behind derived metrics.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptional discipline in using the calculate tool 13 times for precise derivations, and gracefully handled the empty response from the investor deck tool.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"Cost reached $0.95 across 41 turns, which is highly inefficient, largely driven by 13 separate sequential calls to the calculate tool.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Money Machine / Investor's Checklist\",\n      \"issue\": \"Missing Top 5 / Top 10 client concentration metrics, which are standard for IT services risk assessment.\",\n      \"suggestion\": \"Explicitly prompt the agent to extract and report Top 5/10/20 client concentration percentages for IT services companies, looking at historical ARs if current concalls omit them.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution\",\n      \"issue\": \"Agent took 41 turns, largely due to 13 sequential calls to the `calculate` tool, driving up costs and latency.\",\n      \"suggestion\": \"Instruct the agent to consolidate mathematical derivations or limit `calculate` calls to the most critical 3-5 metrics to improve cost efficiency.\"\n    }\n  ],\n  \"strengths\": [\n    \"Excellent articulation of the core IT services business model and the specific threat GenA"
+    }
+  }
+}

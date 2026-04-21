@@ -394,3 +394,56 @@ timestamp	cycle	agent	stock	sector	grade	grade_numeric	report_len	run_s	eval_s	p
 2026-04-17T13:41:10Z	0	risk	POLICYBZR	insurance	ERR	0	35400	0.0	29.3	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
 2026-04-17T14:08:13Z	0	sector	POLICYBZR	insurance	ERR	0	34404	0.0	1199.8	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
 2026-04-17T14:46:35Z	0	valuation	SBIN	bfsi	ERR	0	43573	0.0	1199.7	0	Gemini eval failed: 499 CANCELLED. {'error': {'code': 499, 'message': 'The operation was cancelled.'
+2026-04-20T17:53:49Z	0	valuation	SBIN	bfsi	A-	90	32356	0.0	636.9	1	This is an institutional-quality valuation report that perfectly applies BFSI frameworks, featuring 
+2026-04-20T17:58:19Z	0	financials	SBIN	bfsi	A	93	39226	0.0	264.1	1	This is an institutional-quality report that perfectly applies BFSI frameworks, though it is slightl
+2026-04-20T17:59:24Z	0	business	SBIN	bfsi	B+	87	33583	0.0	61.7	1	The report provides a deep, highly actionable, and logically sound analysis of SBI's business model,
+2026-04-20T18:23:38Z	0	ownership	HDFCBANK	private_bank	A	93	27886	0.0	182.4	1	This is an institutional-quality ownership report that brilliantly synthesizes a complex narrative o
+2026-04-20T18:36:55Z	0	financials	HDFCBANK	private_bank	B+	88	40394	0.0	52.0	1	This is a highly analytical and logically sound financial deep-dive that perfectly applies BFSI fram
+2026-04-20T18:37:40Z	0	valuation	HDFCBANK	private_bank	A-	90	36292	0.0	67.4	1	This is an institutional-quality valuation report that perfectly applies BFSI frameworks to explain 
+2026-04-20T18:42:09Z	0	technical	HDFCBANK	private_bank	A	94	18780	0.0	34.5	1	This is an institutional-quality technical report that brilliantly synthesizes price action, deliver
+2026-04-20T18:48:49Z	0	business	HDFCBANK	private_bank	B	86	30816	0.0	34.6	3	The report provides an excellent, deep analysis of HDFC Bank's post-merger dynamics, correctly ident
+2026-04-20T18:55:46Z	0	sector	HDFCBANK	private_bank	B+	89	31047	0.0	49.6	1	This is an institutional-quality sector report that perfectly applies BFSI frameworks to explain HDF
+2026-04-20T19:30:50Z	0	business	TCS	it_services	A-	90	31862	0.0	36.2	2	This is a highly analytical and well-structured report that perfectly captures the current strategic
+2026-04-20T19:41:38Z	0	risk	TCS	it_services	A-	90	38213	0.0	47.9	1	This is a highly sophisticated risk report that correctly identifies and contextualizes complex gove
+2026-04-20T20:12:22Z	0	ownership	SUNPHARMA	pharma	B+	88	33361	0.0	34.0	1	This is an institutional-quality ownership analysis that provides deep, actionable insights, but it 
+2026-04-20T20:22:31Z	0	financials	SUNPHARMA	pharma	B+	89	36654	0.0	33.6	1	This is an analytically superb report that perfectly applies pharma-specific frameworks to explain S
+2026-04-20T20:23:34Z	0	valuation	SUNPHARMA	pharma	A-	92	32976	0.0	48.4	1	This is an outstanding, institutional-quality valuation report that demonstrates deep understanding 
+2026-04-20T20:32:36Z	0	risk	SUNPHARMA	pharma	A-	92	34346	0.0	29.1	2	This is an institutional-quality risk report that perfectly applies pharma-specific frameworks to Su
+2026-04-20T20:33:27Z	0	business	SUNPHARMA	pharma	B+	89	30051	0.0	58.2	1	This is an institutional-quality business analysis that perfectly captures Sun Pharma's specialty tr
+2026-04-20T20:37:46Z	0	technical	SUNPHARMA	pharma	A-	92	22298	0.0	26.4	1	This is an institutional-quality technical report that brilliantly contextualizes price and volume a
+2026-04-20T20:40:04Z	0	sector	SUNPHARMA	pharma	B+	88	35591	0.0	36.7	3	The report provides a strong, structurally sound analysis of SUNPHARMA's transition from volume gene
+2026-04-20T21:27:18Z	0	valuation	GODREJPROP	real_estate	A-	90	28718	0.0	22.0	2	A highly sophisticated, institutional-grade valuation report that perfectly applies Real Estate sect
+2026-04-20T21:34:50Z	0	financials	GODREJPROP	real_estate	A	93	28368	0.0	30.6	2	This is an institutional-quality financial deep-dive that perfectly deconstructs the misleading stat
+2026-04-20T21:35:58Z	0	business	GODREJPROP	real_estate	A-	90	33560	0.0	39.6	1	This is an institutional-quality report that demonstrates a deep understanding of the real estate se
+2026-04-20T21:38:43Z	0	technical	GODREJPROP	real_estate	A	94	19514	0.0	22.3	1	An institutional-quality technical report that excels in analytical depth and data skepticism. The a
+2026-04-20T21:42:07Z	0	risk	GODREJPROP	real_estate	A-	90	33315	0.0	30.6	1	This is a strong, institutional-quality risk report that expertly applies real estate sector framewo
+2026-04-20T21:49:37Z	0	sector	GODREJPROP	real_estate	A-	92	36160	0.0	26.8	1	This is an institutional-quality sector report that perfectly applies real estate analytical framewo
+2026-04-20T22:47:36Z	0	valuation	NTPC	regulated_power	A-	92	34074	0.0	31.1	1	This is an institutional-quality valuation report that applies the exact right frameworks (Justified
+2026-04-20T22:56:14Z	0	business	NTPC	regulated_power	A-	90	32906	0.0	32.5	1	This is an institutional-quality business report that perfectly applies the regulated utility framew
+2026-04-20T22:57:42Z	0	financials	NTPC	regulated_power	A-	90	36115	0.0	30.8	1	This is an institutional-quality financial analysis that perfectly captures the structural mechanics
+2026-04-20T23:01:30Z	0	technical	NTPC	regulated_power	A-	92	17312	0.0	32.4	1	This is a highly sophisticated technical report that brilliantly adapts standard momentum analysis t
+2026-04-20T23:45:06Z	0	valuation	VEDL	metals	F	53	371	0.0	20.2	1	The agent completely failed to generate the valuation report, outputting only a few lines of interna
+2026-04-20T23:54:03Z	0	sector	VEDL	metals	B+	88	30301	0.0	22.1	2	This is a fundamentally excellent and highly analytical sector report that perfectly applies metals 
+2026-04-20T23:55:01Z	0	business	VEDL	metals	B+	89	33620	0.0	34.6	1	This is an institutionally insightful report that perfectly captures the dual nature of Vedanta as b
+2026-04-21T00:30:16Z	0	ownership	BHARTIARTL	telecom	A-	90	32323	0.0	30.3	1	This is a highly sophisticated, institutional-grade ownership report that brilliantly connects share
+2026-04-21T00:40:31Z	0	business	BHARTIARTL	telecom	A-	92	33719	0.0	26.1	1	This is an institutional-quality report that perfectly captures the core thesis of Bharti Airtel, th
+2026-04-21T00:42:29Z	0	financials	BHARTIARTL	telecom	B+	89	33337	0.0	50.7	1	This is an institutional-quality financial analysis that perfectly applies telecom-specific framewor
+2026-04-21T00:49:21Z	0	sector	BHARTIARTL	telecom	B+	89	31813	0.0	32.1	2	The report provides a highly sophisticated and accurate application of telecom sector frameworks, co
+2026-04-21T01:27:17Z	0	valuation	HINDUNILVR	fmcg	A-	90	30735	0.0	63.9	1	This is an institutional-quality valuation report that brilliantly navigates complex accounting anom
+2026-04-21T01:36:57Z	0	business	HINDUNILVR	fmcg	A-	91	31899	0.0	44.8	1	This is an institutional-quality business report that perfectly applies FMCG frameworks to dissect H
+2026-04-21T01:37:14Z	0	financials	HINDUNILVR	fmcg	B+	88	33784	0.0	38.0	2	This is a highly insightful and analytically rigorous report that perfectly diagnoses HUL's structur
+2026-04-21T01:45:38Z	0	sector	HINDUNILVR	fmcg	A-	90	33635	0.0	61.9	1	This is a highly sophisticated, institutional-quality sector report that perfectly applies FMCG fram
+2026-04-21T02:46:41Z	0	business	ADANIENT	conglomerate	B+	86	26673	0.0	37.4	2	This is an analytically superb report that perfectly captures the structural mechanics, risks, and n
+2026-04-21T02:56:32Z	0	valuation	ADANIENT	conglomerate	ERR	0	448	0.0	1209.6	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'Deadline expired before ope
+2026-04-21T03:03:12Z	0	technical	ADANIENT	conglomerate	ERR	0	19519	0.0	1197.6	0	Gemini eval failed: 499 CANCELLED. {'error': {'code': 499, 'message': 'The operation was cancelled.'
+2026-04-21T03:11:14Z	0	ownership	ETERNAL	platform	ERR	0	29915	0.0	30.2	0	Gemini eval failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently exp
+2026-04-21T03:18:33Z	0	financials	ETERNAL	platform	B+	88	27613	0.0	42.0	1	This is an outstanding piece of financial analysis that brilliantly deconstructs the accounting dist
+2026-04-21T03:22:51Z	0	valuation	ETERNAL	platform	B+	88	28725	0.0	117.0	1	This is an analytically superb report that correctly identifies critical accounting distortions and 
+2026-04-21T03:29:40Z	0	risk	ETERNAL	platform	A-	91	37008	0.0	37.3	0	This is a strong, institutional-quality risk report that excellently applies platform-specific frame
+2026-04-21T03:32:03Z	0	business	ETERNAL	platform	B+	87	34721	0.0	52.9	1	The report provides an institutional-grade analysis of Blinkit's unit economics and accounting shift
+2026-04-21T03:54:55Z	0	ownership	POLICYBZR	insurance	A-	90	31305	0.0	28.7	1	This is an institutional-quality ownership report that extracts deep, actionable insights from the d
+2026-04-21T04:05:39Z	0	valuation	POLICYBZR	insurance	A-	90	35951	0.0	69.9	1	This is an exceptionally high-quality valuation report that demonstrates true analytical reasoning b
+2026-04-21T04:06:56Z	0	financials	POLICYBZR	insurance	B+	87	32264	0.0	46.6	1	This is an analytically outstanding report that perfectly applies the aggregator framework, correctl
+2026-04-21T04:14:31Z	0	risk	POLICYBZR	insurance	A-	92	33173	0.0	29.4	1	A highly sophisticated, institutional-grade risk report that perfectly adapts its framework to an in
+2026-04-21T04:15:07Z	0	business	POLICYBZR	insurance	A-	90	28803	0.0	30.5	3	This is a highly insightful and actionable report that perfectly captures the platform economics of 
+2026-04-21T04:22:54Z	0	sector	POLICYBZR	insurance	B+	87	29414	0.0	35.6	2	The report provides an exceptionally strong analysis of Policybazaar's insurance distribution moat, 

@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T00:40:31.107724+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "telecom": {
+      "agent": "business",
+      "stock": "BHARTIARTL",
+      "sector": "Telecom operator",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent breakdown of unit economics (\u20b910 ARPU hike = \u20b93,504 Cr EBITDA) and strong explanation of the EV/EBITDA anomaly vs PE due to spectrum D&A."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "The narrative flows logically from the fundamental ARPU engine to financial outcomes, culminating in a coherent bull/bear thesis centered on ROCE."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major verticals, risks, and moats. The only gap is the exact segment revenue/EBITDA split, which the agent correctly identified as missing due to tool failures."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Superb framing of the investment decision. The 'Key Question' perfectly isolates the ARPU vs political economy tension that drives the stock."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of telecom frameworks: ARPU, subscriber base, EV/EBITDA preference over PE, Net Debt/EBITDA, and spectrum amortisation dynamics."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Rigorous inline citations and extensive, accurate use of the calculate tool to derive bridges and incremental margins."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Agent used the calculate tool 10 times successfully and honestly surfaced data gaps (segmental AR extraction failure, missing deck) in the mandatory metrics JSON."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 75,
+          "rationale": "Log shows 38 turns and $0.96 cost with a 44.1% cache hit rate, placing this firmly in the C tier for efficiency despite the high quality."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Execution",
+          "issue": "Agent took 38 turns to complete the report, leading to high cost ($0.96) and lower cache hit rate.",
+          "suggestion": "Instruct the agent to consolidate tool calls into parallel waves (e.g., fetching context, fundamentals, and valuation in a single turn) to reduce turn count."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "2. The Money Machine",
+          "issue": "Agent failed to extract segmental revenue split because get_annual_report(FY25, segmental) failed and no deck was on file.",
+          "suggestion": "Improve the segmental data extraction logic in the annual report tool to better handle telecom-specific reporting formats, or provide a fallback to Screener segment data."
+        }
+      ],
+      "strengths": [
+        "Exceptional translation of operational metrics (ARPU) into financial outcomes (incremental EBITDA and ROCE).",
+        "Deep understanding of telecom valuation, correctly steering the reader away from PE towards EV/EBITDA due to heavy spectrum D&A."
+      ],
+      "summary": "This is an institutional-quality report that perfectly captures the core thesis of Bharti Airtel, though it was expensive to generate. The agent expertly applied telecom-specific frameworks to highlight the tension between the company's wide moat and its currently sub-WACC ROCE, making the investment decision highly actionable.",
+      "report_length": 33719,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 26.095903707995603,
+      "run_skipped": true,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent breakdown of unit economics (\u20b910 ARPU hike = \u20b93,504 Cr EBITDA) and strong explanation of the EV/EBITDA anomaly vs PE due to spectrum D&A.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"The narrative flows logically from the fundamental ARPU engine to financial outcomes, culminating in a coherent bull/bear thesis centered on ROCE.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major verticals, risks, and moats. The only gap is the exact segment revenue/EBITDA split, which the agent correctly identified as missing due to tool failures.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Superb framing of the investment decision. The 'Key Question' perfectly isolates the ARPU vs political economy tension that drives the stock.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of telecom frameworks: ARPU, subscriber base, EV/EBITDA preference over PE, Net Debt/EBITDA, and spectrum amortisation dynamics.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Rigorous inline citations and extensive, accurate use of the calculate tool to derive bridges and incremental margins.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Agent used the calculate tool 10 times successfully and honestly surfaced data gaps (segmental AR extraction failure, missing deck) in the mandatory metrics JSON.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 75,\n      \"rationale\": \"Log shows 38 turns and $0.96 cost with a 44.1% cache hit rate, placing this firmly in the C tier for efficiency despite the high quality.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Execution\",\n      \"issue\": \"Agent took 38 turns to complete the report, leading to high cost ($0.96) and lower cache hit rate.\",\n      \"suggestion\": \"Instruct the agent to consolidate tool calls into parallel waves (e.g., fetching context, fundamentals, and valuation in a single turn) to reduce turn count.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"2. The Money Machine\",\n      \"issue\": \"Agent failed to extract segmental revenue split because get_annual_report(FY25, segmental) failed and no deck was on file.\",\n      \"suggestion\": \"Improve the segmental data extraction logic in the annual report tool to better handle telecom-specific reporting formats, or provide a fallback to Screener segment data.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional translation of operational metrics (ARPU) into financial outcomes (incremental EBITDA and ROCE).\",\n    \"Deep understanding of telecom va"
+    }
+  }
+}

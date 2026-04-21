@@ -1,0 +1,91 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T18:48:49.709867+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "private_bank"
+  ],
+  "results": {
+    "private_bank": {
+      "agent": "business",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "B",
+      "grade_numeric": 86,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent breakdown of the mortgage transaction and cross-sell flywheel. Deeply analyzes the merger's impact on ROE, CD ratio, and borrowing mix, explaining the 'why' behind the numbers."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Strong overall narrative connecting the cyclical vs. structural debate. Minor inconsistency: explicitly states ROCE is not applicable to banks, yet includes it in the 9-Year Financial Summary table instead of replacing it with ROE."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers the core banking engine exceptionally well, but misses a critical component for HDFC Bank: the quantification of its massive subsidiaries (HDB, Life, AMC) via SOTP analysis."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a very clear bull/bear framework centered on the timeline for ROE normalization. Identifies specific catalysts (deposit repricing, CD ratio targets) for the PM to track."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect application of BFSI frameworks. Correctly focuses on NIM, CASA, CD ratio, GNPA, and ROA/ROE, while explicitly rejecting industrial metrics like EBITDA and FCF."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Rigorous use of the calculate tool for all derived metrics (Gordon P/B, CAGRs). Citations are clear and specific to concall quarters and sections."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly disciplined and handled empty deck insights well, but failed to call `get_valuation(section='sotp')` despite noting subsidiary quantification as an 'attempted' metric in the JSON."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Highly inefficient execution. The log shows 38 turns and a cost of $1.05, which falls well into the F category (>20 turns, >$1.00) despite a 54% cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Mandatory Metrics / Open Questions",
+          "issue": "Agent failed to call `get_valuation(section='sotp')` to quantify subsidiary contributions, despite it being explicitly listed in the tool description and necessary for a conglomerate bank.",
+          "suggestion": "Update instructions to mandate checking `get_valuation(section='sotp')` for any company with known listed subsidiaries, especially large private banks."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Financial Fingerprint",
+          "issue": "Included ROCE in the financial summary table while simultaneously adding a note that ROCE is meaningless for banks.",
+          "suggestion": "Instruct the agent to dynamically alter historical financial tables to replace ROCE with ROE/ROA when analyzing BFSI stocks, rather than just adding a disclaimer."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution",
+          "issue": "Excessive turn count (38 turns) and cost ($1.05) due to unbatched, sequential tool calls (especially for `calculate` and `get_company_context`).",
+          "suggestion": "Train the agent to batch tool calls where possible (e.g., requesting multiple sections in one `get_company_context` call) and plan its math operations more efficiently."
+        }
+      ],
+      "strengths": [
+        "Superb qualitative breakdown of the business model, specifically the 'Transaction Walk-Through' and cross-sell flywheel.",
+        "Excellent framing of the 'Big Question' (cyclical vs. structural ROE compression), providing a PM with exactly the right mental model to value the stock.",
+        "Strong application of the Gordon Growth Model to justify the P/B multiple and separate the consolidated vs. standalone valuation."
+      ],
+      "summary": "The report provides an excellent, deep analysis of HDFC Bank's post-merger dynamics, correctly identifying the core debate as cyclical vs. structural ROE compression. However, the agent completely missed calling the SOTP valuation tool to quantify subsidiary value, and the execution was highly inefficient, taking 38 turns and over $1.00 to generate.",
+      "report_length": 30816,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 34.63469099999929,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent breakdown of the mortgage transaction and cross-sell flywheel. Deeply analyzes the merger's impact on ROE, CD ratio, and borrowing mix, explaining the 'why' behind the numbers.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Strong overall narrative connecting the cyclical vs. structural debate. Minor inconsistency: explicitly states ROCE is not applicable to banks, yet includes it in the 9-Year Financial Summary table instead of replacing it with ROE.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers the core banking engine exceptionally well, but misses a critical component for HDFC Bank: the quantification of its massive subsidiaries (HDB, Life, AMC) via SOTP analysis.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a very clear bull/bear framework centered on the timeline for ROE normalization. Identifies specific catalysts (deposit repricing, CD ratio targets) for the PM to track.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect application of BFSI frameworks. Correctly focuses on NIM, CASA, CD ratio, GNPA, and ROA/ROE, while explicitly rejecting industrial metrics like EBITDA and FCF.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Rigorous use of the calculate tool for all derived metrics (Gordon P/B, CAGRs). Citations are clear and specific to concall quarters and sections.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly disciplined and handled empty deck insights well, but failed to call `get_valuation(section='sotp')` despite noting subsidiary quantification as an 'attempted' metric in the JSON.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Highly inefficient execution. The log shows 38 turns and a cost of $1.05, which falls well into the F category (>20 turns, >$1.00) despite a 54% cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B\",\n    \"grade_numeric\": 86\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Mandatory Metrics / Open Questions\",\n      \"issue\": \"Agent failed to call `get_valuation(section='sotp')` to quantify subsidiary contributions, despite it being explicitly listed in the tool description and necessary for a conglomerate bank.\",\n      \"suggestion\": \"Update instructions to mandate checking `get_valuation(section='sotp')` for any company with known listed subsidiaries, especially large private banks.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Financial Fingerprint\",\n      \"issue\": \"Included ROCE in the financial summary table while simultaneously adding a note that ROCE is meaningless for banks.\",\n    "
+    }
+  }
+}

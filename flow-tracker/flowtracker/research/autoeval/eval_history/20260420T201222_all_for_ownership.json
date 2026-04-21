@@ -1,0 +1,79 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T20:12:22.483657+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "pharma"
+  ],
+  "results": {
+    "pharma": {
+      "agent": "ownership",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional depth. The calculation of the 118% DII absorption ratio and the precise margin call trigger/buffer (19.6%) for the promoter pledge elevate this far beyond a standard summary."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless logic, bolstered by a dedicated 'Cross-Section Reconciliation' that explicitly resolves apparent contradictions (e.g., quarterly net absorption vs. intra-quarter supply pressure)."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Covers all required dimensions comprehensively. Correctly identifies and documents the missing FII archetype decomposition as a structural data gap rather than ignoring it."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear 'mixed' verdict with highly specific catalysts (FDA EIR resolution, Organon deal clarity) and well-defined risk parameters."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies pharma-specific frameworks, correctly correlating the FII exit with USFDA warning letters and identifying the Shanghvi family trust as a structural, non-informational holding."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent transparency. The agent explicitly flags degraded AR extraction and the 2-AMC concentration artifact in the mutual fund data, ensuring the reader isn't misled."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly disciplined and handled extraction failures gracefully, but made redundant tool calls (e.g., calling `calculate` for `400353 * 5.23 / 100` twice in Turns 22 and 24) and executed a trivial `pct_of` calculation."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Failed the efficiency threshold. The agent took 28 turns (well over the >20 turn limit for an F), though a high cache hit rate (74.1%) kept the actual cost at $0.60."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Execution Log",
+          "issue": "The agent took 28 turns, partially due to excessive 'thinking' steps and redundant calculator calls (e.g., calculating LIC's value identically in Turns 22 and 24, and calculating `pct_of 16.12, 100` in Turn 20).",
+          "suggestion": "Instruct the agent to batch calculations into fewer turns, avoid trivial math via the tool, and store previous calculation results in memory to prevent redundant calls."
+        }
+      ],
+      "strengths": [
+        "Outstanding analytical depth, particularly the DII absorption ratio (118%) and the promoter pledge margin call buffer analysis.",
+        "The 'Cross-Section Reconciliation' is a best-in-class feature that proactively resolves timeframe-based narrative tensions.",
+        "Excellent transparency regarding data limitations, specifically calling out the degraded AR extraction and the missing FII names."
+      ],
+      "summary": "This is an institutional-quality ownership analysis that provides deep, actionable insights, but it is severely penalized for poor operational efficiency. The agent took 28 turns to complete the report\u2014including redundant calculator calls\u2014violating strict efficiency constraints, though the analytical output itself is virtually flawless.",
+      "report_length": 33361,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 34.02568045799853,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional depth. The calculation of the 118% DII absorption ratio and the precise margin call trigger/buffer (19.6%) for the promoter pledge elevate this far beyond a standard summary.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless logic, bolstered by a dedicated 'Cross-Section Reconciliation' that explicitly resolves apparent contradictions (e.g., quarterly net absorption vs. intra-quarter supply pressure).\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Covers all required dimensions comprehensively. Correctly identifies and documents the missing FII archetype decomposition as a structural data gap rather than ignoring it.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear 'mixed' verdict with highly specific catalysts (FDA EIR resolution, Organon deal clarity) and well-defined risk parameters.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies pharma-specific frameworks, correctly correlating the FII exit with USFDA warning letters and identifying the Shanghvi family trust as a structural, non-informational holding.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent transparency. The agent explicitly flags degraded AR extraction and the 2-AMC concentration artifact in the mutual fund data, ensuring the reader isn't misled.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly disciplined and handled extraction failures gracefully, but made redundant tool calls (e.g., calling `calculate` for `400353 * 5.23 / 100` twice in Turns 22 and 24) and executed a trivial `pct_of` calculation.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Failed the efficiency threshold. The agent took 28 turns (well over the >20 turn limit for an F), though a high cache hit rate (74.1%) kept the actual cost at $0.60.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Execution Log\",\n      \"issue\": \"The agent took 28 turns, partially due to excessive 'thinking' steps and redundant calculator calls (e.g., calculating LIC's value identically in Turns 22 and 24, and calculating `pct_of 16.12, 100` in Turn 20).\",\n      \"suggestion\": \"Instruct the agent to batch calculations into fewer turns, avoid trivial math via the tool, and store previous calculation results in memory to prevent redundant calls.\"\n    }\n  ],\n  \"strengths\": [\n    \"Outstanding analytical depth, particularly the DII absorption ratio (118%) and the promoter pledge margin call buffer analysis.\",\n    \"The 'Cross-Section Reconciliation"
+    }
+  }
+}

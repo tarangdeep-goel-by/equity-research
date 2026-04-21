@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_risk",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T19:41:38.103110+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "it_services": {
+      "agent": "risk",
+      "stock": "TCS",
+      "sector": "IT services",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional deep-dive into RPTs (Tejas Networks) and Sovereign AI datacenter risks, though UK weakness analysis remains slightly surface-level."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Bear case math is sound and well-reasoned, but the assumption of a 14x PE floor could be better defended given the unprecedented structural AI threat compared to the 2008 cyclical downturn."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Covers major risks comprehensively, but misses critical IT services leading indicators like utilization rates and net headcount additions."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Highly actionable bear case with clear triggers and a well-quantified risk matrix, though it lacks a base-case probability weighting for full context."
+        },
+        "sector_framework": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Strong application of T&M vs fixed-price and CC growth frameworks, but omits utilization and net headcount metrics which are standard for IT services."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent citations and honest surfacing of data gaps, though it relies on a news article for the USD revenue decline rather than extracting the exact USD figures."
+        },
+        "tool_use_discipline": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Mostly disciplined and surfaced data gaps honestly, but wasted Turn 7 calling get_annual_report with an invalid year='all' argument."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 70,
+          "rationale": "Poor efficiency with 34 turns (well above the >20 threshold for F) and $0.79 cost, though partially salvaged by a strong 69% cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Operational Risk",
+          "issue": "The report misses critical IT services leading indicators such as utilization rates and net headcount additions.",
+          "suggestion": "Update the prompt to explicitly require utilization rates and net headcount trends when analyzing IT services companies."
+        }
+      ],
+      "strengths": [
+        "Phenomenal forensic analysis of Related Party Transactions, specifically identifying the Tejas Networks surge as a proxy for government contract execution risk.",
+        "Excellent contextualization of the 'channel stuffing' flag, correctly identifying it as inapplicable to IT services and providing accurate alternative explanations (milestone billing lag)."
+      ],
+      "summary": "This is a highly sophisticated risk report that correctly identifies and contextualizes complex governance and structural risks, particularly around RPTs and AI disruption. However, it misses standard IT services operational metrics like utilization and headcount additions, and the agent struggled with efficiency, taking 34 turns to complete the task.",
+      "report_length": 38213,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 47.862745083002665,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional deep-dive into RPTs (Tejas Networks) and Sovereign AI datacenter risks, though UK weakness analysis remains slightly surface-level.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Bear case math is sound and well-reasoned, but the assumption of a 14x PE floor could be better defended given the unprecedented structural AI threat compared to the 2008 cyclical downturn.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Covers major risks comprehensively, but misses critical IT services leading indicators like utilization rates and net headcount additions.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Highly actionable bear case with clear triggers and a well-quantified risk matrix, though it lacks a base-case probability weighting for full context.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Strong application of T&M vs fixed-price and CC growth frameworks, but omits utilization and net headcount metrics which are standard for IT services.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent citations and honest surfacing of data gaps, though it relies on a news article for the USD revenue decline rather than extracting the exact USD figures.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Mostly disciplined and surfaced data gaps honestly, but wasted Turn 7 calling get_annual_report with an invalid year='all' argument.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 70,\n      \"rationale\": \"Poor efficiency with 34 turns (well above the >20 threshold for F) and $0.79 cost, though partially salvaged by a strong 69% cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Operational Risk\",\n      \"issue\": \"The report misses critical IT services leading indicators such as utilization rates and net headcount additions.\",\n      \"suggestion\": \"Update the prompt to explicitly require utilization rates and net headcount trends when analyzing IT services companies.\"\n    }\n  ],\n  \"strengths\": [\n    \"Phenomenal forensic analysis of Related Party Transactions, specifically identifying the Tejas Networks surge as a proxy for government contract execution risk.\",\n    \"Excellent contextualization of the 'channel stuffing' flag, correctly identifying it as inapplicable to IT services and providing accurate alternative explanations (milestone billing lag).\"\n  ],\n  \"summary\": \"This is a highly sophisticated risk report that correctly identifies and contextualizes complex governance and structural risks, particularly around RPTs and AI disr"
+    }
+  }
+}

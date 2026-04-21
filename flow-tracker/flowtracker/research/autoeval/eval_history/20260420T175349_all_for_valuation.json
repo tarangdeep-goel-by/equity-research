@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T17:53:49.729564+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "bfsi": {
+      "agent": "valuation",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional depth in decomposing the peer premium/discount into specific drivers (scale, SOTP, PSU governance, NIM gap). The handling of the BVPS standalone vs consolidated discrepancy shows strong institutional awareness."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Highly consistent overall, but slightly mixes basis in the fair value triangle by applying a justified P/B multiple derived from standalone ROE directly to consolidated BVPS, rather than valuing the core bank standalone and adding SOTP."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Covers all major BFSI valuation dimensions including SOTP, Gordon Growth, and peer benchmarking. However, CASA ratio deterioration is only mentioned in the structured briefing and omitted from the main forward projections."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Provides a clear, evidence-backed base/bear/bull framework with specific, monitorable catalysts (Q4 clean earnings, AMC IPO, RBI rate cuts)."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect application of BFSI valuation principles. Explicitly discards EV/EBITDA and standard DCF, anchoring on Gordon Growth P/B-ROE and SOTP for a complex financial conglomerate."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Excellent citation of sources. Transparently flags data gaps (NNPA, AR extraction issues) and explicitly states when fallbacks or proxies are used."
+        },
+        "tool_use_discipline": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Outstanding resilience. When the P/B chart tool returned empty (Turn 12), the agent manually reconstructed the historical P/B band using year-end prices and BVPS. Hunted for asset quality metrics across multiple concall sections."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "The agent required 33 turns and incurred a cost of $1.17, which strictly falls into the F category for efficiency (>20 turns and >$1.00), despite the high quality of the output."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Fair Value Triangle",
+          "issue": "The agent applies a justified P/B multiple derived from standalone ROE directly to consolidated BVPS to calculate the base fair value.",
+          "suggestion": "Instruct the agent to calculate core bank fair value by applying the standalone-derived multiple to standalone BVPS, and then add the SOTP value of subsidiaries to arrive at the total consolidated fair value."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "3. Fair Value Triangle",
+          "issue": "The agent conflates the terms 'margin of safety' and 'upside' (stating 'MoS = +12.18% upside'). The 12.18% figure is correctly calculated as the discount to intrinsic value, while actual upside is ~13.8%.",
+          "suggestion": "Minor LLM phrasing issue; the underlying math from the tool is correct."
+        }
+      ],
+      "strengths": [
+        "Exceptional decomposition of peer valuation premiums and discounts into specific, quantified drivers.",
+        "Outstanding tool resilience, manually reconstructing the historical P/B band when the primary chart tool failed."
+      ],
+      "summary": "This is an institutional-quality valuation report that perfectly applies BFSI frameworks, featuring excellent SOTP analysis and peer premium decomposition. The only analytical flaw is a minor mixing of basis (applying a standalone ROE-derived multiple to consolidated BVPS in the fair value triangle). However, the agent's execution was highly inefficient, requiring 33 turns and $1.17 to produce the report.",
+      "report_length": 32356,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 636.9449448329979,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional depth in decomposing the peer premium/discount into specific drivers (scale, SOTP, PSU governance, NIM gap). The handling of the BVPS standalone vs consolidated discrepancy shows strong institutional awareness.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Highly consistent overall, but slightly mixes basis in the fair value triangle by applying a justified P/B multiple derived from standalone ROE directly to consolidated BVPS, rather than valuing the core bank standalone and adding SOTP.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Covers all major BFSI valuation dimensions including SOTP, Gordon Growth, and peer benchmarking. However, CASA ratio deterioration is only mentioned in the structured briefing and omitted from the main forward projections.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Provides a clear, evidence-backed base/bear/bull framework with specific, monitorable catalysts (Q4 clean earnings, AMC IPO, RBI rate cuts).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect application of BFSI valuation principles. Explicitly discards EV/EBITDA and standard DCF, anchoring on Gordon Growth P/B-ROE and SOTP for a complex financial conglomerate.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Excellent citation of sources. Transparently flags data gaps (NNPA, AR extraction issues) and explicitly states when fallbacks or proxies are used.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Outstanding resilience. When the P/B chart tool returned empty (Turn 12), the agent manually reconstructed the historical P/B band using year-end prices and BVPS. Hunted for asset quality metrics across multiple concall sections.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"The agent required 33 turns and incurred a cost of $1.17, which strictly falls into the F category for efficiency (>20 turns and >$1.00), despite the high quality of the output.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Fair Value Triangle\",\n      \"issue\": \"The agent applies a justified P/B multiple derived from standalone ROE directly to consolidated BVPS to calculate the base fair value.\",\n      \"suggestion\": \"Instruct the agent to calculate core bank fair value by applying the standalone-derived multiple to standalone BVPS, and then add the SOTP value of subsidiaries to arrive at the total consolidated fair value.\"\n    },\n    {\n      \"type\": \"NOT_OUR_PROBLEM\",\n      \"section\": \"3. Fair Value Triangle\",\n      \"issue\": \"The "
+    }
+  }
+}

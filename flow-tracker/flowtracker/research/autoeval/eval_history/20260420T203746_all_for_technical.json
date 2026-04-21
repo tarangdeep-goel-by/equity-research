@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_technical",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T20:37:46.718420+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "pharma": {
+      "agent": "technical",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent contextualization of price action and delivery anomalies, specifically linking the April 15 delivery drop to speculative churn around the Organon news rather than institutional distribution. However, it relies on a proxy for estimate momentum rather than deep-diving into revisions."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Highly logical synthesis of short-term bearish vs. long-term bullish structures. The anomaly resolution for the 28% delivery day is well-reasoned, though attributing it to 'F&O expiry' on a Wednesday (Apr 15) is a minor calendar assumption."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers price, volume, delivery, flows, and sector macro comprehensively. The primary gaps are the missing MACD/ADX indicators (due to data limitations) and the lack of direct estimate revision data."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a very clear scenario map with exact technical triggers (e.g., reclaiming \u20b91,699 on \u226565% delivery) and well-defined support/resistance zones. The 'mixed' signal is appropriately justified by the pending news catalyst."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Perfectly identifies USD/INR translation benefits and USFDA regulatory status as the critical technical/macro overlays for an Indian Pharma exporter, demonstrating deep sector awareness."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Meticulous citation of sources and highly transparent about data limitations, specifically calling out the MF 'new entry' artifact and the missing FMP technical indicators."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Log shows 12 tool calls and good use of the `calculate` tool for delivery averages. However, the agent failed to call `get_estimates` directly, relying on a composite proxy instead, which indicates slight budget/turn mismanagement."
+        },
+        "cost_efficiency": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Cost of $0.38 and a cache hit rate of 65.5% fit the B+ criteria, though the 17 turns are slightly high for a single-agent technical scope."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Mandatory Metrics Status",
+          "issue": "Agent skipped calling the `get_estimates` tool for revision momentum, relying on a composite proxy from the analytical profile instead.",
+          "suggestion": "Update agent instructions to prioritize calling specific tools for mandatory metrics early in the execution loop to avoid skipping them due to turn limits."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Technical Indicators",
+          "issue": "MACD and ADX indicators are not available for NSE-listed stocks via the current FMP integration.",
+          "suggestion": "Integrate an alternative technical indicator endpoint (e.g., Screener or a localized Indian market API) to supply MACD/ADX for .NS tickers."
+        }
+      ],
+      "strengths": [
+        "Exceptional contextualization of technical anomalies, specifically cross-referencing the 28% delivery day with bulk/block deal data and news flow to rule out institutional distribution.",
+        "Strong application of sector-specific macro drivers, correctly linking USD/INR weakness to latent technical tailwinds for Sun Pharma's US specialty business."
+      ],
+      "summary": "This is an institutional-quality technical report that brilliantly contextualizes price and volume action with fundamental news flow (the Organon acquisition). The primary gap is the omission of direct estimate revision momentum due to skipped tool calls, but the deep, logical analysis of delivery anomalies and sector macro drivers makes it highly actionable.",
+      "report_length": 22298,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 26.418077458998596,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent contextualization of price action and delivery anomalies, specifically linking the April 15 delivery drop to speculative churn around the Organon news rather than institutional distribution. However, it relies on a proxy for estimate momentum rather than deep-diving into revisions.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Highly logical synthesis of short-term bearish vs. long-term bullish structures. The anomaly resolution for the 28% delivery day is well-reasoned, though attributing it to 'F&O expiry' on a Wednesday (Apr 15) is a minor calendar assumption.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers price, volume, delivery, flows, and sector macro comprehensively. The primary gaps are the missing MACD/ADX indicators (due to data limitations) and the lack of direct estimate revision data.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a very clear scenario map with exact technical triggers (e.g., reclaiming \u20b91,699 on \u226565% delivery) and well-defined support/resistance zones. The 'mixed' signal is appropriately justified by the pending news catalyst.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Perfectly identifies USD/INR translation benefits and USFDA regulatory status as the critical technical/macro overlays for an Indian Pharma exporter, demonstrating deep sector awareness.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Meticulous citation of sources and highly transparent about data limitations, specifically calling out the MF 'new entry' artifact and the missing FMP technical indicators.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Log shows 12 tool calls and good use of the `calculate` tool for delivery averages. However, the agent failed to call `get_estimates` directly, relying on a composite proxy instead, which indicates slight budget/turn mismanagement.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Cost of $0.38 and a cache hit rate of 65.5% fit the B+ criteria, though the 17 turns are slightly high for a single-agent technical scope.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Mandatory Metrics Status\",\n      \"issue\": \"Agent skipped calling the `get_estimates` tool for revision momentum, relying on a composite proxy from the analytical profile instead.\",\n      \"suggestion\": \"Update agent instructions to prioritize calling specific tools for mandatory metrics early in the execution loop to avoid skipping them due to turn limits.\"\n    },\n    {\n      \"type\": \"DA"
+    }
+  }
+}

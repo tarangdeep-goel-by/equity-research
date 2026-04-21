@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T20:23:34.085727+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "pharma": {
+      "agent": "valuation",
+      "stock": "SUNPHARMA",
+      "sector": "Pharma",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional depth. The regime-adjusted PE band, ETR normalization, and Gordon Growth sanity check to isolate the 'specialty pipeline premium' are institutional-grade analyses."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Mostly excellent, but there is a mismatch in the Fair Value Triangle where the agent manually adjusted weights to 55/45 but cited the tool's unadjusted 50/50 blended fair value as the final output."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Highly comprehensive. Covers historical multiples, reverse DCF, SOTP, peer comparisons, and quality checks without missing any major dimensions."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Provides clear bear/base/bull scenarios with specific EPS and fair value targets, and explicitly flags the Organon acquisition as a major tail risk."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies pharma-specific frameworks, distinguishing between the generics and specialty businesses, and factoring in FDA warning letters and pipeline optionality."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Transparently cites all data sources and honestly surfaces data gaps (e.g., degraded AR extraction, empty DCF) while successfully pivoting to fallbacks."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Excellent tool discipline. Handled multiple missing data points gracefully and made 11 `calculate` calls to ensure accurate derivations."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "The report required 32 turns and cost $0.93, which is highly inefficient and falls into the C-tier for cost/turns, despite the high quality of the output."
+        }
+      },
+      "issues": [
+        {
+          "type": "COMPUTATION",
+          "section": "3. Fair Value Triangle (Segment SOTP)",
+          "issue": "The EV to Equity bridge incorrectly subtracted net cash instead of adding it. The formula written was `270,190 - (-22,665)` but the computed result was `247,525` (which is 270,190 - 22,665). It should be 292,855.",
+          "suggestion": "Ensure correct sign handling when converting Enterprise Value to Equity Value with net cash; use the calculate tool for the final addition."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Fair Value Triangle",
+          "issue": "The agent manually adjusted the valuation weights to 55% PE Band / 45% Consensus due to high dispersion, but then cited the tool's unadjusted 50/50 blended fair value (\u20b91,863) as the final combined output, creating a mismatch with its own table.",
+          "suggestion": "Instruct the agent to recalculate the final blended fair value using the `calculate` tool whenever it manually overrides the tool's default weights."
+        }
+      ],
+      "strengths": [
+        "The regime-adjusted PE band analysis brilliantly contextualizes the current multiple by separating the 7-year history into distinct business phases (generics trough vs specialty dominant).",
+        "The ETR normalization analysis correctly identifies a major earnings headwind and quantifies its impact on the trailing PE multiple, preventing a superficial reading of the valuation."
+      ],
+      "summary": "This is an outstanding, institutional-quality valuation report that demonstrates deep understanding of SUNPHARMA's transition from generics to specialty pharma. The analytical frameworks\u2014particularly the ETR normalization, regime-adjusted PE bands, and Gordon Growth sanity check\u2014are exceptionally well-executed. The only notable flaws are a minor computation error in the SOTP net cash adjustment and a high agent turn count.",
+      "report_length": 32976,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 48.43386808300056,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional depth. The regime-adjusted PE band, ETR normalization, and Gordon Growth sanity check to isolate the 'specialty pipeline premium' are institutional-grade analyses.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Mostly excellent, but there is a mismatch in the Fair Value Triangle where the agent manually adjusted weights to 55/45 but cited the tool's unadjusted 50/50 blended fair value as the final output.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Highly comprehensive. Covers historical multiples, reverse DCF, SOTP, peer comparisons, and quality checks without missing any major dimensions.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Provides clear bear/base/bull scenarios with specific EPS and fair value targets, and explicitly flags the Organon acquisition as a major tail risk.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies pharma-specific frameworks, distinguishing between the generics and specialty businesses, and factoring in FDA warning letters and pipeline optionality.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Transparently cites all data sources and honestly surfaces data gaps (e.g., degraded AR extraction, empty DCF) while successfully pivoting to fallbacks.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Excellent tool discipline. Handled multiple missing data points gracefully and made 11 `calculate` calls to ensure accurate derivations.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"The report required 32 turns and cost $0.93, which is highly inefficient and falls into the C-tier for cost/turns, despite the high quality of the output.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"COMPUTATION\",\n      \"section\": \"3. Fair Value Triangle (Segment SOTP)\",\n      \"issue\": \"The EV to Equity bridge incorrectly subtracted net cash instead of adding it. The formula written was `270,190 - (-22,665)` but the computed result was `247,525` (which is 270,190 - 22,665). It should be 292,855.\",\n      \"suggestion\": \"Ensure correct sign handling when converting Enterprise Value to Equity Value with net cash; use the calculate tool for the final addition.\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Fair Value Triangle\",\n      \"issue\": \"The agent manually adjusted the valuation weights to 55% PE Band / 45% Consensus due to high dispersion, but then cited the tool's unadjusted 50/50 blended fair value (\u20b91,863) as the final combined output, creating a mismatch with its own table.\",\n      \"suggest"
+    }
+  }
+}

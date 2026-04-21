@@ -1,0 +1,85 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T23:55:01.491164+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "metals"
+  ],
+  "results": {
+    "metals": {
+      "agent": "business",
+      "stock": "VEDL",
+      "sector": "Diversified metals",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent breakdown of the holding structure vs. operating businesses. The identification of the 'copper caveat' (17.76% revenue but zero EBITDA) and the deep dive into VRL's cash extraction machine demonstrate high-level analytical thinking."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless logic throughout. The bear and bull cases directly stem from the data presented (demerger vs. VRL extraction), and data anomalies (like the yfinance revenue drop) are transparently handled and corrected."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all 8 verticals, moats, and unit economics comprehensively. However, the lack of a standalone debt maturity profile for VEDL (as opposed to VRL) and the missing hedging policy are minor gaps for a highly leveraged commodity player."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "The 'Big Question' section is exactly what a PM needs. It provides a clear, evidence-backed framework centered on the imminent demerger and the specific RPT/governance terms that will dictate the stock's re-rating."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect application of metals frameworks. Correctly uses EBITDA/tonne for aluminium, COP vs. LME for zinc, and evaluates the integration premium and cost curve positioning."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional data sourcing. Every claim is backed by cited data (e.g., FY26-Q2 concall, FY24 AR), and the agent used the calculate tool 16 times to derive custom metrics like brand fee % of EBITDA."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly disciplined and utilized a wide array of tools effectively. However, it hallucinated the existence of a 'get_quality_scores' tool in its self-audit note, and making 16 consecutive individual 'calculate' calls (Turns 26-43) was highly inefficient."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "The agent took 48 turns to complete the report, which is massively over the >20 turn threshold for an F, driving the cost to $0.94 despite a decent 66.8% cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Execution",
+          "issue": "Agent made 16 consecutive, individual calls to the `calculate` tool (Turns 26-43), driving up turn count and latency.",
+          "suggestion": "Instruct the agent to batch calculations where possible or compute necessary derived metrics in fewer, more consolidated reasoning steps to reduce turn count."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "2. The Money Machine",
+          "issue": "Agent hallucinated the existence of a `get_quality_scores` tool in a warning callout, stating it was not called.",
+          "suggestion": "Minor LLM hallucination of available tool names; no pipeline fix needed as it successfully used `peer_table` as a fallback."
+        }
+      ],
+      "strengths": [
+        "Brilliant identification of the 'copper caveat', stripping out zero-margin revenue to find the true EBITDA-generative base.",
+        "Quantified the 'conglomerate discount' perfectly by comparing VEDL's consolidated metrics against its own subsidiary, HZL.",
+        "The 'Big Question' section distills a complex, 8-vertical conglomerate into a single, highly actionable governance/catalyst thesis."
+      ],
+      "summary": "This is an institutionally insightful report that perfectly captures the dual nature of Vedanta as both a strong operating asset and a leveraged parent's cash conduit. The analytical depth is top-tier, but the agent's execution was highly inefficient, taking 48 turns to generate the output due to excessive, sequential calculator calls.",
+      "report_length": 33620,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 34.59086874999775,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent breakdown of the holding structure vs. operating businesses. The identification of the 'copper caveat' (17.76% revenue but zero EBITDA) and the deep dive into VRL's cash extraction machine demonstrate high-level analytical thinking.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless logic throughout. The bear and bull cases directly stem from the data presented (demerger vs. VRL extraction), and data anomalies (like the yfinance revenue drop) are transparently handled and corrected.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all 8 verticals, moats, and unit economics comprehensively. However, the lack of a standalone debt maturity profile for VEDL (as opposed to VRL) and the missing hedging policy are minor gaps for a highly leveraged commodity player.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"The 'Big Question' section is exactly what a PM needs. It provides a clear, evidence-backed framework centered on the imminent demerger and the specific RPT/governance terms that will dictate the stock's re-rating.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect application of metals frameworks. Correctly uses EBITDA/tonne for aluminium, COP vs. LME for zinc, and evaluates the integration premium and cost curve positioning.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional data sourcing. Every claim is backed by cited data (e.g., FY26-Q2 concall, FY24 AR), and the agent used the calculate tool 16 times to derive custom metrics like brand fee % of EBITDA.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly disciplined and utilized a wide array of tools effectively. However, it hallucinated the existence of a 'get_quality_scores' tool in its self-audit note, and making 16 consecutive individual 'calculate' calls (Turns 26-43) was highly inefficient.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"The agent took 48 turns to complete the report, which is massively over the >20 turn threshold for an F, driving the cost to $0.94 despite a decent 66.8% cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Execution\",\n      \"issue\": \"Agent made 16 consecutive, individual calls to the `calculate` tool (Turns 26-43), driving up turn count and latency.\",\n      \"suggestion\": \"Instruct the agent to batch calculations where possible or compute necessary derived metrics in fewer, more consolidated reasoning steps to reduce turn count.\"\n    },\n    {\n      \"type\": \"NOT_"
+    }
+  }
+}

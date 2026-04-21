@@ -1,0 +1,83 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T18:23:38.630466+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "private_bank": {
+      "agent": "ownership",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "A",
+      "grade_numeric": 93,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent breakdown of the institutional handoff (FII to DII) and the critical distinction between passive ETF vs. active MF conviction. Could have explored the price-discovery implications of passive-heavy MF holdings slightly more."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless internal logic with a dedicated 'Cross-section reconciliation' that explicitly resolves apparent contradictions. It does rely on an assumed historical ADR percentage (12-15%) to bridge a data gap, but states this assumption clearly."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Thorough coverage of all ownership dimensions (FII, DII, MF, Insurance, Public, Insider, Pledge). The only gaps are the exact ADR outstanding and FPI sub-limit checks, which the agent correctly flags as missing."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear 'Bullish on structure' verdict while perfectly framing the governance overhang and ADR headroom as key variables. The actionability is slightly hedged by these unresolved questions, but appropriately so."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies BFSI-specific regulatory constraints, including the 74% private bank FDI cap and the 5% RBI prior-approval threshold for LIC. Could have briefly mentioned if D-SIB status impacts any ownership rules, but this is minor."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Extensive and accurate citations across AMFI, NSE XBRL, concalls, and BSE filings. It does pull in some external knowledge (Reuters headlines) not strictly sourced from the tool logs, but uses it well to contextualize."
+        },
+        "tool_use_discipline": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exemplary persistence in hunting for ADR data across multiple tools (filings, shareholder details) and honestly surfaced the data gap when unsuccessful. It could have recognized slightly earlier that domestic XBRL doesn't name FPIs."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "Cost was moderate ($0.73) and cache hit rate was decent (62.1%), but execution was highly inefficient at 35 turns, largely due to sequential, single-operation calculate calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution Log",
+          "issue": "Highly inefficient execution with 35 turns, primarily due to 8 sequential, single-operation `calculate` tool calls.",
+          "suggestion": "Instruct the agent to batch calculations or perform multiple math operations in fewer turns if the tool allows, or rely on fewer explicit calculate calls for simple subtraction."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Section 1 / Open Questions",
+          "issue": "ADR/GDR outstanding data is critical for calculating true foreign headroom but is missing from the available tools.",
+          "suggestion": "Add a specific ADR/GDR outstanding metric to the `get_ownership` or `get_company_context` tool for companies with foreign listings."
+        }
+      ],
+      "strengths": [
+        "Superb identification of the 'institutional handoff' narrative, backed by precise absolute and relative percentage point calculations.",
+        "Excellent use of a 'Reconciliations' section to proactively address and resolve conflicting data signals (e.g., single-day delivery drops vs. multi-quarter absorption).",
+        "Deep understanding of the difference between passive ETF holdings and active mutual fund conviction."
+      ],
+      "summary": "This is an institutional-quality ownership report that brilliantly synthesizes a complex narrative of FII exit, DII absorption, and governance overhang. The primary gap is the missing ADR data required to calculate true foreign headroom, which the agent correctly identifies and isolates as an open question. While the analytical output is stellar, the agent's execution was highly inefficient, taking 35 turns to complete the task.",
+      "report_length": 27886,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 182.4348857920013,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent breakdown of the institutional handoff (FII to DII) and the critical distinction between passive ETF vs. active MF conviction. Could have explored the price-discovery implications of passive-heavy MF holdings slightly more.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless internal logic with a dedicated 'Cross-section reconciliation' that explicitly resolves apparent contradictions. It does rely on an assumed historical ADR percentage (12-15%) to bridge a data gap, but states this assumption clearly.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Thorough coverage of all ownership dimensions (FII, DII, MF, Insurance, Public, Insider, Pledge). The only gaps are the exact ADR outstanding and FPI sub-limit checks, which the agent correctly flags as missing.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear 'Bullish on structure' verdict while perfectly framing the governance overhang and ADR headroom as key variables. The actionability is slightly hedged by these unresolved questions, but appropriately so.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies BFSI-specific regulatory constraints, including the 74% private bank FDI cap and the 5% RBI prior-approval threshold for LIC. Could have briefly mentioned if D-SIB status impacts any ownership rules, but this is minor.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Extensive and accurate citations across AMFI, NSE XBRL, concalls, and BSE filings. It does pull in some external knowledge (Reuters headlines) not strictly sourced from the tool logs, but uses it well to contextualize.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exemplary persistence in hunting for ADR data across multiple tools (filings, shareholder details) and honestly surfaced the data gap when unsuccessful. It could have recognized slightly earlier that domestic XBRL doesn't name FPIs.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"Cost was moderate ($0.73) and cache hit rate was decent (62.1%), but execution was highly inefficient at 35 turns, largely due to sequential, single-operation calculate calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 93\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution Log\",\n      \"issue\": \"Highly inefficient execution with 35 turns, primarily due to 8 sequential, single-operation `calculate` tool calls.\",\n      \"suggestion\": \"Instruct the agent to batch calculations or perform multiple math operations in fewer turns if the tool allows, or rely on fewer e"
+    }
+  }
+}
