@@ -1542,13 +1542,17 @@ def _get_ownership_section(api, symbol, section, args):
         return api.get_promoter_pledge(symbol)
     elif section == "mf_conviction":
         return api.get_mf_conviction(symbol)
+    elif section == "adr_gdr":
+        # E7: ADR/GDR outstanding. Returns stubbed structure today; live
+        # numbers will flow once AR share-capital note extraction is wired.
+        return api.get_adr_gdr(symbol)
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_ownership",
-    "Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction'. Heavy sections are capped (mf_holdings top 30 by value + tail summary; shareholder_detail top 20 holders) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).",
+    "Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | 'adr_gdr'. shareholder_detail returns top-20 named holders (pivoted per-holder, >=1% latest quarter) with holder_type in {FII, DII, Promoter, Public}. adr_gdr surfaces ADR/GDR outstanding (stubbed today — returns listed_on + nullable counts for known US/UK-listed Indian names; pending AR extraction wiring). Heavy sections are capped (mf_holdings top 30 by value + tail summary) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).",
     {"symbol": str, "section": str},
     annotations=READ_ONLY,
 )
@@ -1583,6 +1587,7 @@ async def get_ownership(args):
                     "shareholder_detail": api.get_shareholder_detail(symbol, args.get("classification")),
                     "promoter_pledge": api.get_promoter_pledge(symbol),
                     "mf_conviction": api.get_mf_conviction(symbol),
+                    "adr_gdr": api.get_adr_gdr(symbol),
                 }
             else:
                 data = _get_ownership_section(api, symbol, section, args)

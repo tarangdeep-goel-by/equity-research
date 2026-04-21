@@ -239,8 +239,13 @@ class TestDcfValuation:
         assert "margin_of_safety_pct" in data
 
     def test_unknown_symbol(self, api: ResearchDataAPI):
+        """Plan v2 §7 E15: empty DCF returns explicit reason code, not {}.
+        Unknown symbol has no annual financials → insufficient_history.
+        """
         data = api.get_dcf_valuation("NONEXIST")
-        assert data == {}
+        assert isinstance(data, dict)
+        assert data.get("fv_cr") is None
+        assert data.get("reason_empty") == "insufficient_history"
 
 
 class TestTechnicalIndicators:
@@ -777,3 +782,232 @@ class TestEbitdaRouterE1:
             matching.net_income + matching.tax + matching.interest + matching.depreciation
         )
         assert latest["ebitda"] == expected
+
+
+# ---------------------------------------------------------------------------
+# E11 — PE / EPS basis fields on get_valuation_snapshot + get_fair_value
+# ---------------------------------------------------------------------------
+
+
+class TestValuationBasisFieldsE11:
+    """Plan v2 §7 E11: every valuation surface must tag pe_basis and eps_basis.
+
+    When PE and EPS come from different bases (standalone vs consolidated),
+    the fair-value auto-blend must downrank the PE component to 0 and emit
+    a warning field so agents can show the user *why* the blend shape shifted.
+    """
+
+    def test_snapshot_tags_basis_fields(self, api: ResearchDataAPI):
+        data = api.get_valuation_snapshot("SBIN")
+        assert "pe_basis" in data
+        assert "eps_basis" in data
+        assert data["pe_basis"] in ("standalone", "consolidated", "unknown")
+        assert data["eps_basis"] in ("standalone", "consolidated", "unknown")
+
+    def test_fair_value_matched_basis_no_warning(self, api: ResearchDataAPI):
+        """When PE and EPS come from the same basis, no mismatch warning is emitted."""
+        data = api.get_fair_value("SBIN")
+        # SBIN seeded path: only yfinance valuation_snapshot exists (no screener_charts
+        # for PE seeded by default), so both PE and EPS resolve to consolidated.
+        # Mismatch warning must NOT be present.
+        assert "_warning_basis_mismatch" not in data
+        assert data.get("pe_basis") == "consolidated"
+        # eps_basis reflects whichever source exists (standalone if annual EPS
+        # is seeded via Screener factory; consolidated if consensus is seeded).
+        assert data.get("eps_basis") in ("standalone", "consolidated")
+
+    def test_fair_value_mismatch_triggers_warning_and_pe_downrank(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Seed screener_charts PE (standalone) + yfinance consensus forward_eps
+        (consolidated). Expect mismatch warning + PE component dropped from blend.
+        """
+        from flowtracker.estimates_models import ConsensusEstimate
+        from flowtracker.fund_models import ValuationSnapshot
+
+        SYMBOL = "MISMATCHX"
+        # 1. Standalone PE chart series from Screener — unique dates required by UNIQUE index
+        from datetime import date, timedelta
+        conn = populated_store._conn
+        base_date = date(2024, 1, 15)
+        for i in range(60):
+            d = (base_date + timedelta(days=i * 5)).isoformat()
+            conn.execute(
+                "INSERT INTO screener_charts (symbol, chart_type, metric, date, value, fetched_at) "
+                "VALUES (?, 'pe', 'Price to Earning', ?, ?, datetime('now'))",
+                (SYMBOL, d, 18.0 + (i % 5) * 0.5),
+            )
+        conn.commit()
+        # 2. yfinance consensus forward_eps (consolidated)
+        populated_store.upsert_consensus_estimates(
+            [
+                ConsensusEstimate(
+                    symbol=SYMBOL,
+                    date="2026-04-20",
+                    target_mean=850.0,
+                    target_high=950.0,
+                    target_low=750.0,
+                    recommendation="BUY",
+                    num_analysts=15,
+                    forward_pe=22.0,
+                    forward_eps=45.0,
+                    current_price=800.0,
+                )
+            ]
+        )
+        # 3. Minimal valuation_snapshot so current_price is populated but
+        # pe_trailing=None → PE basis resolves to 'standalone' via Screener chart path.
+        populated_store.upsert_valuation_snapshot(
+            ValuationSnapshot(
+                symbol=SYMBOL,
+                date="2026-04-20",
+                price=800.0,
+                pe_trailing=None,
+            )
+        )
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_fair_value(SYMBOL)
+        finally:
+            api.close()
+
+        # Basis fields present
+        assert data.get("pe_basis") == "standalone"
+        assert data.get("eps_basis") == "consolidated"
+        # Warning emitted
+        assert "_warning_basis_mismatch" in data
+        assert "downranked" in data["_warning_basis_mismatch"].lower()
+        # If auto-blend ran, pe_band weight must be 0
+        if "blend_weights" in data:
+            assert data["blend_weights"]["pe_band"] == 0
+
+
+# ---------------------------------------------------------------------------
+# E15 — DCF reason codes when empty
+# ---------------------------------------------------------------------------
+
+
+class TestDcfReasonCodesE15:
+    """Plan v2 §7 E15: get_dcf_valuation must classify *why* DCF is empty."""
+
+    def test_reason_insufficient_history_when_no_annual(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Symbol with no annual financials at all → insufficient_history."""
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation("NOANNUAL")
+        finally:
+            api.close()
+        assert data.get("reason_empty") == "insufficient_history"
+        assert data.get("fv_cr") is None
+        assert "notes" in data
+
+    def test_reason_negative_fcf(self, tmp_db, populated_store, monkeypatch):
+        """Latest FCF negative → negative_fcf."""
+        from flowtracker.fund_models import AnnualFinancials
+        SYMBOL = "NEGFCFX"
+        rows = [
+            AnnualFinancials(
+                symbol=SYMBOL,
+                fiscal_year_end=f"{2025 - i}-03-31",
+                revenue=100_000.0,
+                net_income=5_000.0,
+                # Latest year (i=0): cfi swamps cfo → negative FCF
+                cfo=5_000.0 if i > 0 else 1_000.0,
+                cfi=-3_000.0 if i > 0 else -20_000.0,
+            )
+            for i in range(5)
+        ]
+        populated_store.upsert_annual_financials(rows)
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation(SYMBOL)
+        finally:
+            api.close()
+        assert data.get("reason_empty") == "negative_fcf"
+
+    def test_reason_insufficient_history_when_under_3y_positive(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Fewer than 3 positive-FCF years → insufficient_history."""
+        from flowtracker.fund_models import AnnualFinancials
+        SYMBOL = "THINFCFX"
+        rows = [
+            AnnualFinancials(
+                symbol=SYMBOL,
+                fiscal_year_end=f"{2025 - i}-03-31",
+                revenue=100_000.0,
+                net_income=5_000.0,
+                cfo=2_000.0,
+                cfi=-5_000.0,  # FCF negative across all years
+            )
+            for i in range(5)
+        ]
+        populated_store.upsert_annual_financials(rows)
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation(SYMBOL)
+        finally:
+            api.close()
+        # All FCFs negative → 0 positive → insufficient_history takes precedence
+        assert data.get("reason_empty") == "insufficient_history"
+
+    def test_dcf_section_always_returned_with_reason(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """DCF key must never be hidden when empty — agents need to see the reason."""
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation("NONEXIST")
+        finally:
+            api.close()
+        assert "reason_empty" in data
+        assert "fv_cr" in data
+
+
+# ---------------------------------------------------------------------------
+# E16 — sector-index null fallback
+# ---------------------------------------------------------------------------
+
+
+class TestSectorIndexFallbackE16:
+    """Plan v2 §7 E16: sector_index must never be null — always at least Nifty 500."""
+
+    def test_sector_index_fallback_for_banks_regional(self, api: ResearchDataAPI):
+        """'Banks - Regional' (yfinance sub-sector) → ^NSEBANK."""
+        assert api._resolve_sector_index("Banks - Regional") == "^NSEBANK"
+
+    def test_sector_index_fallback_for_nbfc_token(self, api: ResearchDataAPI):
+        assert api._resolve_sector_index("nbfc") == "^NSEBANK"
+
+    def test_sector_index_reit_maps_to_realty(self, api: ResearchDataAPI):
+        assert api._resolve_sector_index("reit") == "NIFTY_REALTY.NS"
+
+    def test_sector_index_null_defaults_to_nifty500(self, api: ResearchDataAPI):
+        """Unmapped sector → NIFTY 500 (^CRSLDX), not None."""
+        assert api._resolve_sector_index(None) == "^CRSLDX"
+        assert api._resolve_sector_index("") == "^CRSLDX"
+        assert api._resolve_sector_index("Some Unknown Sector") == "^CRSLDX"
+
+    def test_sector_index_existing_map_still_wins(self, api: ResearchDataAPI):
+        """Back-compat: entries already in _SECTOR_INDEX still resolve correctly."""
+        assert api._resolve_sector_index("Private Sector Bank") == "^NSEBANK"
+        assert api._resolve_sector_index("IT - Software") == "^CNXIT"
+
+
+# ---------------------------------------------------------------------------
+# E10 — SOTP subsidiary freshness check (bhavcopy-backed)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skip(reason="E10 bhavcopy-backed subsidiary-freshness integration test deferred")
+class TestSotpSubsidiaryFreshnessE10:
+    def test_recently_listed_subsidiary_flagged(self):
+        pass
