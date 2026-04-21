@@ -17,3 +17,9 @@ Conglomerates need segment-level valuation because blending all segments into on
 **Metrics that mislead for conglomerates:** Consolidated PE and consolidated EV/EBITDA blend segment multiples and produce averages that don't reflect any individual business's reality.
 
 **Emphasize:** Segment-level EBIT margins, segment growth rates, capital allocation by segment, demerger/listing potential for valuable subsidiaries.
+
+## SOTP Discipline (new)
+
+Any conglomerate report (business or valuation) without a SOTP table is structurally incomplete. `get_valuation(section='sotp')` is mandatory for conglomerate coverage. If it returns empty, manual SOTP per the shared-preamble A1.4 tenet is mandatory — use `get_company_context(section='subsidiaries')` + `get_fundamentals(section='revenue_segments')` per subsidiary or segment.
+
+Subsidiary market cap refresh: auto-SOTP may be stale for recently-listed subsidiaries (e.g., HDB Financial Services listed Jul 2025, NTPCGREEN Energy listed 2025, Adani Green / Adani Power / Adani Ports existing listings). Cross-check `get_valuation(sotp)` output against `get_market_context(section='peer_metrics')` or direct symbol lookup when a subsidiary is publicly listed. If the auto-SOTP is stale or missing a listed subsidiary, annotate and recompute the SOTP line.

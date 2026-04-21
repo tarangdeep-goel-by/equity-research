@@ -44,3 +44,11 @@ Real estate revenue is recognized on percentage-of-completion or completed-contr
 - `strategic_priorities` — new-launch pipeline, inventory monetisation plan, leasing-vs-sale tilt for commercial.
 
 **Cross-year narrative cues:** `capital_allocation_shifts` often reveal asset-light pivot vs land-bank expansion; `biggest_concern` tracks absorption-rate deterioration and approval-delay clusters.
+
+## Deck as Primary Source for City-Level Data (escalation — new)
+
+Investor deck is the PRIMARY source for city-level presales, absorption rates, book velocity, and project-level launch pipeline — NOT the concall, NOT the annual report, NOT the structured KPI tool. Real-estate risk and business agents MUST call `get_deck_insights(sub_section='segment_performance')` OR `get_deck_insights(sub_section='charts_described')` for the latest quarter BEFORE raising any city-level or project-level data gap as an open question. Per shared-preamble fallback-chain tenet, the deck check is a mandatory step.
+
+## Valuation Framework Priority (new — tighten v1)
+
+Framework priority for Indian real-estate developers: **P/Presales > NAV > P/Ops > Peer > PE**. PE is deprioritized due to IndAS 115 revenue-recognition distortions (booked revenue lags actual sales). If your prose argues against PE as a primary metric (e.g., "IndAS 115 distorts earnings"), your valuation MUST NOT blend PE-based numbers in later — per shared-preamble A1.1 (argue-then-use forbidden).

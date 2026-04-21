@@ -35,3 +35,14 @@ Platform KPIs (GMV, take rate, AOV, MTU / MAU, order frequency, CAC, contributio
 4. **Only if all three return empty** — raise as an open question ("What is this quarter's GMV / take rate? Investor deck suggests X but management has not confirmed.") and continue the report. A platform section that entirely omits GMV and take rate when the data is recoverable via concall is a mandatory-metric gap.
 
 **Emphasize:** GMV growth, take rate trajectory, unit economics improvement, customer acquisition cost trends, competitive moat (network effects, switching costs), and path to EBITDA breakeven.
+
+## Multi-Vertical Platform Coverage (new)
+
+Multi-vertical platforms (food + quick commerce + B2B + payments) — every vertical that is ≥5% of GMV or ≥10% of revenue MUST have its own dedicated section in the business report AND its own separate component in the SOTP valuation. Covering only the headline vertical is a PROMPT_FIX downgrade. Examples:
+
+- ETERNAL: food delivery + Hyperpure (B2B) + District (quick commerce) + Blinkit — all four need separate treatment once individually material.
+- PAYTM: UPI / payments + lending + commerce — each vertical separate.
+
+## Projections Tool Caveat — Asset-Light (new)
+
+`get_projections(section='income_statement')` applies a default D&A assumption suitable for manufacturing companies (~5% of revenue). For asset-light platforms, that assumption is wrong — override with an asset-turnover-based projection (0.5–1.5% of revenue for pure platforms). If the projections tool already emits a `_projection_assumptions` meta field (see E12 upgrade), use the routed ratio; otherwise note the mis-applied assumption explicitly in your valuation and adjust downstream.
