@@ -10,7 +10,7 @@ Indian equity research workspace — CLI tools for tracking institutional flows,
 
 ### flow-tracker/ — Institutional Flow Tracker (`flowtrack`)
 
-Primary project. ~106 CLI commands, 48 SQLite tables, 83 MCP tools, 15 data sources. Tracks FII/DII flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and generates multi-agent AI research reports (7 specialist agents + news + verification + web research + synthesis + explainer + comparison). Includes portfolio tracking, alerts, fair value model, catalyst events, and thesis tracker.
+Primary project. ~106 CLI commands, 50 SQLite tables, 85 MCP tools, 15 data sources. Tracks FII/DII flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and generates multi-agent AI research reports (8 specialist agents + news + verification + web research + synthesis + explainer + comparison). Includes portfolio tracking, alerts, fair value model, catalyst events, and thesis tracker.
 
 ```bash
 cd flow-tracker
@@ -18,13 +18,30 @@ uv sync
 uv run flowtrack <command>
 ```
 
-Has its own `CLAUDE.md` with full architecture docs. Key entry points:
-- `store.py` (~3800 lines) — single `FlowStore` class, 48 tables, ~147 methods
-- `screener_client.py` (~1400 lines) — Screener.in HTTP client, 11 API methods
-- `research/` — multi-agent research system (83 MCP tools, 7 specialist agents + news, verification, web research, synthesis, explainer, comparison)
+Has its own `CLAUDE.md` with full architecture docs — **read it before touching anything in `flow-tracker/`**. Key entry points:
+- `store.py` (~4200 lines) — single `FlowStore` class, 50 tables, ~150 methods
+- `screener_client.py` (~1420 lines) — Screener.in HTTP client, 11 API methods
+- `research/` — multi-agent research system (85 MCP tools, 8 specialist agents + news, verification, web research, synthesis, explainer, comparison)
 - DB: `~/.local/share/flowtracker/flows.db`
 - Screener.in creds: `~/.config/flowtracker/screener.env`
 - FMP creds: `~/.config/flowtracker/fmp.env` (paid plan required for most endpoints)
+
+### plans/ — Active planning docs
+
+Long-form plans live here (e.g., `plans/multi-agent-research.md`, `plans/valuation-agent-comprehensive-fixes.md`, sector/agent fix plans, Gemini review outputs). When the user references a plan, read the file — decisions and phasing are captured there, not in git history.
+
+### scripts/ — Eval orchestration (workspace-level)
+
+Shell wrappers for the autoeval loop, not to be confused with `flow-tracker/scripts/` (cron wrappers).
+- `eval-pipeline.sh <sector> <stock> <agents...>` — one sector, 2-wide parallel generation, async Gemini grading
+- `eval-all-sectors.sh [start_sector]` — full 15-sector × 7-agent matrix, sequential per sector
+- `eval-progress.sh` / `eval-recover.sh` / `eval-rerun-crashes.sh` / `eval-restart.sh` — monitor and resume long runs
+
+Long autoeval runs go in tmux (see workflow-engine rule #7). Outputs land in `/tmp/eval-<sector>-<ts>/`.
+
+### Worktree convention
+
+Feature work uses git worktrees, not branches in the main repo. `equity-research-ar-deck/` is an example — it mirrors the workspace layout (its own `flow-tracker/`, `plans/`, `scripts/`). Any sibling directory named `equity-research-<slug>/` should be treated as a worktree, not separate code. Before editing, confirm which worktree you're in with `git worktree list` + `pwd`.
 
 ## Common Patterns
 

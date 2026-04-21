@@ -1,0 +1,90 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T18:36:55.809135+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "private_bank"
+  ],
+  "results": {
+    "private_bank": {
+      "agent": "financials",
+      "stock": "HDFCBANK",
+      "sector": "Private bank",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent breakdown of NIM compression into 'Merger Shock' and 'Rate Cycle Headwind'. DuPont analysis correctly identifies asset turnover as the primary culprit for ROE compression, and the justified P/B calculation connects the fundamentals directly to valuation."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly consistent logic, particularly in handling the 1:1 bonus issue and the HDFC Ltd merger distortions. The agent correctly overrides the anomalous 67% C/I ratio from the tool with management's stated ~40% figure."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers most critical areas well, but lacks key BFSI metrics like NNPA, PCR, and LCR. While the agent correctly flagged these as missing data, the report remains technically incomplete regarding these standard banking metrics."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a clear thesis centered on ROE recovery and the CD ratio normalization timeline. The conclusion is slightly hedged ('signal: mixed'), but the catalysts (TD repricing) and risks are clearly defined."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of banking frameworks. Focuses heavily on NIM, CASA, CD ratio, Credit Costs, and Asset Quality, while correctly ignoring non-applicable metrics like FCF and Debt/Equity."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional transparency. Every major claim is backed by a cited tool source, and the agent explicitly details its math using the calculate tool for growth rates and justified P/B."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly disciplined execution. The agent attempted to find missing metrics (NNPA, PCR) across multiple tools (sector_kpis, operational_metrics) and surfaced the gaps honestly. Used the calculate tool 10 times for all math."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Cost of $1.23 and 40 turns significantly exceeds the >$1.00 and >20 turn thresholds for an F grade. The agent was highly inefficient in its exploration, likely due to excessive single-metric lookups."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "Asset Quality",
+          "issue": "Critical BFSI metrics (NNPA, PCR, LCR, SMA-2) are missing from the structured extraction tools.",
+          "suggestion": "Update the extraction pipeline to ensure NNPA, PCR, and LCR are reliably captured from bank investor presentations and quarterly results."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Non-Interest Income",
+          "issue": "The 'other income' figure of \u20b9146,848 Cr lacks a structured breakdown (fee vs treasury vs recoveries).",
+          "suggestion": "Enhance the financial_metrics extraction to decompose non-interest income for banks, as treasury gains can heavily distort core operating profitability."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution",
+          "issue": "The agent took 40 turns and spent $1.23, indicating inefficient tool usage and over-exploration.",
+          "suggestion": "Instruct the agent to batch its tool calls more effectively and limit redundant searches for missing metrics after 2 failed attempts to conserve tokens and turns."
+        }
+      ],
+      "strengths": [
+        "Superb handling of corporate actions and merger distortions, ensuring the reader does not misinterpret inflated historical CAGRs or pre-bonus per-share metrics.",
+        "Deep DuPont analysis that correctly isolates asset turnover as the driver of ROE compression, linking it directly to a justified P/B valuation framework."
+      ],
+      "summary": "This is a highly analytical and logically sound financial deep-dive that perfectly applies BFSI frameworks to HDFC Bank's complex post-merger reality. However, the report suffers from missing critical data points (NNPA, PCR, LCR) due to pipeline limitations, and the agent's execution was highly inefficient, resulting in excessive costs and turns.",
+      "report_length": 40394,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 51.9692384580012,
+      "run_skipped": true,
+      "raw_gemini_response": "{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent breakdown of NIM compression into 'Merger Shock' and 'Rate Cycle Headwind'. DuPont analysis correctly identifies asset turnover as the primary culprit for ROE compression, and the justified P/B calculation connects the fundamentals directly to valuation.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly consistent logic, particularly in handling the 1:1 bonus issue and the HDFC Ltd merger distortions. The agent correctly overrides the anomalous 67% C/I ratio from the tool with management's stated ~40% figure.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers most critical areas well, but lacks key BFSI metrics like NNPA, PCR, and LCR. While the agent correctly flagged these as missing data, the report remains technically incomplete regarding these standard banking metrics.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a clear thesis centered on ROE recovery and the CD ratio normalization timeline. The conclusion is slightly hedged ('signal: mixed'), but the catalysts (TD repricing) and risks are clearly defined.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of banking frameworks. Focuses heavily on NIM, CASA, CD ratio, Credit Costs, and Asset Quality, while correctly ignoring non-applicable metrics like FCF and Debt/Equity.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional transparency. Every major claim is backed by a cited tool source, and the agent explicitly details its math using the calculate tool for growth rates and justified P/B.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly disciplined execution. The agent attempted to find missing metrics (NNPA, PCR) across multiple tools (sector_kpis, operational_metrics) and surfaced the gaps honestly. Used the calculate tool 10 times for all math.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Cost of $1.23 and 40 turns significantly exceeds the >$1.00 and >20 turn thresholds for an F grade. The agent was highly inefficient in its exploration, likely due to excessive single-metric lookups.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Asset Quality\",\n      \"issue\": \"Critical BFSI metrics (NNPA, PCR, LCR, SMA-2) are missing from the structured extraction tools.\",\n      \"suggestion\": \"Update the extraction pipeline to ensure NNPA, PCR, and LCR are reliably captured from bank investor presentations and quarterly results.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Non-Interest Income\",\n      \"issue"
+    }
+  }
+}

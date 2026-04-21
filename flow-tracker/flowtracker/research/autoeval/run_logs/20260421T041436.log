@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260421T041436.log
+AutoEval (agent-first): agent=business sectors=['insurance']
+Target: grade_numeric >= 90
+
+--- business / POLICYBZR (insurance) ---
+  Report: 28803 chars
+  Evidence log loaded (56 lines)
+  Grading with Gemini...
+  Grade: A- (90) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260421T041507_all_for_business.json
+
+======================================================================
+AGENT SUMMARY: business
+======================================================================
+  insurance           POLICYBZR     A-  (90)  [PASS]  prompt_fixes:3
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

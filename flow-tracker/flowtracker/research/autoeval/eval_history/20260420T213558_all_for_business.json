@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T21:35:58.525767+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "real_estate": {
+      "agent": "business",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawlessly deconstructs the RE business model and identifies deep forensic signals (CARO Clause XVII) that directly impact investability. Perfect score justified by the exceptional JDA vs outright margin analysis."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly consistent logic overall, though the connection between the 8.3% equity dilution and management's 'no further equity raise' commitment could have been scrutinized slightly more for historical reliability."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Covers almost all bases, but lacks a deeper dive into the commercial portfolio's contribution to the overall business mix, despite mentioning it briefly as an adjacency."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "The bull/bear framework and the specific 'Key Question' regarding the CARO clause provide an exceptionally clear roadmap for an investor. Perfect score justified by the highly specific catalyst monitoring checklist."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies RE-specific metrics (presales, collections velocity, realization psf, market cap/presales) and explicitly adjusts for IndAS 115 distortions. Perfect score justified by the flawless handling of ROCE suppression."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Impeccable sourcing discipline; every metric is tied to a specific tool call, concall quarter, or AR section, with clear distinctions between reported and calculated figures. Perfect score justified by the rigorous inline citations."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent overall discipline and fallback logic (Screener peers), though it could have recognized the inefficiency of 13 sequential calculate calls and attempted to minimize them."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "The agent took 39 turns and cost $0.87, which falls into the F category (>20 turns), largely driven by the 13 sequential calculate calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "General",
+          "issue": "The agent made 13 separate sequential calls to the calculate tool, driving the turn count to 39 and increasing costs.",
+          "suggestion": "Introduce a batch calculation tool or instruct the agent to consolidate mathematical operations to improve cost and turn efficiency."
+        }
+      ],
+      "strengths": [
+        "Masterful application of real estate-specific frameworks, particularly the explanation of IndAS 115 revenue recognition lags and its distortion of standard metrics.",
+        "Exceptional forensic analysis in identifying the CARO Clause XVII deterioration and linking it to JV credit exposure as a key governance risk."
+      ],
+      "summary": "This is an institutional-quality report that demonstrates a deep understanding of the real estate sector's unique mechanics. The analytical depth, particularly regarding the JDA-to-outright shift and the CARO Clause XVII risk, is outstanding. The only significant drawback is the high turn count (39 turns) driven by sequential calculator calls, which negatively impacted cost efficiency.",
+      "report_length": 33560,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 39.56604020799932,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawlessly deconstructs the RE business model and identifies deep forensic signals (CARO Clause XVII) that directly impact investability. Perfect score justified by the exceptional JDA vs outright margin analysis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly consistent logic overall, though the connection between the 8.3% equity dilution and management's 'no further equity raise' commitment could have been scrutinized slightly more for historical reliability.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Covers almost all bases, but lacks a deeper dive into the commercial portfolio's contribution to the overall business mix, despite mentioning it briefly as an adjacency.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"The bull/bear framework and the specific 'Key Question' regarding the CARO clause provide an exceptionally clear roadmap for an investor. Perfect score justified by the highly specific catalyst monitoring checklist.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies RE-specific metrics (presales, collections velocity, realization psf, market cap/presales) and explicitly adjusts for IndAS 115 distortions. Perfect score justified by the flawless handling of ROCE suppression.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Impeccable sourcing discipline; every metric is tied to a specific tool call, concall quarter, or AR section, with clear distinctions between reported and calculated figures. Perfect score justified by the rigorous inline citations.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent overall discipline and fallback logic (Screener peers), though it could have recognized the inefficiency of 13 sequential calculate calls and attempted to minimize them.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"The agent took 39 turns and cost $0.87, which falls into the F category (>20 turns), largely driven by the 13 sequential calculate calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"General\",\n      \"issue\": \"The agent made 13 separate sequential calls to the calculate tool, driving the turn count to 39 and increasing costs.\",\n      \"suggestion\": \"Introduce a batch calculation tool or instruct the agent to consolidate mathematical operations to improve cost and turn efficiency.\"\n    }\n  ],\n  \"strengths\": [\n    \"Masterful application of real estate-specific frameworks, particularly the explanation of IndAS 115 revenue recognition lags and its distortion of standar"
+    }
+  }
+}

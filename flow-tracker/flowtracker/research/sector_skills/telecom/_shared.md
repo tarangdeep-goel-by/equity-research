@@ -30,9 +30,9 @@ This is a telecom operator. Spectrum amortization and heavy capex distort standa
 - **ARPU × users revenue-bridge template.** When quantifying revenue trajectory, always show the bridge: `subscribers_mn × arpu_₹_per_month × 12 = revenue_cr_annualized`. Units: subscribers in millions (or crores — state which), ARPU in ₹/subscriber/**month** (NOT annual) — 3× error is the most common telecom-financials failure mode. Pass through `calculate(operation='expr', a='<subscribers_mn> * <arpu_monthly> * 12', b='0')` and cite the output; never hand-math a 9-digit multiplication.
 - **Nigeria / international-geography FX devaluation risk.** For operators with African / LatAm exposure (Bharti Airtel Africa, Vodafone Idea's international book, Reliance Jio / Jio-bp minority), local-currency ARPU growth can mask USD-denominated revenue decline after FX devaluation. Cite the constant-currency growth alongside reported growth and identify any >15% cumulative YoY FX devaluation in the relevant geography. Nigeria NGN, Egyptian EGP, Turkish TRY, Argentine ARS have historically surprised investors; the report must state the FX regime in the geography, not just the local-currency operating metric.
 
-### Data Workaround — EBITDA Source
+### EBITDA One-Offs Check
 
-`get_quality_scores(section='all')` has historically returned mis-mapped values for metals and telecom sectors (depreciation-as-EBITDA). Until the sector-aware field router ships, pull telecom EBITDA from `get_fundamentals(section='annual_financials')` → operating-profit line, reconciled against the concall `financial_metrics` quoted EBITDA. If a single-quarter spike shows up in EBITDA, cross-check the concall for one-offs (spectrum sale, tower transaction, insurance recovery) before narrating it as operational.
+If a single-quarter spike shows up in EBITDA, cross-check the concall for one-offs (spectrum sale, tower transaction, insurance recovery) before narrating it as operational.
 
 **SOTP Note:** For diversified telecom operators running multiple verticals (mobile domestic + international geographies + towers + broadband + enterprise + digital payments), SOTP analysis is appropriate but requires segment-level data from investor presentations. If segment data is not available from tools, state this limitation explicitly rather than estimating segment values.
 

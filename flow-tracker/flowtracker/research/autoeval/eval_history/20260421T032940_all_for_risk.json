@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_risk",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T03:29:40.656650+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "platform": {
+      "agent": "risk",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "A-",
+      "grade_numeric": 91,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent contextualization of the M-Score flag and borrowing surge, correctly attributing them to the Blinkit 1P model transition and Ind AS 116 lease capitalizations rather than raw financial distress."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Conclusions logically follow the data. The bear case scenario is well-constructed, linking operational metrics (take-rate) to financial outcomes (FCF, capital raises) and market reactions (FII exits)."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major risk dimensions including financial, governance, macro, and operational. Minor gap in unit economics depth (CAC/LTV) due to data unavailability, but adequately compensated with CM/order analysis."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Highly actionable with a quantified bear-case scenario, clear thesis-breaker thresholds, and specific leading indicators to monitor."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect application of platform/Q-commerce frameworks, focusing on take-rates, contribution margins, store throughput, and working capital shifts from 1P inventory models."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong attribution throughout the report, with specific concall quarters and filing dates cited for operational metrics and management changes."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Agent honestly surfaced data-quality gaps (e.g., degraded AR extraction) and used the calculator tool extensively for derivations like ESOP dilution and CCC deterioration."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "Cost of $0.63 and 32 turns is high, falling into the C/F tier for efficiency, though mitigated somewhat by a strong 74.2% cache hit rate."
+        }
+      },
+      "issues": [
+        {
+          "type": "DATA_FIX",
+          "section": "3. Governance & Accounting Risk (Auditor Report)",
+          "issue": "Annual report extraction was degraded, returning only CARO Annexure B and missing Key Audit Matters (KAMs).",
+          "suggestion": "Investigate the PDF parsing pipeline for ETERNAL's FY25 Annual Report to ensure the main auditor opinion and KAMs are correctly extracted."
+        }
+      ],
+      "strengths": [
+        "Exceptional contextualization of accounting anomalies (M-Score, CCC deterioration) by linking them to the structural shift of Blinkit's 1P inventory model.",
+        "Highly actionable bear-case scenario that quantifies downside risk and provides specific, monitorable leading indicators."
+      ],
+      "summary": "This is a strong, institutional-quality risk report that excellently applies platform-specific frameworks to contextualize accounting anomalies. The primary gap is a data pipeline issue resulting in a degraded Annual Report extraction, which obscured Key Audit Matters. Despite high agent turns, the analytical depth and actionability make this a highly valuable output.",
+      "report_length": 37008,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 37.33319929200661,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent contextualization of the M-Score flag and borrowing surge, correctly attributing them to the Blinkit 1P model transition and Ind AS 116 lease capitalizations rather than raw financial distress.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Conclusions logically follow the data. The bear case scenario is well-constructed, linking operational metrics (take-rate) to financial outcomes (FCF, capital raises) and market reactions (FII exits).\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major risk dimensions including financial, governance, macro, and operational. Minor gap in unit economics depth (CAC/LTV) due to data unavailability, but adequately compensated with CM/order analysis.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Highly actionable with a quantified bear-case scenario, clear thesis-breaker thresholds, and specific leading indicators to monitor.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect application of platform/Q-commerce frameworks, focusing on take-rates, contribution margins, store throughput, and working capital shifts from 1P inventory models.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong attribution throughout the report, with specific concall quarters and filing dates cited for operational metrics and management changes.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Agent honestly surfaced data-quality gaps (e.g., degraded AR extraction) and used the calculator tool extensively for derivations like ESOP dilution and CCC deterioration.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"Cost of $0.63 and 32 turns is high, falling into the C/F tier for efficiency, though mitigated somewhat by a strong 74.2% cache hit rate.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 91\n  },\n  \"issues\": [\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"3. Governance & Accounting Risk (Auditor Report)\",\n      \"issue\": \"Annual report extraction was degraded, returning only CARO Annexure B and missing Key Audit Matters (KAMs).\",\n      \"suggestion\": \"Investigate the PDF parsing pipeline for ETERNAL's FY25 Annual Report to ensure the main auditor opinion and KAMs are correctly extracted.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional contextualization of accounting anomalies (M-Score, CCC deterioration) by linking them to the structural shift of Blinkit's 1P inventory model.\",\n    \"Highly actionable bear-case scenario that quantifies downside risk and provides specific, monitorable leading indicators.\"\n  ],\n  \"summary\": \"This is a strong, institutiona"
+    }
+  }
+}

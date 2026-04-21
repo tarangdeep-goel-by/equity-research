@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T03:18:33.875167+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "platform"
+  ],
+  "results": {
+    "platform": {
+      "agent": "financials",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Exceptional breakdown of the 1P accounting distortion and treasury income reliance, though it could have modeled the exact cash flow impact of lease liability capitalization slightly more deeply."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Flawless logic connecting the 1P transition to working capital, margins, and M-score false positives, though the adjusted Rule of 40 calculation is a rough estimate rather than a precise derivation."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major financial dimensions, but lacks absolute segmental financials (Blinkit vs Food Delivery revenue/EBITDA in \u20b9 Cr), which are critical for a platform conglomerate."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Extremely clear bull/bear signals and catalysts, but could have provided a more explicit timeline for when treasury income will compress relative to the core PAT crossover."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Perfect application of platform/QC metrics (NOV, GOV, contribution margin), though it failed to extract absolute CAC, settling for a qualitative mention."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Meticulous citations and data usage, but relies heavily on concall operational metrics without cross-referencing alternative data for market share or competitive positioning."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Log shows excellent use of TOCs and handling of empty decks, but executing 13 sequential `calculate` calls instead of batching expressions shows suboptimal planning."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 52,
+          "rationale": "At 34 turns and $0.88, this execution is highly inefficient and falls into the F category (>20 turns), driven entirely by the 13 sequential, unbatched calculate calls."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Cost Efficiency / Tool Use",
+          "issue": "Agent used 13 sequential turns for individual `calculate` calls, inflating turn count to 34 and cost to $0.88.",
+          "suggestion": "Instruct the agent to combine arithmetic into fewer `expr` calls where possible, or prioritize only the most critical derived metrics for tool calculation to save turns."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Mandatory Platform Metrics Status",
+          "issue": "Absolute CAC was not extracted, and segmental absolute financials were missing.",
+          "suggestion": "Ensure the `get_company_context` tool extracts absolute segmental P&L and CAC from shareholder letters, as concalls often only discuss margins as percentages of NOV."
+        }
+      ],
+      "strengths": [
+        "Brilliant identification of the 1P accounting distortion and its mechanical impact on revenue growth, COGS, and working capital.",
+        "Excellent unmasking of the reported PAT by stripping out treasury income to reveal core operating losses."
+      ],
+      "summary": "This is an outstanding piece of financial analysis that brilliantly deconstructs the accounting distortions masking the company's true operational economics. The insights into the 1P transition and treasury-funded PAT are institutional-grade. However, the agent's execution was highly inefficient, burning 34 turns primarily due to sequential, unbatched calculator calls.",
+      "report_length": 27613,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 41.97100445799879,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Exceptional breakdown of the 1P accounting distortion and treasury income reliance, though it could have modeled the exact cash flow impact of lease liability capitalization slightly more deeply.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Flawless logic connecting the 1P transition to working capital, margins, and M-score false positives, though the adjusted Rule of 40 calculation is a rough estimate rather than a precise derivation.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major financial dimensions, but lacks absolute segmental financials (Blinkit vs Food Delivery revenue/EBITDA in \u20b9 Cr), which are critical for a platform conglomerate.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Extremely clear bull/bear signals and catalysts, but could have provided a more explicit timeline for when treasury income will compress relative to the core PAT crossover.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Perfect application of platform/QC metrics (NOV, GOV, contribution margin), though it failed to extract absolute CAC, settling for a qualitative mention.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Meticulous citations and data usage, but relies heavily on concall operational metrics without cross-referencing alternative data for market share or competitive positioning.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Log shows excellent use of TOCs and handling of empty decks, but executing 13 sequential `calculate` calls instead of batching expressions shows suboptimal planning.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 52,\n      \"rationale\": \"At 34 turns and $0.88, this execution is highly inefficient and falls into the F category (>20 turns), driven entirely by the 13 sequential, unbatched calculate calls.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Cost Efficiency / Tool Use\",\n      \"issue\": \"Agent used 13 sequential turns for individual `calculate` calls, inflating turn count to 34 and cost to $0.88.\",\n      \"suggestion\": \"Instruct the agent to combine arithmetic into fewer `expr` calls where possible, or prioritize only the most critical derived metrics for tool calculation to save turns.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Mandatory Platform Metrics Status\",\n      \"issue\": \"Absolute CAC was not extracted, and segmental absolute financials were missing.\",\n      \"suggestion\": \"Ensure the `get_company_context` tool extracts absolute segmental P&L and CAC from shareholder letters, as conc"
+    }
+  }
+}

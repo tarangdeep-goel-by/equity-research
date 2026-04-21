@@ -1,0 +1,83 @@
+{
+  "sector": "all_for_risk",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T04:14:31.153120+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "insurance": {
+      "agent": "risk",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 92,
+          "rationale": "Excellent depth in connecting the CFO/PAT divergence to specific M-Score components (DSRI, TATA) and receivables growth. Correctly contextualizes the 0% promoter holding as a structural VC/PE artifact rather than a governance red flag."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 92,
+          "rationale": "Conclusions follow the data perfectly. The bear case scenario logically chains the identified risks (IRDAI caps -> guidance cut -> FII exit -> multiple compression) without leaps of faith."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 89,
+          "rationale": "Highly comprehensive across financial, governance, and macro risks. Minor gap: mentions Paisabazaar NPA partner cascade risk but does not attempt to size the credit exposure or identify the specific partners involved."
+        },
+        "actionability": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Provides a highly actionable bear case with specific timeline triggers and leading indicators to monitor. Slight friction between the 20-25% bear case probability and the definitive 'bearish' final signal."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Explicitly and correctly discards standard insurance metrics (VNB, solvency) in favor of marketplace platform metrics (EoM caps, Bima Sugam disintermediation, CAC/LTV)."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless handling of missing data. When the Annual Report extraction failed, the agent explicitly flagged the degradation and escalated the missing Auditor KAMs to Open Questions rather than hallucinating."
+        },
+        "tool_use_discipline": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional discipline shown in the log (19 tool calls). Used the `calculate` tool 7 times for precise math (CAGR, ratios, MoS) and systematically tested multiple AR sections when the first failed."
+        },
+        "cost_efficiency": {
+          "grade": "B",
+          "numeric": 83,
+          "rationale": "Cost was reasonable at $0.51 and cache hit rate was solid at 68.9%, but the agent took 27 turns, which is highly elevated and borders on inefficient despite the good output."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Opening Frame & Operational Risk",
+          "issue": "Identifies CAC inflation vs LTV as a dominant risk axis in the opening frame, but fails to quantify marketing/advertising spend as a % of revenue in the cost structure section to proxy this.",
+          "suggestion": "Instruct the agent to explicitly pull 'advertising and promotion' expenses from the expense_breakdown tool when analyzing platform/marketplace companies to proxy CAC trends."
+        },
+        {
+          "type": "NOT_OUR_PROBLEM",
+          "section": "JSON Summary",
+          "issue": "The final signal is marked 'bearish', but the text explicitly states 'Base case remains growth continues... downside is a 20-25% probability'.",
+          "suggestion": "LLM struggled slightly to reconcile a high-severity but low-probability tail risk into a single categorical signal."
+        }
+      ],
+      "strengths": [
+        "Brilliant handling of the degraded Annual Report extraction, turning a pipeline failure into a precise 'Open Question' for the analyst.",
+        "Excellent forensic accounting analysis, linking the negative CFO and F-Score failure directly to the +57% receivables jump and M-Score DSRI flags.",
+        "Strong sector awareness by explicitly stating the company is a distributor, not an insurer, and applying the correct regulatory frameworks (EoM caps, Bima Sugam)."
+      ],
+      "summary": "A highly sophisticated, institutional-grade risk report that perfectly adapts its framework to an insurtech marketplace model. The agent's forensic breakdown of the CFO/PAT divergence and its disciplined handling of a degraded data source (AR extraction failure) are standout features, though it slightly over-rotated on turn count to get there.",
+      "report_length": 33173,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 29.372472958006256,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 92,\n      \"rationale\": \"Excellent depth in connecting the CFO/PAT divergence to specific M-Score components (DSRI, TATA) and receivables growth. Correctly contextualizes the 0% promoter holding as a structural VC/PE artifact rather than a governance red flag.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 92,\n      \"rationale\": \"Conclusions follow the data perfectly. The bear case scenario logically chains the identified risks (IRDAI caps -> guidance cut -> FII exit -> multiple compression) without leaps of faith.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 89,\n      \"rationale\": \"Highly comprehensive across financial, governance, and macro risks. Minor gap: mentions Paisabazaar NPA partner cascade risk but does not attempt to size the credit exposure or identify the specific partners involved.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Provides a highly actionable bear case with specific timeline triggers and leading indicators to monitor. Slight friction between the 20-25% bear case probability and the definitive 'bearish' final signal.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Explicitly and correctly discards standard insurance metrics (VNB, solvency) in favor of marketplace platform metrics (EoM caps, Bima Sugam disintermediation, CAC/LTV).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless handling of missing data. When the Annual Report extraction failed, the agent explicitly flagged the degradation and escalated the missing Auditor KAMs to Open Questions rather than hallucinating.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional discipline shown in the log (19 tool calls). Used the `calculate` tool 7 times for precise math (CAGR, ratios, MoS) and systematically tested multiple AR sections when the first failed.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"B\",\n      \"numeric\": 83,\n      \"rationale\": \"Cost was reasonable at $0.51 and cache hit rate was solid at 68.9%, but the agent took 27 turns, which is highly elevated and borders on inefficient despite the good output.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Opening Frame & Operational Risk\",\n      \"issue\": \"Identifies CAC inflation vs LTV as a dominant risk axis in the opening frame, but fails to quantify marketing/advertising spend as a % of revenue in the cost structure section to proxy this.\",\n      \"suggestion\": \"Instruct the agent to explicitly pull 'advertising and promotion' expenses from the expense_breakdown tool when analyzing platform/marketplace companies to proxy CAC trends.\"\n    },\n    {\n      \"type\": \"NOT_OUR_PROBLEM\""
+    }
+  }
+}

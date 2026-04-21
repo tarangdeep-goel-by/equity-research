@@ -157,8 +157,8 @@ def _make_filing(**overrides) -> CorporateFiling:
         "bse_scrip_code": "542726",
         "filing_date": "2026-01-25",
         "category": "Result",
-        "subcategory": "Financial Results",
-        "headline": "Financial Results Q3",
+        "subcategory": "Analyst Meet - Intimation",
+        "headline": "Concall transcript Q3",
         "attachment_name": "file.pdf",
         "pdf_flag": 0,
         "file_size": None,
@@ -611,20 +611,16 @@ class TestDownloadFiling:
         assert result is not None
         assert result.name == "investor_deck.pdf"
 
-    def test_download_financial_results(self, tmp_path: Path):
+    def test_download_financial_results_skipped(self, tmp_path: Path):
+        """Financial results are not consumed by the research pipeline — skipped."""
         filing = _make_filing(
             headline="Financial Results Q3",
             subcategory="Financial Results",
             attachment_name="results.pdf",
         )
-        with respx.mock:
-            respx.get(url__regex=r"AttachLive/results\.pdf").respond(
-                200, content=b"%PDF" + b"z" * 500,
-            )
-            with FilingClient() as client:
-                result = client.download_filing(filing, base_dir=tmp_path)
-        assert result is not None
-        assert result.name == "results.pdf"
+        with FilingClient() as client:
+            result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
 
     def test_download_annual_report(self, tmp_path: Path):
         filing = _make_filing(
@@ -641,21 +637,16 @@ class TestDownloadFiling:
         assert result is not None
         assert result.name == "annual_report.pdf"
 
-    def test_download_unknown_type_uses_safe_dirname(self, tmp_path: Path):
-        """Unknown headlines fall back to _safe_dirname(subcategory)."""
+    def test_download_unknown_type_is_skipped(self, tmp_path: Path):
+        """Unknown filing types (not concall / investor_deck / annual_report) are skipped."""
         filing = _make_filing(
             headline="Some random filing",
             subcategory="Board Meeting",
             attachment_name="bm.pdf",
         )
-        with respx.mock:
-            respx.get(url__regex=r"AttachLive/bm\.pdf").respond(
-                200, content=b"%PDF" + b"b" * 500,
-            )
-            with FilingClient() as client:
-                result = client.download_filing(filing, base_dir=tmp_path)
-        assert result is not None
-        assert result.name == "board_meeting.pdf"
+        with FilingClient() as client:
+            result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
 
     def test_download_pdf_flag_one_uses_attach_his(self, tmp_path: Path):
         filing = _make_filing(attachment_name="hist.pdf", pdf_flag=1)
@@ -713,18 +704,17 @@ class TestDownloadFiling:
         assert result is None
 
     def test_download_skips_when_file_already_exists(self, tmp_path: Path):
-        """If file already exists and size matches expected, return without downloading."""
+        """If the canonical file already exists, return it without re-downloading."""
         filing = _make_filing(
-            headline="Financial Results",
-            subcategory="Financial Results",
+            headline="Concall transcript Q3",
+            subcategory="Analyst Meet - Intimation",
             attachment_name="cached.pdf",
             filing_date="2026-01-25",
             file_size=1000,
         )
-        # Pre-create file that matches expected structure
         target_dir = tmp_path / "INDIAMART" / "filings" / "FY26-Q3"
         target_dir.mkdir(parents=True)
-        target = target_dir / "results.pdf"
+        target = target_dir / "concall.pdf"
         target.write_bytes(b"x" * 1000)
 
         with respx.mock:

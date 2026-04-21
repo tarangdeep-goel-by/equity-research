@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_valuation",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T03:22:51.059141+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "platform"
+  ],
+  "results": {
+    "platform": {
+      "agent": "valuation",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "B+",
+      "grade_numeric": 88,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional depth in identifying the 1P/3P accounting distortion and decomposing the EV/Revenue premium over peers. Minor gap: could have explored mature store unit economics deeper to validate the 5-6% EBITDA margin target."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong logical flow, especially the override of the system's PE band signal. Minor gap: assigning a 20% weight to a Forward PE scenario for a company just breaking even is slightly aggressive, though well-caveated."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers almost all bases for a platform company. Gap: Despite attempting SOTP, it didn't manually construct one (valuing Food Delivery and Quick Commerce separately), which is standard for this specific stock."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Very clear base/bear/bull targets and catalysts. Gap: The final recommendation is slightly ambiguous ('mixed' signal despite 15% upside to base), lacking a definitive accumulation/hold stance."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Correctly pivots to EV/Revenue and GMV/NOV metrics. Gap: While it mentions the 1P/3P shift, it doesn't fully adjust to an EV/GMV multiple for a cleaner apples-to-apples comparison with peers, though it raises it as an open question."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent citations and handling of degraded sources. Gap: Relies heavily on consensus estimates for FY26E revenue without fully stress-testing the underlying GMV assumptions."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Log shows excellent fallback logic (e.g., falling back to get_chart_data(pe)), surfaced data gaps honestly (AR/Deck degraded), and used the calculate tool 10 times. The manual calculation at the end was a necessary fallback due to hitting turn limits."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Log shows 33 turns and $1.11 cost, which significantly exceeds the maximum thresholds for efficiency (>20 turns, >$1.00)."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Fair Value Triangle",
+          "issue": "The agent did not attempt a manual SOTP valuation (valuing Food Delivery and Quick Commerce separately) after the automated SOTP tool returned empty.",
+          "suggestion": "Instruct the agent to perform a manual SOTP using segment revenue/EBITDA estimates when the automated SOTP tool returns empty for unlisted but distinct subsidiaries."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Forward Projections",
+          "issue": "The projections tool applies manufacturing-company depreciation logic (5.1% of revenue) to an asset-light platform, resulting in broken EPS projections.",
+          "suggestion": "Update the projections tool logic to cap depreciation as a percentage of fixed assets or use sector-specific depreciation schedules for asset-light platforms."
+        }
+      ],
+      "strengths": [
+        "Brilliant identification and handling of the 1P/3P revenue accounting distortion.",
+        "Excellent critical thinking in overriding the mechanically invalid system-generated 'DEEP VALUE' PE-band signal."
+      ],
+      "summary": "This is an analytically superb report that correctly identifies critical accounting distortions and overrides flawed system signals with strong logic. However, the agent struggled with efficiency, burning through 33 turns and $1.11 to reach its conclusions, and missed an opportunity to perform a manual SOTP valuation.",
+      "report_length": 28725,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 116.95617762499751,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional depth in identifying the 1P/3P accounting distortion and decomposing the EV/Revenue premium over peers. Minor gap: could have explored mature store unit economics deeper to validate the 5-6% EBITDA margin target.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong logical flow, especially the override of the system's PE band signal. Minor gap: assigning a 20% weight to a Forward PE scenario for a company just breaking even is slightly aggressive, though well-caveated.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers almost all bases for a platform company. Gap: Despite attempting SOTP, it didn't manually construct one (valuing Food Delivery and Quick Commerce separately), which is standard for this specific stock.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Very clear base/bear/bull targets and catalysts. Gap: The final recommendation is slightly ambiguous ('mixed' signal despite 15% upside to base), lacking a definitive accumulation/hold stance.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Correctly pivots to EV/Revenue and GMV/NOV metrics. Gap: While it mentions the 1P/3P shift, it doesn't fully adjust to an EV/GMV multiple for a cleaner apples-to-apples comparison with peers, though it raises it as an open question.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent citations and handling of degraded sources. Gap: Relies heavily on consensus estimates for FY26E revenue without fully stress-testing the underlying GMV assumptions.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Log shows excellent fallback logic (e.g., falling back to get_chart_data(pe)), surfaced data gaps honestly (AR/Deck degraded), and used the calculate tool 10 times. The manual calculation at the end was a necessary fallback due to hitting turn limits.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Log shows 33 turns and $1.11 cost, which significantly exceeds the maximum thresholds for efficiency (>20 turns, >$1.00).\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 88\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Fair Value Triangle\",\n      \"issue\": \"The agent did not attempt a manual SOTP valuation (valuing Food Delivery and Quick Commerce separately) after the automated SOTP tool returned empty.\",\n      \"suggestion\": \"Instruct the agent to perform a manual SOTP using segment revenue/EBITDA estimates when the automated SOTP tool returns empty for unlisted but distinct subsidiaries.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Forward Projections\",\n"
+    }
+  }
+}

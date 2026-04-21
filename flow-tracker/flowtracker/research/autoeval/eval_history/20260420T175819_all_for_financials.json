@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_financials",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T17:58:19.042730+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "bfsi": {
+      "agent": "financials",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "A",
+      "grade_numeric": 93,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent breakdown of NIM dynamics (repo-linked vs MCLR repricing) and structural C/I ratio rigidities. Could have slightly improved by estimating the exact duration of the MCLR repricing lag."
+        },
+        "logical_consistency": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Mostly excellent, but contradicts itself by using 5Y cumulative CFO to justify dividend sustainability while later correctly stating CFO is a structurally meaningless metric for banks."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major BFSI dimensions comprehensively, though it suffers from upstream data gaps in GNPA/NNPA and CRAR (which it correctly flags and attempts to proxy)."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Provides a clear forward view with specific catalysts (AMC monetization) and risks (SMA-1 account, credit growth deceleration), though the final 'mixed' signal is slightly timid given the strong bearish evidence presented."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of bank-specific frameworks. Explicitly and correctly discards standard operating margin, uses ROA-based DuPont, and focuses on NIM, CASA, and CD ratio."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional transparency. Clearly distinguishes between structured data and narrative proxies, and explicitly documents the degraded Annual Report extraction without hallucinating missing numbers."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 85,
+          "rationale": "legacy trace \u2014 telemetry not captured"
+        },
+        "cost_efficiency": {
+          "grade": "B+",
+          "numeric": 85,
+          "rationale": "legacy trace \u2014 telemetry not captured"
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Capital Allocation Quality / Contradictions",
+          "issue": "Contradictory use of CFO. The agent uses 5Y cumulative CFO to prove dividend sustainability, but later correctly flags that CFO is structurally meaningless for banks due to deposit/loan flow swings.",
+          "suggestion": "Instruct the agent to use retained earnings (PAT minus dividends) or CET1 generation to assess dividend sustainability for banks, explicitly forbidding the use of CFO for BFSI dividend coverage."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Asset Quality",
+          "issue": "Critical BFSI metrics (GNPA%, NNPA%, CRAR) are missing from `sector_kpis` and `quality_scores(bfsi)` structured data.",
+          "suggestion": "Ensure the data pipeline extracts and populates standard asset quality and capital adequacy ratios for banks in the `sector_kpis` or `fundamentals` endpoints."
+        }
+      ],
+      "strengths": [
+        "Superb adaptation of the DuPont analysis specifically for banks (ROA decomposition).",
+        "Excellent 'Contradictions' section that critically evaluates management commentary against actual data (e.g., ROA floor dependency on exceptional items, over-optimistic credit growth guidance)."
+      ],
+      "summary": "This is an institutional-quality report that perfectly applies BFSI frameworks, though it is slightly marred by a minor logical contradiction regarding bank cash flows. The agent demonstrated exceptional analytical depth in breaking down NIM mechanics and handled upstream data gaps in asset quality with impressive transparency.",
+      "report_length": 39226,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 264.1488659579991,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent breakdown of NIM dynamics (repo-linked vs MCLR repricing) and structural C/I ratio rigidities. Could have slightly improved by estimating the exact duration of the MCLR repricing lag.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Mostly excellent, but contradicts itself by using 5Y cumulative CFO to justify dividend sustainability while later correctly stating CFO is a structurally meaningless metric for banks.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major BFSI dimensions comprehensively, though it suffers from upstream data gaps in GNPA/NNPA and CRAR (which it correctly flags and attempts to proxy).\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Provides a clear forward view with specific catalysts (AMC monetization) and risks (SMA-1 account, credit growth deceleration), though the final 'mixed' signal is slightly timid given the strong bearish evidence presented.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of bank-specific frameworks. Explicitly and correctly discards standard operating margin, uses ROA-based DuPont, and focuses on NIM, CASA, and CD ratio.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional transparency. Clearly distinguishes between structured data and narrative proxies, and explicitly documents the degraded Annual Report extraction without hallucinating missing numbers.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 85,\n      \"rationale\": \"legacy trace \u2014 telemetry not captured\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 85,\n      \"rationale\": \"legacy trace \u2014 telemetry not captured\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 93\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Capital Allocation Quality / Contradictions\",\n      \"issue\": \"Contradictory use of CFO. The agent uses 5Y cumulative CFO to prove dividend sustainability, but later correctly flags that CFO is structurally meaningless for banks due to deposit/loan flow swings.\",\n      \"suggestion\": \"Instruct the agent to use retained earnings (PAT minus dividends) or CET1 generation to assess dividend sustainability for banks, explicitly forbidding the use of CFO for BFSI dividend coverage.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Asset Quality\",\n      \"issue\": \"Critical BFSI metrics (GNPA%, NNPA%, CRAR) are missing from `sector_kpis` and `quality_scores(bfsi)` structured data.\",\n      \"suggestion\": \"Ensure the data pipeline extracts and populates standard asset quality and capital adequacy ratios for banks in the `sector_kpis` or `fundamentals` endpoint"
+    }
+  }
+}

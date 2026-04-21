@@ -1,0 +1,78 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T17:59:24.479543+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "bfsi"
+  ],
+  "results": {
+    "bfsi": {
+      "agent": "business",
+      "stock": "SBIN",
+      "sector": "PSU bank",
+      "grade": "B+",
+      "grade_numeric": 87,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Excellent breakdown of unit economics, NIM compression mechanics, and the structural reliance on treasury/AUCA for ROA maintenance."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Strong logical flow; explicitly handles data discrepancies (e.g., management vs analytical C/I ratio) to avoid contradictions."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers business model, segments, and cost structure well, but notably omits current asset quality metrics (GNPA/NNPA/PCR)."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a clear bull/bear framework, specific upcoming catalysts (Q4 earnings, RBI MPC), and a definitive valuation conclusion."
+        },
+        "sector_framework": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Applies most BFSI frameworks correctly (NIM, CASA, LCR, ROA), but the absence of baseline asset quality metrics (GNPA/NNPA) is a notable gap."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Claims are well-backed by cited data, and the agent transparently notes limitations in the extracted AR MD&A data."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Agent made 40 tool calls, including 16 calculate calls for precise math, and correctly identified degraded AR MD&A data, showing strong discipline."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Agent used 51 turns and cost $1.05 (with a 67.7% cache hit rate), which is highly inefficient and falls into the F category (>$1.00 or >20 turns)."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "The Money Machine / Financial Fingerprint",
+          "issue": "The report omits current Gross NPA, Net NPA, and Provision Coverage Ratio (PCR) metrics, which are fundamental to banking analysis.",
+          "suggestion": "Update prompt instructions to mandate the extraction and reporting of GNPA, NNPA, and PCR for all banking/NBFC stocks."
+        }
+      ],
+      "strengths": [
+        "Exceptional analytical depth in breaking down the unit economics of a single transaction and connecting it to broader NIM compression.",
+        "Highly actionable conclusion with a well-reasoned bull/bear framework and specific near-term catalysts."
+      ],
+      "summary": "The report provides a deep, highly actionable, and logically sound analysis of SBI's business model, particularly excelling in its breakdown of NIM compression and ROA drivers. However, it notably omits baseline asset quality metrics (GNPA/NNPA), which is a standard requirement for bank analysis. Additionally, the agent's execution was highly inefficient, requiring 51 turns and over $1.00 to generate the report.",
+      "report_length": 33583,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 61.70577383300042,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Excellent breakdown of unit economics, NIM compression mechanics, and the structural reliance on treasury/AUCA for ROA maintenance.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Strong logical flow; explicitly handles data discrepancies (e.g., management vs analytical C/I ratio) to avoid contradictions.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers business model, segments, and cost structure well, but notably omits current asset quality metrics (GNPA/NNPA/PCR).\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a clear bull/bear framework, specific upcoming catalysts (Q4 earnings, RBI MPC), and a definitive valuation conclusion.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Applies most BFSI frameworks correctly (NIM, CASA, LCR, ROA), but the absence of baseline asset quality metrics (GNPA/NNPA) is a notable gap.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Claims are well-backed by cited data, and the agent transparently notes limitations in the extracted AR MD&A data.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Agent made 40 tool calls, including 16 calculate calls for precise math, and correctly identified degraded AR MD&A data, showing strong discipline.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Agent used 51 turns and cost $1.05 (with a 67.7% cache hit rate), which is highly inefficient and falls into the F category (>$1.00 or >20 turns).\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 87\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"The Money Machine / Financial Fingerprint\",\n      \"issue\": \"The report omits current Gross NPA, Net NPA, and Provision Coverage Ratio (PCR) metrics, which are fundamental to banking analysis.\",\n      \"suggestion\": \"Update prompt instructions to mandate the extraction and reporting of GNPA, NNPA, and PCR for all banking/NBFC stocks.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional analytical depth in breaking down the unit economics of a single transaction and connecting it to broader NIM compression.\",\n    \"Highly actionable conclusion with a well-reasoned bull/bear framework and specific near-term catalysts.\"\n  ],\n  \"summary\": \"The report provides a deep, highly actionable, and logically sound analysis of SBI's business model, particularly excelling in its breakdown of NIM compression and ROA drivers. However, it notably omits baseline asset quality metrics (GNPA/NNPA), which is a standard requirement for bank analysis. Additionally, the agent's execution was highly inefficient, requiring 51 turns and over"
+    }
+  }
+}

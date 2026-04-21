@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260421T024603.log
+AutoEval (agent-first): agent=business sectors=['conglomerate']
+Target: grade_numeric >= 90
+
+--- business / ADANIENT (conglomerate) ---
+  Report: 26673 chars
+  Evidence log loaded (47 lines)
+  Grading with Gemini...
+  Grade: B+ (86) [FAIL]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260421T024641_all_for_business.json
+
+======================================================================
+AGENT SUMMARY: business
+======================================================================
+  conglomerate        ADANIENT      B+  (86)  [FAIL]  prompt_fixes:2
+======================================================================
+passing:0  failing:1  total:1
+======================================================================

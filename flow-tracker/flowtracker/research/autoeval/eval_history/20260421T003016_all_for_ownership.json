@@ -1,0 +1,83 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T00:30:16.767743+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "telecom": {
+      "agent": "ownership",
+      "stock": "BHARTIARTL",
+      "sector": "Telecom operator",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent depth. The report goes beyond surface-level trends by explaining the 'why' behind FII accumulation (ARPU hikes, deleveraging) and brilliantly decomposes the MF holding to reveal that ~45% is passive index-driven rather than active conviction."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless logic, particularly in the 'Cross-Section Reconciliation' where it expertly resolves apparent contradictions between quarterly balance-sheet accumulation and daily macro-driven selling."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Covers almost all bases, but the explicit omission of the 3-year bulk/block deal check leaves the most critical question (the mechanics of the promoter stake decline) unanswered."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly actionable. The institutional verdict clearly synthesizes the mixed-to-bullish signals and explicitly outlines what a portfolio manager needs to monitor (Singtel trimming vs ESOP dilution)."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfect application of telecom-specific frameworks. Correctly links ownership shifts to sector-specific catalysts like ARPU repair, 5G capex deleveraging, and passive infrastructure RPTs (Indus Towers)."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Strong data attribution throughout. The agent correctly uses the calculate tool for market values and honestly flags where annual report extraction was degraded."
+        },
+        "tool_use_discipline": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Mostly disciplined, but the agent skipped the critical 3-year bulk/block query citing 'budget constraints' while simultaneously wasting over 10 turns on individual, sequential calculate calls."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "35 turns and $0.61 cost is highly inefficient. The agent spent turns 16 through 32 executing single mathematical operations per turn instead of prioritizing critical data queries."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Insider Signals / Open Questions",
+          "issue": "Agent skipped the 3-year bulk/block deal query (a mandatory metric) citing 'budget constraints', leaving the primary mystery of the promoter decline unresolved.",
+          "suggestion": "Instruct the agent to prioritize historical data queries (like 3-year bulk/block) over excessive, sequential percentage calculations if approaching turn limits."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "1. Ownership Structure",
+          "issue": "The `shareholder_detail` tool failed to return named FII holders, preventing the decomposition of the massive 28.76% FII stake.",
+          "suggestion": "Enhance the `shareholder_detail` backend to ensure FPI/FII entities are properly surfaced in the top holders list, especially for large-cap stocks."
+        }
+      ],
+      "strengths": [
+        "Exceptional decomposition of Mutual Fund holdings into active vs. passive (ETF) buckets to gauge true institutional conviction.",
+        "The 'Cross-Section Reconciliation' is a masterclass in resolving conflicting timeframes and data types (e.g., 12Q accumulation vs daily macro selling).",
+        "Strong integration of fundamental telecom narratives (deleveraging, ARPU, Indus Towers RPTs) into the ownership analysis."
+      ],
+      "summary": "This is a highly sophisticated, institutional-grade ownership report that brilliantly connects shareholding shifts to fundamental telecom catalysts. Its primary flaw is an operational one: the agent exhausted its turn budget on sequential math calculations, forcing it to skip the historical bulk/block query that could have solved the mystery of the declining promoter stake.",
+      "report_length": 32323,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 30.32740683299926,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent depth. The report goes beyond surface-level trends by explaining the 'why' behind FII accumulation (ARPU hikes, deleveraging) and brilliantly decomposes the MF holding to reveal that ~45% is passive index-driven rather than active conviction.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless logic, particularly in the 'Cross-Section Reconciliation' where it expertly resolves apparent contradictions between quarterly balance-sheet accumulation and daily macro-driven selling.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Covers almost all bases, but the explicit omission of the 3-year bulk/block deal check leaves the most critical question (the mechanics of the promoter stake decline) unanswered.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly actionable. The institutional verdict clearly synthesizes the mixed-to-bullish signals and explicitly outlines what a portfolio manager needs to monitor (Singtel trimming vs ESOP dilution).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfect application of telecom-specific frameworks. Correctly links ownership shifts to sector-specific catalysts like ARPU repair, 5G capex deleveraging, and passive infrastructure RPTs (Indus Towers).\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Strong data attribution throughout. The agent correctly uses the calculate tool for market values and honestly flags where annual report extraction was degraded.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Mostly disciplined, but the agent skipped the critical 3-year bulk/block query citing 'budget constraints' while simultaneously wasting over 10 turns on individual, sequential calculate calls.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"35 turns and $0.61 cost is highly inefficient. The agent spent turns 16 through 32 executing single mathematical operations per turn instead of prioritizing critical data queries.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Insider Signals / Open Questions\",\n      \"issue\": \"Agent skipped the 3-year bulk/block deal query (a mandatory metric) citing 'budget constraints', leaving the primary mystery of the promoter decline unresolved.\",\n      \"suggestion\": \"Instruct the agent to prioritize historical data queries (like 3-year bulk/block) over excessive, sequential percentage calculations if approaching turn limits.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"1. Ownership Structure\",\n      \"issue\": \"The `shareholder_det"
+    }
+  }
+}

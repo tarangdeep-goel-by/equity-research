@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_technical",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T23:01:30.075869+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "regulated_power": {
+      "agent": "technical",
+      "stock": "NTPC",
+      "sector": "Regulated utility",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent synthesis of delivery deterioration with price resistance to identify speculative momentum, though it misses analyzing volume trends specifically on down vs. up days."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Conclusions perfectly track the data, though the connection between early April FII selling and mid-April delivery drops could have been explicitly linked."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers price, volume, and macro well, but completely misses derivatives data (Open Interest, PCR) which is critical for a high-beta F&O stock like NTPC."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides exact support/resistance levels and clear conditional entry scenarios, though it lacks a defined stop-loss level for the breakout trade scenario."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Outstanding. Perfectly adapts technical analysis for a regulated utility by incorporating the G-Sec yield spread and debunking the low-beta myth. Perfect score justified."
+        },
+        "data_sourcing": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Good use of calculation tools and clear citations, though relying on March MF data for late April price action creates a slight temporal mismatch."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Log shows excellent discipline: used the calculate tool 4 times for averages/sums and honestly reported the FMP indicator limitation without hallucinating data."
+        },
+        "cost_efficiency": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "Cost is low ($0.34) and cache hit rate is solid (65.5%), but 17 turns is on the higher side for a single-agent technical scope."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Volume & Delivery Analysis",
+          "issue": "Missing derivatives data (Open Interest, Put-Call Ratio) which is essential for analyzing near-term resistance in a highly liquid F&O stock.",
+          "suggestion": "Update instructions to require F&O positioning analysis for large-cap stocks with active derivatives markets."
+        }
+      ],
+      "strengths": [
+        "Exceptional sector-specific adaptation by integrating the G-Sec yield spread into the technical/momentum analysis.",
+        "Strong synthesis of price action and delivery percentage to differentiate between genuine accumulation and speculative momentum."
+      ],
+      "summary": "This is a highly sophisticated technical report that brilliantly adapts standard momentum analysis to the realities of a regulated utility. The integration of the G-Sec yield spread and the nuanced interpretation of delivery data at 52-week highs demonstrate institutional-grade analytical depth. The only meaningful gap is the absence of derivatives data (OI/PCR), which would have provided a more complete picture of the resistance at the 52-week high.",
+      "report_length": 17312,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 32.37482095899759,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent synthesis of delivery deterioration with price resistance to identify speculative momentum, though it misses analyzing volume trends specifically on down vs. up days.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Conclusions perfectly track the data, though the connection between early April FII selling and mid-April delivery drops could have been explicitly linked.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers price, volume, and macro well, but completely misses derivatives data (Open Interest, PCR) which is critical for a high-beta F&O stock like NTPC.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides exact support/resistance levels and clear conditional entry scenarios, though it lacks a defined stop-loss level for the breakout trade scenario.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Outstanding. Perfectly adapts technical analysis for a regulated utility by incorporating the G-Sec yield spread and debunking the low-beta myth. Perfect score justified.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Good use of calculation tools and clear citations, though relying on March MF data for late April price action creates a slight temporal mismatch.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Log shows excellent discipline: used the calculate tool 4 times for averages/sums and honestly reported the FMP indicator limitation without hallucinating data.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"Cost is low ($0.34) and cache hit rate is solid (65.5%), but 17 turns is on the higher side for a single-agent technical scope.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Volume & Delivery Analysis\",\n      \"issue\": \"Missing derivatives data (Open Interest, Put-Call Ratio) which is essential for analyzing near-term resistance in a highly liquid F&O stock.\",\n      \"suggestion\": \"Update instructions to require F&O positioning analysis for large-cap stocks with active derivatives markets.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional sector-specific adaptation by integrating the G-Sec yield spread into the technical/momentum analysis.\",\n    \"Strong synthesis of price action and delivery percentage to differentiate between genuine accumulation and speculative momentum.\"\n  ],\n  \"summary\": \"This is a highly sophisticated technical report that brilliantly adapts standard momentum analysis to the realities of a regulated utility. The integration of the G-Sec yield spread and the nuanced interpretat"
+    }
+  }
+}

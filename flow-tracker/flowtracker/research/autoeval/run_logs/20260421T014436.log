@@ -1,0 +1,21 @@
+Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260421T014436.log
+AutoEval (agent-first): agent=sector sectors=['fmcg']
+Target: grade_numeric >= 90
+
+--- sector / HINDUNILVR (fmcg) ---
+  Report: 33635 chars
+  Evidence log loaded (44 lines)
+  Grading with Gemini...
+  Grade: A- (90) [PASS]
+
+
+Wrote: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/last_run.json
+Archived: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/eval_history/20260421T014538_all_for_sector.json
+
+======================================================================
+AGENT SUMMARY: sector
+======================================================================
+  fmcg                HINDUNILVR    A-  (90)  [PASS]  prompt_fixes:1
+======================================================================
+passing:1  failing:0  total:1
+======================================================================

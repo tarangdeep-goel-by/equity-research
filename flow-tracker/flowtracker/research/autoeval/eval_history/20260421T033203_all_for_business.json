@@ -1,0 +1,84 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T03:32:03.579042+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "platform"
+  ],
+  "results": {
+    "platform": {
+      "agent": "business",
+      "stock": "ETERNAL",
+      "sector": "Quick commerce/food delivery",
+      "grade": "B+",
+      "grade_numeric": 87,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Deep dive into Blinkit's 1P vs 3P accounting is institutional grade, but lacks equivalent depth on Food Delivery unit economics (e.g., delivery cost per order, discount trends)."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 92,
+          "rationale": "Strong reasoning overall, but slightly contradicts itself by calling 0% incremental ROCE the 'most important concern' while simultaneously describing the risk as purely execution rather than financial."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 89,
+          "rationale": "Excellent coverage of Blinkit and Food Delivery, but largely ignores Hyperpure and District despite them being distinct and growing business lines."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 92,
+          "rationale": "Clear bull/bear cases and checklist, but the final conclusion lacks a definitive investment stance given that the bull case EV is roughly equal to the current market cap."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Perfectly applies platform/QC metrics (GOV, NOV, dark store economics), but misses cohort retention and LTV/CAC analysis."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Highly transparent about missing AR/deck data, but relies on a rough 44% estimate for food delivery revenue due to the segmental data timeout."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Flawless tool selection and correctly used Screener fallback for mismatched peers, but struggled to extract exact take rates despite multiple concall attempts."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "40 turns is highly inefficient and exceeds the >20 turns threshold for an F grade, despite a good cache hit rate (75.8%)."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. The Business",
+          "issue": "The report largely ignores Hyperpure and District segments in the deep-dive sections despite identifying them as distinct business lines.",
+          "suggestion": "Instruct the agent to allocate analytical weight proportionally to all identified business segments, even if they are in the investment phase."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Tool Audit / Data Sourcing",
+          "issue": "The FY25 Annual Report segmental extraction timed out, forcing the agent to estimate food delivery revenue.",
+          "suggestion": "Optimize the `get_annual_report` segmental extraction to prevent timeouts on large conglomerate ARs."
+        }
+      ],
+      "strengths": [
+        "Exceptional explanation of the accounting shift from 3P to 1P for Blinkit and how it artificially inflates revenue growth and material costs.",
+        "Excellent handling of tool failures, explicitly documenting the lack of investor decks and the AR timeout, and successfully falling back to Screener peers when Yahoo peers were mismatched."
+      ],
+      "summary": "The report provides an institutional-grade analysis of Blinkit's unit economics and accounting shifts, but is heavily penalized for extreme inefficiency (40 turns). While the analytical depth and tool discipline are excellent, the agent needs to balance its thoroughness with operational efficiency and ensure all business segments receive adequate coverage.",
+      "report_length": 34721,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 52.896691791000194,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Deep dive into Blinkit's 1P vs 3P accounting is institutional grade, but lacks equivalent depth on Food Delivery unit economics (e.g., delivery cost per order, discount trends).\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 92,\n      \"rationale\": \"Strong reasoning overall, but slightly contradicts itself by calling 0% incremental ROCE the 'most important concern' while simultaneously describing the risk as purely execution rather than financial.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 89,\n      \"rationale\": \"Excellent coverage of Blinkit and Food Delivery, but largely ignores Hyperpure and District despite them being distinct and growing business lines.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 92,\n      \"rationale\": \"Clear bull/bear cases and checklist, but the final conclusion lacks a definitive investment stance given that the bull case EV is roughly equal to the current market cap.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Perfectly applies platform/QC metrics (GOV, NOV, dark store economics), but misses cohort retention and LTV/CAC analysis.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Highly transparent about missing AR/deck data, but relies on a rough 44% estimate for food delivery revenue due to the segmental data timeout.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Flawless tool selection and correctly used Screener fallback for mismatched peers, but struggled to extract exact take rates despite multiple concall attempts.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"40 turns is highly inefficient and exceeds the >20 turns threshold for an F grade, despite a good cache hit rate (75.8%).\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 87\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. The Business\",\n      \"issue\": \"The report largely ignores Hyperpure and District segments in the deep-dive sections despite identifying them as distinct business lines.\",\n      \"suggestion\": \"Instruct the agent to allocate analytical weight proportionally to all identified business segments, even if they are in the investment phase.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Tool Audit / Data Sourcing\",\n      \"issue\": \"The FY25 Annual Report segmental extraction timed out, forcing the agent to estimate food delivery revenue.\",\n      \"suggestion\": \"Optimize the `get_annual_report` segmental extraction to prevent timeouts on large conglomerate ARs.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional explanation of the accounting shift from 3P to 1P for Blinkit and how it artificially inflates revenue growth and mate"
+    }
+  }
+}

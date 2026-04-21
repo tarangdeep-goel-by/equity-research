@@ -1,0 +1,90 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T00:49:21.756507+00:00",
+  "all_passing": false,
+  "failing_agents": [
+    "telecom"
+  ],
+  "results": {
+    "telecom": {
+      "agent": "sector",
+      "stock": "BHARTIARTL",
+      "sector": "Telecom operator",
+      "grade": "B+",
+      "grade_numeric": 89,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A-",
+          "numeric": 92,
+          "rationale": "Strong depth in breaking down revenue CAGR into distinct regime phases and explaining the EV/EBITDA vs PE dynamic. However, it misses quantifying the exact AGR liability for Airtel specifically, relying only on the sector-wide figure."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Conclusions logically follow the data, and the revenue bridge calculation (365 mn * 256 * 12) perfectly validates the top-line assumptions. Caveats regarding peer mismatches are clearly stated."
+        },
+        "completeness": {
+          "grade": "B+",
+          "numeric": 88,
+          "rationale": "Covers most critical telecom dimensions (ARPU, 5G, FWA, churn, regulatory risks), but misses a detailed discussion on spectrum holding/expiry timelines, which is a fundamental telecom metric."
+        },
+        "actionability": {
+          "grade": "B+",
+          "numeric": 89,
+          "rationale": "Provides a clear 'Swimming With the Current' verdict and identifies specific catalysts. However, it fails to fully reconcile this bullish fundamental view with the 'demanding' reverse DCF valuation it highlighted earlier."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Flawless application of telecom frameworks. Correctly discards PE in favor of EV/EBITDA due to spectrum amortization, focuses heavily on ARPU trajectory, and evaluates Net Debt/EBITDA and ROCE."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Excellent use of the calculate tool to derive metrics rather than hallucinating. Explicitly and honestly calls out when data (like Vi ARPU or Africa constant-currency) is missing from the tools."
+        },
+        "tool_use_discipline": {
+          "grade": "B",
+          "numeric": 85,
+          "rationale": "The agent correctly identified the Yahoo peer mismatch but failed to call the `get_screener_peers` fallback tool, instead relying on workarounds. It also used an excessive 33 turns."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "At 33 turns, the execution is highly inefficient and exceeds the >20 turn threshold for an F. However, the high cache hit rate (82.6%) kept the actual cost moderate at $0.67, bumping the grade to a C."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Sector Valuation Map",
+          "issue": "The report highlights a demanding reverse DCF valuation (pricing in 21% growth vs 14% historical) but concludes with a very bullish verdict without reconciling the two.",
+          "suggestion": "Instruct the agent to explicitly reconcile its fundamental verdict with the reverse DCF implied expectations (e.g., explain why the market is justified in pricing in that growth)."
+        },
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Peer Analysis",
+          "issue": "The agent noticed the Yahoo peer mismatch but failed to call `get_screener_peers` to get a better peer set.",
+          "suggestion": "Update instructions to mandate calling `get_screener_peers` immediately if the primary peer table returns mismatched sectors, rather than just caveating it."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Mandatory Metrics Status",
+          "issue": "Vi ARPU and Africa constant-currency growth were not available in the tools.",
+          "suggestion": "Ensure `sector_kpis` includes competitor KPIs like Vi ARPU, and `concall_insights` extracts constant-currency growth metrics for multinationals."
+        }
+      ],
+      "strengths": [
+        "Excellent sector-specific framework application, correctly identifying why PE is misleading for telecom due to spectrum amortization and anchoring on EV/EBITDA.",
+        "Strong analytical depth in breaking down revenue CAGR into distinct regime phases (pre-Jio, post-Jio, post-consolidation) rather than using a misleading long-term average."
+      ],
+      "summary": "The report provides a highly sophisticated and accurate application of telecom sector frameworks, correctly anchoring on ARPU, EV/EBITDA, and regime-adjusted growth rates. However, the agent burned an excessive number of turns (33) and failed to call the fallback peer tool when it detected a sector mismatch. Reconciling the bullish fundamental verdict with the demanding reverse DCF valuation would elevate this to institutional quality.",
+      "report_length": 31813,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 32.0563938339983,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A-\",\n      \"numeric\": 92,\n      \"rationale\": \"Strong depth in breaking down revenue CAGR into distinct regime phases and explaining the EV/EBITDA vs PE dynamic. However, it misses quantifying the exact AGR liability for Airtel specifically, relying only on the sector-wide figure.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Conclusions logically follow the data, and the revenue bridge calculation (365 mn * 256 * 12) perfectly validates the top-line assumptions. Caveats regarding peer mismatches are clearly stated.\"\n    },\n    \"completeness\": {\n      \"grade\": \"B+\",\n      \"numeric\": 88,\n      \"rationale\": \"Covers most critical telecom dimensions (ARPU, 5G, FWA, churn, regulatory risks), but misses a detailed discussion on spectrum holding/expiry timelines, which is a fundamental telecom metric.\"\n    },\n    \"actionability\": {\n      \"grade\": \"B+\",\n      \"numeric\": 89,\n      \"rationale\": \"Provides a clear 'Swimming With the Current' verdict and identifies specific catalysts. However, it fails to fully reconcile this bullish fundamental view with the 'demanding' reverse DCF valuation it highlighted earlier.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Flawless application of telecom frameworks. Correctly discards PE in favor of EV/EBITDA due to spectrum amortization, focuses heavily on ARPU trajectory, and evaluates Net Debt/EBITDA and ROCE.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Excellent use of the calculate tool to derive metrics rather than hallucinating. Explicitly and honestly calls out when data (like Vi ARPU or Africa constant-currency) is missing from the tools.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B\",\n      \"numeric\": 85,\n      \"rationale\": \"The agent correctly identified the Yahoo peer mismatch but failed to call the `get_screener_peers` fallback tool, instead relying on workarounds. It also used an excessive 33 turns.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"At 33 turns, the execution is highly inefficient and exceeds the >20 turn threshold for an F. However, the high cache hit rate (82.6%) kept the actual cost moderate at $0.67, bumping the grade to a C.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"B+\",\n    \"grade_numeric\": 89\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Sector Valuation Map\",\n      \"issue\": \"The report highlights a demanding reverse DCF valuation (pricing in 21% growth vs 14% historical) but concludes with a very bullish verdict without reconciling the two.\",\n      \"suggestion\": \"Instruct the agent to explicitly reconcile its fundamental verdict with the reverse DCF implied expectations (e.g., explain why the market is justified in pricing in that growth).\"\n    },\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"sect"
+    }
+  }
+}

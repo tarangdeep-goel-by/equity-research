@@ -16,11 +16,24 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from pathlib import Path
 from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
+
+
+def _docling_heartbeat(pdf_name: str, stop: threading.Event, interval: float = 30.0) -> None:
+    """Emit a progress line every `interval` seconds while docling is running.
+
+    Docling's layout / table-structure stages are silent, which makes long AR
+    extractions look frozen in eval tmux panes. This thread keeps the stream
+    flowing so operators can distinguish healthy-slow from genuinely stuck.
+    """
+    t0 = time.time()
+    while not stop.wait(interval):
+        logger.info("[docling] still extracting %s — %.0fs elapsed", pdf_name, time.time() - t0)
 
 
 class ExtractionResult(NamedTuple):
@@ -60,22 +73,37 @@ def extract_to_markdown(pdf_path: Path | str, cache_dir: Path | str) -> Extracti
             from_cache=True,
         )
 
+    size_mb = pdf_path.stat().st_size / 1e6
+    logger.info("[docling] starting extraction of %s (%.1f MB)", pdf_path.name, size_mb)
     t0 = time.time()
+    stop_hb = threading.Event()
+    hb_thread = threading.Thread(
+        target=_docling_heartbeat, args=(pdf_path.name, stop_hb), daemon=True
+    )
+    hb_thread.start()
     try:
-        from docling.document_converter import DocumentConverter
-        conv = DocumentConverter()
-        result = conv.convert(str(pdf_path))
-        md = result.document.export_to_markdown()
-        backend = "docling"
-        degraded = False
-    except Exception as e:
-        logger.warning(
-            "Docling failed on %s (%s: %s) — falling back to pdfplumber",
-            pdf_path.name, type(e).__name__, e,
-        )
-        md = _pdfplumber_fallback(pdf_path)
-        backend = "pdfplumber"
-        degraded = True
+        try:
+            from docling.document_converter import DocumentConverter
+            conv = DocumentConverter()
+            result = conv.convert(str(pdf_path))
+            md = result.document.export_to_markdown()
+            backend = "docling"
+            degraded = False
+        except Exception as e:
+            logger.warning(
+                "Docling failed on %s (%s: %s) — falling back to pdfplumber",
+                pdf_path.name, type(e).__name__, e,
+            )
+            md = _pdfplumber_fallback(pdf_path)
+            backend = "pdfplumber"
+            degraded = True
+    finally:
+        stop_hb.set()
+        hb_thread.join(timeout=1.0)
+    logger.info(
+        "[docling] finished %s via %s in %.1fs (degraded=%s)",
+        pdf_path.name, backend, time.time() - t0, degraded,
+    )
 
     headings = _scan_headings(md)
     elapsed = time.time() - t0

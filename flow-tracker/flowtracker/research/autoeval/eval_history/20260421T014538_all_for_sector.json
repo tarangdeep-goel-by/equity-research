@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T01:45:38.620778+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "fmcg": {
+      "agent": "sector",
+      "stock": "HINDUNILVR",
+      "sector": "FMCG",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Exceptional breakdown of structural ROCE compression post-GSK acquisition. Minor gap: could have quantified quick commerce margin dilution."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Strong logical flow in contextualizing HUL's growth gap. Minor gap: compares HUL's FII ownership directly to ITC's without fully adjusting for free-float market cap."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Covers all major FMCG dimensions including UVG and segment P&L. Minor gap: exact rural/urban revenue splits for HUL are missing."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Provides a clear verdict highlighting the valuation disconnect. Minor gap: doesn't explicitly state a base-case growth expectation to anchor a target price."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of FMCG-specific frameworks (UVG, Segment P&L). Perfect score justified by the nuanced interpretation of UVG ex-GST impacts."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Good transparency on data limitations (e.g., partial AR extraction). Minor gap: TAM relies on unverified consensus due to lack of a web tool."
+        },
+        "tool_use_discipline": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Flawless use of calculate tool (8 calls) and smart fallback to Yahoo peers. Minor gap: failed to extract exact channel mix splits despite attempts."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Agent took 34 turns, strictly hitting the F criteria (>20 turns) for inefficiency, though high cache hit rate (75.4%) kept cost at $0.60."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "3. Sector KPIs",
+          "issue": "The agent failed to extract exact channel mix (GT/MT/e-comm) and rural/urban splits, which are critical for FMCG.",
+          "suggestion": "Update the get_company_context tool instructions to explicitly target rural/urban and channel mix percentages in FMCG concall extractions."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "1. Sector Overview",
+          "issue": "TAM data was flagged as an open question because no web tool was available to verify the \u20b95.5-6.5 lakh crore estimate.",
+          "suggestion": "Provide the agent with a web search tool or a pre-computed sector TAM database to validate industry size claims."
+        }
+      ],
+      "strengths": [
+        "Exceptional contextualization of the ROCE drop from 117% to 28%, correctly identifying it as a structural mathematical result of the GSK acquisition rather than operational deterioration.",
+        "Nuanced handling of the peer comparison, explicitly stripping out gold-inflation (Titan) and base-effects (Nestle) to find HUL's true underlying growth gap."
+      ],
+      "summary": "This is a highly sophisticated, institutional-quality sector report that perfectly applies FMCG frameworks like UVG and segment-level margin analysis. The analytical depth regarding the GSK acquisition's impact on ROCE is outstanding, though the agent's execution was highly inefficient (34 turns).",
+      "report_length": 33635,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 61.936588832999405,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Exceptional breakdown of structural ROCE compression post-GSK acquisition. Minor gap: could have quantified quick commerce margin dilution.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Strong logical flow in contextualizing HUL's growth gap. Minor gap: compares HUL's FII ownership directly to ITC's without fully adjusting for free-float market cap.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Covers all major FMCG dimensions including UVG and segment P&L. Minor gap: exact rural/urban revenue splits for HUL are missing.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Provides a clear verdict highlighting the valuation disconnect. Minor gap: doesn't explicitly state a base-case growth expectation to anchor a target price.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of FMCG-specific frameworks (UVG, Segment P&L). Perfect score justified by the nuanced interpretation of UVG ex-GST impacts.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Good transparency on data limitations (e.g., partial AR extraction). Minor gap: TAM relies on unverified consensus due to lack of a web tool.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Flawless use of calculate tool (8 calls) and smart fallback to Yahoo peers. Minor gap: failed to extract exact channel mix splits despite attempts.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Agent took 34 turns, strictly hitting the F criteria (>20 turns) for inefficiency, though high cache hit rate (75.4%) kept cost at $0.60.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"3. Sector KPIs\",\n      \"issue\": \"The agent failed to extract exact channel mix (GT/MT/e-comm) and rural/urban splits, which are critical for FMCG.\",\n      \"suggestion\": \"Update the get_company_context tool instructions to explicitly target rural/urban and channel mix percentages in FMCG concall extractions.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"1. Sector Overview\",\n      \"issue\": \"TAM data was flagged as an open question because no web tool was available to verify the \u20b95.5-6.5 lakh crore estimate.\",\n      \"suggestion\": \"Provide the agent with a web search tool or a pre-computed sector TAM database to validate industry size claims.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional contextualization of the ROCE drop from 117% to 28%, correctly identifying it as a structural mathematical result of the GSK acquisition rather than operational deterioration.\",\n    \"Nuanced handling of the pee"
+    }
+  }
+}

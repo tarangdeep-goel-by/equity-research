@@ -28,6 +28,14 @@ log "  sector=$SECTOR stock=$STOCK"
 log "  agents=${AGENTS[*]}"
 log "  logdir=$LOGDIR"
 
+# Pre-flight: autoeval deps must be installed, else every grade silently
+# errors with "google-genai not installed" (happened once when a sibling
+# `uv sync --extra test` evicted the autoeval extra).
+if ! (cd "$FT_DIR" && uv run python -c "import google.genai" 2>/dev/null); then
+  log "ABORT — autoeval deps missing (google-genai). Run: cd $FT_DIR && uv sync --extra autoeval"
+  exit 2
+fi
+
 # Pre-commit env
 {
   echo "# Eval Feedback — $SECTOR ($STOCK)"
@@ -41,10 +49,16 @@ grade_agent() {
   local agent="$1"
   log "START grade  $agent"
   cd "$FT_DIR"
-  uv run flowtrack research autoeval -a "$agent" --sectors "$SECTOR" --skip-run \
-    > "$LOGDIR/grade/$agent.log" 2>&1
-  local rc=$?
-  log "DONE  grade  $agent (rc=$rc)"
+  uv run flowtrack research autoeval -a "$agent" --sectors "$SECTOR" --skip-run 2>&1 \
+    | tee "$LOGDIR/grade/$agent.log" \
+    | awk -v p="[$SECTOR/grade/$agent]" '{print p" "$0; fflush()}'
+  local rc=${PIPESTATUS[0]}
+  if [ "$rc" -ne 0 ] || grep -qE "^ERROR:|Traceback|ModuleNotFoundError" "$LOGDIR/grade/$agent.log" 2>/dev/null; then
+    log "FAIL  grade  $agent (rc=$rc) — head of log below"
+    head -5 "$LOGDIR/grade/$agent.log" 2>/dev/null | sed "s/^/    [grade-fail $agent] /" | tee -a "$STATUS"
+  else
+    log "DONE  grade  $agent (rc=$rc)"
+  fi
 
   # Extract summary from evaluate.py output
   {
@@ -74,9 +88,10 @@ run_agent() {
   local agent="$1"
   log "START run    $agent"
   cd "$FT_DIR"
-  uv run flowtrack research run "$agent" -s "$STOCK" \
-    > "$LOGDIR/run/$agent.log" 2>&1
-  local rc=$?
+  uv run flowtrack research run "$agent" -s "$STOCK" 2>&1 \
+    | tee "$LOGDIR/run/$agent.log" \
+    | awk -v p="[$SECTOR/run/$agent]" '{print p" "$0; fflush()}'
+  local rc=${PIPESTATUS[0]}
   log "DONE  run    $agent (rc=$rc)"
 
   if [ $rc -eq 0 ]; then
@@ -95,8 +110,18 @@ run_agent() {
   fi
 }
 
-# Run agents 2 at a time
-i=0
+# First agent runs alone to populate the Phase 0b docling cache
+# (_docling.md + _heading_index.json next to each PDF). Running two agents in
+# parallel on a fresh stock duplicates 15-25 min of PDF OCR work; serialising
+# the first run lets all subsequent agents hit the cache in Phase 0b.
+if [ ${#AGENTS[@]} -gt 0 ]; then
+  first="${AGENTS[0]}"
+  log "WARM-UP      $first (serial — populates docling cache)"
+  run_agent "$first"
+fi
+
+# Remaining agents run 2 at a time with warm cache.
+i=1
 while [ $i -lt ${#AGENTS[@]} ]; do
   a1="${AGENTS[$i]}"
   a2="${AGENTS[$((i+1))]:-}"

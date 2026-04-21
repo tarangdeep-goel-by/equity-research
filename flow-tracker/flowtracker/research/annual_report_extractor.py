@@ -47,17 +47,20 @@ _VAULT_BASE = Path.home() / "vault" / "stocks"
 MAX_CONCURRENT_AR_EXTRACTIONS = 2  # ARs are heavy — keep concurrency modest
 
 # Sections extracted by default. Heavy sections opt-in via --full.
+# BRSR is ESG / sustainability disclosure — not currently consumed by any
+# specialist agent prompt or sector mandate, so it's opt-in to avoid the
+# per-AR cost and reduce SDK subprocess churn during Phase 0b.
 DEFAULT_SECTIONS = (
     "chairman_letter",
     "mdna",
     "risk_management",
     "auditor_report",
     "corporate_governance",
-    "brsr",
     "related_party",
     "segmental",
 )
 FULL_ONLY_SECTIONS = (
+    "brsr",
     "notes_to_financials",
     "financial_statements",
 )

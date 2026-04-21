@@ -1,0 +1,83 @@
+{
+  "sector": "all_for_technical",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T21:38:43.891815+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "real_estate": {
+      "agent": "technical",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "A",
+      "grade_numeric": 94,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Exceptional depth, particularly in distinguishing between debt NCDs and equity in the MF flow data, and correctly interpreting rising price + falling delivery as a short-covering/distribution signal rather than accumulation."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless logical flow. The synthesis perfectly combines the structural bearishness (death cross), short-term exhaustion (RSI 94), and weak conviction (falling delivery) into a coherent 'high-risk bounce' thesis."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Covers all critical technical dimensions (price, volume, momentum, relative strength, flows). The only missing element is F&O data (OI/PCR), which the agent correctly noted was unavailable in the pipeline."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Provides crystal-clear, conditional entry triggers (e.g., RSI < 60 + SMA-50 retest with >50% delivery, or a confirmed SMA-200 reclaim). Exactly what a PM needs to time an entry."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Successfully integrates the 10Y G-Sec yield as the primary macro-technical driver for real estate, contextualizing how rate environments impact the sector's price action."
+        },
+        "data_sourcing": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exemplary data handling. The agent caught a critical benchmark error in the yfinance Beta (vs S&P 500) and correctly substituted the Blume-adjusted Nifty Beta from the analytical profile."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent use of the calculate tool for averages and growth rates. Minor deduction because it used the 'margin_of_safety' operation to calculate the gap between price and SMA-200, which is semantically incorrect though mathematically functional."
+        },
+        "cost_efficiency": {
+          "grade": "B+",
+          "numeric": 87,
+          "rationale": "Cost is very efficient ($0.36) and cache hit rate is solid (64.2%), though it took 16 turns to complete the analysis, which borders on the higher side."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "1. Price Action",
+          "issue": "Agent used the 'margin_of_safety' operation in the calculate tool to find the percentage difference between current price and SMA-200.",
+          "suggestion": "Instruct the agent to reserve 'margin_of_safety' strictly for Fair Value vs Price calculations, and use 'growth_rate', 'pct_of', or 'expr' for moving average distance calculations."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "1. Price Action",
+          "issue": "Sector index performance data (`perf_sector_index`) returned null, forcing the agent to skip sector-relative performance.",
+          "suggestion": "Ensure Nifty Realty (or relevant sector indices) are properly mapped and returning data in the `get_market_context(price_performance)` endpoint."
+        }
+      ],
+      "strengths": [
+        "Brilliant parsing of MF data to separate debt NCD purchases from genuine equity accumulation, preventing a false bullish signal.",
+        "Excellent catch on the Beta benchmark discrepancy, correctly overriding the default yfinance S&P 500 beta with the Nifty 50 Blume-adjusted beta.",
+        "Highly actionable synthesis that combines multiple technical disciplines (momentum, volume divergence, moving averages) into a clear risk/reward framework."
+      ],
+      "summary": "An institutional-quality technical report that excels in analytical depth and data skepticism. The agent's ability to parse debt vs. equity ISINs in mutual fund flows and correct a benchmark error in the Beta metric demonstrates exceptional reasoning, resulting in a highly actionable and accurate assessment of the stock's counter-trend bounce.",
+      "report_length": 19514,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 22.331443292001495,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Exceptional depth, particularly in distinguishing between debt NCDs and equity in the MF flow data, and correctly interpreting rising price + falling delivery as a short-covering/distribution signal rather than accumulation.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless logical flow. The synthesis perfectly combines the structural bearishness (death cross), short-term exhaustion (RSI 94), and weak conviction (falling delivery) into a coherent 'high-risk bounce' thesis.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Covers all critical technical dimensions (price, volume, momentum, relative strength, flows). The only missing element is F&O data (OI/PCR), which the agent correctly noted was unavailable in the pipeline.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Provides crystal-clear, conditional entry triggers (e.g., RSI < 60 + SMA-50 retest with >50% delivery, or a confirmed SMA-200 reclaim). Exactly what a PM needs to time an entry.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Successfully integrates the 10Y G-Sec yield as the primary macro-technical driver for real estate, contextualizing how rate environments impact the sector's price action.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exemplary data handling. The agent caught a critical benchmark error in the yfinance Beta (vs S&P 500) and correctly substituted the Blume-adjusted Nifty Beta from the analytical profile.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent use of the calculate tool for averages and growth rates. Minor deduction because it used the 'margin_of_safety' operation to calculate the gap between price and SMA-200, which is semantically incorrect though mathematically functional.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"B+\",\n      \"numeric\": 87,\n      \"rationale\": \"Cost is very efficient ($0.36) and cache hit rate is solid (64.2%), though it took 16 turns to complete the analysis, which borders on the higher side.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A\",\n    \"grade_numeric\": 94\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"1. Price Action\",\n      \"issue\": \"Agent used the 'margin_of_safety' operation in the calculate tool to find the percentage difference between current price and SMA-200.\",\n      \"suggestion\": \"Instruct the agent to reserve 'margin_of_safety' strictly for Fair Value vs Price calculations, and use 'growth_rate', 'pct_of', or 'expr' for moving average distance calculations.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"1. Price Action\",\n      \"issue\": \"Sector index performance data (`perf_s"
+    }
+  }
+}

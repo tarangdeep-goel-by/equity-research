@@ -1,0 +1,83 @@
+{
+  "sector": "all_for_sector",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T21:49:37.323724+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "real_estate": {
+      "agent": "sector",
+      "stock": "GODREJPROP",
+      "sector": "Real estate developer",
+      "grade": "A-",
+      "grade_numeric": 92,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Exceptional breakdown of the Ind AS 115 accounting distortion and how it suppresses ROCE/PE while operational metrics (pre-sales) thrive. The contextualization of the Beneish M-Score for real estate is top-tier."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "The narrative perfectly bridges the gap between GODREJPROP's #1 operational ranking and #5 market cap ranking without contradictions. Assumptions are clearly stated."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Thoroughly covers TAM, competitive landscape, institutional flows, and macro sensitivities. The only minor gap is the lack of systematic peer CAGR comparison due to a tool limitation."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 94,
+          "rationale": "Provides a clear bull/bear framework with specific catalysts (rate cuts, BD conversion) and highly specific risks (CARO deterioration, FII concentration, JV credit exposure)."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless application of real estate-specific metrics (pre-sales, collections, realization, OCF, land bank/BD). Explicitly and correctly rejects reported revenue/EBITDA as lagging indicators."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Claims are meticulously backed by cited data. The agent transparently notes when peer data was unavailable and successfully triangulates using concall data."
+        },
+        "tool_use_discipline": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Excellent use of the `calculate` tool (10 calls) and proper fallback to `get_screener_peers`. Handled the empty `peer_growth` return gracefully, though it could have batched calls better."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "32 turns and $0.84 cost is highly inefficient. While the cache hit rate was decent (54.9%), taking >20 turns indicates a failure to batch tool calls effectively."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Agent Execution",
+          "issue": "The agent took 32 turns to complete the report, indicating it is calling tools sequentially rather than batching them where possible.",
+          "suggestion": "Update system prompt to explicitly instruct the agent to batch independent tool calls (e.g., calling get_market_context, get_estimates, and get_valuation in a single turn) to reduce turn count and latency."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "2. Competitive Landscape",
+          "issue": "The `get_peer_sector(section='peer_growth')` tool returned empty, preventing a systematic CAGR comparison across peers.",
+          "suggestion": "Investigate the backend data pipeline for the `peer_growth` endpoint to ensure it correctly populates historical growth metrics for real estate peers."
+        }
+      ],
+      "strengths": [
+        "Masterful explanation of real estate accounting (Ind AS 115) and its impact on standard valuation multiples and quality flags (M-Score).",
+        "Excellent synthesis of macro factors (FII flows, USD/INR, interest rates) with company-specific data (FII ownership percentage, premium segment focus).",
+        "Rigorous use of the `calculate` tool to derive implied guidance, market share percentages, and margin of safety."
+      ],
+      "summary": "This is an institutional-quality sector report that perfectly applies real estate analytical frameworks, though it was generated highly inefficiently (32 turns). The agent's ability to look past distorted accounting metrics (negative EV/EBITDA, low ROCE) to identify the underlying operational momentum (record pre-sales and OCF) is exceptional.",
+      "report_length": 36160,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 26.756305584000074,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Exceptional breakdown of the Ind AS 115 accounting distortion and how it suppresses ROCE/PE while operational metrics (pre-sales) thrive. The contextualization of the Beneish M-Score for real estate is top-tier.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"The narrative perfectly bridges the gap between GODREJPROP's #1 operational ranking and #5 market cap ranking without contradictions. Assumptions are clearly stated.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Thoroughly covers TAM, competitive landscape, institutional flows, and macro sensitivities. The only minor gap is the lack of systematic peer CAGR comparison due to a tool limitation.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 94,\n      \"rationale\": \"Provides a clear bull/bear framework with specific catalysts (rate cuts, BD conversion) and highly specific risks (CARO deterioration, FII concentration, JV credit exposure).\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless application of real estate-specific metrics (pre-sales, collections, realization, OCF, land bank/BD). Explicitly and correctly rejects reported revenue/EBITDA as lagging indicators.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Claims are meticulously backed by cited data. The agent transparently notes when peer data was unavailable and successfully triangulates using concall data.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Excellent use of the `calculate` tool (10 calls) and proper fallback to `get_screener_peers`. Handled the empty `peer_growth` return gracefully, though it could have batched calls better.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"32 turns and $0.84 cost is highly inefficient. While the cache hit rate was decent (54.9%), taking >20 turns indicates a failure to batch tool calls effectively.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 92\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Agent Execution\",\n      \"issue\": \"The agent took 32 turns to complete the report, indicating it is calling tools sequentially rather than batching them where possible.\",\n      \"suggestion\": \"Update system prompt to explicitly instruct the agent to batch independent tool calls (e.g., calling get_market_context, get_estimates, and get_valuation in a single turn) to reduce turn count and latency.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"2. Competitive Landscape\",\n      \"issue\": \"The `get_peer_sector(section='peer_growth')` tool returned empty, preventing a systematic CAGR comparison across peers.\",\n      \"suggestion\": \"Inves"
+    }
+  }
+}

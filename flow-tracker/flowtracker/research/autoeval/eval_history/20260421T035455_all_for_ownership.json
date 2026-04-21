@@ -1,0 +1,76 @@
+{
+  "sector": "all_for_ownership",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-21T03:54:55.944482+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "insurance": {
+      "agent": "ownership",
+      "stock": "POLICYBZR",
+      "sector": "Insurtech platform",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 96,
+          "rationale": "Exceptional depth in decomposing the FII exit vs DII absorption, identifying the ESOP trust overhang inflating public float, and highlighting the specific QUANT MF concentration risk."
+        },
+        "logical_consistency": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Strong handling of conflicting signals (near-term FII supply vs medium-term DII absorption) and clear, mathematically sound caveats around historical market cap mismatches."
+        },
+        "completeness": {
+          "grade": "A-",
+          "numeric": 90,
+          "rationale": "Covers all major ownership dimensions thoroughly. FII decomposition and exact ESOP trust holdings are missing, but the agent correctly flags these as data limitations rather than ignoring them."
+        },
+        "actionability": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Provides a highly actionable thesis on the institutional quality rotation, with specific, quantifiable risks (QUANT concentration) and clear open questions for a PM to investigate."
+        },
+        "sector_framework": {
+          "grade": "A",
+          "numeric": 92,
+          "rationale": "Effectively benchmarks POLICYBZR's MF accumulation against sector peers (e.g., PAYTM) and correctly contextualizes ESOP dilution as a structural feature of tech platform companies."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 95,
+          "rationale": "Rigorous citation of tools, dates, and data limitations. The agent transparently acknowledges the degraded annual report extraction and adjusts its confidence accordingly."
+        },
+        "tool_use_discipline": {
+          "grade": "B",
+          "numeric": 84,
+          "rationale": "Agent initially fumbled the `calculate` tool (Turns 20-24), using `pct_of` to find a value and `growth_rate` for absolute differences, before correcting itself with `expr` in later turns."
+        },
+        "cost_efficiency": {
+          "grade": "C",
+          "numeric": 73,
+          "rationale": "37 turns is excessively high and pushed the cost to $0.61, though the excellent cache hit rate (74.6%) prevented the cost from escalating into the F tier."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Tool Audit / Execution Log",
+          "issue": "Agent wasted turns by selecting incorrect named operations in the calculate tool (e.g., using `pct_of` to calculate a value from a percentage, and `growth_rate` for absolute percentage point differences).",
+          "suggestion": "Update the `calculate` tool instructions to explicitly clarify that `pct_of` returns a percentage, and add a named operation for absolute percentage point differences (or instruct the use of `expr` for this)."
+        }
+      ],
+      "strengths": [
+        "Brilliant deduction that the absence of bulk/block deals means the massive FII exit was absorbed via continuous open-market price discovery.",
+        "Excellent identification of the QUANT MF concentration risk (28.75% of all MF AUM), adding a crucial fragility layer to the otherwise bullish MF accumulation narrative."
+      ],
+      "summary": "This is an institutional-quality ownership report that extracts deep, actionable insights from the data, particularly regarding the FII-to-DII handoff and hidden concentration risks. The only meaningful flaw is the agent's inefficient tool usage, requiring 37 turns to complete the analysis due to initial math tool fumbles.",
+      "report_length": 31305,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 28.738124333001906,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 96,\n      \"rationale\": \"Exceptional depth in decomposing the FII exit vs DII absorption, identifying the ESOP trust overhang inflating public float, and highlighting the specific QUANT MF concentration risk.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Strong handling of conflicting signals (near-term FII supply vs medium-term DII absorption) and clear, mathematically sound caveats around historical market cap mismatches.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A-\",\n      \"numeric\": 90,\n      \"rationale\": \"Covers all major ownership dimensions thoroughly. FII decomposition and exact ESOP trust holdings are missing, but the agent correctly flags these as data limitations rather than ignoring them.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Provides a highly actionable thesis on the institutional quality rotation, with specific, quantifiable risks (QUANT concentration) and clear open questions for a PM to investigate.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A\",\n      \"numeric\": 92,\n      \"rationale\": \"Effectively benchmarks POLICYBZR's MF accumulation against sector peers (e.g., PAYTM) and correctly contextualizes ESOP dilution as a structural feature of tech platform companies.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 95,\n      \"rationale\": \"Rigorous citation of tools, dates, and data limitations. The agent transparently acknowledges the degraded annual report extraction and adjusts its confidence accordingly.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"B\",\n      \"numeric\": 84,\n      \"rationale\": \"Agent initially fumbled the `calculate` tool (Turns 20-24), using `pct_of` to find a value and `growth_rate` for absolute differences, before correcting itself with `expr` in later turns.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"C\",\n      \"numeric\": 73,\n      \"rationale\": \"37 turns is excessively high and pushed the cost to $0.61, though the excellent cache hit rate (74.6%) prevented the cost from escalating into the F tier.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Tool Audit / Execution Log\",\n      \"issue\": \"Agent wasted turns by selecting incorrect named operations in the calculate tool (e.g., using `pct_of` to calculate a value from a percentage, and `growth_rate` for absolute percentage point differences).\",\n      \"suggestion\": \"Update the `calculate` tool instructions to explicitly clarify that `pct_of` returns a percentage, and add a named operation for absolute percentage point differences (or instruct the use of `expr` for this).\"\n    }\n  ],\n  \"strengths\": [\n    \"Brilliant deduction that the absence of bulk/block deals means the massive FII exit was absorbed via continuous open-market price discover"
+    }
+  }
+}

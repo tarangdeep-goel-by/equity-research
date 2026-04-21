@@ -1,0 +1,82 @@
+{
+  "sector": "all_for_business",
+  "stock": "(multiple)",
+  "timestamp": "2026-04-20T22:56:14.864924+00:00",
+  "all_passing": true,
+  "failing_agents": [],
+  "results": {
+    "regulated_power": {
+      "agent": "business",
+      "stock": "NTPC",
+      "sector": "Regulated utility",
+      "grade": "A-",
+      "grade_numeric": 90,
+      "parameters": {
+        "analytical_depth": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Masterclass breakdown of the two-part tariff model, explaining why the product is 'uptime' rather than kilowatt-hours, and correctly identifying the CWIP-to-earnings conversion as the core thesis."
+        },
+        "logical_consistency": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Flawless logic connecting the regulatory ROE model to the financials, correctly explaining why absolute EBITDA growth matters more than margin percentages due to fuel pass-throughs."
+        },
+        "completeness": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Covers all critical dimensions of a hybrid utility, though slightly hindered by the lack of exact NGEL ownership percentage and segmental splits due to data extraction issues."
+        },
+        "actionability": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "The investor checklist and the 'Big Question' section provide a crystal-clear, evidence-backed framework for monitoring the CWIP monetization thesis."
+        },
+        "sector_framework": {
+          "grade": "A+",
+          "numeric": 97,
+          "rationale": "Perfectly applies the regulated power framework, focusing on PAF/PLF, regulated equity base, pass-through fuel costs, and capacity pipelines."
+        },
+        "data_sourcing": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Excellent use of available data with clear citations, and highly transparent handling of the degraded annual report extraction."
+        },
+        "tool_use_discipline": {
+          "grade": "A",
+          "numeric": 93,
+          "rationale": "Surfaced data-quality gaps honestly and used the calculator for all derived metrics, though it failed to optimize its call pattern."
+        },
+        "cost_efficiency": {
+          "grade": "F",
+          "numeric": 50,
+          "rationale": "Failed due to excessive turn count (43 turns) and $0.84 cost, largely driven by 12 sequential, unbatched calls to the calculate tool."
+        }
+      },
+      "issues": [
+        {
+          "type": "PROMPT_FIX",
+          "section": "Execution Log",
+          "issue": "Agent made 12 sequential calls to the `calculate` tool (Turns 26-37), driving up the turn count to 43 and increasing costs.",
+          "suggestion": "Instruct the agent to consolidate mathematical operations or plan calculations more efficiently to reduce sequential turn bloat."
+        },
+        {
+          "type": "DATA_FIX",
+          "section": "Data Sources / Open Questions",
+          "issue": "Annual report segmental extraction was degraded, preventing the agent from determining the exact ownership percentage of NGEL and segmental revenue splits.",
+          "suggestion": "Fix the annual report extraction pipeline for FY25 to ensure segmental tables and notes to accounts are properly parsed."
+        }
+      ],
+      "strengths": [
+        "Exceptional application of the regulated utility sector framework, particularly the deconstruction of the two-part tariff and why headline OPM is misleading.",
+        "Highly transparent handling of data limitations, explicitly flagging the degraded AR extraction and missing NGEL ownership data in the open questions."
+      ],
+      "summary": "This is an institutional-quality business report that perfectly applies the regulated utility framework to deconstruct NTPC's two-part tariff model and CWIP monetization thesis. The analytical depth is outstanding, though the agent's execution was highly inefficient, taking 43 turns due to sequential calculator calls. Fixing the annual report extraction pipeline to provide segmental data would make this report flawless.",
+      "report_length": 32906,
+      "run_duration_s": 0.0,
+      "eval_duration_s": 32.456323957994755,
+      "run_skipped": true,
+      "raw_gemini_response": "```json\n{\n  \"parameters\": {\n    \"analytical_depth\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Masterclass breakdown of the two-part tariff model, explaining why the product is 'uptime' rather than kilowatt-hours, and correctly identifying the CWIP-to-earnings conversion as the core thesis.\"\n    },\n    \"logical_consistency\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Flawless logic connecting the regulatory ROE model to the financials, correctly explaining why absolute EBITDA growth matters more than margin percentages due to fuel pass-throughs.\"\n    },\n    \"completeness\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Covers all critical dimensions of a hybrid utility, though slightly hindered by the lack of exact NGEL ownership percentage and segmental splits due to data extraction issues.\"\n    },\n    \"actionability\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"The investor checklist and the 'Big Question' section provide a crystal-clear, evidence-backed framework for monitoring the CWIP monetization thesis.\"\n    },\n    \"sector_framework\": {\n      \"grade\": \"A+\",\n      \"numeric\": 97,\n      \"rationale\": \"Perfectly applies the regulated power framework, focusing on PAF/PLF, regulated equity base, pass-through fuel costs, and capacity pipelines.\"\n    },\n    \"data_sourcing\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Excellent use of available data with clear citations, and highly transparent handling of the degraded annual report extraction.\"\n    },\n    \"tool_use_discipline\": {\n      \"grade\": \"A\",\n      \"numeric\": 93,\n      \"rationale\": \"Surfaced data-quality gaps honestly and used the calculator for all derived metrics, though it failed to optimize its call pattern.\"\n    },\n    \"cost_efficiency\": {\n      \"grade\": \"F\",\n      \"numeric\": 50,\n      \"rationale\": \"Failed due to excessive turn count (43 turns) and $0.84 cost, largely driven by 12 sequential, unbatched calls to the calculate tool.\"\n    }\n  },\n  \"overall\": {\n    \"grade\": \"A-\",\n    \"grade_numeric\": 90\n  },\n  \"issues\": [\n    {\n      \"type\": \"PROMPT_FIX\",\n      \"section\": \"Execution Log\",\n      \"issue\": \"Agent made 12 sequential calls to the `calculate` tool (Turns 26-37), driving up the turn count to 43 and increasing costs.\",\n      \"suggestion\": \"Instruct the agent to consolidate mathematical operations or plan calculations more efficiently to reduce sequential turn bloat.\"\n    },\n    {\n      \"type\": \"DATA_FIX\",\n      \"section\": \"Data Sources / Open Questions\",\n      \"issue\": \"Annual report segmental extraction was degraded, preventing the agent from determining the exact ownership percentage of NGEL and segmental revenue splits.\",\n      \"suggestion\": \"Fix the annual report extraction pipeline for FY25 to ensure segmental tables and notes to accounts are properly parsed.\"\n    }\n  ],\n  \"strengths\": [\n    \"Exceptional application of the regulated utility sector framework, particularly the deconst"
+    }
+  }
+}
