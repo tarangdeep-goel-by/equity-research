@@ -756,6 +756,93 @@ Ship the narrowest useful version:
 
 ---
 
+## Part 3 — Eval coverage for newer agents (macro, synthesis, historical_analog, F&O positioning)
+
+**Status:** Pending. Surfaced 2026-04-21 when the user flagged that the running autoeval covers the 7 original specialists (Business, Financials, Ownership, Valuation, Risk, Technical, Sector) but has zero coverage for the 3 newer agents + the upcoming F&O Positioning agent.
+
+### 3.1 Why the existing harness doesn't fit
+
+The autoeval harness (`research/autoeval/evaluate.py` + `eval_matrix.yaml`) takes a `(sector, stock, agent)` matrix, runs the agent, feeds briefing + report to Gemini with a sector-specific rubric (BFSI CAR/NIM, pharma R&D pipeline, etc.), grades A→F. This assumes:
+
+1. Output is a per-stock specialist report covering that agent's domain.
+2. Graded against sector-specific KPIs.
+3. Single-stock context; no cross-agent dependencies.
+
+**Macro** breaks rule 2 — sector-agnostic (outputs regime state for the whole market). Grading against BFSI rubric is a category error.
+
+**Historical Analog** breaks rules 1 and 2 — statistical-reasoning output, not domain analysis. No sector rubric applies.
+
+**Synthesis** breaks rule 1 — quality is a function of how well it resolves contradictions across 10 specialist briefings; isolated grading loses meta-synthesis quality.
+
+**F&O Positioning** (Sprint 3) breaks rule 1 partially — universe is ~200 F&O-eligible stocks only, graceful-empty for the rest. Standard rubric works for eligible stocks but the matrix needs F&O-filter flag.
+
+### 3.2 Per-agent approach (priority-ordered)
+
+**Tier 1 — Macro (~1 day).** Tractable because it's closest to specialist-shape.
+
+- **Rubric dimensions:**
+  - Anchor coverage: did macro drill into every `status='complete'` anchor from `get_macro_catalog` (Economic Survey, RBI AR, RBI MPR, Union Budget)?
+  - Trajectory-check discipline: every `SECULAR`-tagged theme backed by ≥2 anchor publications?
+  - FACT/VIEW separation: every bullet prefixed correctly, every FACT has inline URL + date?
+  - India-transmission mapping: every global claim followed by INR second-order effect?
+  - Stale-policy defense: is the cited Fed/ECB/RBI stance from the most recent decision?
+- **Matrix shape:** flat list of dates (weekly or monthly cadence), not sector×stock. Macro state changes slowly; 4-6 eval points per quarter is enough signal.
+- **Harness change:** accept `sector=_macro_, stock=NIFTY` as a pseudo-pair; use a new `eval_matrix_macro.yaml`.
+- **Effort:** ~1 day (rubric + harness wiring + 4-6 initial eval points).
+
+**Tier 2 — Historical Analog backtest (~2 days).** Unique among specialists because we have ground truth.
+
+- **Approach:** skip Gemini rubric; do **empirical backtest**. For each of 20 randomly-sampled `(symbol, as_of_date)` points where `as_of_date` is ≥15 months ago (so 12m forward returns are observable), run the agent as-if it were `as_of_date`, extract its `directional_adjustments`, compare to realized 12m return direction.
+- **Dimensions graded:**
+  - **Calibration** — when agent says `downside: Thicker`, does realized 12m return land in cohort's bottom quartile significantly more often than chance?
+  - **Coverage** — does the agent produce output at all (doesn't choke on thin cohorts)?
+  - **Leakage** — integration test confirms `compute_feature_vector(symbol, as_of)` doesn't touch any data with date > `as_of`.
+  - **Prompt adherence** — every analog cited in prose must exist in the tool-call log (programmatic check).
+- **Why backtest > Gemini:** the agent's correctness is a *statistical* property, not a judgmental one. Gemini grading "is this a good analog?" is unfalsifiable; realized returns are ground truth.
+- **Deliverable:** `research/autoeval/backtest_historical_analog.py` — script, not harness integration. Monthly cron target.
+- **Effort:** ~2 days (backtest framework + 20 initial sample points + calibration metrics).
+
+**Tier 3 — Synthesis eval (~2-3 days, DEFER).** Hardest and lowest ROI.
+
+- Why defer: synthesis output quality is a function of specialist briefing quality. Fixing specialists through their own evals is more leveraged than grading synthesis output directly.
+- When to revisit: after specialist A-grade autoeval completes across all sectors, synthesis eval becomes worth the effort.
+- **Rubric sketch** (for when ready):
+  - **Fact grounding** — Gemini verifies every claim in synthesis prose traces to a specialist briefing (automated via briefing audit).
+  - **Contradiction resolution** — when specialists disagree, did synthesis explicitly address the tension vs averaging?
+  - **Directive handling** — when orchestrator pre-analysis flagged a cross-signal, did synthesis address it?
+  - **Calibration check** — does synthesis's bull/base/bear probability match Historical Analog's cohort prior within tolerance?
+- These are **meta-rubrics** — graded across the full multi-agent run, not the synthesis output alone. Requires richer harness plumbing.
+
+**Tier 4 — F&O Positioning (folds into Sprint 3 autoeval budget).** Standard rubric with F&O-eligible filter. No separate work item — already budgeted in Sprint 3 §2.12 (Autoeval F&O-eligible sector sweep, 1.5 days).
+
+### 3.3 Exit criteria (Tier 1 + Tier 2 combined)
+
+- [ ] Macro autoeval runs on 4-6 recent dates, grade distribution visible in `results.tsv`.
+- [ ] Macro rubric explicitly checks anchor exhaustion (every `status='complete'` anchor drilled).
+- [ ] Historical Analog backtest on 20 (symbol, 2023-Q1) points shows calibration ≥ chance (if agent says `downside: Thicker`, P(realized 12m in bottom quartile) > 0.25 by meaningful margin).
+- [ ] Backtest has zero-leakage integration test (computing features for pre-2020 symbol touches no post-2020 data).
+- [ ] Tier 3 synthesis eval explicitly deferred with a `# TODO` comment in `eval_matrix.yaml`.
+
+### 3.4 Effort summary
+
+| Tier | Item | Effort |
+|---|---|---|
+| 1 | Macro autoeval — rubric + harness wiring + initial 4-6 eval points | ~1 day |
+| 2 | Historical Analog backtest script + 20 sample points + calibration metrics | ~2 days |
+| 3 | Synthesis eval (DEFER until specialists A-grade across sectors) | ~2-3 days, not now |
+| 4 | F&O Positioning eval — folded into Sprint 3 budget | 0 incremental |
+| **Total now** | **~3 days** (Tier 1 + Tier 2) |
+
+### 3.5 Sequencing recommendation
+
+Ship Tier 1 (Macro) first — it's the smallest change and slots into the existing harness with minor shape tweaks. That gives us per-week grade visibility on macro quality, which currently has zero feedback loop.
+
+Ship Tier 2 (Historical Analog backtest) as an independent follow-up — skipping Gemini entirely, building the backtest script as a standalone evaluation tool. Monthly cron cadence.
+
+Tier 3 (Synthesis) waits until either (a) specialists reach A-grade across all sectors, or (b) a quality regression in synthesis output demands it.
+
+---
+
 ## Phasing & sequencing
 
 **Recommended order: Sprint 0 (corp-action infra) → Sprint 1 (Historical Analog) → Sprint 2 (F&O ingestion) → Sprint 3 (F&O Positioning agent).**
@@ -827,10 +914,11 @@ Both agents hit the existing CLI smoke suite (`tests/unit/test_smoke.py`) via `-
 | **Sprint 0** | ✅ Merged 2026-04-20 (PR #65, #66) | ~3 days | Corporate-action infra | Sprint 1 |
 | **Sprint 1** | ✅ Merged 2026-04-20 (PR #67) | ~5 days | Historical Analog agent | Empirical conviction calibration in synthesis |
 | **Part 1.5** | 🔄 **Queued — resume here** | ~1 day | Post-Sprint-1 hardening from Gemini review of TMPV smoke test (similarity-ring fallback, informative_N, is_backfilled flag, imputation, multi-horizon stats, toxic-intersection prompt clause) | Robust output on narrow-industry and recently-listed tickers |
+| **Part 3** (eval coverage) | 🔄 Queued | ~3 days | Macro autoeval rubric (Tier 1, ~1d) + Historical Analog backtest script (Tier 2, ~2d). Synthesis eval deferred. | Per-agent quality feedback loops on the 3 newer agents |
 | **Sprint 2** | Pending | ~4.5 days | F&O ingestion pipeline | Sprint 3 |
 | **Sprint 3** | Pending | ~4 days | F&O Positioning agent | Unique positioning dimension |
 
-**Remaining effort: ~9.5 days.**
+**Remaining effort: ~12.5 days.**
 
 Both new agents are tier-3 (failures non-blocking). Both are pure additions — no existing agent changes required. `_SYNTHESIS_FIELDS` expansions land cleanly.
 
@@ -838,9 +926,12 @@ Both new agents are tier-3 (failures non-blocking). Both are pure additions — 
 
 **Start here:** Part 1.5 (§1.5.2 fix list). Three CRITICAL items (similarity-ring fallback, informative_N, is_backfilled flag) are the most leveraged — shipping just those would already lift edge-case output quality. Re-run the TMPV smoke + exit criteria in §1.5.5 to verify.
 
-**After Part 1.5:** Sprint 2 ingestion work can start in a separate worktree (`equity-research-fno-ingest`). Sprint 2 has zero dependency on Part 1.5, so the two can parallelize if bandwidth allows.
+**Second priority:** Part 3 eval coverage (§3.2 Tier 1 + Tier 2). Ship Macro autoeval (~1d) before Tier 2 backtest (~2d). Tier 3 (synthesis eval) stays deferred. These can parallelize with Part 1.5 in separate worktrees — they touch different code paths.
+
+**After Part 1.5 + Part 3:** Sprint 2 ingestion work starts in `equity-research-fno-ingest`. Sprint 2 has zero dependency on the other pending items.
 
 **Context anchors:**
 - TMPV smoke output that triggered Part 1.5: in session log 2026-04-21 around commit `f5d0f93` (Sprint 1 merge).
-- Gemini review verdict: see §1.5.2 table + §1.5.3 keep-list.
-- Production DB has 17,701 materialized state rows — no re-materialization needed unless `analog_builder.py` feature-vector logic changes (fixes #1/#2/#5 don't change features; fix #3/#4 do — plan a re-run if those ship).
+- Gemini review verdict for Part 1.5: see §1.5.2 table + §1.5.3 keep-list.
+- Part 3 motivation: user flagged the 3 newer agents (macro, synthesis, historical_analog) have zero autoeval coverage while the 7 original specialists are being graded. §3.1 explains why the existing harness doesn't fit.
+- Production DB has 17,701 materialized state rows — no re-materialization needed unless `analog_builder.py` feature-vector logic changes (Part 1.5 fixes #1/#2/#5 don't change features; #3/#4 do — plan a re-run if those ship).
