@@ -39,3 +39,14 @@ This is an Indian IT services company. Standard manufacturing/asset-heavy metric
 - `strategic_priorities` — AI/gen-AI positioning, large-deal-ramp timelines, inorganic-vs-organic split.
 
 **Cross-year narrative cues:** `key_evolution_themes` typically track discretionary-vs-non-discretionary-spending trend; `guidance_track_record` credibility matters extra for IT given quarterly guidance cadence.
+
+## IT Services Mandatory Metrics (new)
+
+IT Services business and risk agents MUST cite all of the following for Tier-1 IT reports (TCS, INFY, WIPRO, HCLTECH, TECHM, LTIM):
+
+1. Top-5 and Top-10 client concentration (% of revenue)
+2. Utilization rate (onsite / offshore split)
+3. Net headcount additions, latest quarter
+4. Attrition LTM (%)
+
+Source chain: `get_company_context(section='client_concentration')` → `get_concall_insights(sub_section='operational_metrics')` → `get_deck_insights(sub_section='highlights')` for the latest quarter. All four are mandatory — missing any is a PROMPT_FIX downgrade for Tier-1 IT coverage.

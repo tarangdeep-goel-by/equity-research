@@ -60,3 +60,15 @@ Every private-bank report — from both the ownership and financials agents — 
 
 ### Metrics That Don't Apply
 Same exclusions as BFSI core (see bfsi/_shared.md): ROCE, EBITDA, FCF, standard DCF, working capital, gross margin — all formula artifacts for banks. Do not present.
+
+## BFSI Asset-Quality Metrics — Strict Enforcement (new)
+
+Missing any of GNPA %, NNPA %, PCR %, LCR %, CRAR %, or CET-1 % when the bank is in the Nifty-50 BFSI cohort is a PROMPT_FIX downgrade. Extract via the mandatory chain: `get_quality_scores(section='bfsi')` → `get_sector_kpis(symbol, sub_section=<key>)` → `get_concall_insights(sub_section='financial_metrics')` for the last 4 quarters → `get_annual_report(section='segmental')` or `auditor_report`. Cite each value with 1-decimal precision: "GNPA 2.1%" NOT "below 3%".
+
+## CFO-for-BFSI Rule (new)
+
+Operating cash flow for banks and NBFCs is dominated by deposit and loan flow swings quarter to quarter. Do NOT use CFO to argue dividend sustainability. Use the dividend payout ratio (from `get_fundamentals(section='ratios')`) or `total dividend / net_profit` trajectory instead. Citing CFO coverage for a BFSI dividend is a COMPUTATION-level downgrade.
+
+## ROCE Exclusion for BFSI (new)
+
+ROCE is NOT a valid KPI for banks or NBFCs — it mixes interest income and borrowings denominators in non-meaningful ways. Do not include ROCE in the business profile table or financial summary. If `get_fundamentals` returns a ROCE value, ignore it for narrative. Use ROE, ROA, NIM, and C/I ratio instead.

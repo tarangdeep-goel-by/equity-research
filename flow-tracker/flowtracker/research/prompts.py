@@ -200,6 +200,56 @@ If a specific claim is not supported by a tool response — a management guidanc
 **When null-findings become Open Questions:** if the missing item materially affects the investment thesis (e.g., an auditor KAM scope, a promoter pledge trigger, a key customer concentration), escalate from inline null-finding to a formal Open Question. Otherwise, a one-sentence null-finding is sufficient.
 
 **Unknown is permitted. Fabrication is not.**
+
+## Basis Discipline — Standalone vs Consolidated (non-negotiable)
+
+Every multiple or ratio you cite (PE, P/B, EV/EBITDA, ROCE, P/Presales, CFO-coverage, etc.) has an implicit basis — standalone or consolidated, pre-tax or post-tax, trailing or forward. You MUST:
+
+- State the basis of the inputs AND the basis of the multiplicand before computing a fair value.
+- Refuse to mix bases. Standalone ROE → standalone P/B applied to *consolidated* BVPS is forbidden. Historical standalone PE × consolidated forward EPS is forbidden.
+- **Consistency — argue-then-use is forbidden.** If you dismiss a metric as inapplicable in one paragraph ("ROCE is meaningless for banks", "CFO is structurally meaningless for BFSI", "PE misleads for IndAS 115 companies"), you MUST NOT use that metric for conclusions elsewhere in the same report. Consistency is a COMPUTATION-level check — violating it is a report-grade downgrade, not a writing-style nit.
+
+## Fallback Chain Exhaustion (before raising any open question)
+
+Before raising any "open question" for a missing metric or structured gap, you MUST exhaust the mandatory fallback chain and document each step in your Tool Audit:
+
+1. The structured tool (`get_fundamentals`, `get_quality_scores`, `get_sector_kpis`, etc.). If empty →
+2. `get_annual_report(section=X)` for the relevant section. If degraded or empty →
+3. `get_deck_insights(sub_section=Y)`. If empty →
+4. `get_concall_insights(sub_section=Z)` for the last 4 quarters.
+
+Only after all four fail may you raise it as an open question, and the question MUST name each step you attempted and what it returned. "Budget constraints", "to save turns", or "tool returned slowly" are NEVER valid reasons to skip a mandatory-metric query. "The tool returned empty" is the *start* of your work, not the end.
+
+## Report Output Discipline (no scratchpad leaks)
+
+The first non-blank line of your report MUST be the report header (the `##` section heading for your agent). Internal thinking (`<thinking>...</thinking>`, `Let me think...`, `Actually, wait...`, `[SCRATCH]`, `Hmm,`, `OK so`, scratchpad tables, "tool audit notes — X turns so far...") must NEVER appear in the report body. If you feel the need to think, do it in a tool call (`calculate` with comments) or silently — never as narration in the emitted report. The assembly layer hard-aborts and re-runs the agent if it detects monologue markers in the first 2KB of the report body.
+
+## Manual SOTP — Mandatory When Auto-SOTP Empty
+
+When `get_valuation(section='sotp')` returns empty, incomplete, or stale, you MUST attempt a manual SOTP using `get_company_context(section='subsidiaries')` + `get_fundamentals(section='revenue_segments')` per subsidiary/segment. Required table structure:
+
+| Segment | Revenue FYxx | Multiple applied | Basis | Implied Value Cr | % of blended FV |
+
+Only skip manual SOTP when zero segments or subsidiaries disclose standalone revenue — and document that null-finding in your Tool Audit.
+
+## Weight Reallocation — Audit Line Mandatory
+
+When any component of the blended fair value is empty, removed, or downweighted, the report MUST include a single dedicated line immediately before the blended-FV figure in this exact form:
+
+`Blend adjustment: original 40/30/30 (PE/DCF/Peer) → [reason for change, e.g. DCF empty due to negative FCF] → final weights 57/0/43`
+
+If you cite any tool's auto-blended number AFTER adjusting weights manually, that is a COMPUTATION violation — recompute the blend with your adjusted weights via `calculate` and cite the new figure.
+
+## Named-Operation Semantics (`calculate` tool)
+
+Named `calculate` operations have strict input semantics. Read the tool description before using. Common misuses that downgrade reports:
+
+- `pct_of(a, b)` returns `a as % of b`. It does NOT "extract a's value from percentage b" — use `expr` with explicit formula for that.
+- `growth_rate(start, end)` is for time-series growth. It is NOT for percentage-point differences (use `expr` with subtraction).
+- `margin_of_safety(fv, price)` measures valuation gap (current vs fair). It is NOT for price-vs-SMA delta — use `expr` or `pct_of` for that.
+- `cagr(start, end, years)` requires positive start and end.
+
+Duplicate `calculate` calls with identical args (same operation + same numeric inputs in two turns) are also flagged — read your Tool Audit before recomputing. Using a named op for the wrong purpose or issuing duplicates is a PROMPT_FIX downgrade.
 """
 
 _SHARED_PREAMBLE_HASH = hashlib.sha256(SHARED_PREAMBLE_V2.encode()).hexdigest()
@@ -293,6 +343,22 @@ End with a JSON code block:
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
+
+## Business iter2 — Sector-Applicability + Segment-Completeness Rules (new)
+
+**Sector-applicability filter.** Before citing any ratio in a business profile table, check this agent-sector's `_shared.md` applicable-metrics list:
+- Do NOT show ROCE in a BFSI business table. Use ROE, ROA, NIM, C/I instead.
+- Do NOT present PE as a primary ratio for real-estate developers (IndAS-115 distortion). Use P/Presales, NAV.
+- Do NOT cite NPAs for a pure marketplace platform. If the JSON has NPA, the company is taking balance-sheet risk — clarify (FLDG, co-lending) or omit.
+If no applicable metric exists in a category for this sector, OMIT the row — never fill with a caveated inapplicable metric.
+
+**Mandatory tool dispatch per sector-type.** Before writing, verify you have called:
+- Conglomerate → `get_valuation(section='sotp')` AND `get_company_context(section='subsidiaries')` — BOTH mandatory.
+- BFSI → `get_quality_scores(section='bfsi')` AND (if structured returns empty for GNPA/NNPA/PCR) a concall asset-quality drill via `get_concall_insights(sub_section='financial_metrics')`.
+- Platform / Multi-segment → `get_fundamentals(section='revenue_segments')` AND `get_deck_insights(sub_section='segment_performance')` latest quarter.
+- IT Services → `get_company_context(section='client_concentration')` if present, otherwise concall drill for Top-5/10 revenue concentration.
+
+**Segment-completeness gate.** If the company discloses N segments in its FY annual report or latest deck, the business profile MUST have N segment rows (or an explicit single-line "consolidated only — company discloses N segments but reports single consolidated P&L; segment narrative below" declaration with reason). Missing 1+ disclosed segments is a PROMPT_FIX downgrade.
 """
 
 AGENT_PROMPTS_V2: dict[str, tuple[str, str]] = {}
@@ -422,6 +488,14 @@ End with a JSON code block:
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
+
+## Financials iter2 — Macro Routing, CFO-for-BFSI, FMCG Decomposition (new)
+
+**Macro routing guard.** Macro series (10Y G-sec yield, CPI / WPI inflation, commodity spot prices, USD-INR rate, WACC build-up inputs) MUST be routed through `get_market_context(section='macro')` only. Company-specific tools (`get_fundamentals`, `get_quality_scores`, `get_concall_insights`, `get_annual_report`) do NOT contain macro data — searching them wastes turns and surfaces as a PROMPT_FIX downgrade.
+
+**CFO-for-BFSI guard.** For banks and NBFCs, operating cashflow is dominated by deposit inflows / loan disbursement flow and is NOT a dividend-sustainability signal. Do NOT cite "5Y cumulative CFO ≥ cumulative dividends" as proof that a BFSI dividend is sustainable. Use `dividend_payout_ratio` from `get_fundamentals(section='ratios')`, or `total dividend / net_profit` trajectory. Citing CFO coverage for a BFSI dividend is a COMPUTATION-level downgrade.
+
+**Volume-vs-price decomposition for FMCG.** For any FMCG company with >₹10,000 Cr revenue, the financials report MUST extract historical UVG (underlying volume growth) vs price-led growth split for the last 4 quarters. Source chain: structured tool (`get_sector_kpis` fmcg KPIs) → concall `financial_metrics` → deck `highlights`. If all empty, raise a specific open question naming the sources attempted (per shared-preamble fallback chain).
 """
 
 AGENT_PROMPTS_V2["financials"] = (FINANCIAL_SYSTEM_V2, FINANCIAL_INSTRUCTIONS_V2)
@@ -563,6 +637,12 @@ End with a JSON code block:
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
+
+## Ownership iter4 — No Mandatory-Metric Skips, Calc Dedup (new)
+
+**No mandatory-metric skips via excuse.** The mandatory-metrics list in this file is non-negotiable. "Budget constraints", "to save turns", "tool returned slowly", "large payload" are NOT valid reasons to skip. If a mandatory metric's tool truly errors out (non-empty failure), raise a specific open question naming the tool + error code. Silent omission is a PROMPT_FIX downgrade.
+
+**Calc-dedup awareness.** Before issuing a `calculate` call, scan your current Tool Audit for an existing identical invocation (same operation + same args). If found, reuse — do NOT re-run. Redundant `calculate` calls burn turns and are flagged as PROMPT_FIX downgrades.
 """
 
 AGENT_PROMPTS_V2["ownership"] = (OWNERSHIP_SYSTEM_V2, OWNERSHIP_INSTRUCTIONS_V2)
@@ -685,6 +765,18 @@ End with a JSON code block:
 ```
 
 **`fallback_chain_complete`** — Set to `true` only if every primary-tool output that returned partial/weak/empty data had its registered fallback (per Fallback Tool Map) invoked before fair-value composition. Set to `false` if any fallback was available but not called; in that case, list which in `key_findings` so reviewers can see the gap acknowledged.
+
+## Valuation iter3 — Per-Share Chain, Tool Registry, Auto-SOTP as Seed (new)
+
+**Per-share derivation chain.** Every "target price" MUST have a visible per-share chain: `blended_fv_cr → /shares_outstanding → per_share_target`. Use `calculate(operation='total_cr_to_per_share', a=<blended_cr>, b=<shares_in_lakh>)` — do NOT compute per-share via in-prose division. The calc output must appear in your Tool Audit and its exact number must match the per-share figure in prose.
+
+**Tool-registry re-reminder.** Valid sections for frequently-misused tools:
+- `get_quality_scores`: `bfsi | metals | telecom | default` (no other sections exist). For cashflow quality use `get_fundamentals(section='cash_flow_quality')` — that is a DIFFERENT tool.
+- `get_valuation`: `snapshot | sotp | wacc | peer_metrics | pe_band | pbv_band | ev_ebitda_band`.
+- `get_fair_value_analysis`: returns composite — do not section-filter.
+Hallucinating sections wastes a turn and is a PROMPT_FIX downgrade.
+
+**Auto-SOTP is a seed, not a final.** Treat `get_valuation(section='sotp')` output as a starting point. Always cross-check against current market caps for listed subsidiaries (HDB Financial Services, NTPCGREEN, Adani Green, SBI Life etc.) via `get_market_context(section='peer_metrics')` when the subsidiary is listed. If auto-SOTP is empty, incomplete, or stale (>30 days old or missing a recently-listed subsidiary), follow the shared-preamble A1.4 manual-SOTP rule.
 """
 
 AGENT_PROMPTS_V2["valuation"] = (VALUATION_SYSTEM_V2, VALUATION_INSTRUCTIONS_V2)
@@ -804,6 +896,22 @@ End with a JSON code block:
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
+
+## Risk iter1 — Quantification, Leading Indicators, Deck-Primary Risks (new)
+
+**JSON-to-prose parity.** Every metric in the `mandatory_metrics` JSON section of your structured briefing MUST have a corresponding narrative sentence with interpretation in the prose report. JSON-populated-but-silent-in-narrative is a PROMPT_FIX downgrade. Conversely, any risk you discuss in prose with a specific number should have a JSON entry.
+
+**Framing-quantification symmetry.** Any risk axis you frame (CAC vs LTV, commodity cost vs margin sensitivity, interest coverage, forex exposure) MUST be quantified with specific numbers in your cost-structure / risk-decomposition section. Framing without numbers is hand-waving. Example: "CAC vs LTV pressure" is hand-waving; "marketing spend is 11% of revenue in FY25 vs 8% in FY22 (400 bps expansion); CAC payback extended from 14 months to 22 months per disclosed MAU economics" is a risk axis.
+
+**Sector-specific leading indicators (mandatory set — pull at least 3 of 5 per report):**
+- IT Services: utilization % (onsite / offshore), net headcount additions QoQ, attrition LTM, sub-100-day accounts concentration, Top-5 client revenue share.
+- BFSI: SMA-2 (30–60 day stressed book), restructured book outstanding, AIF/AT1 exposure, slippages run-rate, credit cost trajectory.
+- Real Estate: city-level presales velocity, inventory months-of-sales, debt maturity profile (next 12/24m), launch-pipeline value.
+- Platform: CAC payback months, cohort retention curves, take-rate trend QoQ, AOV trajectory.
+- Pharma: KSM/China dependency % of cost of goods, USFDA facility status (active 483s / Warning Letters), regulatory pipeline risk (ANDA approvals pending), key-molecule concentration.
+- FMCG: UVG (underlying volume growth) vs price-led growth split, rural vs urban growth gap, channel mix GT/MT/e-com shift.
+
+**Deck-primary risks.** State-level presales (real estate), capacity-mix and ASP trajectory (metals), utilization (IT), channel mix (FMCG), GMV growth by vertical (platform) typically live in the **investor deck** — NOT the concall and NOT the structured KPI tool. Risk agent MUST consult `get_deck_insights` for these categories before raising the gap as an open question (per shared-preamble fallback-chain rule).
 """
 
 AGENT_PROMPTS_V2["risk"] = (RISK_SYSTEM_V2, RISK_INSTRUCTIONS_V2)
@@ -882,6 +990,14 @@ End with a JSON code block:
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
+
+## Technical iter2 — Indicator Completeness, F&O Mandatory, Estimate Revisions (new)
+
+**Indicator completeness.** If `get_market_context(section='technicals')` returns MACD, Bollinger Bands, or ADX values, you MUST use them in the narrative. "Screener SMAs + RSI were sufficient" is NOT an acceptable rationale for omitting available indicators. Skip an indicator ONLY if the data is genuinely empty (null), and state that explicitly.
+
+**F&O derivatives mandatory.** For any stock where `get_market_context(section='technicals').fo_enabled == true`, the report MUST include: PCR (Put-Call Ratio), open interest trajectory, and rollover %. If any of these return empty, raise as a specific open question naming the sub-field — don't silently skip.
+
+**Estimate revision momentum.** `get_estimates(section='revision_history')` is the authoritative source for analyst estimate-revision momentum. Using a composite proxy from the analytical profile instead is a PROMPT_FIX downgrade — call the dedicated tool.
 """
 
 AGENT_PROMPTS_V2["technical"] = (TECHNICAL_SYSTEM_V2, TECHNICAL_INSTRUCTIONS_V2)
@@ -975,6 +1091,16 @@ End with a JSON code block:
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"]
 }
 ```
+
+## Sector iter2 — Peer Swap, Reverse-DCF Reconciliation, Multi-Segment Economics (new)
+
+**Peer-swap discipline.** If `get_yahoo_peers` returns a set with >50% sector-mismatch (e.g., ZOMATO returning IRFC/JIOFIN/LICI — unrelated businesses), you MUST call `get_screener_peers` and reconcile. Note the mismatch briefly, then continue with the swapped set. Noting the mismatch without swapping is a PROMPT_FIX downgrade.
+
+**Reverse-DCF vs verdict reconciliation.** If your implied-growth output says "price assumes X% growth" and X > 1.5× the 5Y historical revenue CAGR, the verdict section MUST explicitly acknowledge the gap. Use this form: "Requires acceleration from [historical]% to [implied]% growth — a high-conviction bet on [specific catalyst, e.g. Africa expansion, 5G monetization, new USFDA approvals]." Do NOT output a bullish verdict without this reconciliation.
+
+**Multi-segment economics mandatory.** For any company where ANY segment is ≥15% of revenue or ≥15% of valuation, the sector report MUST have a dedicated segment-economics subsection (growth, margin, capital intensity, competitive position) — not just a mention in the overview. Applies to: platforms (food + quick commerce + B2B), insurance+credit marketplaces (Policybazaar + Paisabazaar), conglomerates (holdco + operating cos), BFSI + listed subsidiaries (HDFCBANK + HDBFS, SBIN + SBI Life / SBI Cards).
+
+**Hypothesis validation.** If you identify a distortion (e.g., "20% ROCE is depressed by ₹22,665 Cr of unutilized cash on the balance sheet"), you MUST compute the corrected value via `calculate` (ex-cash ROCE, adjusted margin, etc.) — don't state the hypothesis without validation.
 """
 
 AGENT_PROMPTS_V2["sector"] = (SECTOR_SYSTEM_V2, SECTOR_INSTRUCTIONS_V2)

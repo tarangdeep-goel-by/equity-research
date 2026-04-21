@@ -11,7 +11,9 @@ import pytest
 
 from flowtracker.research.annual_report_extractor import (
     _atomic_write_json,
+    _merge_chunk_payloads,
     _section_is_complete,
+    _split_section_text,
 )
 from flowtracker.research.ar_downloader import _period_to_fy_label, find_ar_pdfs
 from flowtracker.research.data_api import ResearchDataAPI
@@ -373,3 +375,327 @@ class TestEnsureAnnualReportDataCacheSkip:
         assert result is not None
         assert result["_new_years_extracted"] == 0
         assert "FY25" in result["years_analyzed"]
+
+
+# --- Retry + chunking + _meta (post-eval v2 E14) ---------------------------
+
+
+def _fake_md_with_canonical_sections(auditor_body: str = None, cg_body: str = None) -> str:
+    """Build a small fake AR markdown with auditor + CG sections that the
+    heading_toc recognizes as canonical. Bodies can be sized by the caller.
+    """
+    auditor_body = auditor_body or ("auditor body " * 100)
+    cg_body = cg_body or ("cg body " * 100)
+    return (
+        "## INDEPENDENT AUDITOR'S REPORT\n\n"
+        + auditor_body + "\n\n"
+        "## CORPORATE GOVERNANCE REPORT\n\n"
+        + cg_body + "\n\n"
+    )
+
+
+def _seed_fake_docling(monkeypatch, ar_mod, markdown: str) -> None:
+    """Patch extract_to_markdown to return a fake Docling result."""
+    from flowtracker.research.doc_extractor import ExtractionResult, _scan_headings
+    headings = _scan_headings(markdown)
+    monkeypatch.setattr(
+        ar_mod, "extract_to_markdown",
+        lambda pdf, cache_dir: ExtractionResult(
+            markdown=markdown, headings=headings,
+            backend="docling", degraded=False, elapsed_s=0.0, from_cache=True,
+        ),
+    )
+
+
+class TestSectionRetry:
+    """E14: per-section retry on transient SDK/connection failures."""
+
+    @pytest.mark.asyncio
+    async def test_section_retry_on_transient_failure(self, vault_home, monkeypatch):
+        """Mock extractor raises ProcessError twice then succeeds — expect final
+        success, section listed in _meta.retried_sections."""
+        import flowtracker.research.annual_report_extractor as ar_mod
+        from claude_agent_sdk import ProcessError
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake")
+
+        _seed_fake_docling(monkeypatch, ar_mod, _fake_md_with_canonical_sections())
+
+        # No real sleep — retry delays become instant.
+        async def no_sleep(_delay):
+            return None
+        monkeypatch.setattr(ar_mod.asyncio, "sleep", no_sleep)
+
+        call_counts = {"auditor_report": 0, "corporate_governance": 0}
+
+        async def flaky_extract_section(sec, slice_text, sym, fy, model, industry=None):
+            call_counts[sec] = call_counts.get(sec, 0) + 1
+            if sec == "auditor_report" and call_counts[sec] <= 2:
+                raise ProcessError(f"simulated SDK exit 1 (attempt {call_counts[sec]})")
+            return {"ok": True, "section": sec, "attempts": call_counts[sec]}
+
+        monkeypatch.setattr(ar_mod, "_extract_section", flaky_extract_section)
+
+        result = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report", "corporate_governance"),
+        )
+
+        # Auditor succeeded on attempt 3.
+        assert call_counts["auditor_report"] == 3
+        assert result["auditor_report"]["ok"] is True
+        # CG succeeded first try — not retried.
+        assert call_counts["corporate_governance"] == 1
+        # Retry metadata.
+        assert "auditor_report" in result["_meta"]["retried_sections"]
+        assert "corporate_governance" not in result["_meta"]["retried_sections"]
+        assert result["_meta"]["missing_sections"] == []
+        assert result["_meta"]["degraded_quality"] is True  # any retry => degraded
+        # Final status is complete because every section ultimately succeeded.
+        assert result["extraction_status"] == "complete"
+
+    @pytest.mark.asyncio
+    async def test_section_gives_up_after_all_retries(self, vault_home, monkeypatch):
+        """Extractor always raises — section lands in _meta.missing_sections."""
+        import flowtracker.research.annual_report_extractor as ar_mod
+        from claude_agent_sdk import CLIConnectionError
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake")
+
+        _seed_fake_docling(monkeypatch, ar_mod, _fake_md_with_canonical_sections())
+
+        async def no_sleep(_delay):
+            return None
+        monkeypatch.setattr(ar_mod.asyncio, "sleep", no_sleep)
+
+        call_counts = {"auditor_report": 0}
+
+        async def always_fail(sec, slice_text, sym, fy, model, industry=None):
+            if sec == "auditor_report":
+                call_counts[sec] += 1
+                raise CLIConnectionError("stream never opened")
+            return {"ok": True, "section": sec}
+
+        monkeypatch.setattr(ar_mod, "_extract_section", always_fail)
+
+        result = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report", "corporate_governance"),
+        )
+
+        # 1 initial + 3 retries = 4 attempts.
+        assert call_counts["auditor_report"] == 4
+        assert "auditor_report" in result["_meta"]["missing_sections"]
+        assert result["_meta"]["degraded_quality"] is True
+        assert "extraction_error" in result["auditor_report"]
+        # CG succeeded normally.
+        assert result["corporate_governance"]["ok"] is True
+        assert result["extraction_status"] == "partial"
+
+
+class TestSectionChunking:
+    """E14: large sections split before extraction, results merged."""
+
+    def test_split_section_text_small_stays_one_chunk(self):
+        """Sections at or under the chunk size stay as a single chunk."""
+        text = "a" * 40_000
+        chunks = _split_section_text(text, chunk_size=60_000)
+        assert len(chunks) == 1
+        assert chunks[0] == text
+
+    def test_split_section_text_respects_paragraph_boundaries(self):
+        """200KB of paragraphs split into >=3 chunks on paragraph boundaries."""
+        paragraphs = [("word " * 2000).strip() for _ in range(30)]  # ~10KB each => ~300KB
+        text = "\n\n".join(paragraphs)
+        chunks = _split_section_text(text, chunk_size=60_000)
+        assert len(chunks) >= 3
+        for chunk in chunks:
+            assert len(chunk) <= 60_000
+
+    def test_merge_chunk_payloads_concatenates_lists(self):
+        """List-valued fields concatenate across chunks."""
+        payloads = [
+            {"top_risks": [{"risk": "A"}], "_chars_extracted_from": 100},
+            {"top_risks": [{"risk": "B"}, {"risk": "C"}], "_chars_extracted_from": 200},
+            {"top_risks": [{"risk": "D"}], "_chars_extracted_from": 50},
+        ]
+        merged = _merge_chunk_payloads(payloads)
+        assert [r["risk"] for r in merged["top_risks"]] == ["A", "B", "C", "D"]
+        # _chars_extracted_from sums across chunks.
+        assert merged["_chars_extracted_from"] == 350
+
+    def test_merge_chunk_payloads_scalars_take_latest_non_null(self):
+        """Scalar fields: latest non-null wins; dicts shallow-merge."""
+        payloads = [
+            {"tone": "confident", "summary": "first"},
+            {"tone": None, "summary": "second"},
+            {"tone": "defensive"},
+        ]
+        merged = _merge_chunk_payloads(payloads)
+        assert merged["tone"] == "defensive"
+        assert merged["summary"] == "second"
+
+    @pytest.mark.asyncio
+    async def test_large_section_chunks_and_merges(self, vault_home, monkeypatch):
+        """A 200KB section splits into 3+ chunks; results merged end-to-end."""
+        import flowtracker.research.annual_report_extractor as ar_mod
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake")
+
+        # Build auditor body that totals ~200KB with paragraph breaks.
+        big_paragraphs = [("audit-para-" + "x" * 2000) for _ in range(100)]  # ~200KB
+        big_body = "\n\n".join(big_paragraphs)
+        small_body = "cg body " * 100
+        fake_md = (
+            "## INDEPENDENT AUDITOR'S REPORT\n\n"
+            + big_body + "\n\n"
+            "## CORPORATE GOVERNANCE REPORT\n\n"
+            + small_body + "\n\n"
+        )
+        _seed_fake_docling(monkeypatch, ar_mod, fake_md)
+
+        call_log: list[tuple[str, int]] = []
+
+        async def fake_extract_section(sec, slice_text, sym, fy, model, industry=None):
+            call_log.append((sec, len(slice_text)))
+            # Return a dict with a list field so we can verify concatenation.
+            return {
+                "section": sec,
+                "key_audit_matters": [{"matter": f"{sec}-chunk-{len(call_log)}"}],
+            }
+
+        monkeypatch.setattr(ar_mod, "_extract_section", fake_extract_section)
+
+        result = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report", "corporate_governance"),
+        )
+
+        # Auditor was chunked into 3+ calls, CG as a single call.
+        auditor_calls = [c for c in call_log if c[0] == "auditor_report"]
+        cg_calls = [c for c in call_log if c[0] == "corporate_governance"]
+        assert len(auditor_calls) >= 3, f"expected >=3 chunks, got {len(auditor_calls)}"
+        assert len(cg_calls) == 1
+        # Each chunk respected the configured max.
+        for _, size in auditor_calls:
+            assert size <= ar_mod.CHUNK_SIZE_BYTES
+        # Merged output has concatenated list entries (one per chunk).
+        assert len(result["auditor_report"]["key_audit_matters"]) == len(auditor_calls)
+        assert result["auditor_report"]["_chunked"] == len(auditor_calls)
+
+    @pytest.mark.asyncio
+    async def test_small_section_no_chunking(self, vault_home, monkeypatch):
+        """A 40KB section stays a single extraction call."""
+        import flowtracker.research.annual_report_extractor as ar_mod
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake")
+
+        # ~40KB auditor body (below CHUNK_TRIGGER_BYTES=80KB).
+        small_body = ("audit-word " * 3500)  # ~38KB
+        fake_md = (
+            "## INDEPENDENT AUDITOR'S REPORT\n\n"
+            + small_body + "\n\n"
+        )
+        _seed_fake_docling(monkeypatch, ar_mod, fake_md)
+
+        call_log: list[tuple[str, int]] = []
+
+        async def fake_extract_section(sec, slice_text, sym, fy, model, industry=None):
+            call_log.append((sec, len(slice_text)))
+            return {"section": sec, "ok": True}
+
+        monkeypatch.setattr(ar_mod, "_extract_section", fake_extract_section)
+
+        result = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report",),
+        )
+
+        assert len(call_log) == 1
+        # Not chunked — no _chunked marker.
+        assert "_chunked" not in result["auditor_report"]
+        assert result["auditor_report"]["ok"] is True
+
+
+class TestMetaFields:
+    """E14: _meta.degraded_quality / missing_sections / retried_sections."""
+
+    @pytest.mark.asyncio
+    async def test_meta_fields_present_on_clean_run(self, vault_home, monkeypatch):
+        """Clean run — every section extracts first try — degraded_quality=False,
+        empty missing_sections and retried_sections."""
+        import flowtracker.research.annual_report_extractor as ar_mod
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake")
+
+        _seed_fake_docling(monkeypatch, ar_mod, _fake_md_with_canonical_sections())
+
+        async def clean_extract(sec, slice_text, sym, fy, model, industry=None):
+            return {"ok": True, "section": sec}
+
+        monkeypatch.setattr(ar_mod, "_extract_section", clean_extract)
+
+        result = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report", "corporate_governance"),
+        )
+
+        assert "_meta" in result
+        assert result["_meta"]["degraded_quality"] is False
+        assert result["_meta"]["missing_sections"] == []
+        assert result["_meta"]["retried_sections"] == []
+        assert result["extraction_status"] == "complete"
+
+    @pytest.mark.asyncio
+    async def test_meta_does_not_break_section_iteration(self, vault_home, monkeypatch):
+        """Backward compat: downstream code iterating over section names should
+        still work — _meta is namespaced under a reserved prefix."""
+        import flowtracker.research.annual_report_extractor as ar_mod
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake")
+
+        _seed_fake_docling(monkeypatch, ar_mod, _fake_md_with_canonical_sections())
+
+        async def clean_extract(sec, slice_text, sym, fy, model, industry=None):
+            return {"ok": True, "section": sec}
+
+        monkeypatch.setattr(ar_mod, "_extract_section", clean_extract)
+
+        sections = ("auditor_report", "corporate_governance")
+        result = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6", sections=sections,
+        )
+
+        # Key convention: everything user-facing is a known section name or a
+        # '_'-prefixed meta key (_meta, _elapsed_s, _heading_count, ...).
+        for key in result.keys():
+            # Meta keys start with underscore; real section payloads do not.
+            if not key.startswith("_") and key in sections:
+                assert isinstance(result[key], dict)
+        # Iterate sections explicitly (the canonical downstream pattern).
+        for sec in sections:
+            assert result[sec]["ok"] is True

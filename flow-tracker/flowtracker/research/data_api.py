@@ -310,12 +310,45 @@ class ResearchDataAPI:
 
     # --- SOTP: Listed Subsidiaries ---
 
-    def get_listed_subsidiaries(self, symbol: str) -> list[dict] | None:
+    def _is_recently_listed(self, sub_symbol: str, days: int = 180) -> tuple[bool, str | None]:
+        """Detect recently-listed Indian equities via daily_stock_data earliest date.
+
+        Plan v2 §7 E10: cross-check SOTP subsidiaries against listings within the
+        last `days`. Returns (is_recent, earliest_date_str).
+
+        A symbol is considered "recently listed" if its earliest row in
+        daily_stock_data is within the last `days`. Falls back to (False, None)
+        if no bhavcopy history exists (e.g. sub not tracked in NSE bhavcopy feed).
+        """
+        row = self._store._conn.execute(
+            "SELECT MIN(date) AS first_date FROM daily_stock_data WHERE symbol = ?",
+            (sub_symbol.upper(),),
+        ).fetchone()
+        if not row or not row["first_date"]:
+            return False, None
+        from datetime import date, timedelta
+        try:
+            first_dt = datetime.strptime(row["first_date"], "%Y-%m-%d").date()
+        except Exception:
+            return False, None
+        cutoff = date.today() - timedelta(days=days)
+        return first_dt >= cutoff, row["first_date"]
+
+    def get_listed_subsidiaries(self, symbol: str) -> dict | list[dict] | None:
         """Get listed subsidiary valuations for SOTP analysis.
 
         Reads parent→subsidiary mappings from DB, fetches live market caps
         from yfinance, and computes per-share value to the parent.
         Returns None if the company has no listed subsidiaries in DB.
+
+        Plan v2 §7 E10: emits `subsidiaries_listed_recently` flag and per-row
+        `recently_listed`/`listed_on` fields when a subsidiary appears in the
+        last 180 days of bhavcopy listings. Rows with no market cap data yet are
+        tagged `market_cap_cr: null, needs_refresh: true` so agents can see them.
+
+        Returns a dict of shape:
+          {"subsidiaries": [...], "subsidiaries_listed_recently": [...], "_meta": {...}}
+        (legacy list return shape preserved only when zero freshness signal exists).
         """
         subs = self._store.get_listed_subsidiaries(symbol)
         if not subs:
@@ -326,28 +359,73 @@ class ResearchDataAPI:
         if not parent_shares:
             return None
 
+        recently_listed: list[str] = []
         results = []
         for row in subs:
+            sub_sym = row["sub_symbol"]
+            is_recent, first_date = self._is_recently_listed(sub_sym, days=180)
             try:
-                t = yf.Ticker(f"{row['sub_symbol']}.NS")
+                t = yf.Ticker(f"{sub_sym}.NS")
                 sub_mcap = t.info.get("marketCap", 0) or 0
-                sub_mcap_cr = sub_mcap / 1e7
+                sub_mcap_cr = (sub_mcap / 1e7) if sub_mcap else None
                 ownership = row["parent_ownership_pct"]
-                parent_stake_cr = sub_mcap_cr * (ownership / 100)
-                per_share_value = (parent_stake_cr * 1e7) / parent_shares if parent_shares else 0
-                results.append({
+                parent_stake_cr = (sub_mcap_cr or 0) * (ownership / 100) if sub_mcap_cr else None
+                per_share_value = (
+                    (parent_stake_cr * 1e7) / parent_shares
+                    if parent_stake_cr and parent_shares
+                    else None
+                )
+                entry = {
                     "subsidiary": row["sub_name"],
-                    "symbol": row["sub_symbol"],
+                    "symbol": sub_sym,
                     "parent_ownership_pct": ownership,
                     "relationship": row.get("relationship", ""),
-                    "subsidiary_market_cap_cr": round(sub_mcap_cr),
-                    "parent_stake_value_cr": round(parent_stake_cr),
-                    "per_share_value": round(per_share_value, 2),
-                })
+                    "subsidiary_market_cap_cr": round(sub_mcap_cr) if sub_mcap_cr else None,
+                    "parent_stake_value_cr": round(parent_stake_cr) if parent_stake_cr else None,
+                    "per_share_value": round(per_share_value, 2) if per_share_value else None,
+                }
+                if is_recent:
+                    entry["recently_listed"] = True
+                    entry["listed_on"] = first_date
+                    recently_listed.append(row["sub_name"])
+                if sub_mcap_cr is None:
+                    entry["needs_refresh"] = True
+                results.append(entry)
             except Exception:
-                continue
+                # Still surface the row so agents see the subsidiary even if yf failed.
+                entry = {
+                    "subsidiary": row["sub_name"],
+                    "symbol": sub_sym,
+                    "parent_ownership_pct": row["parent_ownership_pct"],
+                    "relationship": row.get("relationship", ""),
+                    "subsidiary_market_cap_cr": None,
+                    "parent_stake_value_cr": None,
+                    "per_share_value": None,
+                    "needs_refresh": True,
+                }
+                if is_recent:
+                    entry["recently_listed"] = True
+                    entry["listed_on"] = first_date
+                    recently_listed.append(row["sub_name"])
+                results.append(entry)
 
-        return results if results else None
+        if not results:
+            return None
+
+        return {
+            "subsidiaries": results,
+            "subsidiaries_listed_recently": recently_listed,
+            "_meta": {
+                "freshness_check": (
+                    "bhavcopy_earliest_date"
+                    if self._store._conn.execute(
+                        "SELECT 1 FROM daily_stock_data LIMIT 1"
+                    ).fetchone()
+                    else "unavailable"
+                ),
+                "freshness_window_days": 180,
+            },
+        }
 
     # --- Freshness Helpers ---
 
@@ -519,6 +597,49 @@ class ResearchDataAPI:
 
     # --- Valuation ---
 
+    def _detect_pe_basis(self, symbol: str) -> str:
+        """Return 'standalone' if Screener PE chart exists (Screener PE = standalone for most
+        Indian companies), else 'consolidated' (yfinance valuation_snapshot PE), else 'unknown'.
+
+        Plan v2 §7 E11: expose PE/EPS basis so agents can flag standalone/consolidated
+        mismatches when PE band and EPS projection are sourced from different bases.
+        """
+        # Screener charts — chart_type='pe'
+        has_chart = self._store._conn.execute(
+            "SELECT 1 FROM screener_charts "
+            "WHERE symbol = ? AND chart_type = 'pe' AND metric = 'Price to Earning' "
+            "LIMIT 1",
+            (symbol.upper(),),
+        ).fetchone()
+        if has_chart:
+            return "standalone"
+        has_snap = self._store._conn.execute(
+            "SELECT 1 FROM valuation_snapshot "
+            "WHERE symbol = ? AND pe_trailing IS NOT NULL "
+            "LIMIT 1",
+            (symbol.upper(),),
+        ).fetchone()
+        if has_snap:
+            return "consolidated"
+        return "unknown"
+
+    def _detect_eps_basis(self, symbol: str) -> str:
+        """EPS projection source — yfinance consensus (forward_eps) is consolidated.
+        Screener/annual_financials EPS is standalone for most Indian companies.
+
+        For the auto-blend path in get_fair_value, we use consensus forward_eps →
+        'consolidated'. If only annual_financials EPS is available, returns 'standalone'.
+        Plan v2 §7 E11.
+        """
+        est = self._store.get_estimate_latest(symbol)
+        if est and est.forward_eps:
+            return "consolidated"
+        # Fallback: annual_financials (Screener) EPS
+        annual = self._store.get_annual_financials(symbol, limit=1)
+        if annual and annual[0].eps:
+            return "standalone"
+        return "unknown"
+
     def get_valuation_snapshot(self, symbol: str) -> dict:
         """Latest valuation snapshot (50+ fields: price, PE, PB, EV/EBITDA, margins, etc.)."""
         hist = self._store.get_valuation_history(symbol, days=7)
@@ -561,6 +682,10 @@ class ResearchDataAPI:
             snap["pct_below_52w_high"] = round((1 - price / high) * 100, 2)
         if low and price:
             snap["pct_above_52w_low"] = round((price / low - 1) * 100, 2)
+        # Plan v2 §7 E11: expose PE/EPS basis so agents detect standalone/consolidated
+        # mismatches. pe_trailing + eps_ttm here come from yfinance → 'consolidated'.
+        snap["pe_basis"] = "consolidated" if snap.get("pe_trailing") else "unknown"
+        snap["eps_basis"] = "consolidated" if snap.get("eps_ttm") is not None else "unknown"
         return snap
 
     def get_valuation_band(self, symbol: str, metric: str = "pe_trailing", days: int = 2500) -> dict:
@@ -1125,20 +1250,20 @@ class ResearchDataAPI:
                 if c is not None and p is not None:
                     qoq_changes[cat.lower()] = round(c - p, 2)
 
-        # Top 10 named holders (latest quarter)
+        # Top 10 named holders (latest quarter).
+        # get_shareholder_detail now returns pivoted rows with latest_pct +
+        # holder_type populated (E4 fix). Pre-fix this loop scanned for
+        # wide-format keys that never existed and emitted empty names.
         top_holders = self.get_shareholder_detail(symbol, top_n=10)
         holders_brief = []
         for h in top_holders[:10]:
-            # Extract latest-quarter pct value
-            latest_pct = None
-            for k, v in h.items():
-                if isinstance(v, (int, float)) and (k.startswith("q_") or k.startswith("Q") or k.endswith("_pct")):
-                    if latest_pct is None or v > latest_pct:
-                        latest_pct = v
+            latest_pct = h.get("latest_pct")
             holders_brief.append({
-                "name": h.get("name") or h.get("shareholder_name") or h.get("holder", ""),
+                "name": h.get("name") or h.get("holder_name") or "",
+                "holder_type": h.get("holder_type") or h.get("classification", ""),
                 "classification": h.get("classification", ""),
-                "latest_pct": round(latest_pct, 2) if latest_pct else None,
+                "latest_pct": round(latest_pct, 2) if isinstance(latest_pct, (int, float)) else None,
+                "latest_quarter": h.get("latest_quarter"),
             })
 
         # MF summary from conviction
@@ -1229,6 +1354,7 @@ class ResearchDataAPI:
                 "shareholding", "changes", "shareholder_detail",
                 "mf_holdings", "mf_changes", "mf_conviction",
                 "insider", "bulk_block", "promoter_pledge",
+                "adr_gdr",
             ],
             "hint": (
                 "This is a compact TOC. Call get_ownership(section='<name>') "
@@ -1802,28 +1928,180 @@ class ResearchDataAPI:
 
     def get_shareholder_detail(
         self, symbol: str, classification: str | None = None, top_n: int = 20,
+        min_latest_pct: float = 1.0,
     ) -> list[dict]:
         """Individual shareholder names and quarterly %: Vanguard, LIC, etc.
 
-        Capped to top_n holders (default 20) ranked by their LATEST-quarter
-        percentage. Large private banks can have 100+ disclosed holders above
-        the 1% reporting threshold; the raw payload hits 25-30KB which
-        contributes to the 80-150K truncation problem in get_ownership.
+        Returns ONE pivoted row per holder (not per holder x quarter) with:
+          {name, holder_type, classification, latest_pct, latest_quarter,
+           quarters: {qtr: pct, ...}}
+
+        Applies the 1% BSE disclosure threshold on the LATEST quarter and
+        sorts globally by latest_pct desc, capping to top_n (default 20).
+        This fixes E4 — pre-fix, large FII stakes (e.g., BHARTIARTL 28% FII)
+        surfaced zero named FII entities because the top-N sort was reading
+        wide-format keys (q_XXX / Q-prefix / _pct suffix) against a narrow
+        holder x quarter row schema, so latest_pct was always 0 and the
+        alphabetical classification order (domestic_institutions first)
+        deterministically filled all 20 slots with DII rows.
+
+        holder_type normalization: foreign_institutions -> 'FII',
+        domestic_institutions -> 'DII', promoters -> 'Promoter',
+        public -> 'Public'.
+
+        Cap strategy (to guarantee FII representation for large-cap FII-heavy
+        names like BHARTIARTL where individual FII holdings are 1.0-1.5% but
+        individual DII/LIC holdings are 3-5% and would otherwise crowd the
+        entire top_n): reserve up to min(5, #FII_holders) slots for FII, then
+        fill remaining slots globally by latest_pct desc.
         """
         rows = self._store.get_shareholder_details(symbol, classification)
-        if top_n is None or len(rows) <= top_n:
-            return rows
-        # Pick top N by latest-quarter pct. Row schema: name + quarterly columns.
-        # Find the latest-quarter column by scanning for the max quarter key.
-        def latest_pct(row: dict) -> float:
-            qtr_vals = [
-                v for k, v in row.items()
-                if (k.startswith("q_") or k.startswith("Q") or k.endswith("_pct"))
-                and isinstance(v, (int, float))
-            ]
-            return max(qtr_vals) if qtr_vals else 0.0
-        sorted_rows = sorted(rows, key=latest_pct, reverse=True)
-        return sorted_rows[:top_n]
+        pivoted = self._pivot_shareholder_rows(rows)
+        if min_latest_pct is not None and min_latest_pct > 0:
+            pivoted = [h for h in pivoted if (h.get("latest_pct") or 0) >= min_latest_pct]
+        pivoted.sort(key=lambda h: h.get("latest_pct") or 0.0, reverse=True)
+        if top_n is None or len(pivoted) <= top_n:
+            return pivoted
+
+        # Reserve FII slots so large-cap FII stakes aren't dropped entirely.
+        # Only applies when caller didn't filter to a single classification.
+        if classification is None:
+            fii_rows = [h for h in pivoted if h.get("holder_type") == "FII"]
+            fii_reserve = min(5, len(fii_rows))
+            other_rows = [h for h in pivoted if h.get("holder_type") != "FII"]
+            # Keep top fii_reserve FIIs (already sorted by latest_pct)
+            reserved = fii_rows[:fii_reserve]
+            remaining_slots = top_n - fii_reserve
+            # Fill remaining from (pivoted minus reserved) ordered by latest_pct
+            # Include the leftover FIIs (if any) in the global pool too so a
+            # very large individual FII still qualifies on merit.
+            reserved_names = {(r["classification"], r["name"]) for r in reserved}
+            pool = [h for h in pivoted if (h["classification"], h["name"]) not in reserved_names]
+            filler = pool[:remaining_slots]
+            combined = reserved + filler
+            # Re-sort the combined set by latest_pct desc for display.
+            combined.sort(key=lambda h: h.get("latest_pct") or 0.0, reverse=True)
+            return combined
+        return pivoted[:top_n]
+
+    # Screener's narrow classification strings -> normalized holder_type labels
+    # used in reports. Mirrored in the ownership TOC's top_10_holders_brief.
+    _HOLDER_TYPE_MAP = {
+        "foreign_institutions": "FII",
+        "domestic_institutions": "DII",
+        "promoters": "Promoter",
+        "public": "Public",
+    }
+
+    @classmethod
+    def _pivot_shareholder_rows(cls, rows: list[dict]) -> list[dict]:
+        """Collapse narrow (name x quarter) rows into one row per holder.
+
+        Input row schema (from store.get_shareholder_details):
+          {symbol, classification, holder_name, quarter, percentage, ...}
+
+        Output row schema:
+          {name, holder_type, classification, latest_pct, latest_quarter,
+           quarters: {quarter: pct}}
+        """
+        from datetime import datetime as _dt
+
+        def parse_q(q: str) -> tuple[int, int]:
+            # Screener quarter strings are "Sep 2025", "Jun 2025", ...
+            try:
+                dt = _dt.strptime(q.strip(), "%b %Y")
+                return (dt.year, dt.month)
+            except Exception:
+                return (0, 0)
+
+        grouped: dict[tuple[str, str], dict] = {}
+        for r in rows:
+            name = r.get("holder_name") or r.get("name") or ""
+            cls_raw = r.get("classification") or ""
+            key = (cls_raw, name)
+            pct = r.get("percentage")
+            qtr = r.get("quarter") or ""
+            if name == "" or pct is None or qtr == "":
+                continue
+            entry = grouped.setdefault(
+                key,
+                {
+                    "name": name,
+                    "classification": cls_raw,
+                    "holder_type": cls._HOLDER_TYPE_MAP.get(cls_raw, cls_raw),
+                    "quarters": {},
+                },
+            )
+            entry["quarters"][qtr] = pct
+
+        result: list[dict] = []
+        for entry in grouped.values():
+            qtrs = entry["quarters"]
+            if not qtrs:
+                continue
+            latest_q = max(qtrs.keys(), key=parse_q)
+            entry["latest_quarter"] = latest_q
+            entry["latest_pct"] = qtrs[latest_q]
+            result.append(entry)
+        return result
+
+    # ------------------------------------------------------------------
+    # E7 — ADR / GDR outstanding (stub)
+    # ------------------------------------------------------------------
+    # Known Indian names with active ADR / GDR programs. Used as a stub
+    # allowlist until AR extraction is wired to surface share-capital notes.
+    # TODO(E7): replace with live extraction from the AR notes-to-financials
+    # "Note - Share Capital" sub-section once the AR extractor surfaces it.
+    _ADR_GDR_LISTINGS: dict[str, list[str]] = {
+        "INFY": ["NYSE"],
+        "TCS": ["NYSE"],  # Unsponsored Level 1 OTC; listed for completeness
+        "HDFCBANK": ["NYSE"],
+        "ICICIBANK": ["NYSE"],
+        "WIT": ["NYSE"],
+        "WIPRO": ["NYSE"],
+        "RDY": ["NYSE"],
+        "DRREDDY": ["NYSE"],
+        "SIFY": ["NASDAQ"],
+        "MMTC": ["LSE"],
+        "TATAMOTORS": ["NYSE"],
+        "SBIN": ["LSE"],
+        "AXISBANK": ["LSE"],
+        "RELIANCE": [],  # Explicitly none — used as a negative-case anchor
+    }
+
+    def get_adr_gdr(self, symbol: str) -> dict:
+        """ADR/GDR outstanding stub — structured empty payload.
+
+        Live numbers require parsing the AR share-capital note; that wiring
+        is deferred to a follow-up (tracked in TODO(E7) in data_api.py).
+        For now this ships the API surface with a stable schema so agents
+        stop re-failing on missing adr_gdr sections.
+
+        Returned shape:
+          {
+            "listed_on": ["NYSE", ...],           # empty list if none
+            "outstanding_units_mn": None,
+            "pct_of_total_equity": None,
+            "as_of_date": None,
+            "source": "stub" | "FY25_AR_note_X",
+            "_meta": {"stub": True, "todo": "E7"}
+          }
+        """
+        sym_up = symbol.upper()
+        listed = self._ADR_GDR_LISTINGS.get(sym_up, [])
+        meta: dict = {"stub": True, "todo": "E7"}
+        if sym_up not in self._ADR_GDR_LISTINGS:
+            meta["reason"] = "symbol_not_in_known_adr_gdr_list"
+        elif not listed:
+            meta["reason"] = "no_known_adr_gdr_listing"
+        return {
+            "listed_on": listed,
+            "outstanding_units_mn": None,
+            "pct_of_total_equity": None,
+            "as_of_date": None,
+            "source": "stub",
+            "_meta": meta,
+        }
 
     def get_expense_breakdown(self, symbol: str, section: str = "profit-loss") -> list[dict]:
         """Schedule sub-item breakdowns (e.g., Expenses → Employee Cost, Raw Material).
@@ -1994,16 +2272,77 @@ class ResearchDataAPI:
     # --- FMP Data ---
 
     def get_dcf_valuation(self, symbol: str) -> dict:
-        """Latest DCF intrinsic value + margin of safety."""
+        """Latest DCF intrinsic value + margin of safety.
+
+        Plan v2 §7 E15: when DCF is empty/unavailable, emit a reason code
+        ('insufficient_history' | 'negative_fcf' | 'growth_above_limits' |
+        'unknown') instead of returning an empty dict, so agents can show
+        the user *why* DCF was skipped.
+        """
         dcf = self._store.get_fmp_dcf_latest(symbol)
-        if not dcf:
-            return {}
+        if not dcf or not dcf.dcf or dcf.dcf <= 0:
+            reason = self._classify_dcf_empty_reason(symbol)
+            return {
+                "fv_cr": None,
+                "reason_empty": reason,
+                "notes": (
+                    "DCF unavailable — see reason_empty. Agents should defer to "
+                    "PE-band/consensus/PB-band for fair value."
+                ),
+            }
         result = _clean(dcf.model_dump())
         if dcf.dcf and dcf.stock_price and dcf.dcf > 0:
             result["margin_of_safety_pct"] = round(
                 (dcf.dcf - dcf.stock_price) / dcf.dcf * 100, 2
             )
         return result
+
+    def _classify_dcf_empty_reason(self, symbol: str) -> str:
+        """Plan v2 §7 E15: classify *why* DCF is empty.
+
+        Returns one of: 'insufficient_history' | 'negative_fcf' |
+        'growth_above_limits' | 'unknown'.
+        """
+        annual = self._store.get_annual_financials(symbol, limit=5)
+        if not annual:
+            return "insufficient_history"
+
+        # Compute FCF proxy = cfo + cfi (cfi is typically negative = capex outflow).
+        fcfs: list[float] = []
+        for a in annual:
+            cfo = getattr(a, "cfo", None)
+            cfi = getattr(a, "cfi", None)
+            if cfo is not None and cfi is not None:
+                fcfs.append(cfo + cfi)
+            elif getattr(a, "free_cash_flow", None) is not None:
+                fcfs.append(a.free_cash_flow)
+
+        if not fcfs:
+            return "insufficient_history"
+
+        positive = [v for v in fcfs if v and v > 0]
+        if len(positive) < 3:
+            return "insufficient_history"
+
+        # Latest FCF first (annual sorted DESC by fiscal_year_end by default)
+        latest_fcf = fcfs[0]
+        if latest_fcf is not None and latest_fcf < 0:
+            return "negative_fcf"
+
+        # 5Y CAGR check — compare oldest positive FCF to latest
+        if len(fcfs) >= 5:
+            oldest = fcfs[-1]
+            latest = fcfs[0]
+            if oldest and oldest > 0 and latest and latest > 0:
+                years = len(fcfs) - 1
+                try:
+                    cagr = (latest / oldest) ** (1 / years) - 1
+                    if cagr > 0.30:
+                        return "growth_above_limits"
+                except (ValueError, ZeroDivisionError):
+                    pass
+
+        return "unknown"
 
     def get_dcf_history(self, symbol: str, days: int = 365) -> list[dict]:
         """Historical DCF trajectory."""
@@ -2175,6 +2514,22 @@ class ResearchDataAPI:
             forward_eps = est.forward_eps
 
         pe_fair = None
+        # Plan v2 §7 E11: detect basis mismatch between PE-band source and EPS source.
+        pe_basis = self._detect_pe_basis(symbol)
+        eps_basis = self._detect_eps_basis(symbol)
+        basis_mismatch = (
+            pe_basis != "unknown"
+            and eps_basis != "unknown"
+            and pe_basis != eps_basis
+        )
+        result["pe_basis"] = pe_basis
+        result["eps_basis"] = eps_basis
+        if basis_mismatch:
+            result["_warning_basis_mismatch"] = (
+                f"PE sourced from {pe_basis} basis, EPS sourced from {eps_basis} basis — "
+                "blend weight downranked to 0"
+            )
+
         if pe_band and forward_eps:
             # ValuationBand has min_val, median_val, max_val, percentile
             # bear = min-to-median midpoint, base = median, bull = median-to-max midpoint
@@ -2199,7 +2554,8 @@ class ResearchDataAPI:
             }
             if narrow_band_warning:
                 result["pe_band"]["narrow_band_warning"] = narrow_band_warning
-            pe_fair = base
+            # E11: pe_fair contributes to auto-blend only if basis matches or unknown.
+            pe_fair = None if basis_mismatch else base
 
         # 2. FMP DCF (exclude for BFSI — unreliable for Indian financials)
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
@@ -2215,7 +2571,7 @@ class ResearchDataAPI:
         if target_mean:
             result["consensus_target"] = target_mean
 
-        # Combined fair value = average of available
+        # Combined fair value = average of available (PE component dropped on basis mismatch)
         values = [v for v in [pe_fair, dcf_value, target_mean] if v]
         if values and current_price:
             combined = sum(values) / len(values)
@@ -2224,6 +2580,14 @@ class ResearchDataAPI:
             result["current_price"] = current_price
             result["margin_of_safety_pct"] = round(margin, 2)
             result["sources_used"] = len(values)
+            # E11: if basis mismatch downranked PE weight to 0, expose the weights
+            # the auto-blend actually used so agents can reason about the shape.
+            if basis_mismatch:
+                result["blend_weights"] = {
+                    "pe_band": 0,
+                    "dcf": round(1.0 / len(values), 3) if dcf_value else 0,
+                    "consensus_target": round(1.0 / len(values), 3) if target_mean else 0,
+                }
 
             # Signal
             bear = result.get("pe_band", {}).get("bear")
@@ -3048,6 +3412,32 @@ class ResearchDataAPI:
         if not quarters:
             return {"error": "No quarterly data in concall extraction", "sector": sector}
 
+        # BFSI fallback: when structured operational_metrics is empty for a quarter,
+        # the concall extractor sometimes puts asset-quality / capital ratios into
+        # financial_metrics.consolidated (or .standalone). Pre-load that slice so we
+        # can consult it in the per-key matching loop below.
+        # Applies to the `banks` sector only — other sectors have different
+        # financial_metrics semantics and would create false positives.
+        fin_metrics_by_quarter: dict[str, dict] = {}
+        bfsi_fallback_enabled = sector == "banks"
+        if bfsi_fallback_enabled:
+            fin_slice = self.get_concall_insights(symbol, section_filter="financial_metrics")
+            if isinstance(fin_slice, dict) and "error" not in fin_slice:
+                for fq in fin_slice.get("quarters", []) or []:
+                    q_label = fq.get("fy_quarter", fq.get("label", ""))
+                    fm = fq.get("financial_metrics") or {}
+                    if not isinstance(fm, dict):
+                        continue
+                    # Flatten consolidated + standalone into a single dict for lookup.
+                    # Consolidated takes precedence when the same key appears in both.
+                    flat: dict = {}
+                    for src in ("standalone", "consolidated"):
+                        block = fm.get(src) or {}
+                        if isinstance(block, dict):
+                            flat.update(block)
+                    if flat:
+                        fin_metrics_by_quarter[q_label] = flat
+
         # Extract KPIs from each quarter's operational_metrics
         kpi_timeline: dict[str, list[dict]] = {k: [] for k in canonical_keys}
 
@@ -3055,6 +3445,7 @@ class ResearchDataAPI:
             quarter_label = q.get("fy_quarter", q.get("label", ""))
             op_metrics = q.get("operational_metrics") or {}
             key_numbers = {}  # key_numbers_mentioned dropped in trimming; fuzzy match falls back to op_metrics only
+            fin_metrics = fin_metrics_by_quarter.get(quarter_label, {}) if bfsi_fallback_enabled else {}
 
             # Direct match on canonical keys
             for canonical_key in canonical_keys:
@@ -3105,6 +3496,24 @@ class ResearchDataAPI:
                                 value = src_val
                             matched_via = f"fuzzy:{src_key}"
                             break
+
+                # 5. BFSI financial_metrics fallback — for banks only, when the
+                # structured KPI store (operational_metrics) is empty for this quarter,
+                # look into financial_metrics.{consolidated,standalone}. Tries canonical
+                # key, then each alias.
+                if value is None and bfsi_fallback_enabled and fin_metrics:
+                    candidate_keys = [canonical_key] + list(key_aliases.get(canonical_key, []))
+                    for ck in candidate_keys:
+                        if ck in fin_metrics:
+                            entry = fin_metrics[ck]
+                            if isinstance(entry, dict):
+                                value = entry.get("value")
+                                context = entry.get("context")
+                            else:
+                                value = entry
+                            if value is not None:
+                                matched_via = f"financial_metrics:{ck}"
+                                break
 
                 if value is not None:
                     entry = {"quarter": quarter_label, "value": value}
@@ -3419,6 +3828,8 @@ class ResearchDataAPI:
 
         Uses last 3-5 years of actuals to project revenue, EBITDA, net income, and EPS.
         Accounts for corporate actions (splits/bonuses) in per-share calculations.
+        Plan v2 §7 E12: passes resolved sector token to build_projections for
+        sector-aware D&A routing.
         """
         from flowtracker.research.projections import build_projections
 
@@ -3440,12 +3851,45 @@ class ResearchDataAPI:
         valuation = self.get_valuation_snapshot(symbol)
         current_shares = valuation.get("shares_outstanding", 0)
 
+        # Plan v2 §7 E12: resolve industry → sector token for D&A routing.
+        industry_token = self._resolve_industry_token(symbol)
+
         return build_projections(
             annual,
             adjustment_factor=factor,
             pe_multiples=pe_multiples,
             shares_override=current_shares or None,
+            industry=industry_token,
         )
+
+    def _resolve_industry_token(self, symbol: str) -> str | None:
+        """Map symbol's industry classification to a normalized token used by
+        projections._resolve_da_strategy (e.g. 'bfsi', 'platform', 'manufacturing').
+        Plan v2 §7 E12.
+        """
+        if self._is_bfsi(symbol):
+            return "bfsi"
+        if self._is_insurance(symbol):
+            return "insurance"
+        if self._is_realestate(symbol):
+            return "real_estate"
+        if self._is_metals(symbol):
+            return "metals"
+        if self._is_it_services(symbol):
+            return "it_services"
+        raw = (self._get_industry(symbol) or "").lower()
+        if not raw or raw == "unknown":
+            return None
+        if "auto" in raw:
+            return "auto"
+        if "cement" in raw:
+            return "cement"
+        if "platform" in raw or "internet" in raw or "ecommerce" in raw or "marketplace" in raw:
+            return "platform"
+        # Generic manufacturing umbrella: chemicals, industrials, consumer durables, etc.
+        if any(kw in raw for kw in ("manufactur", "industrial", "chemical", "machinery", "capital goods")):
+            return "manufacturing"
+        return None
 
     def get_wacc_params(self, symbol: str) -> dict:
         """Dynamic WACC: beta, cost of equity, cost of debt, terminal growth, PE multiples."""
@@ -5734,6 +6178,83 @@ class ResearchDataAPI:
             result["asset_quality"] = asset_quality
         return result
 
+    # --- BFSI peer compare ---
+
+    # Canonical keys the BFSI peer-compare surfaces per bank. Chosen for
+    # peer-ranking utility: NIM (profitability of core book), GNPA (credit
+    # discipline), cost-to-income (operating leverage).
+    _BFSI_PEER_COMPARE_KEYS = ("nim_pct", "gnpa_pct", "cost_to_income_pct")
+
+    def get_bfsi_peer_metrics(self, symbol: str) -> dict:
+        """BFSI peer-compare: subject + peers with nim_pct / gnpa_pct / cost_to_income_pct.
+
+        Returns {subject, peers, peer_count, keys}. Each entry contains the three
+        canonical peer-compare keys when resolvable. NIM and cost-to-income are
+        computed from annual financials via `get_bfsi_metrics`; GNPA is lifted
+        from the latest concall via `get_sector_kpis(sub_section='gross_npa_pct')`.
+
+        Non-BFSI subject → {skipped: true, reason: ...}. Peers that are non-BFSI
+        are filtered out silently.
+        """
+        if not self._is_bfsi(symbol):
+            return {"skipped": True, "reason": f"{symbol} is not a BFSI stock"}
+        if self._is_insurance(symbol):
+            return {"skipped": True, "reason": "Insurance uses a different KPI framework"}
+
+        def _row_for(sym: str) -> dict | None:
+            """Build a single peer-compare row. Returns None if nothing resolvable."""
+            if not self._is_bfsi(sym) or self._is_insurance(sym):
+                return None
+            row: dict = {"symbol": sym}
+            # NIM + cost_to_income from computed annual financials (latest year).
+            try:
+                bfsi = self.get_bfsi_metrics(sym)
+            except Exception:
+                bfsi = {}
+            years = (bfsi or {}).get("years") or []
+            if years:
+                latest = years[-1]
+                if latest.get("nim_pct") is not None:
+                    row["nim_pct"] = latest["nim_pct"]
+                if latest.get("cost_to_income_pct") is not None:
+                    row["cost_to_income_pct"] = latest["cost_to_income_pct"]
+                row["fiscal_year"] = latest.get("fiscal_year")
+            # GNPA from latest concall quarter via structured KPI lookup.
+            try:
+                gnpa_resp = self.get_sector_kpis(sym, kpi_key="gross_npa_pct")
+            except Exception:
+                gnpa_resp = {}
+            if isinstance(gnpa_resp, dict) and "kpi" in gnpa_resp:
+                kpi = gnpa_resp["kpi"]
+                values = kpi.get("values") if isinstance(kpi, dict) else None
+                if values:
+                    latest_q = values[-1]
+                    if isinstance(latest_q, dict) and latest_q.get("value") is not None:
+                        row["gnpa_pct"] = latest_q["value"]
+                        row["gnpa_quarter"] = latest_q.get("quarter")
+            # Only return rows that resolved at least one peer-compare key.
+            has_any = any(k in row for k in self._BFSI_PEER_COMPARE_KEYS)
+            return row if has_any else None
+
+        subject_row = _row_for(symbol) or {"symbol": symbol}
+
+        peers = self._store.get_peers(symbol)
+        peer_rows: list[dict] = []
+        for p in peers:
+            psym = p.get("peer_symbol") or p.get("peer_name")
+            if not psym or psym == symbol:
+                continue
+            row = _row_for(psym)
+            if row:
+                peer_rows.append(row)
+
+        return {
+            "subject": subject_row,
+            "peers": peer_rows,
+            "peer_count": len(peer_rows),
+            "keys": list(self._BFSI_PEER_COMPARE_KEYS),
+        }
+
     # Canonical asset quality keys in the concall schema (see sector_kpis.py 'banks' block).
     _BFSI_ASSET_QUALITY_KEYS = (
         "gross_npa_pct",
@@ -6285,6 +6806,51 @@ class ResearchDataAPI:
         "Non Banking Financial Company (NBFC)": "^NSEBANK",
     }
 
+    # Plan v2 §7 E16: sub-sector / normalized-token fallback for sector index.
+    # When `_SECTOR_INDEX` doesn't have a hit, normalize the industry string
+    # and try this table. Final fallback is NIFTY 500 (^CRSLDX).
+    _SECTOR_INDEX_FALLBACK: dict[str, str] = {
+        "banks-regional": "^NSEBANK",
+        "banks - regional": "^NSEBANK",
+        "banks": "^NSEBANK",
+        "private_bank": "^NSEBANK",
+        "nbfc": "^NSEBANK",
+        "credit services": "^NSEBANK",
+        "reit": "NIFTY_REALTY.NS",
+        "real_estate": "NIFTY_REALTY.NS",
+        "real estate - development": "NIFTY_REALTY.NS",
+        "fmcg": "^CNXFMCG",
+        "it_services": "^CNXIT",
+        "information technology services": "^CNXIT",
+        "software - application": "^CNXIT",
+        "software - infrastructure": "^CNXIT",
+        "pharma": "^CNXPHARMA",
+        "pharmaceuticals": "^CNXPHARMA",
+        "drug manufacturers - specialty & generic": "^CNXPHARMA",
+        "metals": "NIFTY_METAL.NS",
+        "steel": "NIFTY_METAL.NS",
+        "aluminum": "NIFTY_METAL.NS",
+        "auto": "NIFTY_AUTO.NS",
+        "auto components": "NIFTY_AUTO.NS",
+        "automobile": "NIFTY_AUTO.NS",
+        "platform": "^CRSLDX",  # no dedicated index — fallback to Nifty 500
+    }
+    _SECTOR_INDEX_DEFAULT = "^CRSLDX"  # Nifty 500
+
+    def _resolve_sector_index(self, industry: str | None) -> str:
+        """Resolve industry → index ticker. Never returns None.
+
+        Plan v2 §7 E16: when sub-sector / classification doesn't map directly,
+        normalize and try the fallback table. Final default is Nifty 500
+        ('^CRSLDX') rather than null.
+        """
+        if industry and industry in self._SECTOR_INDEX:
+            return self._SECTOR_INDEX[industry]
+        norm = (industry or "").strip().lower()
+        if norm in self._SECTOR_INDEX_FALLBACK:
+            return self._SECTOR_INDEX_FALLBACK[norm]
+        return self._SECTOR_INDEX_DEFAULT
+
     def get_price_performance(self, symbol: str, index_cache: dict | None = None) -> dict:
         """Price return vs Nifty 50 and sector index (excl. dividends).
 
@@ -6332,7 +6898,8 @@ class ResearchDataAPI:
                 nifty_prices = {}
 
         industry = self._get_industry(symbol)
-        sector_idx = self._SECTOR_INDEX.get(industry)
+        # E16: never return null; default to Nifty 500 when sector can't be mapped.
+        sector_idx = self._resolve_sector_index(industry)
         sector_prices = {}
         if sector_idx:
             if index_cache and sector_idx in index_cache:

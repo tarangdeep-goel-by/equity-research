@@ -34,3 +34,15 @@ This company is an insurance company. Apply insurance-specific analysis:
 **Fallback when concall KPIs unavailable:** If VNB/EV/combined ratio data is not available from tools, explicitly state this gap. For life insurance, fall back to P/B + ROE framework. For general insurance, use P/B + underwriting profit trends from P&L. These are insurance-specific KPIs that require actuarial data — estimating them from standard financials would produce unreliable numbers.
 
 **Emphasize:** Premium growth trajectory, product mix (protection vs savings for life), investment yield, solvency buffer above 150%, and claims ratio trend.
+
+## Segment Separation for Insurance + Credit Marketplaces (new)
+
+POLICYBZR and other insurance-marketplaces have two economically distinct segments (Policybazaar = insurance distribution; Paisabazaar = credit marketplace). Both MUST be analyzed separately — growth, unit economics, take rate, competitive position. Reporting only the insurance side while ignoring the credit side (or vice versa) is structurally incomplete.
+
+## NPA Framing for Marketplaces (new)
+
+If reporting NPAs for a marketplace business, clarify whether the company takes balance-sheet risk (FLDG arrangements, co-lending partnerships) or is a pure distribution marketplace. A pure marketplace should NOT have NPAs on its own book — if the JSON output contains an NPA field for a pure marketplace, it is reporting channel-partner data and MUST be framed as such, not attributed to the company's own credit risk.
+
+## Valuation Basis — Conglomerate Insurance (new)
+
+`get_valuation` output for listed insurance companies may mix standalone historical PE (Screener-derived) with consolidated forward EPS (FMP-derived). Flag and recompute with matching bases per shared-preamble A1.1 tenet. See E11 upgrade (`pe_basis` / `eps_basis` fields) for the tool-side warning.

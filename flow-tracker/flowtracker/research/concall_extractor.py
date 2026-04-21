@@ -471,10 +471,25 @@ Extract into this JSON structure:
     //   casa_ratio_pct (CASA %), gross_npa_pct (GNPA %), net_npa_pct (NNPA %),
     //   provision_coverage_ratio_pct (PCR %), net_interest_margin_pct (NIM %),
     //   fresh_slippages_cr, credit_cost_bps, capital_adequacy_ratio_pct (CRAR),
-    //   liquidity_coverage_ratio_pct (LCR), cost_to_income_ratio_pct, roau_pct (ROA).
+    //   cet1_pct (CET-1 %), liquidity_coverage_ratio_pct (LCR),
+    //   cost_to_income_ratio_pct, roau_pct (ROA).
     //   MANDATORY for BFSI: always emit casa_ratio_pct, gross_npa_pct, net_npa_pct,
-    //   provision_coverage_ratio_pct — if not stated in the call, set value to null
-    //   with reason "not_mentioned_in_concall". Never omit these four keys for BFSI.
+    //   provision_coverage_ratio_pct, capital_adequacy_ratio_pct, cet1_pct, liquidity_coverage_ratio_pct
+    //   — if not stated in the call, set value to null with reason "not_mentioned_in_concall".
+    //   Never omit these seven keys for BFSI.
+    // For pharma: rd_pct_of_revenue (R&D % of revenue), usfda_facility_status
+    //   (one of: "active_no_observations" | "483s_open" | "warning_letter" | "unknown"),
+    //   anda_approvals_ltm (integer — trailing-twelve-month ANDA approvals),
+    //   key_molecule_pipeline (list of molecule names with optional launch dates),
+    //   us_revenue_usd_mn, india_formulations_revenue_cr, us_price_erosion_pct.
+    // For FMCG: uvg_pct (underlying volume growth %), price_growth_pct,
+    //   channel_gt_pct (general trade share), channel_mt_pct (modern trade share),
+    //   channel_ecom_pct (e-commerce share), rural_growth_pct, urban_growth_pct,
+    //   advertising_and_promotion_spend_pct, gross_margin_pct.
+    // For telecom: arpu_inr (ARPU in INR), subscribers_mn (total subscribers in millions),
+    //   africa_cc_growth_pct (constant-currency growth in Africa subsidiary),
+    //   africa_fx_devaluation_pct (local-currency devaluation impact),
+    //   monthly_churn_rate_pct, data_usage_per_subscriber_gb, network_capex_cr.
     // For manufacturing: capacity_utilization, order_book, realization, raw_material_cost, power_cost, volume_growth, export_share, etc.
   },
 

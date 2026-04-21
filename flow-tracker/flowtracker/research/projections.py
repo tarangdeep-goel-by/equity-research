@@ -6,6 +6,104 @@ import statistics
 from dataclasses import dataclass
 
 
+# Plan v2 §7 E12: sector-aware D&A routing.
+# Returns (ratio, source_tag, caveat_text|None). BFSI/real_estate use different
+# logic handled inline in build_projections (line-item based, not % of revenue).
+_INDUSTRY_DA_RATIOS: dict[str, tuple[float, str, str | None]] = {
+    # Asset-heavy manufacturing/resource (keep legacy 5% default)
+    "manufacturing": (0.05, "manufacturing_default", None),
+    "metals": (0.05, "metals_default", None),
+    "cement": (0.05, "cement_default", None),
+    "auto": (0.05, "auto_default", None),
+    # Asset-light platforms / IT services / insurance / marketplaces
+    "it_services": (0.01, "it_services_default",
+                    "Industry classified as 'it_services' — D&A 1% of revenue per asset-light routing."),
+    "platform": (0.01, "platform_default",
+                 "Industry classified as 'platform' — D&A 1% of revenue per asset-light routing."),
+    "insurance": (0.01, "insurance_default",
+                  "Industry classified as 'insurance' — D&A 1% of revenue per asset-light routing."),
+    "marketplace": (0.01, "marketplace_default",
+                    "Industry classified as 'marketplace' — D&A 1% of revenue per asset-light routing."),
+}
+
+_BFSI_INDUSTRIES_PROJ = {"bfsi", "private_bank", "nbfc", "public_bank", "banks"}
+_REAL_ESTATE_INDUSTRIES = {"real_estate", "realestate"}
+
+
+def _resolve_da_strategy(
+    industry: str | None,
+    latest_rev: float,
+    latest_dep: float,
+    latest_net_block: float | None,
+) -> dict:
+    """Return D&A strategy for projections based on industry classification.
+
+    Returns a dict with:
+      - mode: "ratio" | "line_item" | "net_block"
+      - ratio: float (for mode='ratio' and 'net_block')
+      - source: str tag
+      - caveats: list[str]
+    """
+    ind = (industry or "").strip().lower()
+
+    if ind in _BFSI_INDUSTRIES_PROJ:
+        # Do NOT project D&A as % of revenue — use latest reported line item.
+        return {
+            "mode": "line_item",
+            "growth_rate": 0.05,  # modest 5%/yr growth
+            "base_value": latest_dep or 0.0,
+            "source": "bfsi_line_item",
+            "caveats": [
+                "Industry classified as BFSI — D&A projected from latest reported "
+                "line item with 5%/yr growth (not % of revenue)."
+            ],
+        }
+
+    if ind in _REAL_ESTATE_INDUSTRIES:
+        # Project from fixed-asset base (net_block / 30yr life). Fallback to 2%.
+        if latest_net_block and latest_net_block > 0:
+            # depreciation per year ≈ net_block / 30; ratio = dep / revenue
+            implied_dep = latest_net_block / 30.0
+            ratio = (implied_dep / latest_rev) if latest_rev and latest_rev > 0 else 0.02
+            return {
+                "mode": "ratio",
+                "ratio": ratio,
+                "source": "real_estate_net_block",
+                "caveats": [
+                    "Industry classified as 'real_estate' — D&A derived from net block / 30yr typical life."
+                ],
+            }
+        return {
+            "mode": "ratio",
+            "ratio": 0.02,
+            "source": "real_estate_fallback",
+            "caveats": [
+                "Industry classified as 'real_estate' but net_block unavailable — "
+                "fell back to 2% of revenue."
+            ],
+        }
+
+    if ind in _INDUSTRY_DA_RATIOS:
+        ratio, source, caveat = _INDUSTRY_DA_RATIOS[ind]
+        return {
+            "mode": "ratio",
+            "ratio": ratio,
+            "source": source,
+            "caveats": [caveat] if caveat else [],
+        }
+
+    # Unknown / unresolved industry → 2% midpoint with caveat flag.
+    return {
+        "mode": "ratio",
+        "ratio": 0.02,
+        "source": "unresolved_default",
+        "caveats": [
+            "Industry classification unresolved — used 2% midpoint default. "
+            "Valuation downstream should manually override for known asset-light or BFSI cases."
+        ],
+    }
+
+
 @dataclass
 class ProjectionScenario:
     """One scenario (bear/base/bull) for a single projected year."""
@@ -32,6 +130,7 @@ def build_projections(
     adjustment_factor: float = 1.0,
     shares_override: float | None = None,
     pe_multiples: dict | None = None,
+    industry: str | None = None,
 ) -> dict:
     """Build 3-year bear/base/bull projections from historical annual data.
 
@@ -39,9 +138,12 @@ def build_projections(
         annual_data: List of annual financials dicts (most recent first), needs at least 3 years
         adjustment_factor: Cumulative split/bonus factor for per-share adjustment
         shares_override: Override shares outstanding (post-adjustment)
+        industry: Optional industry classification (e.g. 'platform', 'bfsi', 'manufacturing')
+            used for sector-aware D&A routing. Plan v2 §7 E12.
 
     Returns:
-        Dict with actuals summary, assumptions, and 3 scenarios x 3 years of projections
+        Dict with actuals summary, assumptions, and 3 scenarios x 3 years of projections.
+        Includes `_projection_assumptions` meta dict with D&A ratio used, source tag, and caveats.
     """
     if len(annual_data) < 3:
         return {"error": "Need at least 3 years of annual data for projections"}
@@ -139,6 +241,23 @@ def build_projections(
     avg_dep_pct = statistics.mean(dep_pcts) if dep_pcts else 0.03
     avg_int_pct = statistics.mean(int_pcts) if int_pcts else 0.01
 
+    # Plan v2 §7 E12: sector-aware D&A strategy. Overrides avg_dep_pct (ratio mode)
+    # or routes to line-item projection (BFSI).
+    latest_dep = latest.get("depreciation") or 0.0
+    latest_net_block = (
+        latest.get("net_block")
+        or latest.get("fixed_assets")
+        or latest.get("gross_block")
+    )
+    da_strategy = _resolve_da_strategy(
+        industry=industry,
+        latest_rev=latest_revenue,
+        latest_dep=latest_dep,
+        latest_net_block=latest_net_block,
+    )
+    if da_strategy["mode"] == "ratio":
+        avg_dep_pct = da_strategy["ratio"]
+
     # --- Define scenarios ---
 
     # Base case: trailing 3yr CAGR for growth, trailing 3yr avg margin
@@ -168,10 +287,16 @@ def build_projections(
     def _project_scenario(label: str, growth: float, ebitda_margin: float) -> list[dict]:
         projections = []
         rev = latest_revenue
+        dep_running = da_strategy.get("base_value", 0.0)  # line_item seed
         for yr in range(1, 4):
             rev = rev * (1 + growth)
             ebitda = rev * ebitda_margin
-            dep = rev * avg_dep_pct
+            if da_strategy["mode"] == "line_item":
+                # BFSI: grow depreciation line item at fixed %/yr
+                dep_running = dep_running * (1 + da_strategy.get("growth_rate", 0.05))
+                dep = dep_running
+            else:
+                dep = rev * avg_dep_pct
             interest = rev * avg_int_pct
             pbt = ebitda - dep - interest
             tax = pbt * avg_tax_rate if pbt > 0 else 0
@@ -268,4 +393,13 @@ def build_projections(
             "bull": bull,
         },
         "implied_fair_values": fair_values,
+        "_projection_assumptions": {
+            "da_ratio_used": round(da_strategy.get("ratio", avg_dep_pct), 4)
+            if da_strategy["mode"] != "line_item"
+            else None,
+            "da_mode": da_strategy["mode"],
+            "da_ratio_source": da_strategy["source"],
+            "industry_resolved": industry,
+            "caveats": da_strategy.get("caveats", []),
+        },
     }
