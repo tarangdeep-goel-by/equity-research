@@ -16,6 +16,51 @@ _VAULT_BASE = Path.home() / "vault" / "stocks"
 _REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 
 
+class ReportAssemblyError(Exception):
+    """Raised when a per-agent report fails an assembly-layer invariant
+    (e.g. scratchpad / monologue leaked into the report body).
+    """
+
+    pass
+
+
+# Monologue / scratchpad markers that should never appear in a final report body.
+# Pairs with the L1 A1.3 prompt tenet — assembly-layer hard guard for eval v2 §7 E17.
+MONOLOGUE_MARKERS = [
+    r"<thinking>",
+    r"</thinking>",
+    r"\[SCRATCH\]",
+    r"^Let me think",
+    r"^Actually,",
+    r"^Wait —",
+    r"^Wait,",
+    r"^OK so",
+    r"^Hmm[ ,]",
+    r"^Okay, so",
+]
+
+_MONOLOGUE_PATTERN = re.compile(
+    "|".join(MONOLOGUE_MARKERS),
+    re.MULTILINE,
+)
+
+# Reports shorter than this are treated as "agent crashed" — different failure mode,
+# skip the scratchpad guard so we don't mask the real error.
+_MIN_REPORT_BYTES_FOR_GUARD = 400
+
+
+def _detect_scratchpad_leak(report_text: str, head_bytes: int = 2000) -> str | None:
+    """Return the offending snippet if monologue leaks into the report head, else None."""
+    head = report_text[:head_bytes]
+    match = _MONOLOGUE_PATTERN.search(head)
+    if match:
+        # Return a short context window around the match for the error message.
+        start = max(0, match.start() - 40)
+        end = min(len(head), match.end() + 60)
+        return head[start:end].replace("\n", " ")
+    return None
+
+
 def assemble_final_report(
     symbol: str,
     specialist_envelopes: dict,  # {name: BriefingEnvelope}
@@ -74,6 +119,16 @@ def assemble_final_report(
     for agent_name, section_title in report_order:
         env = specialist_envelopes.get(agent_name)
         if env and env.report:
+            # Hard guard: scratchpad / monologue must not leak into the final body.
+            # Skip for very short reports (likely agent crash — different failure).
+            if len(env.report.strip()) >= _MIN_REPORT_BYTES_FOR_GUARD:
+                snippet = _detect_scratchpad_leak(env.report)
+                if snippet is not None:
+                    raise ReportAssemblyError(
+                        f"Scratchpad / monologue leaked into '{agent_name}' "
+                        f"report for {symbol}. Offending snippet: {snippet!r}. "
+                        f"Re-run this agent."
+                    )
             # Strip preamble text (agent's thinking/tool-calling messages before the report)
             cleaned = _strip_preamble(env.report)
             parts.append(cleaned)
@@ -82,6 +137,14 @@ def assemble_final_report(
     # Web research section (resolved open questions)
     web_env = specialist_envelopes.get("web_research")
     if web_env and web_env.report and len(web_env.report.strip()) > 100:
+        if len(web_env.report.strip()) >= _MIN_REPORT_BYTES_FOR_GUARD:
+            snippet = _detect_scratchpad_leak(web_env.report)
+            if snippet is not None:
+                raise ReportAssemblyError(
+                    f"Scratchpad / monologue leaked into 'web_research' "
+                    f"report for {symbol}. Offending snippet: {snippet!r}. "
+                    f"Re-run this agent."
+                )
         cleaned = _strip_preamble(web_env.report)
         # Strip the trailing JSON briefing block from the report
         json_start = cleaned.rfind("```json")

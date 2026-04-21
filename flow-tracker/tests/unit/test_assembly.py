@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from flowtracker.research.assembly import _find_section, _split_by_headers, _strip_preamble
+from flowtracker.research.assembly import (
+    ReportAssemblyError,
+    _detect_scratchpad_leak,
+    _find_section,
+    _split_by_headers,
+    _strip_preamble,
+    assemble_final_report,
+)
+from flowtracker.research.briefing import AgentCost, BriefingEnvelope, ToolEvidence
 
 
 # ---------------------------------------------------------------------------
@@ -150,3 +160,176 @@ class TestFindSection:
         ])
         result = _find_section(sections, "Big Question")
         assert result == "first"
+
+
+# ---------------------------------------------------------------------------
+# _detect_scratchpad_leak — monologue guard for eval v2 §7 E17
+# ---------------------------------------------------------------------------
+def test_scratchpad_leak_raises_on_thinking_tag():
+    # report body that starts with a <thinking> tag
+    bad = "<thinking>Let me compute the blended FV...</thinking>\n\n# Valuation Report\n..."
+    from flowtracker.research.assembly import _detect_scratchpad_leak
+    assert _detect_scratchpad_leak(bad) is not None
+
+
+def test_scratchpad_leak_raises_on_let_me_think_line():
+    bad = "Let me think about what tools to call first.\n\n# Financials Report\n..."
+    from flowtracker.research.assembly import _detect_scratchpad_leak
+    assert _detect_scratchpad_leak(bad) is not None
+
+
+def test_clean_report_passes():
+    good = "# Valuation Report\n\n## Summary\n\nFair value ₹1,200 vs current ₹1,100 → 9% upside.\n"
+    from flowtracker.research.assembly import _detect_scratchpad_leak
+    assert _detect_scratchpad_leak(good) is None
+
+
+def test_detect_ignores_leak_past_head_bytes():
+    """Markers after head_bytes should not trigger."""
+    pad = "# Valuation Report\n\n" + ("Clean body line.\n" * 200)
+    trailing = pad + "<thinking>late scratchpad</thinking>\n"
+    # Well past 2000 bytes
+    assert len(pad) > 2000
+    assert _detect_scratchpad_leak(trailing) is None
+
+
+def test_detect_matches_scratch_marker():
+    bad = "[SCRATCH] internal note before the body.\n\n# Report\n"
+    assert _detect_scratchpad_leak(bad) is not None
+
+
+def test_detect_matches_actually_start_of_line():
+    bad = "Actually, let me revise the numbers.\n\n# Report\n"
+    assert _detect_scratchpad_leak(bad) is not None
+
+
+# ---------------------------------------------------------------------------
+# assemble_final_report integration — raises ReportAssemblyError on leak
+# ---------------------------------------------------------------------------
+def _mk_env(
+    agent: str,
+    symbol: str = "VEDL",
+    report: str | None = None,
+    company_name: str = "",
+) -> BriefingEnvelope:
+    if report is None:
+        report = (
+            f"## {agent.title()} Analysis\n\n"
+            f"This is the {agent} report for {symbol}.\n\n"
+            f"### Key Findings\n- Finding 1\n- Finding 2\n"
+        )
+    briefing: dict = {"agent": agent}
+    if company_name:
+        briefing["company_name"] = company_name
+    return BriefingEnvelope(
+        agent=agent,
+        symbol=symbol,
+        generated_at="2026-04-22T10:00:00",
+        report=report,
+        briefing=briefing,
+        evidence=[
+            ToolEvidence(
+                tool="get_quarterly_results",
+                args={"symbol": symbol},
+                result_hash="abc123",
+                is_error=False,
+            )
+        ],
+        cost=AgentCost(
+            input_tokens=100,
+            output_tokens=50,
+            total_cost_usd=0.01,
+            duration_seconds=1.0,
+        ),
+    )
+
+
+def _mk_synthesis(symbol: str = "VEDL") -> BriefingEnvelope:
+    report = (
+        "## Verdict\n\n**HOLD**\n\n"
+        "## Executive Summary\n\nOK.\n\n"
+        "## Key Signals\n\n- Signal A\n\n"
+        "## Catalysts\n\n- Catalyst\n\n"
+        "## What to Watch\n\n- Watch\n\n"
+        "## Big Question\n\nQ?\n"
+    )
+    return BriefingEnvelope(
+        agent="synthesis",
+        symbol=symbol,
+        generated_at="2026-04-22T11:00:00",
+        report=report,
+        briefing={"verdict": "HOLD"},
+        evidence=[],
+        cost=AgentCost(
+            input_tokens=100,
+            output_tokens=50,
+            total_cost_usd=0.01,
+            duration_seconds=1.0,
+        ),
+    )
+
+
+class TestAssembleFinalReportScratchpadGuard:
+    """The assembly pipeline must reject scratchpad-leaked specialist reports."""
+
+    @pytest.fixture(autouse=True)
+    def _redirect_paths(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(
+            "flowtracker.research.assembly._VAULT_BASE", tmp_path / "vault"
+        )
+        monkeypatch.setattr(
+            "flowtracker.research.assembly._REPORTS_DIR", tmp_path / "reports"
+        )
+
+    def test_raises_on_thinking_tag_leak_in_valuation(self):
+        """Mirrors the VEDL metals incident: valuation agent leaks <thinking>."""
+        # Build a leaked valuation report > 400 bytes so guard engages.
+        leaked_body = (
+            "<thinking>\n"
+            "Let me compute the blended FV for VEDL.\n"
+            "Step 1: pull the EV/EBITDA peer multiple...\n"
+            "Step 2: adjust for net debt per plan v2.\n"
+            "</thinking>\n\n"
+            "# Valuation Report for VEDL\n\n"
+            + ("Placeholder body content line.\n" * 20)
+        )
+        assert len(leaked_body) > 400
+
+        specialists = {
+            "business": _mk_env("business", company_name="Vedanta"),
+            "valuation": _mk_env("valuation", report=leaked_body),
+        }
+        synthesis = _mk_synthesis()
+
+        with pytest.raises(ReportAssemblyError) as excinfo:
+            assemble_final_report("VEDL", specialists, synthesis)
+
+        msg = str(excinfo.value)
+        assert "valuation" in msg
+        assert "VEDL" in msg
+
+    def test_short_crashed_report_does_not_trip_guard(self):
+        """Reports under 400 bytes skip the guard (different failure mode)."""
+        # Very short leaked output — agent likely crashed.
+        short_leaked = "<thinking>aborted</thinking>"
+        assert len(short_leaked) < 400
+
+        specialists = {
+            "business": _mk_env("business", company_name="Vedanta"),
+            "valuation": _mk_env("valuation", report=short_leaked),
+        }
+        synthesis = _mk_synthesis()
+
+        # Should not raise ReportAssemblyError.
+        md_path, _ = assemble_final_report("VEDL", specialists, synthesis)
+        assert md_path.exists()
+
+    def test_clean_specialists_do_not_trigger_guard(self):
+        specialists = {
+            "business": _mk_env("business", company_name="Vedanta"),
+            "valuation": _mk_env("valuation"),
+        }
+        synthesis = _mk_synthesis()
+
+        md_path, _ = assemble_final_report("VEDL", specialists, synthesis)
+        assert md_path.exists()
