@@ -175,6 +175,113 @@ def test_largest_match_wins_when_section_appears_twice():
     assert "real mdna content" in mdna_text
 
 
+def test_largest_gap_wins_between_two_heading_candidates():
+    """Task scenario: synthetic doc with MDA at offset ~500 (body ~400 chars)
+    followed by MDA at a much later offset (body ~100KB). Slicer must pick
+    the second, larger-body candidate."""
+    # Build a doc where the first MDA heading has only a short body (ends
+    # at the next same-level heading <500 chars later) and the second MDA
+    # heading has a much larger body.
+    prefix = "x" * 400  # pad doc start
+    small_body = "short forward-ref stuff\n\n"
+    filler = "filler line\n" * 3000  # ~36KB
+    big_body = "real mdna text line\n" * 5000  # ~100KB
+    md = (
+        prefix + "\n\n"
+        "## MANAGEMENT DISCUSSION AND ANALYSIS\n\n"
+        + small_body
+        + "## CORPORATE GOVERNANCE REPORT\n\n"
+        + filler
+        + "## MANAGEMENT DISCUSSION AND ANALYSIS\n\n"
+        + big_body
+        + "## NEXT SECTION\n\n"
+        + "tail\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "mdna" in idx
+    # Confirm the slicer picked the large candidate — its char_start should be
+    # deep into the document (after the filler), not near offset 400.
+    assert idx["mdna"]["char_start"] > 30_000, (
+        f"Expected the large-body MDA far into the doc, got char_start={idx['mdna']['char_start']}"
+    )
+    assert idx["mdna"]["size_chars"] > 50_000
+    mdna_text = slice_section(md, idx, "mdna")
+    assert "real mdna text line" in mdna_text
+    # The small forward-ref blurb must NOT be in the chosen slice.
+    assert "short forward-ref stuff" not in mdna_text
+
+
+def test_body_text_fallback_when_heading_slice_is_tiny():
+    """Reproduces the SUNPHARMA FY25 bug: the only `##` MD&A heading is a
+    forward reference with <500 chars of body, but the real MD&A content
+    appears further down as *plain-text* running-header text (Docling
+    didn't recognise it as a heading). The body-text fallback should
+    synthesise an anchor at the plain-text occurrence and produce a
+    multi-KB slice."""
+    md = (
+        "## DIRECTORS' REPORT\n\n"
+        "intro\n\n"
+        "## MANAGEMENT DISCUSSION AND ANALYSIS\n\n"
+        # Tiny body — only a forward-reference blurb.
+        "The Management Discussion and Analysis is provided separately.\n\n"
+        "## CORPORATE GOVERNANCE REPORT\n\n"
+        "Governance disclosure opening...\n\n"
+        # Real MD&A body, but Docling rendered the title as plain-text
+        # (running header text) not as a markdown heading. Subsections
+        # within MD&A are level-2 too — they don't match other canonicals.
+        "Management Discussion and Analysis\n\n"
+        "<!-- image -->\n\n"
+        "## Global Pharmaceutical Industry\n\n"
+        + ("industry commentary " * 400) + "\n\n"
+        "## Developed Markets\n\n"
+        + ("developed markets prose " * 300) + "\n\n"
+        "## US\n\n"
+        + ("US market commentary " * 300) + "\n\n"
+        # A different canonical section terminates the synthetic MD&A.
+        "## Independent Auditor's Report\n\n"
+        "auditor opinion text\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+
+    assert "mdna" in idx
+    entry = idx["mdna"]
+    # Body-text fallback should have fired because the heading-based slice
+    # was tiny (<2KB).
+    assert entry["match_source"] == "body_text", (
+        f"Expected body_text fallback, got {entry['match_source']}"
+    )
+    # Resulting slice should be multi-KB and contain the real MD&A prose.
+    assert entry["size_chars"] > 5000
+    mdna_text = slice_section(md, idx, "mdna")
+    assert "industry commentary" in mdna_text
+    assert "developed markets prose" in mdna_text
+    # Must NOT extend into the auditor report.
+    assert "auditor opinion text" not in mdna_text
+
+
+def test_body_text_fallback_skipped_when_heading_slice_is_large_enough():
+    """Safety guard: when the heading-based match already yields a healthy
+    slice, the body-text fallback must NOT replace it even if stray
+    plain-text mentions exist elsewhere."""
+    md = (
+        "## MANAGEMENT DISCUSSION AND ANALYSIS\n\n"
+        + ("real mdna prose " * 500) + "\n\n"  # ~8KB, well above the 2KB floor
+        "## RISK MANAGEMENT\n\n"
+        # A stray plain-text mention further down — fallback would pick this
+        # as a synthetic anchor and produce a much longer fake section if
+        # the gate were broken.
+        "Management Discussion and Analysis was filed separately.\n\n"
+        + ("risk prose " * 100) + "\n\n"
+        "## NEXT\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert idx["mdna"]["match_source"] == "heading"
+    assert idx["mdna"]["char_start"] == 0
+
+
 def test_section_not_present_is_absent_from_index():
     md = "# Just a cover\n\nNothing else here.\n"
     headings = _scan_headings(md)
