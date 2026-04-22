@@ -2070,21 +2070,31 @@ class ResearchDataAPI:
     }
 
     def get_adr_gdr(self, symbol: str) -> dict:
-        """ADR/GDR outstanding stub — structured empty payload.
+        """ADR/GDR outstanding — reads from AR notes-to-financials when present,
+        falls back to a structured stub payload otherwise.
 
-        Live numbers require parsing the AR share-capital note; that wiring
-        is deferred to a follow-up (tracked in TODO(E7) in data_api.py).
-        For now this ships the API surface with a stable schema so agents
-        stop re-failing on missing adr_gdr sections.
+        Attempts live extraction by scanning the most recent AR's
+        `notes_to_financials` section for depositary-receipt disclosures:
+          1. A dedicated `share_capital.adr_gdr_details` sub-dict, if the
+             extractor produces one.
+          2. Any `material_items` / `forensic_red_flags` entry that mentions
+             "depositary receipts" / "ADR" / "GDR" / "American Depositary"
+             with an adjacent numeric (outstanding units) token.
+
+        The AR extractor schema today does NOT emit ADR-specific fields
+        (see _SECTION_PROMPTS['notes_to_financials'] in
+        annual_report_extractor.py), so live population is best-effort. When
+        nothing is found we preserve the stub behavior but record which
+        AR years were consulted in `_meta.source_checked`.
 
         Returned shape:
           {
             "listed_on": ["NYSE", ...],           # empty list if none
-            "outstanding_units_mn": None,
-            "pct_of_total_equity": None,
-            "as_of_date": None,
-            "source": "stub" | "FY25_AR_note_X",
-            "_meta": {"stub": True, "todo": "E7"}
+            "outstanding_units_mn": None | float,
+            "pct_of_total_equity": None | float,
+            "as_of_date": None | "YYYY-MM-DD",
+            "source": "stub" | "FY25_AR_notes_to_financials",
+            "_meta": {"stub": bool, "source_checked": [...], ...}
           }
         """
         sym_up = symbol.upper()
@@ -2094,7 +2104,8 @@ class ResearchDataAPI:
             meta["reason"] = "symbol_not_in_known_adr_gdr_list"
         elif not listed:
             meta["reason"] = "no_known_adr_gdr_listing"
-        return {
+
+        payload: dict = {
             "listed_on": listed,
             "outstanding_units_mn": None,
             "pct_of_total_equity": None,
@@ -2102,6 +2113,117 @@ class ResearchDataAPI:
             "source": "stub",
             "_meta": meta,
         }
+
+        # Only attempt live extraction for known ADR/GDR issuers.
+        if not listed:
+            return payload
+
+        try:
+            ar = self.get_annual_report(
+                sym_up, section="notes_to_financials", include_cross_year=False,
+            )
+        except Exception:
+            ar = {"error": "get_annual_report raised"}
+
+        if not isinstance(ar, dict) or "error" in ar:
+            meta["source_checked"] = []
+            return payload
+
+        years_payload = ar.get("years") or []
+        checked: list[str] = []
+        found_entry: dict | None = None
+        found_fy: str | None = None
+
+        # Walk years newest-first (get_annual_report already sorts that way).
+        for yslice in years_payload:
+            fy_label = (yslice.get("fiscal_year") or "").upper()
+            notes = yslice.get("notes_to_financials")
+            if not fy_label or not isinstance(notes, dict):
+                continue
+            # Skip the placeholder-empty shape.
+            if notes.get("status") == "section_not_found_or_empty":
+                continue
+            if "extraction_error" in notes:
+                continue
+            checked.append(f"{fy_label}_AR_notes_to_financials")
+
+            hit = self._find_adr_gdr_in_notes(notes)
+            if hit is not None:
+                found_entry = hit
+                found_fy = fy_label
+                break
+
+        meta["source_checked"] = checked
+
+        if found_entry is not None and found_fy:
+            payload["outstanding_units_mn"] = found_entry.get("outstanding_units_mn")
+            payload["pct_of_total_equity"] = found_entry.get("pct_of_total_equity")
+            payload["as_of_date"] = found_entry.get("as_of_date")
+            payload["source"] = f"{found_fy}_AR_notes_to_financials"
+            meta["stub"] = False
+            meta.pop("todo", None)
+            meta.pop("reason", None)
+        return payload
+
+    @staticmethod
+    def _find_adr_gdr_in_notes(notes: dict) -> dict | None:
+        """Best-effort search for ADR/GDR outstanding inside a notes_to_financials payload.
+
+        Two paths:
+          1. Structured: `share_capital.adr_gdr_details` if extractor surfaces it.
+          2. Free-text: scan `material_items` / `forensic_red_flags` strings for
+             ADR/GDR/depositary keywords and an adjacent numeric.
+
+        Returns None when nothing usable is found.
+        """
+        # Path 1 — explicit sub-dict (future-proof; current extractor does not emit this).
+        share_cap = notes.get("share_capital")
+        if isinstance(share_cap, dict):
+            adr = share_cap.get("adr_gdr_details")
+            if isinstance(adr, dict):
+                return {
+                    "outstanding_units_mn": adr.get("outstanding_units_mn")
+                        or adr.get("outstanding_mn") or adr.get("units_mn"),
+                    "pct_of_total_equity": adr.get("pct_of_total_equity")
+                        or adr.get("pct_equity"),
+                    "as_of_date": adr.get("as_of_date") or adr.get("as_of"),
+                }
+
+        # Path 2 — free-text scan of narrative list fields.
+        kw_re = re.compile(r"\b(adr|gdr|american depositary|depositary receipts?)\b", re.IGNORECASE)
+        # Pull a numeric with optional "mn" / "million" / "lakh" / "crore" unit suffix.
+        num_re = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*(mn|million|lakh|lakhs|crore|cr)?", re.IGNORECASE)
+
+        candidates: list[str] = []
+        for key in ("material_items", "forensic_red_flags",
+                    "significant_accounting_policy_changes"):
+            val = notes.get(key)
+            if isinstance(val, list):
+                candidates.extend(str(x) for x in val if x)
+            elif isinstance(val, str):
+                candidates.append(val)
+
+        for text in candidates:
+            if not kw_re.search(text):
+                continue
+            m = num_re.search(text)
+            if not m:
+                continue
+            try:
+                units = float(m.group(1))
+            except ValueError:
+                continue
+            unit = (m.group(2) or "").lower()
+            if unit in ("crore", "cr"):
+                units = units * 10.0  # 1 cr = 10 mn
+            elif unit in ("lakh", "lakhs"):
+                units = units / 10.0  # 1 lakh = 0.1 mn
+            return {
+                "outstanding_units_mn": units,
+                "pct_of_total_equity": None,
+                "as_of_date": None,
+            }
+        return None
 
     def get_expense_breakdown(self, symbol: str, section: str = "profit-loss") -> list[dict]:
         """Schedule sub-item breakdowns (e.g., Expenses → Employee Cost, Raw Material).
