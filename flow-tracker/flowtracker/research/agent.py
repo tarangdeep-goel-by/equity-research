@@ -55,6 +55,14 @@ from flowtracker.research.tools import (
 _VAULT_BASE = Path.home() / "vault" / "stocks"
 _REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 
+# --- Specialist-run retry config (E14 extension to _run_specialist) ---
+# Mirror annual_report_extractor: [30s, 60s, 120s] backoff = 3 retries on top
+# of the initial attempt. Retry only when the SDK subprocess crashed BEFORE
+# emitting useful content (< PARTIAL_OUTPUT_BYTES). Crashes after content is
+# captured fall through to the existing "graceful degradation" path.
+SPECIALIST_RETRY_DELAYS_SEC: tuple[int, ...] = (30, 60, 120)
+PARTIAL_OUTPUT_BYTES = 400
+
 
 # --- Multi-agent specialist defaults ---
 
@@ -583,6 +591,8 @@ async def _run_specialist(
         permission_mode="bypassPermissions",
         model=model,
         stderr=_stderr_cb,
+        setting_sources=[],  # isolate subprocess from user hooks/plugins/skills
+        plugins=[],          # no external plugins in specialist subprocess
     )
     effort = effort or DEFAULT_EFFORT.get(name)
     if effort:
@@ -662,156 +672,212 @@ async def _run_specialist(
         current_turn_tool_ids = []
         current_turn_usage = {}
 
-    try:
-        async for message in query(
-            prompt=user_prompt or f"Analyze {symbol}. Pull all relevant data using your tools. Produce your full report section.",
-            options=options,
-        ):
-            if isinstance(message, RateLimitEvent):
-                logger.warning(
-                    "[%s] rate limited: status=%s type=%s resets_at=%s",
-                    name, message.rate_limit_info.status,
-                    message.rate_limit_info.rate_limit_type,
-                    message.rate_limit_info.resets_at,
-                )
-                # C-2b: record rate-limit retry event (no specific tool context here)
-                retries.append(RetryEvent(
-                    tool_name="(any)",
-                    attempt=len(retries) + 1,
-                    cause="rate_limit",
-                    wait_ms=0,
-                    at=datetime.now(timezone.utc).isoformat(),
-                ))
-                continue
-            if isinstance(message, AssistantMessage):
-                # C-2f: record first-token timestamp on the very first AssistantMessage
-                if first_token_mono is None:
-                    first_token_mono = time.monotonic()
+    # Retry loop: the Claude SDK subprocess occasionally crashes with
+    # "Command failed with exit code 1" before emitting any useful content
+    # (ghost spawn, hook crash on teardown, etc.). Retry up to
+    # len(SPECIALIST_RETRY_DELAYS_SEC) times — but only when the crash produced
+    # no captured content. Crashes AFTER useful content was captured fall
+    # through to the existing "graceful degradation" path.
+    max_attempts = 1 + len(SPECIALIST_RETRY_DELAYS_SEC)
+    attempt = 0
+    while attempt < max_attempts:
+        attempt += 1
+        if attempt > 1:
+            # Reset per-attempt state before retrying.
+            evidence.clear()
+            pending_tool_calls.clear()
+            text_blocks.clear()
+            report_text = ""
+            total_cost = 0.0
+            input_tokens = 0
+            output_tokens = 0
+            first_token_mono = None
+            turn_index = -1
+            current_turn_mono = None
+            current_turn_started = ""
+            current_turn_reasoning_chars = 0
+            current_turn_tool_ids = []
+            current_turn_usage = {}
+            # Track retry on the trace so evals can see the re-run.
+            retries.append(RetryEvent(
+                tool_name="(specialist)",
+                attempt=attempt,
+                cause="subprocess_crash",
+                wait_ms=SPECIALIST_RETRY_DELAYS_SEC[attempt - 2] * 1000,
+                at=datetime.now(timezone.utc).isoformat(),
+            ))
+            logger.warning(
+                "[%s] %s: specialist retry attempt %d/%d after %ds (no content from prior attempt)...",
+                name, symbol, attempt - 1, len(SPECIALIST_RETRY_DELAYS_SEC),
+                SPECIALIST_RETRY_DELAYS_SEC[attempt - 2],
+            )
+            await asyncio.sleep(SPECIALIST_RETRY_DELAYS_SEC[attempt - 2])
 
-                # C-2a: a new assistant message = a new turn. Flush previous, start fresh.
-                _flush_turn()
-                turn_index += 1
-                current_turn_mono = time.monotonic()
-                current_turn_started = datetime.now(timezone.utc).isoformat()
+        try:
+            async for message in query(
+                prompt=user_prompt or f"Analyze {symbol}. Pull all relevant data using your tools. Produce your full report section.",
+                options=options,
+            ):
+                if isinstance(message, RateLimitEvent):
+                    logger.warning(
+                        "[%s] rate limited: status=%s type=%s resets_at=%s",
+                        name, message.rate_limit_info.status,
+                        message.rate_limit_info.rate_limit_type,
+                        message.rate_limit_info.resets_at,
+                    )
+                    # C-2b: record rate-limit retry event (no specific tool context here)
+                    retries.append(RetryEvent(
+                        tool_name="(any)",
+                        attempt=len(retries) + 1,
+                        cause="rate_limit",
+                        wait_ms=0,
+                        at=datetime.now(timezone.utc).isoformat(),
+                    ))
+                    continue
+                if isinstance(message, AssistantMessage):
+                    # C-2f: record first-token timestamp on the very first AssistantMessage
+                    if first_token_mono is None:
+                        first_token_mono = time.monotonic()
 
-                # Accumulate tokens from each assistant turn (usage is a dict)
-                msg_usage = getattr(message, "usage", None)
-                if isinstance(msg_usage, dict):
-                    current_turn_usage = msg_usage  # stored on turn flush
-                    input_tokens += msg_usage.get("input_tokens", 0) or 0
-                    output_tokens += msg_usage.get("output_tokens", 0) or 0
+                    # C-2a: a new assistant message = a new turn. Flush previous, start fresh.
+                    _flush_turn()
+                    turn_index += 1
+                    current_turn_mono = time.monotonic()
+                    current_turn_started = datetime.now(timezone.utc).isoformat()
 
-                for block in message.content:
-                    block_type = type(block).__name__
-                    if block_type == "TextBlock":
-                        text_blocks.append(block.text)
-                        current_turn_reasoning_chars += len(block.text or "")
-                    elif isinstance(block, ToolUseBlock):
-                        call_started = datetime.now(timezone.utc).isoformat()
-                        call_args = block.input or {}
-                        pending_tool_calls[block.id] = {
-                            "tool": block.name,
-                            "args": call_args,
-                            "started_at": call_started,
-                            "start_mono": time.monotonic(),
-                            "turn_index": turn_index,
-                        }
-                        current_turn_tool_ids.append(block.id)
-                        # C-2b: same-(tool, args) re-call = retry. Count prior evidence
-                        # entries that match BEFORE we append the new one.
-                        prior_matches = sum(
-                            1 for ev in evidence
-                            if ev.tool == block.name and ev.args == call_args
-                        )
-                        if prior_matches > 0:
-                            retries.append(RetryEvent(
-                                tool_name=block.name,
-                                attempt=prior_matches + 1,
-                                cause="other",
-                                wait_ms=0,
-                                at=call_started,
-                            ))
-                        # Record evidence immediately from ToolUseBlock.
-                        # The Agent SDK processes tool results internally and does NOT
-                        # expose ToolResultBlock through the stream, so we capture
-                        # tool calls here (result_summary/hash stay empty).
-                        evidence.append(ToolEvidence(
-                            tool=block.name,
-                            args=call_args,
-                            started_at=call_started,
-                            turn_index=turn_index,
-                        ))
-                        # Compact args for log readability — show all params, truncate long values
-                        compact = {}
-                        for k, v in (block.input or {}).items():
-                            sv = str(v)
-                            compact[k] = sv if len(sv) <= 80 else sv[:77] + "..."
-                        logger.info(
-                            "[%s] tool_call: %s(%s)",
-                            name, block.name, json.dumps(compact, default=str),
-                        )
-                    elif isinstance(block, ToolResultBlock):
-                        # Agent SDK may expose results in future versions.
-                        # When available, enrich the matching evidence entry.
-                        tool_id = block.tool_use_id
-                        if tool_id in pending_tool_calls:
-                            call = pending_tool_calls.pop(tool_id)
-                            result_str = str(block.content) if block.content else ""
-                            call_duration_ms = int((time.monotonic() - call["start_mono"]) * 1000)
-                            is_err = getattr(block, "is_error", False) or False
-                            # Find and enrich the evidence entry we created above
-                            for ev in reversed(evidence):
-                                if ev.tool == call["tool"] and ev.started_at == call["started_at"]:
-                                    ev.result_summary = result_str[:500]
-                                    ev.result_hash = hashlib.sha256(result_str.encode()).hexdigest()
-                                    ev.is_error = is_err
-                                    ev.duration_ms = call_duration_ms
-                                    break
-                            status_icon = "ERR" if is_err else "ok"
-                            logger.info(
-                                "[%s] tool_result: %s → %s %d chars %.1fs",
-                                name, call["tool"], status_icon, len(result_str), call_duration_ms / 1000,
+                    # Accumulate tokens from each assistant turn (usage is a dict)
+                    msg_usage = getattr(message, "usage", None)
+                    if isinstance(msg_usage, dict):
+                        current_turn_usage = msg_usage  # stored on turn flush
+                        input_tokens += msg_usage.get("input_tokens", 0) or 0
+                        output_tokens += msg_usage.get("output_tokens", 0) or 0
+
+                    for block in message.content:
+                        block_type = type(block).__name__
+                        if block_type == "TextBlock":
+                            text_blocks.append(block.text)
+                            current_turn_reasoning_chars += len(block.text or "")
+                        elif isinstance(block, ToolUseBlock):
+                            call_started = datetime.now(timezone.utc).isoformat()
+                            call_args = block.input or {}
+                            pending_tool_calls[block.id] = {
+                                "tool": block.name,
+                                "args": call_args,
+                                "started_at": call_started,
+                                "start_mono": time.monotonic(),
+                                "turn_index": turn_index,
+                            }
+                            current_turn_tool_ids.append(block.id)
+                            # C-2b: same-(tool, args) re-call = retry. Count prior evidence
+                            # entries that match BEFORE we append the new one.
+                            prior_matches = sum(
+                                1 for ev in evidence
+                                if ev.tool == block.name and ev.args == call_args
                             )
-            elif isinstance(message, ResultMessage):
-                report_text = message.result or ""
-                total_cost = message.total_cost_usd or 0.0
-                # ResultMessage.usage is a dict, not an object — use .get()
-                usage = message.usage
-                if isinstance(usage, dict):
-                    # Prefer ResultMessage totals over accumulated per-turn counts
-                    result_in = usage.get("input_tokens", 0) or 0
-                    result_out = usage.get("output_tokens", 0) or 0
-                    if result_in or result_out:
-                        input_tokens = result_in
-                        output_tokens = result_out
-                # C-2a: close the final turn on ResultMessage
+                            if prior_matches > 0:
+                                retries.append(RetryEvent(
+                                    tool_name=block.name,
+                                    attempt=prior_matches + 1,
+                                    cause="other",
+                                    wait_ms=0,
+                                    at=call_started,
+                                ))
+                            # Record evidence immediately from ToolUseBlock.
+                            # The Agent SDK processes tool results internally and does NOT
+                            # expose ToolResultBlock through the stream, so we capture
+                            # tool calls here (result_summary/hash stay empty).
+                            evidence.append(ToolEvidence(
+                                tool=block.name,
+                                args=call_args,
+                                started_at=call_started,
+                                turn_index=turn_index,
+                            ))
+                            # Compact args for log readability — show all params, truncate long values
+                            compact = {}
+                            for k, v in (block.input or {}).items():
+                                sv = str(v)
+                                compact[k] = sv if len(sv) <= 80 else sv[:77] + "..."
+                            logger.info(
+                                "[%s] tool_call: %s(%s)",
+                                name, block.name, json.dumps(compact, default=str),
+                            )
+                        elif isinstance(block, ToolResultBlock):
+                            # Agent SDK may expose results in future versions.
+                            # When available, enrich the matching evidence entry.
+                            tool_id = block.tool_use_id
+                            if tool_id in pending_tool_calls:
+                                call = pending_tool_calls.pop(tool_id)
+                                result_str = str(block.content) if block.content else ""
+                                call_duration_ms = int((time.monotonic() - call["start_mono"]) * 1000)
+                                is_err = getattr(block, "is_error", False) or False
+                                # Find and enrich the evidence entry we created above
+                                for ev in reversed(evidence):
+                                    if ev.tool == call["tool"] and ev.started_at == call["started_at"]:
+                                        ev.result_summary = result_str[:500]
+                                        ev.result_hash = hashlib.sha256(result_str.encode()).hexdigest()
+                                        ev.is_error = is_err
+                                        ev.duration_ms = call_duration_ms
+                                        break
+                                status_icon = "ERR" if is_err else "ok"
+                                logger.info(
+                                    "[%s] tool_result: %s → %s %d chars %.1fs",
+                                    name, call["tool"], status_icon, len(result_str), call_duration_ms / 1000,
+                                )
+                elif isinstance(message, ResultMessage):
+                    report_text = message.result or ""
+                    total_cost = message.total_cost_usd or 0.0
+                    # ResultMessage.usage is a dict, not an object — use .get()
+                    usage = message.usage
+                    if isinstance(usage, dict):
+                        # Prefer ResultMessage totals over accumulated per-turn counts
+                        result_in = usage.get("input_tokens", 0) or 0
+                        result_out = usage.get("output_tokens", 0) or 0
+                        if result_in or result_out:
+                            input_tokens = result_in
+                            output_tokens = result_out
+                    # C-2a: close the final turn on ResultMessage
+                    _flush_turn()
+            # Reached end of message stream cleanly — break out of retry loop.
+            break
+        except Exception as exc:
+            # Claude CLI may exit with code 1 after delivering results.
+            # If we already captured text, proceed with what we have.
+            captured_bytes = len(report_text) + sum(len(tb) for tb in text_blocks)
+            has_content = captured_bytes > 0
+            # Surface the captured subprocess stderr (SDK bug #800 hides it by default)
+            stderr_tail = "\n".join(_stderr_buffer[-50:]).strip()
+            if stderr_tail:
+                logger.warning(
+                    "Agent '%s' for %s CLI stderr (last 50 lines):\n%s",
+                    name, symbol, stderr_tail,
+                )
+            # Retry path: subprocess crashed with no/negligible content and we
+            # haven't exhausted attempts yet.
+            if captured_bytes < PARTIAL_OUTPUT_BYTES and attempt < max_attempts:
+                logger.warning(
+                    "Agent '%s' for %s attempt %d raised %s with %d bytes captured — retrying",
+                    name, symbol, attempt, type(exc).__name__, captured_bytes,
+                )
+                # _flush_turn first so any in-flight turn is preserved in telemetry.
                 _flush_turn()
-    except Exception as exc:
-        # Claude CLI may exit with code 1 after delivering results.
-        # If we already captured text, proceed with what we have.
-        has_content = bool(report_text or text_blocks)
-        # Surface the captured subprocess stderr (SDK bug #800 hides it by default)
-        stderr_tail = "\n".join(_stderr_buffer[-50:]).strip()
-        if stderr_tail:
-            logger.warning(
-                "Agent '%s' for %s CLI stderr (last 50 lines):\n%s",
-                name, symbol, stderr_tail,
-            )
-        if has_content:
-            logger.warning(
-                "Agent '%s' for %s raised %s after producing content — proceeding with partial output",
-                name, symbol, type(exc).__name__,
-            )
-        else:
-            agent_status = "failed"
-            logger.error(
-                "Agent '%s' for %s FAILED with no output: %s: %s",
-                name, symbol, type(exc).__name__, exc,
-                exc_info=True,
-            )
-    finally:
-        # C-2a: ensure any in-flight turn is flushed even on exception paths
-        _flush_turn()
+                continue  # next iteration of the retry while-loop
+            # Otherwise: existing behaviour — preserve partial output OR mark failed.
+            if has_content:
+                logger.warning(
+                    "Agent '%s' for %s raised %s after producing content — proceeding with partial output",
+                    name, symbol, type(exc).__name__,
+                )
+            else:
+                agent_status = "failed"
+                logger.error(
+                    "Agent '%s' for %s FAILED with no output: %s: %s",
+                    name, symbol, type(exc).__name__, exc,
+                    exc_info=True,
+                )
+            break
+        finally:
+            # C-2a: ensure any in-flight turn is flushed even on exception paths
+            _flush_turn()
 
     # C-2f: compute time-to-first-token (delta from query start to first AssistantMessage)
     time_to_first_token_ms = (
@@ -1002,6 +1068,8 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
             max_turns=1,
             permission_mode="bypassPermissions",
             model="claude-haiku-4-5-20251001",
+            setting_sources=[],  # isolate from user hooks/plugins/skills
+            plugins=[],          # no external plugins in briefing subprocess
         )
 
         result_text = ""

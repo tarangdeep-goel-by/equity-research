@@ -202,6 +202,8 @@ async def _call_claude(
                           "NotebookEdit", "TodoWrite"],
         stderr=lambda line: logger.warning("[cli-stderr] %s", line),
         env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000"},
+        setting_sources=[],  # isolate from user hooks/plugins/skills
+        plugins=[],          # no external plugins in extractor subprocess
     )
     if output_format:
         options.output_format = output_format
