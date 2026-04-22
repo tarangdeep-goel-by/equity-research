@@ -95,6 +95,19 @@ AR_SECTIONS: dict[str, list[str]] = {
 }
 
 
+# Minimum size for a heading-based section match to be trusted without fallback.
+# Below this, we try a body-text fallback (see _body_text_fallback) — Docling
+# sometimes renders the real section header as plain paragraph text (e.g.
+# SUNPHARMA FY25 MD&A) and the only `##` heading in the TOC hands back a
+# forward-reference blurb.
+_MIN_HEADING_SECTION_CHARS = 2000
+
+# Body-text fallback requires the synthetic section to be at least this many
+# times bigger than the tiny heading-based section before we substitute it —
+# guards against accidentally picking up stray mentions of the canonical name.
+_BODY_FALLBACK_IMPROVEMENT_RATIO = 5
+
+
 def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
     """Return {canonical_name: {char_start, char_end, matched_heading, level}}.
 
@@ -104,7 +117,12 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
          forward reference "see MD&A Report" and the actual section header).
          We pick the candidate that produces the LARGEST section — the real one.
       3. char_end is the start of the next heading at the same-or-higher level.
-      4. Sections not found are simply absent from the index.
+      4. If the largest heading-based candidate is still tiny (< 2KB), fall
+         back to plain-text occurrences of the aliases in the markdown body —
+         Docling sometimes flattens the real section header to a paragraph
+         (e.g. SUNPHARMA FY25 MD&A lives as repeating running-header text,
+         not as a `##` heading).
+      5. Sections not found are simply absent from the index.
     """
     compiled = {
         canonical: [re.compile(p, re.IGNORECASE) for p in patterns]
@@ -123,6 +141,13 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
                 matched_heading_ids.add(h["char_offset"])
                 break  # one canonical per heading
 
+    # Ranges that correspond to actual heading lines — used to exclude
+    # occurrences inside an already-matched heading from the body-text fallback.
+    heading_ranges = [
+        (h["char_offset"], h["char_offset"] + h["level"] + 2 + len(h["text"]))
+        for h in headings
+    ]
+
     # For each canonical, score candidates by their section size and pick the largest.
     index: dict[str, dict] = {}
     for canonical, hits in candidates.items():
@@ -133,13 +158,32 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
         # Largest section wins (real header has more content than a forward reference).
         scored.sort(key=lambda t: t[0], reverse=True)
         size, h, end = scored[0]
-        index[canonical] = {
+        entry = {
             "char_start": h["char_offset"],
             "char_end": end,
             "matched_heading": h["text"],
             "level": h["level"],
             "size_chars": size,
+            "match_source": "heading",
         }
+
+        # Size-gated body-text fallback: when the best heading slice is tiny,
+        # scan the markdown for plain-text occurrences of the alias patterns
+        # and synthesize a section using the next different-canonical heading
+        # as the end boundary.
+        if size < _MIN_HEADING_SECTION_CHARS:
+            fallback = _body_text_fallback(
+                md, canonical, compiled[canonical], compiled, headings, heading_ranges,
+            )
+            if fallback and fallback["size_chars"] >= size * _BODY_FALLBACK_IMPROVEMENT_RATIO:
+                logger.info(
+                    "Section '%s': heading-based slice tiny (%d chars); "
+                    "body-text fallback gives %d chars at offset %d — using fallback",
+                    canonical, size, fallback["size_chars"], fallback["char_start"],
+                )
+                entry = fallback
+
+        index[canonical] = entry
 
     unknown_count = len(headings) - len(matched_heading_ids)
     if unknown_count > 0:
@@ -148,6 +192,102 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
             len(index), len(AR_SECTIONS), unknown_count,
         )
     return index
+
+
+def _body_text_fallback(
+    md: str,
+    canonical: str,
+    regexes: list[re.Pattern],
+    all_compiled: dict[str, list[re.Pattern]],
+    headings: list[dict],
+    heading_ranges: list[tuple[int, int]],
+) -> dict | None:
+    """Synthetic section anchor from plain-text body occurrences.
+
+    For each non-heading-range occurrence of a canonical's alias regexes in
+    `md`, compute a synthetic section body ending at the next heading that
+    matches a DIFFERENT canonical section. Pick the occurrence with the
+    largest synthetic body.
+
+    Returns a dict matching `build_ar_section_index` entry shape with
+    `match_source="body_text"`, or None if no usable body hit is found.
+    """
+    # Gather all raw-text match positions for this canonical.
+    hits: list[int] = []
+    for rx in regexes:
+        for m in rx.finditer(md):
+            hits.append(m.start())
+    if not hits:
+        return None
+    # Dedup + sort (different aliases may match at the same position).
+    hits = sorted(set(hits))
+
+    def _inside_heading(off: int) -> bool:
+        for s, e in heading_ranges:
+            if s <= off < e:
+                return True
+        return False
+
+    def _looks_like_title_line(off: int) -> bool:
+        """Filter: the match should start a short line that reads like a
+        section title, not mid-paragraph prose or a TOC bullet.
+
+        Rules:
+          - Must be at start of line (preceded by newline or beginning of doc).
+          - The containing line must be <= 120 chars (long lines = prose).
+          - The line must not start with a TOC-bullet character sequence
+            like "- N Title" or "N Title" (integer page numbers).
+        """
+        # Must be at the start of a line.
+        if off > 0 and md[off - 1] != "\n":
+            return False
+        # Find the line's end (newline or EOF).
+        line_end = md.find("\n", off)
+        if line_end < 0:
+            line_end = len(md)
+        line = md[off:line_end]
+        # Reject very long lines — those are prose, not titles.
+        if len(line) > 120:
+            return False
+        return True
+
+    def _next_other_canonical_heading(start_off: int) -> int:
+        """First heading after start_off whose text matches a canonical
+        section OTHER than `canonical`. Used as the synthetic end boundary."""
+        for h in headings:
+            if h["char_offset"] <= start_off:
+                continue
+            text = h["text"]
+            for other, other_rxs in all_compiled.items():
+                if other == canonical:
+                    continue
+                if any(rx.search(text) for rx in other_rxs):
+                    return h["char_offset"]
+        return len(md)
+
+    best: dict | None = None
+    for off in hits:
+        if _inside_heading(off):
+            continue
+        if not _looks_like_title_line(off):
+            continue
+        end = _next_other_canonical_heading(off)
+        synthetic_size = end - off
+        if best is None or synthetic_size > best["size_chars"]:
+            # Capture the actual matching text span for the `matched_heading`
+            # field so callers can tell it was a body-text match.
+            # Use a short excerpt from the offset (strip to first line).
+            line_end = md.find("\n", off)
+            line_end = off + 80 if line_end < 0 else min(line_end, off + 120)
+            best = {
+                "char_start": off,
+                "char_end": end,
+                "matched_heading": md[off:line_end].strip(),
+                "level": 0,  # synthetic — no explicit heading level
+                "size_chars": synthetic_size,
+                "match_source": "body_text",
+            }
+    return best
 
 
 def _find_section_end(md: str, headings: list[dict], h: dict) -> int:

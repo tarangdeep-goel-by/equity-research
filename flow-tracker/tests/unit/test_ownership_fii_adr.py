@@ -228,3 +228,127 @@ def test_adr_gdr_routed_through_get_ownership(api_empty):
     data = _get_ownership_section(api_empty, "HDFCBANK", "adr_gdr", {})
     assert isinstance(data, dict)
     assert "listed_on" in data
+
+
+# ---------------------------------------------------------------------------
+# Fix 10 — ADR/GDR live extraction from AR notes_to_financials
+# ---------------------------------------------------------------------------
+
+
+def test_adr_gdr_reads_from_ar_notes(api_empty, monkeypatch):
+    """When the AR notes_to_financials payload exposes a share_capital.adr_gdr_details
+    sub-dict, get_adr_gdr must populate the numeric fields and flip stub=False.
+    """
+    def fake_get_annual_report(symbol, year=None, section=None, include_cross_year=True):
+        assert section == "notes_to_financials"
+        return {
+            "symbol": symbol,
+            "section": "notes_to_financials",
+            "years": [
+                {
+                    "fiscal_year": "FY25",
+                    "notes_to_financials": {
+                        "share_capital": {
+                            "adr_gdr_details": {
+                                "outstanding_units_mn": 124.5,
+                                "pct_of_total_equity": 2.81,
+                                "as_of_date": "2025-03-31",
+                            },
+                        },
+                    },
+                },
+            ],
+        }
+
+    monkeypatch.setattr(api_empty, "get_annual_report", fake_get_annual_report)
+    data = api_empty.get_adr_gdr("INFY")
+
+    assert data["outstanding_units_mn"] == 124.5
+    assert data["pct_of_total_equity"] == 2.81
+    assert data["as_of_date"] == "2025-03-31"
+    assert data["source"] == "FY25_AR_notes_to_financials"
+    meta = data["_meta"]
+    assert meta["stub"] is False
+    assert "FY25_AR_notes_to_financials" in meta.get("source_checked", [])
+
+
+def test_adr_gdr_reads_from_material_items_freetext(api_empty, monkeypatch):
+    """Free-text fallback: material_items mentioning ADR + a number should be mined."""
+    def fake_get_annual_report(symbol, year=None, section=None, include_cross_year=True):
+        return {
+            "section": "notes_to_financials",
+            "years": [
+                {
+                    "fiscal_year": "FY24",
+                    "notes_to_financials": {
+                        "material_items": [
+                            "American Depositary Receipts outstanding: 87.2 mn units as of year end",
+                        ],
+                    },
+                },
+            ],
+        }
+
+    monkeypatch.setattr(api_empty, "get_annual_report", fake_get_annual_report)
+    data = api_empty.get_adr_gdr("INFY")
+    assert data["outstanding_units_mn"] == 87.2
+    assert data["source"] == "FY24_AR_notes_to_financials"
+    assert data["_meta"]["stub"] is False
+
+
+def test_adr_gdr_falls_back_to_stub_when_ar_empty(api_empty, monkeypatch):
+    """When AR notes don't mention ADR/GDR, stub behavior must be preserved
+    but source_checked should record which years were consulted.
+    """
+    def fake_get_annual_report(symbol, year=None, section=None, include_cross_year=True):
+        return {
+            "section": "notes_to_financials",
+            "years": [
+                {
+                    "fiscal_year": "FY25",
+                    "notes_to_financials": {
+                        "contingent_liabilities_cr": {"total": 120.0},
+                        "material_items": ["Routine disclosure, nothing on depositary receipts"],
+                    },
+                },
+            ],
+        }
+
+    monkeypatch.setattr(api_empty, "get_annual_report", fake_get_annual_report)
+    data = api_empty.get_adr_gdr("INFY")
+    assert data["outstanding_units_mn"] is None
+    assert data["pct_of_total_equity"] is None
+    assert data["source"] == "stub"
+    meta = data["_meta"]
+    assert meta["stub"] is True
+    # Year got consulted — must be recorded.
+    assert meta.get("source_checked") == ["FY25_AR_notes_to_financials"]
+
+
+def test_adr_gdr_falls_back_to_stub_when_ar_missing(api_empty, monkeypatch):
+    """When get_annual_report returns an error dict (no vault), stub preserved."""
+    def fake_get_annual_report(symbol, year=None, section=None, include_cross_year=True):
+        return {"error": "No AR extractions found", "hint": "run extract-ar"}
+
+    monkeypatch.setattr(api_empty, "get_annual_report", fake_get_annual_report)
+    data = api_empty.get_adr_gdr("INFY")
+    assert data["outstanding_units_mn"] is None
+    assert data["source"] == "stub"
+    assert data["_meta"]["stub"] is True
+    # No usable year — source_checked is an empty list.
+    assert data["_meta"].get("source_checked") == []
+
+
+def test_adr_gdr_non_adr_symbol_skips_ar_lookup(api_empty, monkeypatch):
+    """RELIANCE has no known listing — we must NOT call get_annual_report."""
+    calls = {"n": 0}
+
+    def fake_get_annual_report(*a, **kw):  # pragma: no cover — must not be hit
+        calls["n"] += 1
+        return {}
+
+    monkeypatch.setattr(api_empty, "get_annual_report", fake_get_annual_report)
+    data = api_empty.get_adr_gdr("RELIANCE")
+    assert calls["n"] == 0
+    assert data["listed_on"] == []
+    assert data["_meta"]["stub"] is True

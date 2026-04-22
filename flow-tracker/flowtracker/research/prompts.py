@@ -249,6 +249,14 @@ Named `calculate` operations have strict input semantics. Read the tool descript
 - `margin_of_safety(fv, price)` measures valuation gap (current vs fair). It is NOT for price-vs-SMA delta — use `expr` or `pct_of` for that.
 - `cagr(start, end, years)` requires positive start and end.
 
+Concrete usage map — copy these, don't guess:
+- "What is 36.24% of 238,563?" → `expr(a="0.3624 * 238563", b="0")` — NOT `pct_of`
+- "What percent of 238,563 is 86,462?" → `pct_of(a=86462, b=238563)` → returns 36.24
+- "Growth from 100 to 120?" → `growth_rate(a=100, b=120)` → returns 20.0
+- "Difference 2.1% − 1.8% (pp delta)?" → `expr(a="2.1 - 1.8", b="0")` — NOT `growth_rate`
+- "Margin of safety at FV ₹1200, price ₹1000?" → `margin_of_safety(a=1200, b=1000)` → returns 20.0
+- "Price vs 200-SMA: price ₹1010, SMA ₹980, what's the % gap?" → `expr(a="(1010 - 980) / 980 * 100", b="0")` — NOT `margin_of_safety`
+
 Duplicate `calculate` calls with identical args (same operation + same numeric inputs in two turns) are also flagged — read your Tool Audit before recomputing. Using a named op for the wrong purpose or issuing duplicates is a PROMPT_FIX downgrade.
 """
 

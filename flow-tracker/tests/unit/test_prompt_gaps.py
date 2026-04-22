@@ -57,6 +57,23 @@ class TestPromptCoverage:
     def test_preamble_has_f_score(self):
         assert "F-Score" in SHARED_PREAMBLE_V2
 
+    def test_preamble_has_name_op_concrete_usage_map(self):
+        """Name-op tenet must ship the concrete-usage-map examples so agents
+        don't misuse pct_of / growth_rate / margin_of_safety (see Fix 8).
+        """
+        assert "Concrete usage map" in SHARED_PREAMBLE_V2
+        # pct_of: "what % of b is a" — NOT "compute a% of b".
+        assert 'What is 36.24% of 238,563?' in SHARED_PREAMBLE_V2
+        assert 'expr(a="0.3624 * 238563"' in SHARED_PREAMBLE_V2
+        assert 'What percent of 238,563 is 86,462?' in SHARED_PREAMBLE_V2
+        assert "pct_of(a=86462, b=238563)" in SHARED_PREAMBLE_V2
+        # growth_rate vs pp-delta.
+        assert "growth_rate(a=100, b=120)" in SHARED_PREAMBLE_V2
+        assert 'expr(a="2.1 - 1.8"' in SHARED_PREAMBLE_V2
+        # margin_of_safety vs price-vs-SMA.
+        assert "margin_of_safety(a=1200, b=1000)" in SHARED_PREAMBLE_V2
+        assert "(1010 - 980) / 980 * 100" in SHARED_PREAMBLE_V2
+
 
 class TestNoRedundantFetches:
     """Verify prompts don't instruct re-fetching data already in analytical_profile."""

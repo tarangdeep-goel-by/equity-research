@@ -1671,6 +1671,42 @@ class TestMarketContextV2:
         data = _parse(result)
         assert "error" in data
 
+    @pytest.mark.xfail(
+        reason=(
+            "F&O derivatives data (PCR, OI, rollover, fo_enabled) is mandated "
+            "by the technical agent prompt (prompts.py:998) but the underlying "
+            "infrastructure does not exist: no DB table, no client (FMP/NSE/"
+            "Screener), no cron populates it, and get_technical_indicators() "
+            "only returns RSI/SMA/MACD/ADX. Shipping this requires a new NSE "
+            "derivatives client + table + cron + fo_enabled symbol list "
+            "(~200 stocks). Tracked as plan-v2 B6 tenet gap — eval flagged "
+            "HDFCBANK/GODREJPROP/ETERNAL/NTPC technical reports."
+        ),
+        strict=True,
+    )
+    @pytest.mark.asyncio
+    async def test_technicals_includes_fo_fields_for_liquid_stock(self):
+        """Contract test: for an F&O-enabled Nifty 50 stock, get_market_context(
+        section='technicals') must expose PCR, OI, rollover, and fo_enabled=True.
+
+        Uses the real ResearchDataAPI against the local DB (not FakeAPI), so it
+        fails as long as the derivatives data is not actually ingested. Flip to
+        non-xfail once the ingestion pipeline lands.
+        """
+        from flowtracker.research.tools import get_market_context
+
+        result = await get_market_context.handler(
+            {"symbol": "HDFCBANK", "section": "technicals"}
+        )
+        data = _parse(result)
+        # technicals section returns a list[dict] or a dict; normalize to dict
+        record = data[0] if isinstance(data, list) and data else data
+        assert isinstance(record, dict), f"expected dict, got {type(record)}"
+        assert record.get("fo_enabled") is True, "HDFCBANK is F&O-enabled"
+        assert record.get("pcr") is not None, "PCR (Put-Call Ratio) must be present"
+        assert record.get("open_interest") is not None, "Open Interest must be present"
+        assert record.get("rollover_pct") is not None, "Rollover % must be present"
+
 
 class TestCompanyContextV2:
     @pytest.mark.asyncio

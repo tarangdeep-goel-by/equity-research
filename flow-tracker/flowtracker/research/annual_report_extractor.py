@@ -89,6 +89,22 @@ CHUNK_SIZE_BYTES = 60_000
 _TRANSIENT_EXC = (CLIConnectionError, ProcessError, TimeoutError, OSError, ConnectionError)
 
 
+class _ClaudeSubprocessCrash(Exception):
+    """SDK subprocess exited with no content captured.
+
+    Raised by `_call_claude` when the underlying Claude Agent SDK raises a
+    bare `Exception("Command failed with exit code 1")` (or similar subprocess-
+    level crash) *before* any text or ResultMessage was captured. The bare
+    Exception class isn't in `_TRANSIENT_EXC` so it wouldn't retry otherwise;
+    wrapping lets `_extract_with_retry` catch these specifically without
+    swallowing programmer errors.
+    """
+
+    def __init__(self, original: BaseException):
+        super().__init__(f"{type(original).__name__}: {original}")
+        self.original = original
+
+
 def _split_section_text(text: str, chunk_size: int = CHUNK_SIZE_BYTES) -> list[str]:
     """Split a section's markdown into chunks <= chunk_size, preferring paragraph
     boundaries (double newline). Falls back to hard splits when a single paragraph
@@ -194,6 +210,15 @@ async def _extract_with_retry(
             logger.warning(
                 "[ar] %s %s: section '%s' transient failure (attempt %d): %s: %s",
                 symbol, fy_label, section_name, attempt, type(exc).__name__, exc,
+            )
+        except _ClaudeSubprocessCrash as exc:
+            # SDK raised bare Exception("Command failed with exit code 1") with
+            # no content — treat as transient and retry. The wrapper was raised
+            # by `_call_claude` only when nothing had been captured yet.
+            last_exc = exc
+            logger.warning(
+                "[ar] %s %s: section '%s' subprocess crash (attempt %d): %s",
+                symbol, fy_label, section_name, attempt, exc,
             )
     logger.error(
         "[ar] %s %s: section '%s' gave up after %d attempts: %s",
@@ -471,6 +496,8 @@ async def _call_claude(
                           "NotebookEdit", "TodoWrite"],
         stderr=lambda line: logger.warning("[cli-stderr] %s", line),
         env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "180000"},
+        setting_sources=[],  # isolate from user hooks/plugins/skills
+        plugins=[],          # no external plugins in extractor subprocess
     )
     text_blocks: list[str] = []
     result_text = ""
@@ -485,10 +512,20 @@ async def _call_claude(
                         text_blocks.append(block.text)
             elif isinstance(msg, ResultMessage):
                 result_text = msg.result or ""
+    except _TRANSIENT_EXC:
+        # Transient per-connection failures — re-raise as-is so the retry
+        # wrapper's narrow `_TRANSIENT_EXC` handler picks them up.
+        if not (result_text or text_blocks):
+            raise
+        logger.warning("[ar] _call_claude raised transient exc after capturing content")
     except Exception as exc:
+        # Bare Exception covers the SDK's own "Command failed with exit code 1"
+        # crash (see claude_agent_sdk/_internal/query.py). Wrap it so the retry
+        # wrapper can match on a narrow class rather than a stringly-typed
+        # check on Exception.__str__.
         if not (result_text or text_blocks):
             logger.error("[ar] _call_claude failed with no content: %s", exc)
-            raise
+            raise _ClaudeSubprocessCrash(exc) from exc
         logger.warning("[ar] _call_claude raised %s after capturing content", type(exc).__name__)
     return result_text or "\n".join(text_blocks)
 

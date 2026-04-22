@@ -699,3 +699,94 @@ class TestMetaFields:
         # Iterate sections explicitly (the canonical downstream pattern).
         for sec in sections:
             assert result[sec]["ok"] is True
+
+
+# --- SDK subprocess hygiene: crash retry + option isolation ---------------
+
+
+class TestSubprocessCrashRetry:
+    """SDK subprocess crashes (bare Exception("Command failed with exit code 1"))
+    with no captured content should be wrapped in _ClaudeSubprocessCrash and
+    retried by _extract_with_retry.
+    """
+
+    @pytest.mark.asyncio
+    async def test_claude_subprocess_crash_triggers_retry(self, vault_home, monkeypatch):
+        """Two consecutive bare-Exception crashes (via _call_claude) should be
+        caught, wrapped, and retried — third attempt succeeds."""
+        import flowtracker.research.annual_report_extractor as ar_mod
+
+        symbol = "TESTCO"
+        fy_label = "FY25"
+        pdf_path = vault_home / "vault" / "stocks" / symbol / "filings" / fy_label / "annual_report.pdf"
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(b"fake")
+
+        _seed_fake_docling(monkeypatch, ar_mod, _fake_md_with_canonical_sections())
+
+        # Instant retries.
+        async def no_sleep(_delay):
+            return None
+        monkeypatch.setattr(ar_mod.asyncio, "sleep", no_sleep)
+
+        call_counts = {"auditor_report": 0}
+
+        async def flaky_call_claude(**kwargs):
+            call_counts["auditor_report"] = call_counts.get("auditor_report", 0) + 1
+            if call_counts["auditor_report"] <= 2:
+                # Simulate what _call_claude does when SDK raises bare Exception
+                # with no content buffered.
+                raise ar_mod._ClaudeSubprocessCrash(
+                    Exception("Command failed with exit code 1")
+                )
+            # Third attempt returns a real-looking JSON string.
+            return '{"opinion": "unqualified", "key_audit_matters": []}'
+
+        monkeypatch.setattr(ar_mod, "_call_claude", flaky_call_claude)
+
+        result = await ar_mod._extract_single_ar(
+            pdf_path, symbol, "claude-sonnet-4-6",
+            sections=("auditor_report",),
+        )
+
+        assert call_counts["auditor_report"] == 3
+        assert "extraction_error" not in result["auditor_report"]
+        assert result["auditor_report"]["opinion"] == "unqualified"
+        # Retried path is flagged on _meta.
+        assert "auditor_report" in result["_meta"]["retried_sections"]
+        assert result["_meta"]["degraded_quality"] is True
+
+
+class TestExtractorOptionsIsolation:
+    """Extractor subprocesses must set setting_sources=[] and plugins=[] so
+    they don't spawn with the user's hooks/plugins/skills loaded."""
+
+    def test_setting_sources_empty_in_ar_options(self):
+        """_call_claude in annual_report_extractor must construct
+        ClaudeAgentOptions with setting_sources=[] and plugins=[]."""
+        import inspect
+        import flowtracker.research.annual_report_extractor as ar_mod
+
+        src = inspect.getsource(ar_mod._call_claude)
+        assert "setting_sources=[]" in src, (
+            "annual_report_extractor._call_claude is missing setting_sources=[]"
+        )
+        assert "plugins=[]" in src, (
+            "annual_report_extractor._call_claude is missing plugins=[]"
+        )
+
+    def test_setting_sources_empty_in_concall_options(self):
+        import inspect
+        from flowtracker.research import concall_extractor as ce_mod
+
+        src = inspect.getsource(ce_mod._call_claude)
+        assert "setting_sources=[]" in src
+        assert "plugins=[]" in src
+
+    def test_setting_sources_empty_in_deck_options(self):
+        import inspect
+        from flowtracker.research import deck_extractor as de_mod
+
+        src = inspect.getsource(de_mod._call_claude)
+        assert "setting_sources=[]" in src
+        assert "plugins=[]" in src
