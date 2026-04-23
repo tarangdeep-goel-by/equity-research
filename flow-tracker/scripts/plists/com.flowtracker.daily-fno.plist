@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Daily F&O bhavcopy + participant OI fetch. Runs at 18:30 IST (after NSE
+  publishes end-of-day F&O files around 18:00). Weekends run too — they
+  will no-op when NSE has no new data (CLI is idempotent).
+
+  Install:
+      cp scripts/plists/com.flowtracker.daily-fno.plist ~/Library/LaunchAgents/
+      launchctl load ~/Library/LaunchAgents/com.flowtracker.daily-fno.plist
+
+  Verify:
+      launchctl list | grep flowtracker.daily-fno
+
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.flowtracker.daily-fno.plist
+      rm ~/Library/LaunchAgents/com.flowtracker.daily-fno.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowtracker.daily-fno</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/tarang/.local/share/flowtracker/scripts/daily-fno.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/tarang/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+</dict>
+</plist>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Refresh F&O eligible universe. Runs 1st of every month at 10:00. NSE
+  refreshes the F&O-eligible list quarterly, but the CLI is idempotent so
+  monthly "no change" runs are cheap and simpler than a true quarterly cron.
+
+  Install:
+      cp scripts/plists/com.flowtracker.quarterly-fno-universe.plist ~/Library/LaunchAgents/
+      launchctl load ~/Library/LaunchAgents/com.flowtracker.quarterly-fno-universe.plist
+
+  Verify:
+      launchctl list | grep flowtracker.quarterly-fno-universe
+
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.flowtracker.quarterly-fno-universe.plist
+      rm ~/Library/LaunchAgents/com.flowtracker.quarterly-fno-universe.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowtracker.quarterly-fno-universe</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/tarang/.local/share/flowtracker/scripts/quarterly-fno-universe.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/tarang/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Day</key><integer>1</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+</dict>
+</plist>
