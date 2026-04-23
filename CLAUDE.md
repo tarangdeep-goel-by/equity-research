@@ -43,7 +43,7 @@ Long autoeval runs go in tmux (see workflow-engine rule #7). Outputs land in `/t
 
 ### Worktree convention
 
-Feature work uses git worktrees, not branches in the main repo. `equity-research-ar-deck/` is an example — it mirrors the workspace layout (its own `flow-tracker/`, `plans/`, `scripts/`). Any sibling directory named `equity-research-<slug>/` should be treated as a worktree, not separate code. Before editing, confirm which worktree you're in with `git worktree list` + `pwd`.
+Feature work uses git worktrees, not branches in the main repo. Historically placed as siblings (`../equity-research-<slug>/`), but the current repo has worktrees nested *inside* at `equity-research/equity-research-<slug>/` — gitignored via `equity-research-*/`. Treat any `equity-research-<slug>/` path as a worktree, not source. Before editing, confirm which worktree you're in with `git worktree list` + `pwd`.
 
 ## Common Patterns
 
@@ -52,3 +52,4 @@ Feature work uses git worktrees, not branches in the main repo. `equity-research
 - **Data models:** Pydantic v2 with `extra="ignore"` for safe dict passthrough.
 - **Testing:** `uv run pytest tests/ -m "not slow"` (~20s, ~1120 tests). See `flow-tracker/CLAUDE.md` for full test guide.
 - **Monetary values** are in crores (₹1 Cr = 10M).
+- **Code navigation:** `code-graph-mcp` is indexed for this workspace (main repo only; worktrees excluded). For structural questions (who calls X, impact of changing Y, module overview, semantic search by concept), prefer MCP tools / CLI (`code-graph-mcp impact SYMBOL`, `code-graph-mcp overview path/`, `code-graph-mcp callgraph X`) over grep+Read chains. When working inside a worktree, queries still hit main's index — accept this for small fixes; for heavy structural work in a worktree, start Claude Code from that worktree's directory to build a local index.
