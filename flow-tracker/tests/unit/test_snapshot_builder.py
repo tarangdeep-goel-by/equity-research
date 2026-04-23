@@ -12,9 +12,12 @@ monkeypatched where `_build_yfinance` exercises the live sector/industry path.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import pytest
+
+_TODAY = date.today().isoformat()
 
 from flowtracker.fund_models import LiveSnapshot
 # Pre-import FundClient at module load time so the (slow) yfinance/pandas import
@@ -348,7 +351,7 @@ class TestPegComputed:
         store.upsert_valuation_snapshots([
             ValuationSnapshot(
                 symbol="ACME",
-                date="2026-04-15",
+                date=_TODAY,
                 price=1000.0,
                 pe_forward=30.0,
                 peg_ratio=None,
@@ -365,7 +368,7 @@ class TestPegComputed:
         store.upsert_valuation_snapshots([
             ValuationSnapshot(
                 symbol="ACME",
-                date="2026-04-15",
+                date=_TODAY,
                 price=1000.0,
                 pe_forward=30.0,
                 peg_ratio=None,
@@ -381,7 +384,7 @@ class TestPegComputed:
         store.upsert_valuation_snapshots([
             ValuationSnapshot(
                 symbol="ACME",
-                date="2026-04-15",
+                date=_TODAY,
                 price=1000.0,
                 pe_forward=None,
                 peg_ratio=None,
@@ -473,7 +476,7 @@ class TestBuildComputed:
             ),
         ])
         store.upsert_valuation_snapshots([
-            ValuationSnapshot(symbol="ACME", date="2026-04-15", price=1000.0, market_cap=50000.0),
+            ValuationSnapshot(symbol="ACME", date=_TODAY, price=1000.0, market_cap=50000.0),
         ])
         data = _build_computed("ACME", store)
         assert "fcf_yield" not in data
@@ -504,7 +507,7 @@ class TestBuildComputed:
             ),
         ])
         store.upsert_valuation_snapshots([
-            ValuationSnapshot(symbol="ACME", date="2026-04-15", price=1000.0, market_cap=50000.0),
+            ValuationSnapshot(symbol="ACME", date=_TODAY, price=1000.0, market_cap=50000.0),
         ])
         data = _build_computed("ACME", store)
         assert "fcf_yield" not in data
@@ -541,7 +544,7 @@ class TestBuildCompanySnapshotComputed:
         from flowtracker.fund_models import ValuationSnapshot
         store.upsert_valuation_snapshots([
             ValuationSnapshot(
-                symbol="ACME", date="2026-04-15", price=1000.0,
+                symbol="ACME", date=_TODAY, price=1000.0,
                 pe_forward=30.0, peg_ratio=None, earnings_growth=20.0,
             )
         ])
