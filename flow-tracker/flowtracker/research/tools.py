@@ -2360,6 +2360,13 @@ async def get_setup_feature_vector(args):
     annotations=READ_ONLY,
 )
 async def get_historical_analogs(args):
+    """Returns analogs + cohort metadata.
+
+    Response keys: ``symbol``, ``as_of_date``, ``target_features``,
+    ``analogs`` (list with per-row distance + forward returns + relaxation_level),
+    ``analog_count``, ``relaxation_level`` (0/1/2), ``relaxation_label``
+    (strict/industry_only/mcap_only), ``unique_symbols``, ``gross_count``.
+    """
     with ResearchDataAPI() as api:
         data = api.get_historical_analogs(
             args["symbol"], args.get("k", 20), args.get("as_of_date"),
@@ -2370,10 +2377,13 @@ async def get_historical_analogs(args):
 
 @tool(
     "get_analog_cohort_stats",
-    "Aggregate base rates across the analog cohort (default k=50 for richer stats): "
-    "recovery_rate_pct (% of analogs with +20%+ 12m return), blow_up_rate_pct (% with "
-    "-20%+), median_return_12m_pct, p10/p90 tails. Use these as your empirical prior "
-    "before making bull/base/bear calibration.",
+    "Aggregate base rates across the analog cohort (default k=50 for richer stats). "
+    "Returns: gross_N, unique_symbols, informative_N_{3m,6m,12m} (rows whose forward "
+    "window at that horizon has closed — cite this N for base rates, not gross_N), "
+    "relaxation_level (0=strict industry+mcap, 1=industry_only, 2=mcap_only), "
+    "per_horizon stats (median_return_pct + p10/p90 when informative_N>=5 else "
+    "individual_outcomes list), recovery_rate_pct / blow_up_rate_pct / sideways_rate_pct. "
+    "Use these as your empirical prior before making bull/base/bear calibration.",
     {"symbol": str, "k": int, "as_of_date": str},
     annotations=READ_ONLY,
 )

@@ -247,6 +247,9 @@ _SYNTHESIS_FIELDS = {
     "target_features", "analog_count", "analog_lookback_years",
     "base_rates", "cluster_summary", "top_analogs",
     "differentiators", "directional_adjustments", "regime_caveat",
+    # Historical Analog (Part 1.5) — cohort health + relaxation metadata
+    "unique_symbols", "relaxation_level", "relaxation_label", "primary_horizon",
+    "toxic_intersections",
 }
 
 

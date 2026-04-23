@@ -1,0 +1,36 @@
+# Eval Matrix — Macro Agent (Part 3 Tier 1)
+# Flat-date cadence instead of (sector, stock) pairs. Macro output is
+# market-wide regime state; there is no sector rubric to apply.
+#
+# Cadence: monthly, aligned to RBI MPR announcements when possible.
+# 4-6 eval points per quarter is enough signal for trend visibility.
+
+target_grade: "A-"
+target_grade_numeric: 90
+max_cycles_per_run: 2
+
+# Anchor-exhaustion rubric needs the catalog at eval time. Harness calls
+# get_macro_catalog() pre-grade and injects the expected anchor list into
+# the Gemini prompt. Do not hardcode anchor names here — they drift.
+anchor_exhaustion_enforced: true
+
+# Symbol used for the macro agent's "target industry hint" (India-wide
+# regime is industry-agnostic, but the agent prompt plumbing requires a
+# symbol). NIFTY is a no-op placeholder.
+placeholder_symbol: NIFTY
+
+# Each entry is an as-of date. Matrix is flat — no sector dimension.
+# Dates chosen to span recent macro regime shifts (RBI rate stance, US
+# Fed pivots, budget events) so grades have regime-change signal.
+eval_dates:
+  - date: "2025-11-01"
+    why: "Post-RBI Oct MPR decision; pre-Budget; USD/INR 88+ pressure peak"
+
+  - date: "2025-12-15"
+    why: "Pre-Dec MPC; Fed Dec FOMC positioning; year-end FII outflow window"
+
+  - date: "2026-02-01"
+    why: "Post-Union Budget FY27; RBI Feb MPR; capex cycle thesis in focus"
+
+  - date: "2026-03-15"
+    why: "Post-Fed-Mar-FOMC; pre-Indian fiscal year-end; macro risk-off stress test"
