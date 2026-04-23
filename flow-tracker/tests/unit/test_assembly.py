@@ -204,6 +204,55 @@ def test_detect_matches_actually_start_of_line():
 
 
 # ---------------------------------------------------------------------------
+# VEDL regression guards — PR-10. These mirror the named contracts in the
+# post-eval v2 retry where valuation regressed to F(53) due to scratchpad
+# leak. If the guard regresses (markers dropped from MONOLOGUE_MARKERS, head
+# window shrunk past the leak, or pattern compile flags changed), these tests
+# flip red. DO NOT weaken — fix the guard.
+# ---------------------------------------------------------------------------
+def test_scratchpad_leak_detected_thinking_tag():
+    """<thinking>...</thinking> wrapper must be detected as a leak."""
+    bad = (
+        "<thinking>\n"
+        "Let me pull the EV/EBITDA multiple and compute through-cycle...\n"
+        "</thinking>\n\n"
+        "# Valuation Report\n\nFair value analysis follows.\n"
+    )
+    assert _detect_scratchpad_leak(bad) is not None
+
+
+def test_scratchpad_leak_detected_explicit_scratch_marker():
+    """[SCRATCH] and 'Let me think' are explicit scratchpad markers."""
+    bad_scratch = "[SCRATCH] jotting calc\n\n# Valuation Report\nbody"
+    bad_let_me = "Let me think about the right multiple.\n\n# Valuation Report\nbody"
+    assert _detect_scratchpad_leak(bad_scratch) is not None
+    assert _detect_scratchpad_leak(bad_let_me) is not None
+
+
+def test_scratchpad_leak_detected_wait_then_marker():
+    """'Wait —' / 'Wait,' at line start signals self-correction monologue."""
+    bad_em = "Wait — actually, the through-cycle EBITDA should use 10Y avg.\n\n# Report\nbody"
+    bad_comma = "Wait, I mis-read the capex split.\n\n# Report\nbody"
+    assert _detect_scratchpad_leak(bad_em) is not None
+    assert _detect_scratchpad_leak(bad_comma) is not None
+
+
+def test_clean_report_passes_scratchpad_guard():
+    """Clean valuation body (no monologue markers) must not be flagged."""
+    good = (
+        "# Valuation Report — VEDL\n\n"
+        "## Through-Cycle EV/EBITDA\n\n"
+        "Primary anchor for a diversified miner. Using 10Y EBITDA/tonne average\n"
+        "excluding the FY21 supply shock, mid-cycle multiple of 5.5x yields a\n"
+        "fair EV of ₹X Cr. Net debt of ₹Y Cr implies equity FV of ₹Z/share.\n\n"
+        "## EV/Ton Nameplate Cross-Check\n\n"
+        "At $450/t for integrated steel vs sub-sector band of $400-600/t, the\n"
+        "stock sits mid-range — no unexplained residual gap.\n"
+    )
+    assert _detect_scratchpad_leak(good) is None
+
+
+# ---------------------------------------------------------------------------
 # assemble_final_report integration — raises ReportAssemblyError on leak
 # ---------------------------------------------------------------------------
 def _mk_env(
