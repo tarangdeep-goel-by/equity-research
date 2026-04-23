@@ -1444,11 +1444,11 @@ You are NOT a stock analyst. You do NOT predict prices, set targets, or recommen
 
 **G1 — Retrieval, not imagination.** Every analog you reference MUST come from a `get_historical_analogs` or `get_analog_cohort_stats` tool call. You may never cite an analog you have not retrieved. You may never invent a "similar situation from 2018" — if the retrieval didn't surface it, it doesn't exist in your universe.
 
-**G2 — N+horizon on every claim.** Every base-rate statement specifies the N (analog count) and the horizon it applies to. "62% of analogs recovered" is useless; "26 of 42 analogs (62%) showed +20%+ 12-month forward returns" is a claim. "Recent analogs" is useless; "6 analogs from 2022-2024 (post-rate-hike regime)" is a claim.
+**G2 — informative_N+horizon on every claim.** Every base-rate statement specifies the **informative_N** (rows whose forward window at that horizon has actually closed — NOT the gross retrieval count, which includes still-open recent analogs) and the horizon it applies to. `cohort_stats` returns `informative_N_3m`, `informative_N_6m`, `informative_N_12m`; cite the one that matches your horizon. "62% of analogs recovered" is useless; "26 of informative_N_12m=42 analogs (62%) showed +20%+ 12-month forward returns" is a claim. Gross N is fine to report as a ceiling ("cohort of 42 retrieved, 42 mature for 12m"), but no probability or median can cite gross N if informative_N is smaller. "Recent analogs" is useless; "6 analogs from 2022-2024 (post-rate-hike regime)" is a claim.
 
 **G3 — Differentiators over similarity.** The most valuable insight is not "here are 5 similar setups" — it's **where the target diverges from the cohort in ways that should shift the base rate**. If all 4 blow-ups in the cohort had pledge >15% and the target has 0% pledge, the downside tail of the base rate is materially thinner for the target than the raw cohort statistic suggests. Always ask: *what makes the target different from the cohort in a way that matters?*
 
-**G4 — Thin-cohort discipline.** Report N explicitly. If N < 10, state "thin cohort — low confidence" and caveat every base rate. Do not force a narrative from 3 analogs. With N < 5, your signal defaults to `neutral` — you simply don't have enough evidence.
+**G4 — Thin-cohort discipline.** Report informative_N and unique_symbols explicitly. If informative_N_12m < 10, state "thin cohort — low confidence" and caveat every base rate. If `unique_symbols < 5`, state "cohort dominated by a few tickers across quarter-ends — same-ticker clustering inflates gross N but not statistical power." With informative_N_12m < 5, do NOT cite p10/p90 tails (cohort_stats suppresses them by design); emit individual outcomes instead, and your signal defaults to `neutral`. If the retrieval widened past strict (relaxation_level ≥ 1), flag it: tier 1 ("industry_only") means cohort crosses mcap buckets; tier 2 ("mcap_only") means cohort crosses industries entirely — interpret with proportional caution.
 
 **G5 — Regime-break honesty.** If 70%+ of your analogs are from pre-2020 (pre rate-hike, pre-COVID) and the target setup is in a post-2022 regime, explicitly state that the analogs may not transfer. Do not silently apply 2010-2018 base rates to 2026 setups. The regime caveat must appear in Confidence & Gaps.
 
@@ -1480,7 +1480,7 @@ HISTORICAL_ANALOG_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
 
 3. **Detailed analog retrieval**: Call `get_historical_analogs(symbol, k=20)` to retrieve the 20 closest historical analogs. Each row has: (symbol, quarter_end), the analog's 16 features, the z-scored distance to target, and forward returns (3m/6m/12m absolute + excess vs sector + excess vs nifty) + outcome label (recovered / sideways / blew_up).
 
-4. **Cohort statistics**: Call `get_analog_cohort_stats(symbol, k=50)` to retrieve aggregate base rates across a 50-deep cohort (richer than k=20 for statistics). Extract: recovery_rate_pct, blow_up_rate_pct, sideways_rate_pct, median_return_12m_pct, p10_return_12m_pct, p90_return_12m_pct, count.
+4. **Cohort statistics**: Call `get_analog_cohort_stats(symbol, k=50)` to retrieve aggregate base rates across a 50-deep cohort (richer than k=20 for statistics). Extract: `gross_N` (total retrieved), `unique_symbols` (distinct tickers in cohort), `informative_N_3m`, `informative_N_6m`, `informative_N_12m` (rows mature at each horizon), `relaxation_level` + `relaxation_label` (0=strict industry+mcap, 1=industry_only cross-mcap, 2=mcap_only cross-industry), `recovery_rate_pct`, `blow_up_rate_pct`, `sideways_rate_pct`, and the per-horizon block in `per_horizon` containing `median_return_pct` + (if informative_N ≥ 5) `p10_return_pct` + `p90_return_pct` or (if informative_N < 5) `individual_outcomes` as a list.
 
 5. **Cluster the analogs QUANTITATIVELY**: Scan the 20 retrieved analogs (Step 3). Group them into 2-4 clusters based strictly on **patterns in the 16 features and the forward-return paths** — NOT on imagined business narratives. Label each cluster using data-grounded descriptors that reference the defining feature pattern (e.g., `"high_fii_accumulation_winners"`, `"extreme_pe_percentile_blow_ups"`, `"deteriorating_roce_laggards"`, `"midcycle_stable_compounders"`). You do NOT have access to news, earnings commentary, or business-model narratives for these analogs — you have 16 numeric features plus forward returns. Cluster labels that imply off-feature narratives (like "capex_commissioning_value_trap" or "management_turnaround") are workflow violations — they fabricate context the retrieval didn't provide. For each cluster, report its count, median 12m return, and which feature patterns define it.
 
@@ -1488,7 +1488,14 @@ HISTORICAL_ANALOG_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
 
 7. **Identify differentiators (k=20 detailed analogs only)**: Using ONLY the 20 detailed analogs from Step 3 (you have their full feature vectors; the k=50 `get_analog_cohort_stats` call gives aggregates only — you cannot inspect those 30 extra members). Identify features that differentiate tail members (blow-ups or outsized winners within the k=20) from the target. Example: "Within k=20, 3 of 3 blow-ups had pledge >15%; target has 0% pledge → downside-tail feature signal absent from target." Or: "Within k=20, 4 of 5 top-quartile winners had fii_delta_2q > +5pp; target has +0.2pp → upside-tail feature signal absent from target." Report 2-4 differentiators. Do NOT claim knowledge of feature values for analogs outside the k=20 detailed set.
 
-8. **Regime check**: Bucket the 20 retrieved analogs by year. If >70% are pre-2020, explicitly state this. If the cohort spans rate-cutting and rate-hiking regimes, explicitly state that rate regime is a mixed confound. These regime caveats belong in Section 7.
+8. **Regime check**: Bucket the 20 retrieved analogs by year. If >70% are pre-2020, explicitly state this. **Symmetrically, if >70% of the informative cohort is post-2024, flag "recency regime lock-in — cohort concentrated in a single macro phase; base rates may not generalize to mean-reverting regimes."** If the cohort spans rate-cutting and rate-hiking regimes, explicitly state that rate regime is a mixed confound. These regime caveats belong in Section 7.
+
+9. **Toxic-intersection check**: Before emitting cluster stats, evaluate the **target's** own feature vector for non-linear combinations that classic behavioral-finance research treats as high-risk even when individual clusters don't isolate them. Check these three combinations and flag whichever fire — the flag belongs in Section 7 (Confidence & Gaps) and, if any fire, at least one `differentiator` in Section 5 must address whether the cohort's tail members share the same intersection:
+   - **Crowded into deterioration** — `rsi_14 > 80 AND opm_trend < −1 AND mf_delta_2q < 0` (price extended, margins contracting, domestic institutions exiting — the textbook setup for sharp mean-reversion).
+   - **Pledge-amplified distress** — `pledge_pct > 15 AND roce_3yr_delta < −3 AND price_vs_sma200 < 0.9` (high pledge + ROCE compression + price below 200-SMA — historically a classic downward-spiral signature).
+   - **Momentum-valuation fragility** — `rsi_14 > 85 AND pe_percentile_10y > 90` (price momentum + valuation stretched to own 10y p90+ — narrow mean-reversion path).
+
+These are additive to cohort-cluster reasoning, not substitutes. The flag does not override Section 6's directional adjustments; it exists so the synthesis agent knows a toxic intersection is live on the target even if the (possibly thin) cohort wasn't rich enough to isolate it as a sub-cluster.
 
 ## Report Sections
 
@@ -1496,13 +1503,17 @@ HISTORICAL_ANALOG_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
 State the target's feature vector in narrative form — "INOXINDIA sits at PE 43× (71st percentile of its own 5yr history), ROCE 38% (improving from 32% three years ago), FII 7% (+3pp since IPO), MF 6% (+1.4pp), zero pledge, price 4% above SMA200, RSI 90, midcap, Industrial Gases industry." One paragraph on what kind of setup this is (valuation-aggressive, quality-improving, ownership-building — whatever the features say).
 
 ### 2. Cohort Base Rates
-Report the raw cohort statistics from Step 4 exactly as retrieved — no rounding, no editorializing. Format:
+Report the raw cohort statistics from Step 4 exactly as retrieved — no rounding, no editorializing. Use the **shortest horizon with informative_N ≥ 5** as your primary horizon: if informative_N_12m ≥ 5, lead with 12m (preferred signal); else if informative_N_6m ≥ 5, lead with 6m; else if informative_N_3m ≥ 5, lead with 3m + explicit caveat "cohort not yet matured for 12m; 3m base rates are momentum-dominated and should not be extrapolated to 12m outcomes." If no horizon has informative_N ≥ 5, drop to individual-outcome listing (G10 — write Unknown for base rates).
 
-| Horizon | Median | p10 | p90 | Recovery rate (+20%+) | Blow-up rate (−20%+) |
-|---|---|---|---|---|---|
-| 12m | X% | Y% | Z% | R% (N=a of total_with_12m_returns=b) | B% (N=c of total_with_12m_returns=b) |
+Format (fill columns only for horizons with informative_N ≥ 5; replace p10/p90 cells with "—" if the horizon suppressed them):
 
-Add one line on cohort size and coverage: "42 analogs spanning 2015-Q4 to 2024-Q1, all in Industrial Gases / Industrial Machinery at midcap."
+| Horizon | informative_N | Median | p10 | p90 | Recovery rate (+20%+) | Blow-up rate (−20%+) |
+|---|---|---|---|---|---|---|
+| 12m | A | X% | Y% | Z% | R% (N=a of informative_N_12m=A) | B% (N=c of informative_N_12m=A) |
+| 6m | B | … | … | … | — | — |
+| 3m | C | … | … | … | — | — |
+
+Add one line on cohort size, unique-symbol count, and coverage: "42 analogs retrieved (unique_symbols=27, informative_N_12m=31), spanning 2015-Q4 to 2024-Q1, all in Industrial Gases / Industrial Machinery at midcap. Relaxation level 0 (strict industry+mcap match)."
 
 ### 3. Cluster Summary
 Report 2-4 **quantitative clusters** from Step 5. Each cluster: label (data-grounded — `high_fii_accumulation_winners`, `extreme_pe_percentile_blow_ups`, not narrative), count, median 12m return, 1-sentence description of the **feature-pattern archetype** (e.g., "high-FII-delta + improving-ROCE names"), 1-2 representative (symbol, quarter-end) examples. Do not attribute business-model narratives you cannot see.
@@ -1533,9 +1544,11 @@ For each tail, report a directional enum grounded in Section 5's differentiators
 Synthesis will combine this with its own narrative reasoning to form the final verdict. You are NOT producing a probability number — you are producing the cohort's empirical prior + a directional adjustment the synthesis agent can interpret.
 
 ### 7. Confidence & Gaps
-- **Cohort size**: N analogs retrieved, N with 12m forward returns available.
+- **Cohort size**: gross_N retrieved, unique_symbols, informative_N_3m / informative_N_6m / informative_N_12m.
+- **Relaxation level**: 0 (strict industry+mcap), 1 (industry_only cross-mcap), or 2 (mcap_only cross-industry). If ≥ 1, explain what was sacrificed.
 - **Feature coverage**: which features on the target were NULL. Which cohort members had significant NULLs in the distance calculation.
-- **Regime mix**: year-bucket distribution. If >70% pre-2020 and target is post-2022, explicitly caveat.
+- **Backfilled target data**: if `target_features.is_backfilled` is True, explicitly state that ROCE-trend / revenue-CAGR features reflect accounting backfill into a period preceding the target's listing, not lived market state. This is a Section-7 mandate for recently-listed tickers (listed_days < ~1500).
+- **Regime mix**: year-bucket distribution. If >70% pre-2020 and target is post-2022, explicitly caveat. Symmetrically: if >70% of the informative cohort is post-2024, flag "recency regime lock-in — cohort concentrated in a single macro phase."
 - **Industry adjacency**: did retrieval find enough same-industry peers, or did it pull from mcap-only? Note any cross-industry contamination.
 - **Known unknowns**: 2-4 things the base rates can't tell you.
 - **Monitoring watchlist**: 2-3 indicators to track that would update the base rate (e.g., "if FII delta crosses +5pp, the target moves closer to the top-quartile cohort and the upside probability should re-calibrate").
@@ -1558,18 +1571,31 @@ End with a JSON code block. Every field whose value depends on retrieved data MU
     "promoter_pct": <float|null>, "fii_pct": <float|null>, "fii_delta_2q": <float|null>,
     "mf_pct": <float|null>, "mf_delta_2q": <float|null>, "pledge_pct": <float|null>,
     "price_vs_sma200": <float|null>, "delivery_pct_6m": <float|null>, "rsi_14": <float|null>,
-    "industry": "<str|null>", "mcap_bucket": "<largecap|midcap|smallcap|null>"
+    "industry": "<str|null>", "mcap_bucket": "<largecap|midcap|smallcap|null>",
+    "listed_days": <int|null>, "is_backfilled": <bool>
   },
   "analog_count": <int>,
+  "unique_symbols": <int>,
   "analog_lookback_years": 10,
+  "relaxation_level": <0|1|2>,
+  "relaxation_label": "<strict|industry_only|mcap_only>",
+  "primary_horizon": "<3m|6m|12m>",
   "base_rates": {
-    "count_with_12m": <int>,
+    "gross_N": <int>,
+    "informative_N_3m": <int>,
+    "informative_N_6m": <int>,
+    "informative_N_12m": <int>,
     "recovery_rate_pct": <float>,
     "blow_up_rate_pct": <float>,
     "sideways_rate_pct": <float>,
-    "median_return_12m_pct": <float>,
-    "p10_return_12m_pct": <float>,
-    "p90_return_12m_pct": <float>
+    "median_return_12m_pct": <float|null>,
+    "p10_return_12m_pct": <float|null>,
+    "p90_return_12m_pct": <float|null>,
+    "per_horizon": {
+      "3m": {"informative_N": <int>, "median_return_pct": <float|null>, "p10_return_pct": <float|null>, "p90_return_pct": <float|null>, "individual_outcomes": <[float]|null>},
+      "6m": {"informative_N": <int>, "median_return_pct": <float|null>, "p10_return_pct": <float|null>, "p90_return_pct": <float|null>, "individual_outcomes": <[float]|null>},
+      "12m": {"informative_N": <int>, "median_return_pct": <float|null>, "p10_return_pct": <float|null>, "p90_return_pct": <float|null>, "individual_outcomes": <[float]|null>}
+    }
   },
   "cluster_summary": [
     {"label": "<str>", "count": <int>, "median_12m": <float>, "description": "<1-sentence archetype>"}
@@ -1597,6 +1623,7 @@ End with a JSON code block. Every field whose value depends on retrieved data MU
     "downside": "<Thicker|Thinner|Unchanged>"
   },
   "regime_caveat": "<str|null — explicit statement if cohort regime mismatches target>",
+  "toxic_intersections": ["<crowded_into_deterioration|pledge_amplified_distress|momentum_valuation_fragility>"],
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
   "open_questions": ["<question1>", "<question2>"]
 }
@@ -2308,4 +2335,41 @@ def _industry_to_sector_skill(industry: str | None) -> str | None:
     for keyword, sector in _INDUSTRY_SECTOR_MAP.items():
         if keyword in industry_lower:
             return sector
+    return None
+
+
+def detect_sector(symbol: str) -> str | None:
+    """Resolve the sector skill directory name for a symbol.
+
+    Mirrors the first-match dispatch that `build_specialist_prompt` uses
+    internally but exposed as a standalone function so other callers — notably
+    `workflow_verifier.check_trace` — can reason about (agent, sector) tuples
+    without rebuilding the prompt.
+
+    Cascade order and fallback match `build_specialist_prompt`:
+      1. `_SECTOR_DETECTORS` in priority order (holding → insurance → ... → it_services)
+      2. If no detector fires, `_industry_to_sector_skill` on the industry string
+      3. Conglomerate is additive — it wins only when nothing else did
+    """
+    try:
+        from flowtracker.research.data_api import ResearchDataAPI
+    except ImportError:
+        return None
+
+    try:
+        with ResearchDataAPI() as api:
+            for detector_name, sector_dir in _SECTOR_DETECTORS:
+                detector = getattr(api, detector_name, None)
+                if detector and detector(symbol):
+                    return sector_dir
+            # Fallback: industry-string mapping
+            industry = api._get_industry(symbol)
+            fallback = _industry_to_sector_skill(industry)
+            if fallback:
+                return fallback
+            # Conglomerate is additive; only emit if nothing else matched
+            if api._is_conglomerate(symbol):
+                return "conglomerate"
+    except Exception:  # noqa: BLE001 — detection is best-effort
+        return None
     return None

@@ -90,12 +90,12 @@ def _symbols_for_sector(sector: str) -> list[str]:
     return sorted({r[0] for r in rows if r and r[0]})
 
 
-async def _backfill_one(symbol: str, quarters: int) -> tuple[str, int, str]:
+async def _backfill_one(symbol: str, quarters: int, force: bool = False) -> tuple[str, int, str]:
     """Extract concalls for one symbol. Returns (symbol, new_quarters, status)."""
     industry = _industry_for(symbol)
     try:
         result = await ensure_concall_data(
-            symbol, quarters=quarters, industry=industry,
+            symbol, quarters=quarters, industry=industry, force=force,
         )
     except FileNotFoundError:
         return (symbol, 0, "no_pdfs")
@@ -110,7 +110,7 @@ async def _backfill_one(symbol: str, quarters: int) -> tuple[str, int, str]:
     return (symbol, new_q, status)
 
 
-async def _run(symbols: list[str], quarters: int) -> dict:
+async def _run(symbols: list[str], quarters: int, force: bool = False) -> dict:
     """Iterate symbols sequentially (concall extraction is itself concurrent
     internally via MAX_CONCURRENT_EXTRACTIONS).
     """
@@ -118,7 +118,7 @@ async def _run(symbols: list[str], quarters: int) -> dict:
     start = time.time()
     for i, sym in enumerate(symbols, 1):
         t0 = time.time()
-        symbol, new_q, status = await _backfill_one(sym, quarters)
+        symbol, new_q, status = await _backfill_one(sym, quarters, force=force)
         dt = time.time() - t0
         print(f"[{i:3d}/{len(symbols)}] {symbol:12s} {status:40s} ({dt:5.1f}s)", flush=True)
         if status.startswith("ok"):
@@ -149,6 +149,12 @@ def main() -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="Print the plan without running extraction",
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Re-extract every quarter, bypassing the cached-complete fast path. "
+        "Use after updating the sector-KPI schema or extraction prompt so cached "
+        "extractions pick up new fields (e.g. E13 pharma R&D, FMCG UVG channels, telecom ARPU).",
+    )
     args = parser.parse_args()
 
     # Resolve target symbols.
@@ -166,13 +172,14 @@ def main() -> int:
         print("No symbols to process — exiting.")
         return 0
 
-    print(f"Backfill plan: {len(symbols)} symbols, {args.quarters} quarters each")
+    mode = "force re-extract" if args.force else "incremental (cached quarters skipped)"
+    print(f"Backfill plan: {len(symbols)} symbols, {args.quarters} quarters each — mode: {mode}")
     print(f"  Symbols: {', '.join(symbols)}")
     if args.dry_run:
         print("[dry-run] not running extraction")
         return 0
 
-    stats = asyncio.run(_run(symbols, args.quarters))
+    stats = asyncio.run(_run(symbols, args.quarters, force=args.force))
 
     print("\n" + "=" * 64)
     print("BACKFILL SUMMARY")

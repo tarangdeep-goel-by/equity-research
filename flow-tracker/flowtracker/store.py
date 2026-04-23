@@ -765,6 +765,13 @@ CREATE TABLE IF NOT EXISTS historical_states (
     -- Categorical
     industry TEXT,
     mcap_bucket TEXT,
+    -- Listing age + backfill marker (Part 1.5): listed_days is the gap
+    -- between the ticker's earliest bhavcopy row and quarter_end; when
+    -- small, any multi-year accounting feature (roce_3yr_delta,
+    -- revenue_cagr_3yr) reflects provider backfill into a pre-listing
+    -- period, not lived market performance. is_backfilled flags that.
+    listed_days INTEGER,
+    is_backfilled INTEGER NOT NULL DEFAULT 0,
     computed_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (symbol, quarter_end)
 );
@@ -1117,6 +1124,7 @@ class FlowStore:
         self._migrate_analytical_snapshot()
         self._migrate_company_snapshot()
         self._migrate_daily_stock_data()
+        self._migrate_historical_states()
         self._migrate_fno_tables()
 
     def _migrate_analytical_snapshot(self) -> None:
@@ -1173,6 +1181,22 @@ class FlowStore:
         for col_name, col_type in [("sector", "TEXT")]:
             if col_name not in existing:
                 self._conn.execute(f"ALTER TABLE company_snapshot ADD COLUMN {col_name} {col_type}")
+        self._conn.commit()
+
+    def _migrate_historical_states(self) -> None:
+        """Add Part 1.5 columns (listed_days, is_backfilled) to historical_states."""
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(historical_states)").fetchall()
+        }
+        for col_name, col_type in [
+            ("listed_days", "INTEGER"),
+            ("is_backfilled", "INTEGER NOT NULL DEFAULT 0"),
+        ]:
+            if col_name not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE historical_states ADD COLUMN {col_name} {col_type}"
+                )
         self._conn.commit()
 
     def _migrate_daily_stock_data(self) -> None:
@@ -2939,6 +2963,7 @@ class FlowStore:
                 ic.symbol, ic.company_name,
                 vs.market_cap, vs.pe_trailing,
                 sr.roce_pct,
+                asnap.bfsi_roa_pct,
                 fii.percentage AS fii_pct,
                 mf.percentage AS mf_pct,
                 vs.earnings_growth AS price_change_1yr_pct
@@ -2952,6 +2977,11 @@ class FlowStore:
                 AND sr.fiscal_year_end = (
                     SELECT MAX(sr2.fiscal_year_end) FROM screener_ratios sr2
                     WHERE sr2.symbol = ic.symbol
+                )
+            LEFT JOIN analytical_snapshot asnap ON ic.symbol = asnap.symbol
+                AND asnap.computed_date = (
+                    SELECT MAX(a2.computed_date) FROM analytical_snapshot a2
+                    WHERE a2.symbol = ic.symbol
                 )
             LEFT JOIN shareholding fii ON ic.symbol = fii.symbol
                 AND fii.category = 'FII'
@@ -2975,6 +3005,10 @@ class FlowStore:
             "mcap_cr": round(r["market_cap"], 2) if r["market_cap"] else None,
             "pe": round(r["pe_trailing"], 2) if r["pe_trailing"] else None,
             "roce_pct": round(r["roce_pct"], 2) if r["roce_pct"] else None,
+            # BFSI-only: ROA from analytical_snapshot.bfsi_roa_pct (computed
+            # by the weekly analytics cron). ROCE is meaningless for banks/
+            # NBFCs, so sector charts for BFSI prefer the ROA axis.
+            "roa_pct": round(r["bfsi_roa_pct"], 2) if r["bfsi_roa_pct"] else None,
             "fii_pct": round(r["fii_pct"], 2) if r["fii_pct"] else None,
             "mf_pct": round(r["mf_pct"], 2) if r["mf_pct"] else None,
             "price_change_1yr_pct": round(r["price_change_1yr_pct"], 2) if r["price_change_1yr_pct"] else None,

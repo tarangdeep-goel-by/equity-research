@@ -448,7 +448,13 @@ Return ONLY JSON:
   }
 }""",
 
-    "notes_to_financials": """Extract material disclosures from Notes to Financial Statements (focus on forensics).
+    "notes_to_financials": """Extract material disclosures from Notes to Financial Statements (focus on forensics + share capital).
+
+Also scan the share capital / equity notes for depositary-receipt disclosures:
+look for "depositary", "ADR", "GDR", "American Depositary", "Global Depositary",
+"Depositary Receipt", typically with an outstanding-units count (millions) and
+a % of total equity. Populate share_capital.adr_gdr_details when any of these
+terms appear with a numeric quantity; leave it null otherwise.
 
 Return ONLY JSON:
 {
@@ -460,6 +466,14 @@ Return ONLY JSON:
   "deferred_tax_notes": "<substance>",
   "employee_benefits_obligations_cr": <number>,
   "impairments_or_write_offs_cr": <number>,
+  "share_capital": {
+    "adr_gdr_details": {
+      "outstanding_units_mn": <number or null>,
+      "pct_of_total_equity": <number or null>,
+      "as_of_date": "<YYYY-MM-DD or null>",
+      "listed_on": ["<NYSE | NASDAQ | LSE | Luxembourg | ...>"]
+    }
+  },
   "forensic_red_flags": ["<anything unusual — loan-write-offs, inventory aging, large EL>"]
 }""",
 
@@ -483,19 +497,40 @@ Return ONLY JSON:
 
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
-    max_budget: float = 0.40, max_turns: int = 1,
+    max_budget: float = 0.40, max_turns: int = 3,
 ) -> str:
+    # max_turns=3 (not 1): for sections like BHARTIARTL's segmental — many
+    # Africa country breakdowns + India segments — the JSON output exceeds the
+    # model's single-turn output budget (~8K tokens) and the response is
+    # truncated. With max_turns=1 the CLI returns error_max_turns; with 3 the
+    # model continues across turns. Non-truncating sections still finish in
+    # one turn, so the extra headroom is free.
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         max_turns=max_turns,
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
+        # Structured JSON extraction — disable extended thinking. Otherwise the
+        # model can burn a turn on a ThinkingBlock and hit max_turns=1 before
+        # emitting the final JSON, which the CLI reports as
+        # ResultMessage(subtype='error_max_turns', is_error=True) → exit code 1
+        # → "Fatal error in message reader: Command failed with exit code 1".
+        thinking={"type": "disabled"},
         disallowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep",
                           "WebSearch", "WebFetch", "Agent", "Skill",
                           "NotebookEdit", "TodoWrite"],
         stderr=lambda line: logger.warning("[cli-stderr] %s", line),
-        env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "180000"},
+        env={
+            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "180000",
+            # Bypass cmux's claude-wrapper hook injection
+            # (/Applications/cmux.app/Contents/Resources/bin/claude). Extractor
+            # subprocesses are headless and short-lived; SessionStart /
+            # UserPromptSubmit / PreToolUse hooks fire into the cmux daemon
+            # dozens of times per run, adding latency and a subprocess-crash
+            # surface we don't need.
+            "CMUX_CLAUDE_HOOKS_DISABLED": "1",
+        },
         setting_sources=[],  # isolate from user hooks/plugins/skills
         plugins=[],          # no external plugins in extractor subprocess
     )

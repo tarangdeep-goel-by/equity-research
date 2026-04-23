@@ -82,6 +82,71 @@ def test_feature_vector_shape_and_keys(store: FlowStore) -> None:
     assert vec["fii_pct"] == pytest.approx(18.0)
 
 
+def test_feature_vector_is_backfilled_for_newly_listed(store: FlowStore) -> None:
+    """Recently-listed tickers (listed_days < 1500) with a populated
+    roce_3yr_delta are flagged is_backfilled — the 3-year accounting window
+    precedes the listing date, so the feature reflects provider bookkeeping
+    rather than lived market state.
+    """
+    from flowtracker.research.analog_builder import compute_feature_vector
+
+    # Ticker with 120 trading days of bhavcopy (simulates a fresh demerger)
+    as_of = date(2026, 3, 31)
+    first_day = as_of - timedelta(days=120)
+    _seed_prices(
+        store, "NEWCO",
+        [
+            ((first_day + timedelta(days=i)).isoformat(), 100.0 + i * 0.1)
+            for i in range(120)
+        ],
+    )
+    # Populate 4 FYs of annual financials so ROCE 3yr delta is not None
+    # (this is the data that backs "backfill" — the provider supplies it
+    # despite the ticker only having 120 days on NSE).
+    for years_back in range(4):
+        fy_end = (as_of - timedelta(days=years_back * 365)).isoformat()
+        store._conn.execute(
+            "INSERT INTO annual_financials (symbol, fiscal_year_end, "
+            "total_assets, net_income, borrowings, reserves, equity_capital, revenue) "
+            "VALUES (?, ?, 1000, 100, 200, 300, 100, 1000)",
+            ("NEWCO", fy_end),
+        )
+    store._conn.commit()
+
+    vec = compute_feature_vector(store, "NEWCO", as_of.isoformat())
+    assert vec["listed_days"] == 120
+    assert vec["roce_3yr_delta"] is not None
+    assert vec["is_backfilled"] is True
+
+
+def test_feature_vector_not_backfilled_for_mature_ticker(store: FlowStore) -> None:
+    """Mature tickers (listed_days >= 1500) are never flagged is_backfilled."""
+    from flowtracker.research.analog_builder import compute_feature_vector
+
+    as_of = date(2026, 3, 31)
+    first_day = as_of - timedelta(days=1800)
+    _seed_prices(
+        store, "OLDCO",
+        [
+            ((first_day + timedelta(days=i)).isoformat(), 100.0 + i * 0.01)
+            for i in range(1800)
+        ],
+    )
+    for years_back in range(4):
+        fy_end = (as_of - timedelta(days=years_back * 365)).isoformat()
+        store._conn.execute(
+            "INSERT INTO annual_financials (symbol, fiscal_year_end, "
+            "total_assets, net_income, borrowings, reserves, equity_capital, revenue) "
+            "VALUES (?, ?, 1000, 100, 200, 300, 100, 1000)",
+            ("OLDCO", fy_end),
+        )
+    store._conn.commit()
+
+    vec = compute_feature_vector(store, "OLDCO", as_of.isoformat())
+    assert vec["listed_days"] >= 1500
+    assert vec["is_backfilled"] is False
+
+
 def test_feature_vector_no_leakage_past_as_of(store: FlowStore) -> None:
     """Computing features for (X, 2020-Q1) must only use data with date <= 2020-03-31."""
     from flowtracker.research.analog_builder import compute_feature_vector
@@ -190,10 +255,11 @@ def test_retrieval_excludes_same_symbol_within_2yr(store: FlowStore) -> None:
         "fii_pct": 15.0, "mf_pct": 10.0, "industry": "Chemicals",
         "mcap_bucket": "midcap",
     }
-    analogs = retrieve_top_k_analogs(
+    result = retrieve_top_k_analogs(
         store, target_symbol="TGT", target_date=today.isoformat(),
-        target_features=target_features, k=10,
+        target_features=target_features, k=10, min_unique_symbols=1,
     )
+    analogs = result["analogs"]
 
     symbols = [a["symbol"] for a in analogs]
     # Recent TGT row must be excluded (within 2 years)
@@ -224,14 +290,124 @@ def test_retrieval_industry_hard_filter(store: FlowStore) -> None:
         "fii_pct": 15.0, "mf_pct": 10.0, "industry": "Chemicals",
         "mcap_bucket": "midcap",
     }
-    analogs = retrieve_top_k_analogs(
+    # min_unique_symbols=1 keeps strict tier in play; otherwise fallback would
+    # widen to mcap-only and surface the pharma row.
+    result = retrieve_top_k_analogs(
         store, target_symbol="TGT", target_date=date.today().isoformat(),
-        target_features=target_features, k=10,
+        target_features=target_features, k=10, min_unique_symbols=1,
     )
+    analogs = result["analogs"]
 
     symbols = [a["symbol"] for a in analogs]
     assert "CHEM1" in symbols
     assert "PHARMA1" not in symbols, "Industry hard-filter leaked a pharma peer into chemicals cohort"
+    assert result["relaxation_level"] == 0
+    assert result["relaxation_label"] == "strict"
+
+
+def test_retrieval_strict_tier_when_enough_unique_symbols(store: FlowStore) -> None:
+    """When strict (industry+mcap) yields >=5 unique symbols, stay at tier 0."""
+    from flowtracker.research.analog_builder import retrieve_top_k_analogs
+
+    recent = (date.today() - timedelta(days=365 * 3)).isoformat()
+    # Seed 6 distinct chemical-midcap peers — strict tier should satisfy
+    peer_rows = [
+        (f"CHEM{i}", recent, "Chemicals", "midcap") for i in range(1, 7)
+    ]
+    # Plus a pharma row that must NOT surface at strict tier
+    peer_rows.append(("PHARMA_X", recent, "Pharmaceuticals", "midcap"))
+    store._conn.executemany(
+        "INSERT INTO historical_states "
+        "(symbol, quarter_end, pe_trailing, roce_current, promoter_pct, fii_pct, "
+        " mf_pct, industry, mcap_bucket) "
+        "VALUES (?, ?, 25.0, 20.0, 50.0, 15.0, 10.0, ?, ?)",
+        peer_rows,
+    )
+    store._conn.commit()
+
+    target_features = {
+        "pe_trailing": 25.0, "roce_current": 20.0, "promoter_pct": 50.0,
+        "fii_pct": 15.0, "mf_pct": 10.0, "industry": "Chemicals",
+        "mcap_bucket": "midcap",
+    }
+    result = retrieve_top_k_analogs(
+        store, target_symbol="TGT", target_date=date.today().isoformat(),
+        target_features=target_features, k=20,
+    )
+    assert result["relaxation_level"] == 0
+    assert result["relaxation_label"] == "strict"
+    assert result["unique_symbols"] >= 5
+    symbols = {a["symbol"] for a in result["analogs"]}
+    assert "PHARMA_X" not in symbols
+
+
+def test_retrieval_falls_back_to_industry_only(store: FlowStore) -> None:
+    """When strict has <5 unique symbols, widen to industry-only (cross-mcap)."""
+    from flowtracker.research.analog_builder import retrieve_top_k_analogs
+
+    recent = (date.today() - timedelta(days=365 * 3)).isoformat()
+    # 2 midcap chemicals peers (strict tier) + 5 largecap chemicals peers (industry-only tier)
+    rows = [(f"MID{i}", recent, "Chemicals", "midcap") for i in range(1, 3)]
+    rows += [(f"LARGE{i}", recent, "Chemicals", "largecap") for i in range(1, 6)]
+    store._conn.executemany(
+        "INSERT INTO historical_states "
+        "(symbol, quarter_end, pe_trailing, roce_current, promoter_pct, fii_pct, "
+        " mf_pct, industry, mcap_bucket) "
+        "VALUES (?, ?, 25.0, 20.0, 50.0, 15.0, 10.0, ?, ?)",
+        rows,
+    )
+    store._conn.commit()
+
+    target_features = {
+        "pe_trailing": 25.0, "roce_current": 20.0, "promoter_pct": 50.0,
+        "fii_pct": 15.0, "mf_pct": 10.0, "industry": "Chemicals",
+        "mcap_bucket": "midcap",
+    }
+    result = retrieve_top_k_analogs(
+        store, target_symbol="TGT", target_date=date.today().isoformat(),
+        target_features=target_features, k=20,
+    )
+    assert result["relaxation_level"] == 1
+    assert result["relaxation_label"] == "industry_only"
+    assert result["unique_symbols"] >= 5
+    # All returned rows must still be Chemicals (cross-mcap only)
+    assert all(a["industry"] == "Chemicals" for a in result["analogs"])
+    # Every row is stamped with the tier that produced the cohort
+    assert all(a["relaxation_level"] == 1 for a in result["analogs"])
+
+
+def test_retrieval_falls_back_to_mcap_only(store: FlowStore) -> None:
+    """When industry-only still has <5 unique symbols, widen to mcap-only."""
+    from flowtracker.research.analog_builder import retrieve_top_k_analogs
+
+    recent = (date.today() - timedelta(days=365 * 3)).isoformat()
+    # 1 chemicals midcap + 0 chemicals largecap + 6 pharma midcaps
+    rows = [("CHEM_NARROW", recent, "Chemicals", "midcap")]
+    rows += [(f"PHARMA_{i}", recent, "Pharmaceuticals", "midcap") for i in range(1, 7)]
+    store._conn.executemany(
+        "INSERT INTO historical_states "
+        "(symbol, quarter_end, pe_trailing, roce_current, promoter_pct, fii_pct, "
+        " mf_pct, industry, mcap_bucket) "
+        "VALUES (?, ?, 25.0, 20.0, 50.0, 15.0, 10.0, ?, ?)",
+        rows,
+    )
+    store._conn.commit()
+
+    target_features = {
+        "pe_trailing": 25.0, "roce_current": 20.0, "promoter_pct": 50.0,
+        "fii_pct": 15.0, "mf_pct": 10.0, "industry": "Chemicals",
+        "mcap_bucket": "midcap",
+    }
+    result = retrieve_top_k_analogs(
+        store, target_symbol="TGT", target_date=date.today().isoformat(),
+        target_features=target_features, k=20,
+    )
+    assert result["relaxation_level"] == 2
+    assert result["relaxation_label"] == "mcap_only"
+    assert result["unique_symbols"] >= 5
+    symbols = {a["symbol"] for a in result["analogs"]}
+    # Pharma peers surface because we've relaxed industry
+    assert any(s.startswith("PHARMA_") for s in symbols)
 
 
 def test_distance_metric_symmetry_and_z_score(store: FlowStore) -> None:
@@ -253,6 +429,40 @@ def test_distance_metric_symmetry_and_z_score(store: FlowStore) -> None:
     # None values should be ignored, not crash
     c = {"pe_trailing": 25.0, "roce_current": None, "pledge_pct": 5.0}
     _ = feature_distance(a, c, stds)  # must not raise
+
+
+def test_feature_distance_imputes_null_with_supplied_medians() -> None:
+    """Skip-on-None biases toward sparse candidates. With medians provided,
+    NULL dims get imputed to the sector median so partial-match candidates
+    pay a real distance cost for their gaps."""
+    from flowtracker.research.analog_builder import feature_distance
+
+    stds = {"pe_trailing": 10.0, "roce_current": 5.0, "pledge_pct": 3.0}
+    medians = {"pe_trailing": 25.0, "roce_current": 20.0, "pledge_pct": 5.0}
+
+    # Target: far from the median across all dims (50, 40, 20)
+    target = {"pe_trailing": 50.0, "roce_current": 40.0, "pledge_pct": 20.0}
+    # Full-feature candidate exactly at the median
+    full = {"pe_trailing": 25.0, "roce_current": 20.0, "pledge_pct": 5.0}
+    # Sparse candidate — only pe_trailing reported, others null
+    sparse = {"pe_trailing": 25.0, "roce_current": None, "pledge_pct": None}
+
+    # Without medians: skip-on-None means sparse only compares 1 dim, gets
+    # a small sum-of-squares, looks artificially close.
+    d_full_skip = feature_distance(target, full, stds)
+    d_sparse_skip = feature_distance(target, sparse, stds)
+    # With medians: sparse's nulls get imputed to the medians, so its distance
+    # should match full (both candidates land at identical imputed values).
+    d_full_imp = feature_distance(target, full, stds, medians=medians)
+    d_sparse_imp = feature_distance(target, sparse, stds, medians=medians)
+
+    assert d_full_imp == pytest.approx(d_sparse_imp), (
+        f"Imputation should equalize sparse vs full-feature candidates at the "
+        f"same imputed values; got {d_sparse_imp=} vs {d_full_imp=}"
+    )
+    # And the imputed sparse distance should be larger than the skip-on-None
+    # sparse distance — skip bias is the very thing this fix removes.
+    assert d_sparse_imp > d_sparse_skip
 
 
 # ---------------------------------------------------------------------------
@@ -280,3 +490,50 @@ def test_cohort_base_rates_aggregation(store: FlowStore) -> None:
     assert stats["blow_up_rate_pct"] == pytest.approx(10.0)   # 1/10 blew up
     # Sorted: [-25, 5, 10, 15, 22, 25, 30, 35, 40, 50] → median = avg(22, 25) = 23.5
     assert stats["median_return_12m_pct"] == pytest.approx(23.5)
+
+
+def test_cohort_informative_N_and_unique_symbols(store: FlowStore) -> None:
+    """Gross N includes all retrieved rows; informative_N_* only counts rows
+    whose forward window at that horizon has closed."""
+    from flowtracker.research.analog_builder import cohort_stats
+
+    # 8 analogs: 5 have 12m returns, 8 have 3m returns. 3 unique symbols.
+    cohort = [
+        {"symbol": "A", "return_3m_pct": 4, "return_12m_pct": 20, "outcome_label": "recovered"},
+        {"symbol": "A", "return_3m_pct": -2, "return_12m_pct": 8, "outcome_label": "sideways"},
+        {"symbol": "B", "return_3m_pct": 6, "return_12m_pct": -25, "outcome_label": "blew_up"},
+        {"symbol": "B", "return_3m_pct": 1, "return_12m_pct": 30, "outcome_label": "recovered"},
+        {"symbol": "C", "return_3m_pct": 3, "return_12m_pct": 40, "outcome_label": "recovered"},
+        # 3 rows with 3m populated but 12m still open
+        {"symbol": "A", "return_3m_pct": 2, "return_12m_pct": None, "outcome_label": None},
+        {"symbol": "B", "return_3m_pct": -1, "return_12m_pct": None, "outcome_label": None},
+        {"symbol": "C", "return_3m_pct": 5, "return_12m_pct": None, "outcome_label": None},
+    ]
+
+    stats = cohort_stats(cohort)
+    assert stats["count"] == 8
+    assert stats["gross_N"] == 8
+    assert stats["unique_symbols"] == 3
+    assert stats["informative_N_3m"] == 8
+    assert stats["informative_N_12m"] == 5
+    # 12m horizon has informative_N=5, so p10/p90 emit
+    assert "p10_return_pct" in stats["per_horizon"]["12m"]
+
+
+def test_cohort_suppresses_p10_p90_when_small_sample(store: FlowStore) -> None:
+    """When informative_N < 5, suppress p10/p90 and emit individual outcomes
+    (mathematically honest — tail estimates on N=3 are fabricated precision)."""
+    from flowtracker.research.analog_builder import cohort_stats
+
+    cohort = [
+        {"symbol": "A", "return_12m_pct": 15, "outcome_label": "sideways"},
+        {"symbol": "B", "return_12m_pct": -30, "outcome_label": "blew_up"},
+        {"symbol": "C", "return_12m_pct": 45, "outcome_label": "recovered"},
+    ]
+
+    stats = cohort_stats(cohort)
+    twelve = stats["per_horizon"]["12m"]
+    assert twelve["informative_N"] == 3
+    assert "p10_return_pct" not in twelve, "p10/p90 must suppress on N<5"
+    assert "p90_return_pct" not in twelve
+    assert twelve["individual_outcomes"] == [-30, 15, 45]
