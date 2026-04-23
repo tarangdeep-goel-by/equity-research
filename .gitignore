@@ -10,3 +10,11 @@ build/
 *.db
 uv.lock
 .claude/
+
+# Autoeval artifacts (generated; never commit)
+/flow-tracker/flowtracker/research/autoeval/eval_history/*
+!/flow-tracker/flowtracker/research/autoeval/eval_history/.gitkeep
+/flow-tracker/flowtracker/research/autoeval/run_logs/*
+!/flow-tracker/flowtracker/research/autoeval/run_logs/.gitkeep
+/flow-tracker/flowtracker/research/autoeval/last_run.json
+/flow-tracker/flowtracker/research/autoeval/results.tsv

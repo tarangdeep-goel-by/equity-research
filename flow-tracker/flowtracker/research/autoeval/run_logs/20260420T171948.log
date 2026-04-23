@@ -1,9 +1,0 @@
-Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260420T171948.log
-AutoEval (agent-first): agent=valuation sectors=['bfsi']
-Target: grade_numeric >= 90
-
---- valuation / SBIN (bfsi) ---
-  Report: 32356 chars
-  Evidence log loaded (43 lines)
-  Grading with Gemini...
-ERROR: google-genai not installed. Run: uv sync --extra autoeval

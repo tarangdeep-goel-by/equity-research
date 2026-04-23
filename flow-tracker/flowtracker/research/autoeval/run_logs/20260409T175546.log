@@ -1,9 +1,0 @@
-Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260409T175546.log
-AutoEval (agent-first): agent=business sectors=['chemicals']
-Target: grade_numeric >= 90
-
---- business / PIDILITIND (chemicals) ---
-  Report: 30295 chars
-  Evidence log loaded (4 lines)
-  Grading with Gemini...
-ERROR: google-genai not installed. Run: uv sync --extra autoeval

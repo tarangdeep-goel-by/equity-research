@@ -1,8 +1,0 @@
-Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260409T160556.log
-AutoEval (agent-first): agent=financials sectors=['real_estate']
-Target: grade_numeric >= 90
-
---- financials / GODREJPROP (real_estate) ---
-  Report: 28718 chars
-  Evidence log loaded (4 lines)
-  Grading with Gemini...

@@ -1,8 +1,0 @@
-Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260408T084322.log
-AutoEval (agent-first): agent=financials sectors=['auto']
-Target: grade_numeric >= 90
-
---- financials / OLAELEC (auto) ---
-  Report: 31371 chars
-  Evidence log loaded (4 lines)
-  Grading with Gemini...

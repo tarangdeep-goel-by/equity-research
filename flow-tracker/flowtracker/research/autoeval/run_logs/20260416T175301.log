@@ -1,8 +1,0 @@
-Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260416T175301.log
-AutoEval (agent-first): agent=ownership sectors=['conglomerate', 'pharma']
-Target: grade_numeric >= 90
-
---- ownership / ADANIENT (conglomerate) ---
-  Report: 28700 chars
-  Evidence log loaded (39 lines)
-  Grading with Gemini...

@@ -1,9 +1,0 @@
-Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T150709.log
-AutoEval (agent-first): agent=risk sectors=['insurance']
-Target: grade_numeric >= 90
-
---- risk / POLICYBZR (insurance) ---
-  Report: 35400 chars
-  Evidence log loaded (36 lines)
-  Grading with Gemini...
-ERROR: google-genai not installed. Run: uv sync --extra autoeval
