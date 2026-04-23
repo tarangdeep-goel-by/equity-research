@@ -792,6 +792,43 @@ class TestExtractorOptionsIsolation:
         assert "plugins=[]" in src
 
 
+class TestCmuxHooksDisabled:
+    """Every SDK call site must pass CMUX_CLAUDE_HOOKS_DISABLED=1 in env.
+
+    The cmux claude-wrapper at /Applications/cmux.app/Contents/Resources/bin/claude
+    injects SessionStart / UserPromptSubmit / PreToolUse hooks via --settings into
+    every `claude` subprocess. For our headless extractor / specialist / verifier
+    subprocesses those hooks add latency and a crash surface we don't need —
+    CMUX_CLAUDE_HOOKS_DISABLED=1 makes the wrapper pass straight through.
+    """
+
+    def test_ar_extractor_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import annual_report_extractor as ar_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(ar_mod._call_claude)
+
+    def test_concall_extractor_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import concall_extractor as ce_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(ce_mod._call_claude)
+
+    def test_deck_extractor_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import deck_extractor as de_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(de_mod._call_claude)
+
+    def test_specialist_runner_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import agent as agent_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(agent_mod._run_specialist)
+
+    def test_verifier_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import verifier as vmod
+        # The verifier options live inside _run_verifier
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(vmod._run_verifier)
+
+
 class TestSectionPromptSchemas:
     """Regression guards for the JSON schemas embedded in _SECTION_PROMPTS.
 

@@ -201,7 +201,12 @@ async def _call_claude(
                           "WebSearch", "WebFetch", "Agent", "Skill",
                           "NotebookEdit", "TodoWrite"],
         stderr=lambda line: logger.warning("[cli-stderr] %s", line),
-        env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000"},
+        env={
+            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000",
+            # Bypass cmux's claude-wrapper hook injection — extractor subprocesses
+            # don't need SessionStart/UserPromptSubmit/PreToolUse tracking.
+            "CMUX_CLAUDE_HOOKS_DISABLED": "1",
+        },
         setting_sources=[],  # isolate from user hooks/plugins/skills
         plugins=[],          # no external plugins in extractor subprocess
     )
