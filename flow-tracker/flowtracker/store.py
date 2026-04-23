@@ -4096,6 +4096,29 @@ class FlowStore:
 
         return count
 
+    def delete_corporate_action(
+        self, symbol: str, ex_date: str, action_type: str,
+        source: str = "bse", recompute_adj_close: bool = True,
+    ) -> int:
+        """Delete a single corporate action row (for data corrections).
+
+        Sync hook: by default, re-runs recompute_adj_close(symbol) so the
+        adjusted-price surface drops the now-removed multiplier immediately.
+        Mirrors the upsert hook — a deletion is just an opposite-direction
+        correction and must keep adj_close in sync the same way.
+        """
+        cursor = self._conn.execute(
+            "DELETE FROM corporate_actions WHERE symbol = ? AND ex_date = ? "
+            "AND action_type = ? AND source = ?",
+            (symbol.upper(), ex_date, action_type, source),
+        )
+        self._conn.commit()
+        deleted = cursor.rowcount
+        if deleted and recompute_adj_close and action_type in ("split", "bonus"):
+            self.recompute_adj_close(symbol.upper())
+            self.invalidate_screener_price_charts(symbol.upper())
+        return deleted
+
     def get_corporate_actions(self, symbol: str) -> list[dict]:
         """Get all corporate actions for a symbol, ordered by date desc."""
         rows = self._conn.execute(
