@@ -368,11 +368,19 @@ class FilingClient:
     # -- Download PDFs --
 
     def download_filing(
-        self, filing: CorporateFiling, base_dir: Path | None = None,
+        self,
+        filing: CorporateFiling,
+        base_dir: Path | None = None,
+        force_refresh: bool = False,
     ) -> Path | None:
         """Download a filing PDF to local storage.
 
         Stores in: {base_dir}/{symbol}/{category}/{date}_{headline_slug}.pdf
+
+        Cache behavior:
+        - Files with size < 1024 bytes are treated as corrupt → re-download.
+        - Files older than 30 days log a WARNING and are reused (no auto-refresh).
+        - ``force_refresh=True`` bypasses the cache and always hits the network.
         """
         if base_dir is None:
             base_dir = _DEFAULT_FILING_DIR
@@ -416,10 +424,27 @@ class FilingClient:
         # re-files of the same type are treated as duplicates and skipped —
         # we previously wrote {ftype}_{date}.pdf for "different-size"
         # refilings, which the extractors never read.
-        if file_path.exists() and file_path.stat().st_size > 0:
-            return file_path
-
-        import time
+        if force_refresh:
+            logger.info("force_refresh=True — bypassing cache for %s", file_path.name)
+        elif file_path.exists() and file_path.stat().st_size > 0:
+            size = file_path.stat().st_size
+            if size < 1024:
+                # Suspect: partial download, server-error HTML, etc. Re-download.
+                logger.info(
+                    "Cached %s is suspiciously small (%d bytes) — re-downloading",
+                    file_path.name, size,
+                )
+            else:
+                age_days = (time.time() - file_path.stat().st_mtime) / 86400
+                if age_days > 30:
+                    logger.warning(
+                        "Cached %s is stale (%.0f days old) — reusing; pass "
+                        "force_refresh=True to refresh",
+                        file_path.name, age_days,
+                    )
+                else:
+                    logger.debug("Cache hit for %s (%.0f days old)", file_path.name, age_days)
+                return file_path
 
         for attempt in range(3):
             try:
