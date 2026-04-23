@@ -102,6 +102,70 @@ def test_fetch_fno_bhavcopy_skips_empty_ticker_rows():
     assert len(contracts) == 3  # 4 data rows - 1 empty-ticker row
 
 
+# Strike validation: OPTSTK/OPTIDX must have a strike; futures may omit it.
+
+_BHAV_URL = (
+    "https://nsearchives.nseindia.com/content/fo/"
+    "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv"
+)
+_BHAV_HEADER = (
+    "TradDt,BizDt,Sgmt,Src,FinInstrmTp,FinInstrmId,ISIN,TckrSymb,SctySrs,"
+    "XpryDt,FininstrmActlXpryDt,StrkPric,OptnTp,FinInstrmNm,OpnPric,HghPric,"
+    "LwPric,ClsPric,LastPric,PrvsClsgPric,UndrlygPric,SttlmPric,OpnIntrst,"
+    "ChngInOpnIntrst,TtlTradgVol,TtlTrfVal,TtlNbOfTxsExctd,SsnId,NewBrdLotQty,"
+    "Rmks,Rsvd1,Rsvd2,Rsvd3,Rsvd4"
+)
+
+
+def _bhav_csv(instr: str, strike: str, optn: str) -> str:
+    row = (
+        f"2026-04-17,2026-04-17,FO,NSE,{instr},1,INE002A01018,RELIANCE,EQ,"
+        f"2026-04-24,2026-04-24,{strike},{optn},X,20,25,18,20,20,22,"
+        f"1491.30,0,200000,10000,5000,100000000,200,FO,250,,,,,"
+    )
+    return f"{_BHAV_HEADER}\n{row}\n"
+
+
+@respx.mock
+def test_bhavcopy_optstk_missing_strike_raises():
+    """OPTSTK row with empty StrkPric must raise FnoFetchError identifying the row."""
+    respx.get(_BHAV_URL).respond(200, text=_bhav_csv("STO", "", "CE"))
+
+    with FnoClient() as client, pytest.raises(FnoFetchError) as exc_info:
+        client.fetch_fno_bhavcopy(date(2026, 4, 17))
+
+    msg = str(exc_info.value).lower()
+    assert "strike" in msg and "reliance" in msg and "2026-04-24" in msg
+
+
+@respx.mock
+def test_bhavcopy_optstk_valid_strike_parses():
+    """OPTSTK row with StrkPric='1500.0' parses correctly with strike=1500.0."""
+    respx.get(_BHAV_URL).respond(200, text=_bhav_csv("STO", "1500.0", "CE"))
+
+    with FnoClient() as client:
+        contracts = client.fetch_fno_bhavcopy(date(2026, 4, 17))
+
+    assert len(contracts) == 1
+    assert contracts[0].instrument == "OPTSTK"
+    assert contracts[0].strike == 1500.0
+    assert contracts[0].option_type == "CE"
+
+
+@respx.mock
+def test_bhavcopy_futstk_missing_strike_parses_as_none():
+    """FUTSTK row with empty StrkPric is legal — strike stays None (no regression)."""
+    respx.get(_BHAV_URL).respond(200, text=_bhav_csv("STF", "", ""))
+
+    with FnoClient() as client:
+        contracts = client.fetch_fno_bhavcopy(date(2026, 4, 17))
+
+    assert len(contracts) == 1
+    assert contracts[0].instrument == "FUTSTK"
+    assert contracts[0].strike is None
+    assert contracts[0].option_type is None
+
+
 # ---------------------------------------------------------------------------
 # fetch_participant_oi
 # ---------------------------------------------------------------------------

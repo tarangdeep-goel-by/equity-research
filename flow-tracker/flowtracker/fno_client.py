@@ -189,6 +189,11 @@ class FnoClient:
             try:
                 raw = FnoContractRaw.model_validate(row)
                 contracts.append(_parse_row(raw))
+            except FnoFetchError:
+                # Data-integrity failures (e.g. OPTSTK without strike) must
+                # surface — they would otherwise silently collapse on the
+                # sentinel-keyed upsert. Let the caller see them.
+                raise
             except Exception as e:
                 logger.debug("Skipping F&O row for %s: %s", symbol, e)
                 continue
@@ -410,6 +415,17 @@ class FnoClient:
 def _parse_row(raw: FnoContractRaw) -> FnoContract:
     """Convert a raw bhavcopy row into a typed FnoContract."""
     instrument = _INSTR_MAP.get(raw.FinInstrmTp.strip(), raw.FinInstrmTp.strip())
+
+    # Options MUST carry a strike — the (trade_date, symbol, instrument,
+    # expiry, strike, option_type) PK uses a -1 sentinel for NULL strikes,
+    # so two OPTSTK rows with blank strikes would collide under INSERT OR
+    # REPLACE. Futures legitimately have no strike (NSE writes "0" or blank).
+    if instrument in ("OPTSTK", "OPTIDX") and not raw.StrkPric.strip():
+        raise FnoFetchError(
+            f"{instrument} row missing strike price: "
+            f"symbol={raw.TckrSymb.strip()} expiry={raw.XpryDt} "
+            f"trade_date={raw.TradDt}"
+        )
 
     strike: float | None = (
         float(raw.StrkPric) if raw.StrkPric.strip() else None
