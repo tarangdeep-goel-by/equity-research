@@ -790,3 +790,29 @@ class TestExtractorOptionsIsolation:
         src = inspect.getsource(de_mod._call_claude)
         assert "setting_sources=[]" in src
         assert "plugins=[]" in src
+
+
+class TestSectionPromptSchemas:
+    """Regression guards for the JSON schemas embedded in _SECTION_PROMPTS.
+
+    get_adr_gdr in data_api.py reads
+    notes_to_financials.share_capital.adr_gdr_details — so the prompt MUST
+    instruct the extractor to surface that nested shape. Without it the
+    ADR/GDR tool falls back to stubs even when the AR mentions depositary
+    receipts (plan v3 item I).
+    """
+
+    def test_notes_to_financials_declares_adr_gdr_schema(self):
+        from flowtracker.research.annual_report_extractor import _SECTION_PROMPTS
+
+        prompt = _SECTION_PROMPTS["notes_to_financials"]
+        # Schema field the get_adr_gdr consumer reads
+        assert "share_capital" in prompt
+        assert "adr_gdr_details" in prompt
+        assert "outstanding_units_mn" in prompt
+        assert "pct_of_total_equity" in prompt
+        assert "listed_on" in prompt
+        # Extraction hint keywords — what the LLM should look for in the AR
+        assert "depositary" in prompt.lower()
+        assert "ADR" in prompt
+        assert "GDR" in prompt

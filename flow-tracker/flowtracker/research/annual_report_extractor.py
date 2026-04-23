@@ -448,7 +448,13 @@ Return ONLY JSON:
   }
 }""",
 
-    "notes_to_financials": """Extract material disclosures from Notes to Financial Statements (focus on forensics).
+    "notes_to_financials": """Extract material disclosures from Notes to Financial Statements (focus on forensics + share capital).
+
+Also scan the share capital / equity notes for depositary-receipt disclosures:
+look for "depositary", "ADR", "GDR", "American Depositary", "Global Depositary",
+"Depositary Receipt", typically with an outstanding-units count (millions) and
+a % of total equity. Populate share_capital.adr_gdr_details when any of these
+terms appear with a numeric quantity; leave it null otherwise.
 
 Return ONLY JSON:
 {
@@ -460,6 +466,14 @@ Return ONLY JSON:
   "deferred_tax_notes": "<substance>",
   "employee_benefits_obligations_cr": <number>,
   "impairments_or_write_offs_cr": <number>,
+  "share_capital": {
+    "adr_gdr_details": {
+      "outstanding_units_mn": <number or null>,
+      "pct_of_total_equity": <number or null>,
+      "as_of_date": "<YYYY-MM-DD or null>",
+      "listed_on": ["<NYSE | NASDAQ | LSE | Luxembourg | ...>"]
+    }
+  },
   "forensic_red_flags": ["<anything unusual — loan-write-offs, inventory aging, large EL>"]
 }""",
 
