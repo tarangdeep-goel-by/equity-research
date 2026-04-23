@@ -2136,9 +2136,21 @@ def _build_temporal_context(symbol: str, api) -> str:
     Built dynamically per symbol, NOT part of SHARED_PREAMBLE_V2 (keeps hash stable).
     """
     from datetime import datetime, timezone
+    import os
     from pathlib import Path as _P
 
     today_utc = datetime.now(timezone.utc)
+    # Backtest hook: FLOWTRACK_AS_OF=YYYY-MM-DD forces the temporal anchor to a
+    # historical date so the Historical Analog backtest can run the agent as-if
+    # it were that past point. Without this override, every backtest sample
+    # would run against live wall-clock state and produce the same analog
+    # cohort regardless of sample as_of — invalidating calibration metrics.
+    _as_of_env = os.environ.get("FLOWTRACK_AS_OF")
+    if _as_of_env:
+        try:
+            today_utc = datetime.strptime(_as_of_env, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass  # malformed env var — fall through to wall-clock
     try:
         from zoneinfo import ZoneInfo
         today_ist = today_utc.astimezone(ZoneInfo("Asia/Kolkata"))

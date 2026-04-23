@@ -179,17 +179,37 @@ class ResearchDataAPI:
 
     # --- Historical Analog Agent ---
 
+    @staticmethod
+    def _default_as_of(as_of_date: str | None) -> str:
+        """Resolve a caller-omitted as_of_date.
+
+        Honors ``FLOWTRACK_AS_OF=YYYY-MM-DD`` when set (backtest hook) so
+        tool calls that don't pass an explicit date still run against the
+        historical sample's as-of, not wall-clock.
+        """
+        import os
+        from datetime import date
+        if as_of_date is not None:
+            return as_of_date
+        env_val = os.environ.get("FLOWTRACK_AS_OF")
+        if env_val:
+            try:
+                date.fromisoformat(env_val)
+                return env_val
+            except ValueError:
+                pass
+        return date.today().isoformat()
+
     def get_setup_feature_vector(self, symbol: str, as_of_date: str | None = None) -> dict:
         """Return the 16-feature fingerprint for (symbol, as_of_date).
 
         Used by the Historical Analog Agent to inspect the target setup.
-        Default as_of_date = today. Strict temporal cutoff — every input
-        filtered to date <= as_of_date to prevent data leakage.
+        Default as_of_date = today (or FLOWTRACK_AS_OF env var). Strict
+        temporal cutoff — every input filtered to date <= as_of_date to
+        prevent data leakage.
         """
         from flowtracker.research.analog_builder import compute_feature_vector
-        from datetime import date
-        if as_of_date is None:
-            as_of_date = date.today().isoformat()
+        as_of_date = self._default_as_of(as_of_date)
         return compute_feature_vector(self._store, symbol, as_of_date)
 
     def get_historical_analogs(
@@ -206,9 +226,7 @@ class ResearchDataAPI:
         from flowtracker.research.analog_builder import (
             compute_feature_vector, retrieve_top_k_analogs,
         )
-        from datetime import date
-        if as_of_date is None:
-            as_of_date = date.today().isoformat()
+        as_of_date = self._default_as_of(as_of_date)
         target_vec = compute_feature_vector(self._store, symbol, as_of_date)
         retrieval = retrieve_top_k_analogs(
             self._store, target_symbol=symbol, target_date=as_of_date,
