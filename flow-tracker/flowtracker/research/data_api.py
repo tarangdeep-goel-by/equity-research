@@ -210,16 +210,21 @@ class ResearchDataAPI:
         if as_of_date is None:
             as_of_date = date.today().isoformat()
         target_vec = compute_feature_vector(self._store, symbol, as_of_date)
-        analogs = retrieve_top_k_analogs(
+        retrieval = retrieve_top_k_analogs(
             self._store, target_symbol=symbol, target_date=as_of_date,
             target_features=target_vec, k=k,
         )
+        analogs = retrieval["analogs"]
         return {
             "symbol": symbol.upper(),
             "as_of_date": as_of_date,
             "target_features": target_vec,
             "analog_count": len(analogs),
             "analogs": analogs,
+            "relaxation_level": retrieval["relaxation_level"],
+            "relaxation_label": retrieval["relaxation_label"],
+            "unique_symbols": retrieval["unique_symbols"],
+            "gross_count": retrieval["gross_count"],
         }
 
     def get_analog_cohort_stats(

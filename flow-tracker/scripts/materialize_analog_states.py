@@ -64,9 +64,17 @@ def upsert_feature_row(store: FlowStore, symbol: str, qtr: str, vec: dict) -> No
         "mf_pct", "mf_delta_2q", "pledge_pct",
         "price_vs_sma200", "delivery_pct_6m", "rsi_14",
         "industry", "mcap_bucket",
+        "listed_days", "is_backfilled",
     )
     values = tuple(vec.get(c) if c not in ("symbol", "quarter_end") else None for c in cols)
     values = (symbol, qtr) + values[2:]
+    # SQLite stores booleans as 0/1 — coerce is_backfilled explicitly
+    values = tuple(
+        1 if (c == "is_backfilled" and v is True)
+        else 0 if (c == "is_backfilled" and v is False)
+        else v
+        for c, v in zip(cols, values)
+    )
     store._conn.execute(
         f"INSERT OR REPLACE INTO historical_states ({','.join(cols)}) "
         f"VALUES ({','.join('?' * len(cols))})",

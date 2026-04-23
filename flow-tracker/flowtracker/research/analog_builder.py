@@ -258,6 +258,39 @@ def _pledge_pct(store: FlowStore, symbol: str, as_of: str) -> float | None:
     return row["pledge_pct"] if row else None
 
 
+def _listed_days(store: FlowStore, symbol: str, as_of: str) -> int | None:
+    """Days between the earliest NSE bhavcopy row for `symbol` and `as_of`.
+
+    Uses daily_stock_data as the listing-age proxy: its earliest row for a
+    ticker is the first day that ticker appears in bhavcopy, which for a
+    clean IPO equals the listing date. For demerger tickers (TMPV, RELNEW)
+    the earliest bhavcopy row is the first post-demerger trading day — any
+    accounting data preceding that date under the same ticker has been
+    backfilled by the data provider, not traded.
+    """
+    row = store._conn.execute(
+        "SELECT MIN(date) AS first_date FROM daily_stock_data WHERE symbol = ?",
+        (symbol.upper(),),
+    ).fetchone()
+    if not row or not row["first_date"]:
+        return None
+    try:
+        first = date.fromisoformat(row["first_date"])
+        target = date.fromisoformat(as_of)
+    except (ValueError, TypeError):
+        return None
+    delta = (target - first).days
+    return delta if delta >= 0 else None
+
+
+# Symbols with fewer than this many trading days on NSE are considered
+# "young"; any multi-year accounting feature (roce_3yr_delta, revenue_cagr_3yr)
+# for such symbols is backfilled by the data provider and does NOT reflect
+# lived market state for that ticker. 1500 days (~4.1 years) clears the
+# 3-yr ROCE window with a buffer for FY alignment.
+_BACKFILL_LISTED_DAYS_THRESHOLD = 1500
+
+
 def compute_feature_vector(store: FlowStore, symbol: str, as_of_date: str) -> dict[str, Any]:
     """Build the 16-feature vector for (symbol, as_of_date).
 
@@ -275,12 +308,25 @@ def compute_feature_vector(store: FlowStore, symbol: str, as_of_date: str) -> di
 
     roce_now = _roce_at(store, symbol, as_of_date, years_back=0)
     roce_3yr = _roce_at(store, symbol, as_of_date, years_back=3)
+    roce_3yr_delta = (roce_now - roce_3yr) if (roce_now is not None and roce_3yr is not None) else None
+
+    listed_days = _listed_days(store, symbol, as_of_date)
+    # is_backfilled: True when the ticker has too short a trading history for
+    # multi-year accounting metrics to be genuinely earned. Newly-listed
+    # tickers (listed_days < 1500) still surface a non-null roce_3yr_delta
+    # because providers backfill segment accounting — that value reflects
+    # provider bookkeeping, not market-experienced performance.
+    is_backfilled = (
+        listed_days is not None
+        and listed_days < _BACKFILL_LISTED_DAYS_THRESHOLD
+        and roce_3yr_delta is not None
+    )
 
     return {
         "pe_trailing": _pe_trailing_at(store, symbol, as_of_date),
         "pe_percentile_10y": _pe_percentile(store, symbol, as_of_date),
         "roce_current": roce_now,
-        "roce_3yr_delta": (roce_now - roce_3yr) if (roce_now is not None and roce_3yr is not None) else None,
+        "roce_3yr_delta": roce_3yr_delta,
         "revenue_cagr_3yr": _revenue_cagr_3yr(store, symbol, as_of_date),
         "opm_trend": _opm_trend(store, symbol, as_of_date),
         "promoter_pct": promoter,
@@ -294,6 +340,8 @@ def compute_feature_vector(store: FlowStore, symbol: str, as_of_date: str) -> di
         "rsi_14": _rsi_14(store, symbol, as_of_date),
         "industry": _industry(store, symbol),
         "mcap_bucket": _mcap_bucket(store, symbol, as_of_date),
+        "listed_days": listed_days,
+        "is_backfilled": is_backfilled,
     }
 
 
@@ -386,14 +434,32 @@ def compute_forward_returns(
 
 
 def feature_distance(
-    a: dict[str, Any], b: dict[str, Any], stds: dict[str, float],
+    a: dict[str, Any],
+    b: dict[str, Any],
+    stds: dict[str, float],
+    medians: dict[str, float] | None = None,
 ) -> float:
-    """Z-scored Euclidean distance over continuous features. None values
-    on either side of a feature skip that dimension (don't crash)."""
+    """Z-scored Euclidean distance over continuous features.
+
+    If ``medians`` is provided, NULL values on either side are imputed to the
+    supplied median for that feature before the squared difference is
+    computed. This removes the "partial-match bias" present in the skip-on-None
+    path: a candidate that lacks half its features under skip-on-None ends up
+    with a small sum-of-squares and an artificially low normalized distance,
+    surfacing as a top analog for noise reasons.
+
+    When ``medians`` is None (or a feature is missing from the dict), the
+    legacy skip-on-None behavior applies for that dimension only.
+    """
     sq_sum = 0.0
     contributing = 0
     for k in _CONT_FEATURES:
         va, vb = a.get(k), b.get(k)
+        if medians is not None and k in medians:
+            if va is None:
+                va = medians[k]
+            if vb is None:
+                vb = medians[k]
         if va is None or vb is None:
             continue
         s = stds.get(k, 1.0) or 1.0
@@ -404,6 +470,40 @@ def feature_distance(
     # Normalize by contributing dimensions so partial-feature candidates aren't
     # unfairly penalized relative to full-feature ones.
     return math.sqrt(sq_sum / contributing * len(_CONT_FEATURES))
+
+
+def _industry_medians(store: FlowStore, industry: str | None) -> dict[str, float]:
+    """Per-feature median across historical_states. When ``industry`` is given
+    and contains at least 8 rows, medians are computed within that industry;
+    otherwise the universe-wide median is used (broader signal, noisier
+    feature-level values).
+
+    Used by ``retrieve_top_k_analogs`` to impute NULL positions in
+    ``feature_distance`` so sparse candidates don't surface as false-positive
+    top analogs under the skip-on-None bias.
+    """
+    medians: dict[str, float] = {}
+    for feat in _CONT_FEATURES:
+        row = None
+        if industry is not None:
+            row = store._conn.execute(
+                f"SELECT {feat} AS v FROM historical_states "
+                f"WHERE industry = ? AND {feat} IS NOT NULL",
+                (industry,),
+            ).fetchall()
+            if len(row) < 8:
+                row = None
+        if row is None:
+            row = store._conn.execute(
+                f"SELECT {feat} AS v FROM historical_states WHERE {feat} IS NOT NULL",
+            ).fetchall()
+        vals = [r["v"] for r in row]
+        if vals:
+            try:
+                medians[feat] = statistics.median(vals)
+            except statistics.StatisticsError:
+                continue
+    return medians
 
 
 def _universe_stds(store: FlowStore) -> dict[str, float]:
@@ -426,33 +526,23 @@ def _universe_stds(store: FlowStore) -> dict[str, float]:
     return stds
 
 
-def retrieve_top_k_analogs(
+_RELAXATION_TIERS: tuple[tuple[str, bool, bool], ...] = (
+    # (label, use_industry_filter, use_mcap_filter)
+    ("strict", True, True),        # tier 0: industry AND mcap_bucket
+    ("industry_only", True, False),  # tier 1: industry only (cross-mcap)
+    ("mcap_only", False, True),     # tier 2: mcap only (cross-industry)
+)
+
+
+def _run_retrieval_query(
     store: FlowStore,
     target_symbol: str,
-    target_date: str,
-    target_features: dict[str, Any],
-    k: int = 20,
-    exclusion_years: int = 2,
+    cutoff_date: str,
+    industry: str | None,
+    mcap_bucket: str | None,
+    use_industry: bool,
+    use_mcap: bool,
 ) -> list[dict[str, Any]]:
-    """Return the top-K closest historical_states rows to `target_features`.
-
-    Filters:
-      - Hard: matching industry + matching mcap_bucket (loose adjacency logic
-        can come in Phase 2; MVP keeps it tight).
-      - Leakage guard: exclude any row where symbol == target_symbol AND
-        quarter_end within `exclusion_years` of target_date.
-
-    Each returned dict has the candidate's features + computed distance +
-    forward returns joined from analog_forward_returns.
-    """
-    industry = target_features.get("industry")
-    mcap_bucket = target_features.get("mcap_bucket")
-
-    cutoff_date = (
-        date.fromisoformat(target_date) - timedelta(days=exclusion_years * 365)
-    ).isoformat()
-
-    # Join historical_states + analog_forward_returns. Filter by industry + mcap.
     sql = """
         SELECT
             hs.symbol AS symbol, hs.quarter_end AS quarter_end,
@@ -472,32 +562,92 @@ def retrieve_top_k_analogs(
         WHERE 1=1
     """
     args: list[Any] = []
-    if industry is not None:
+    if use_industry and industry is not None:
         sql += " AND hs.industry = ?"
         args.append(industry)
-    if mcap_bucket is not None:
+    if use_mcap and mcap_bucket is not None:
         sql += " AND hs.mcap_bucket = ?"
         args.append(mcap_bucket)
-
-    # Leakage: exclude target_symbol's own rows within exclusion_years of target_date
     sql += " AND NOT (hs.symbol = ? AND hs.quarter_end > ?)"
     args.extend([target_symbol.upper(), cutoff_date])
+    return [dict(r) for r in store._conn.execute(sql, args).fetchall()]
 
-    rows = store._conn.execute(sql, args).fetchall()
+
+def retrieve_top_k_analogs(
+    store: FlowStore,
+    target_symbol: str,
+    target_date: str,
+    target_features: dict[str, Any],
+    k: int = 20,
+    exclusion_years: int = 2,
+    min_unique_symbols: int = 5,
+) -> dict[str, Any]:
+    """Retrieve top-K analogs with a similarity-ring fallback.
+
+    Attempts three filter tiers in order, stopping at the first tier whose
+    scored cohort contains at least `min_unique_symbols` distinct symbols:
+
+      - tier 0 ("strict"): industry == target AND mcap_bucket == target
+      - tier 1 ("industry_only"): industry == target (cross-mcap)
+      - tier 2 ("mcap_only"): mcap_bucket == target (cross-industry)
+
+    Leakage guard: excludes target's own rows within `exclusion_years` of
+    target_date, applied at every tier.
+
+    Returns a dict with:
+      - ``analogs``: list of candidates (features + distance + forward returns),
+        ranked by z-scored Euclidean distance
+      - ``relaxation_level``: int 0/1/2 indicating which tier produced the cohort
+      - ``relaxation_label``: str matching ``_RELAXATION_TIERS``
+      - ``unique_symbols``: int, distinct symbols in the returned cohort
+      - ``gross_count``: int, total rows in the returned cohort (pre-k trim)
+    """
+    industry = target_features.get("industry")
+    mcap_bucket = target_features.get("mcap_bucket")
+
+    cutoff_date = (
+        date.fromisoformat(target_date) - timedelta(days=exclusion_years * 365)
+    ).isoformat()
 
     stds = _universe_stds(store)
+    medians = _industry_medians(store, industry)
 
-    scored: list[dict[str, Any]] = []
-    for row in rows:
-        d = dict(row)
-        dist = feature_distance(target_features, d, stds)
-        if not math.isfinite(dist):
-            continue
-        d["distance"] = round(dist, 4)
-        scored.append(d)
+    last_scored: list[dict[str, Any]] = []
+    last_level = 0
+    last_label = _RELAXATION_TIERS[0][0]
+    for level, (label, use_industry, use_mcap) in enumerate(_RELAXATION_TIERS):
+        rows = _run_retrieval_query(
+            store,
+            target_symbol=target_symbol,
+            cutoff_date=cutoff_date,
+            industry=industry,
+            mcap_bucket=mcap_bucket,
+            use_industry=use_industry,
+            use_mcap=use_mcap,
+        )
+        scored: list[dict[str, Any]] = []
+        for row in rows:
+            dist = feature_distance(target_features, row, stds, medians)
+            if not math.isfinite(dist):
+                continue
+            row["distance"] = round(dist, 4)
+            scored.append(row)
+        scored.sort(key=lambda r: r["distance"])
+        last_scored, last_level, last_label = scored, level, label
+        if len({r["symbol"] for r in scored[:k]}) >= min_unique_symbols:
+            break
 
-    scored.sort(key=lambda r: r["distance"])
-    return scored[:k]
+    top_k = last_scored[:k]
+    for row in top_k:
+        row["relaxation_level"] = last_level
+    unique_symbols = len({r["symbol"] for r in top_k})
+    return {
+        "analogs": top_k,
+        "relaxation_level": last_level,
+        "relaxation_label": last_label,
+        "unique_symbols": unique_symbols,
+        "gross_count": len(last_scored),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -505,18 +655,84 @@ def retrieve_top_k_analogs(
 # ---------------------------------------------------------------------------
 
 
+_HORIZON_KEYS: tuple[tuple[str, str], ...] = (
+    ("3m", "return_3m_pct"),
+    ("6m", "return_6m_pct"),
+    ("12m", "return_12m_pct"),
+)
+
+_SMALL_SAMPLE_THRESHOLD = 5
+
+
+def _horizon_stats(returns: list[float]) -> dict[str, Any]:
+    """Central tendency + tail for a single forward-return horizon.
+
+    Suppresses p10/p90 when informative_N < 5 (too few samples for the tails
+    to be meaningful; individual outcomes are more honest at that N).
+    """
+    if not returns:
+        return {}
+    sorted_r = sorted(returns)
+    n = len(sorted_r)
+    out: dict[str, Any] = {
+        "informative_N": n,
+        "median_return_pct": round(statistics.median(sorted_r), 2),
+    }
+    if n >= _SMALL_SAMPLE_THRESHOLD:
+        out["p10_return_pct"] = round(sorted_r[max(0, int(0.1 * n) - 1)], 2)
+        out["p90_return_pct"] = round(sorted_r[min(n - 1, int(0.9 * n) - 1)], 2)
+    else:
+        out["individual_outcomes"] = sorted_r
+    return out
+
+
 def cohort_stats(cohort: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate recovery rate, median return, blow-up rate, tail percentiles."""
-    returns_12m = [c["return_12m_pct"] for c in cohort if c.get("return_12m_pct") is not None]
+    """Aggregate base rates across the cohort.
+
+    Surfaces two distinct N counts to prevent agents citing sample sizes that
+    overstate statistical power:
+      - ``count`` / ``gross_N``: total rows retrieved (any forward window)
+      - ``informative_N_{3m,6m,12m}``: rows whose forward window has closed
+        and produced a realized return at that horizon. This is the N that
+        agents must cite for base rates — the gross count includes recent
+        analogs whose 12m windows are still open.
+
+    Also surfaces ``unique_symbols`` so reviewers can spot cohorts dominated
+    by 2-3 names across many quarter-ends (a common failure mode for narrow
+    industries).
+
+    Tail stats (p10/p90) are suppressed when informative_N < 5; individual
+    outcomes are emitted instead (small-sample loudness control).
+    """
     labels = [c.get("outcome_label") for c in cohort]
     n = len(cohort)
+    unique_symbols = len({c["symbol"] for c in cohort if c.get("symbol") is not None})
 
-    out: dict[str, Any] = {"count": n}
-    if returns_12m:
-        sorted_r = sorted(returns_12m)
-        out["median_return_12m_pct"] = round(statistics.median(sorted_r), 2)
-        out["p10_return_12m_pct"] = round(sorted_r[max(0, int(0.1 * len(sorted_r)) - 1)], 2)
-        out["p90_return_12m_pct"] = round(sorted_r[min(len(sorted_r) - 1, int(0.9 * len(sorted_r)) - 1)], 2)
+    out: dict[str, Any] = {
+        "count": n,
+        "gross_N": n,
+        "unique_symbols": unique_symbols,
+    }
+
+    per_horizon: dict[str, dict[str, Any]] = {}
+    for label, key in _HORIZON_KEYS:
+        returns = [c[key] for c in cohort if c.get(key) is not None]
+        per_horizon[label] = _horizon_stats(returns)
+    out["per_horizon"] = per_horizon
+    # Top-level informative_N per horizon for easy prompt access
+    for label in ("3m", "6m", "12m"):
+        out[f"informative_N_{label}"] = per_horizon[label].get("informative_N", 0)
+
+    # Back-compat keys mirroring pre-fix-#5 12m fields — prompts and tests
+    # that read the old names keep working.
+    twelve = per_horizon["12m"]
+    if "median_return_pct" in twelve:
+        out["median_return_12m_pct"] = twelve["median_return_pct"]
+    if "p10_return_pct" in twelve:
+        out["p10_return_12m_pct"] = twelve["p10_return_pct"]
+    if "p90_return_pct" in twelve:
+        out["p90_return_12m_pct"] = twelve["p90_return_pct"]
+
     if n > 0:
         out["recovery_rate_pct"] = round(labels.count("recovered") / n * 100, 1)
         out["blow_up_rate_pct"] = round(labels.count("blew_up") / n * 100, 1)
