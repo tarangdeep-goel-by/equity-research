@@ -517,6 +517,56 @@ def test_upsert_opt_out_of_recompute_for_batch(store: FlowStore) -> None:
     assert _adj(store, "BULK1", "2024-01-01") is None
 
 
+def test_adj_close_recomputes_on_corporate_action_delete(store: FlowStore) -> None:
+    """Deleting a corporate action must trigger adj_close recompute so stale
+    adjustments don't linger after a data correction."""
+    # Seed with natural cliff: prior close 2000 → ex-date close 1000 (2:1 split)
+    _seed_prices(store, "DEL1", [
+        ("2024-01-01", 2000.0),
+        ("2024-06-01", 1000.0),
+    ])
+    store.upsert_corporate_actions([{
+        "symbol": "DEL1", "ex_date": "2024-06-01", "action_type": "split",
+        "multiplier": 2.0, "ratio_text": "2:1",
+        "dividend_amount": None, "source": "bse",
+    }])
+    assert _adj(store, "DEL1", "2024-01-01") == pytest.approx(1000.0)
+
+    # Delete the action — adj_close must revert to raw close on next read
+    store.delete_corporate_action("DEL1", "2024-06-01", "split", source="bse")
+    assert _adj(store, "DEL1", "2024-01-01") == pytest.approx(2000.0)
+    assert _adj(store, "DEL1", "2024-06-01") == pytest.approx(1000.0)
+
+
+def test_adj_close_recomputes_on_corporate_action_update(store: FlowStore) -> None:
+    """Upserting a new multiplier for the same (symbol, ex_date, action_type,
+    source) row must re-fire the recompute with the updated ratio."""
+    _seed_prices(store, "UPD1", [
+        ("2024-01-01", 3000.0),
+        ("2024-06-01", 1500.0),  # 2:1 cliff vs prior 3000
+    ])
+    store.upsert_corporate_actions([{
+        "symbol": "UPD1", "ex_date": "2024-06-01", "action_type": "bonus",
+        "multiplier": 2.0, "ratio_text": "1:1",
+        "dividend_amount": None, "source": "bse",
+    }])
+    assert _adj(store, "UPD1", "2024-01-01") == pytest.approx(1500.0)
+
+    # Correct the ratio to 3:1 (multiplier 3.0); cliff supports up to 3x.
+    store._conn.execute(
+        "UPDATE daily_stock_data SET close = ?, open = ?, high = ?, low = ? "
+        "WHERE symbol = ? AND date = ?",
+        (1000.0, 1000.0, 1000.0, 1000.0, "UPD1", "2024-06-01"),
+    )
+    store._conn.commit()
+    store.upsert_corporate_actions([{
+        "symbol": "UPD1", "ex_date": "2024-06-01", "action_type": "bonus",
+        "multiplier": 3.0, "ratio_text": "2:1",
+        "dividend_amount": None, "source": "bse",
+    }])
+    assert _adj(store, "UPD1", "2024-01-01") == pytest.approx(1000.0)
+
+
 def test_recompute_handles_action_deletion_via_fresh_query(store: FlowStore) -> None:
     """If an action is corrected (deleted + re-added with different multiplier),
     the next recompute must reflect the new state, not stale in-memory data.
