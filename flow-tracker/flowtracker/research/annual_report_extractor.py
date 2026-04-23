@@ -505,6 +505,12 @@ async def _call_claude(
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
+        # Structured JSON extraction — disable extended thinking. Otherwise the
+        # model can burn a turn on a ThinkingBlock and hit max_turns=1 before
+        # emitting the final JSON, which the CLI reports as
+        # ResultMessage(subtype='error_max_turns', is_error=True) → exit code 1
+        # → "Fatal error in message reader: Command failed with exit code 1".
+        thinking={"type": "disabled"},
         disallowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep",
                           "WebSearch", "WebFetch", "Agent", "Skill",
                           "NotebookEdit", "TodoWrite"],

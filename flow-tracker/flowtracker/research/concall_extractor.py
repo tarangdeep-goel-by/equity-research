@@ -649,6 +649,10 @@ async def _call_claude(
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
+        # Structured JSON extraction — disable extended thinking. See
+        # annual_report_extractor._call_claude for the full rationale: thinking
+        # consumes a turn, max_turns=1 then hits error_max_turns → exit code 1.
+        thinking={"type": "disabled"},
         disallowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep",
                           "WebSearch", "WebFetch", "Agent", "Skill",
                           "NotebookEdit", "TodoWrite"],

@@ -792,6 +792,38 @@ class TestExtractorOptionsIsolation:
         assert "plugins=[]" in src
 
 
+class TestThinkingDisabledForExtraction:
+    """Every structured-JSON extraction call site must disable extended thinking.
+
+    Without this guard, max_turns=1 + a ThinkingBlock response → CLI returns
+    ResultMessage(subtype='error_max_turns', is_error=True) → subprocess exit
+    code 1 → the SDK wraps it as "Fatal error in message reader: Command failed
+    with exit code 1". Diagnosed 2026-04-23 when the HINDUNILVR/BHARTIARTL/
+    SUNPHARMA re-extract failed on segmental + corporate_governance sections.
+    """
+
+    def test_ar_extractor_disables_thinking(self):
+        import inspect
+        from flowtracker.research import annual_report_extractor as ar_mod
+        src = inspect.getsource(ar_mod._call_claude)
+        assert '"type": "disabled"' in src
+        assert "thinking=" in src
+
+    def test_concall_extractor_disables_thinking(self):
+        import inspect
+        from flowtracker.research import concall_extractor as ce_mod
+        src = inspect.getsource(ce_mod._call_claude)
+        assert '"type": "disabled"' in src
+        assert "thinking=" in src
+
+    def test_deck_extractor_disables_thinking(self):
+        import inspect
+        from flowtracker.research import deck_extractor as de_mod
+        src = inspect.getsource(de_mod._call_claude)
+        assert '"type": "disabled"' in src
+        assert "thinking=" in src
+
+
 class TestCmuxHooksDisabled:
     """Every SDK call site must pass CMUX_CLAUDE_HOOKS_DISABLED=1 in env.
 
