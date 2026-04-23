@@ -551,3 +551,102 @@ class TestAppendFixTracker:
         assert "a/b" in content
         assert "line1 line2 with / pipe" in content
         assert "fix / it" in content
+
+
+# ---------------------------------------------------------------------------
+# Sector-KPI pre-run guard (PR-11)
+# ---------------------------------------------------------------------------
+
+
+class TestSectorKpisSkipGuard:
+    """_eval_sector skips agents that depend on sector_kpis when no extracted
+    KPIs are available for the symbol. Unrelated agents run normally.
+
+    Exercises _agent_uses_sector_kpis + _sector_kpis_populated by patching the
+    latter at the module boundary so we don't need a live DB or concall cache.
+    """
+
+    @pytest.fixture
+    def _no_run_agent(self, monkeypatch):
+        """Stub run_agent so a failed pre-guard doesn't shell out to flowtrack."""
+        calls = {"count": 0}
+
+        def fake_run(agent, stock):
+            calls["count"] += 1
+            return 0.1, True
+
+        monkeypatch.setattr(ev, "run_agent", fake_run)
+        return calls
+
+    def test_skips_agent_when_sector_kpis_missing(self, monkeypatch, capsys, _no_run_agent):
+        """sector agent uses sector_kpis → SKIP with SKIP_MISSING_KPIS marker."""
+        monkeypatch.setattr(ev, "_sector_kpis_populated", lambda _sym: False)
+        import asyncio
+        result = asyncio.run(ev._eval_sector(
+            agent="sector", sector_name="bfsi",
+            sector_cfg={"stock": "SUNPHARMA", "type": "Pharma"},
+            target_numeric=90, skip_run=False, cycle=0,
+        ))
+        assert result.grade == "SKIP"
+        assert "SKIP_MISSING_KPIS" in result.summary
+        assert "SUNPHARMA" in result.summary
+        assert "backfill_sector_kpis.py" in result.summary
+        assert _no_run_agent["count"] == 0, "agent must NOT be invoked when skipped"
+        err = capsys.readouterr().err
+        assert "SKIP: sector_kpis missing for SUNPHARMA" in err
+
+    def test_runs_agent_when_sector_kpis_present(self, monkeypatch, _no_run_agent):
+        """KPIs populated → agent runs normally (no SKIP)."""
+        monkeypatch.setattr(ev, "_sector_kpis_populated", lambda _sym: True)
+        monkeypatch.setattr(ev, "read_report", lambda _a, _s: "# Report\n\nbody")
+        monkeypatch.setattr(ev, "read_agent_evidence", lambda _a, _s: "")
+
+        async def fake_eval(agent, stock, sector_type, report_md, evidence=""):
+            return ev.AgentEvalResult(
+                agent=agent, stock=stock, sector=sector_type,
+                grade="A-", grade_numeric=90,
+            )
+
+        monkeypatch.setattr(ev, "eval_with_gemini", fake_eval)
+        import asyncio
+        result = asyncio.run(ev._eval_sector(
+            agent="sector", sector_name="bfsi",
+            sector_cfg={"stock": "SBIN", "type": "PSU bank"},
+            target_numeric=90, skip_run=False, cycle=0,
+        ))
+        assert result.grade == "A-"
+        assert _no_run_agent["count"] == 1
+
+    def test_does_not_skip_unrelated_agent(self, monkeypatch, _no_run_agent):
+        """ownership agent never touches sector_kpis → runs even when KPIs absent."""
+        monkeypatch.setattr(ev, "_sector_kpis_populated", lambda _sym: False)
+        monkeypatch.setattr(ev, "read_report", lambda _a, _s: "# Report\n\nbody")
+        monkeypatch.setattr(ev, "read_agent_evidence", lambda _a, _s: "")
+
+        async def fake_eval(agent, stock, sector_type, report_md, evidence=""):
+            return ev.AgentEvalResult(
+                agent=agent, stock=stock, sector=sector_type,
+                grade="B+", grade_numeric=87,
+            )
+
+        monkeypatch.setattr(ev, "eval_with_gemini", fake_eval)
+        import asyncio
+        result = asyncio.run(ev._eval_sector(
+            agent="ownership", sector_name="bfsi",
+            sector_cfg={"stock": "SBIN", "type": "PSU bank"},
+            target_numeric=90, skip_run=False, cycle=0,
+        ))
+        assert result.grade != "SKIP"
+        assert _no_run_agent["count"] == 1
+
+    def test_agent_uses_sector_kpis_classifier(self):
+        """Direct coverage of the prompt-inspection helper."""
+        # sector + financials reference sector_kpis in their V2 prompts
+        assert ev._agent_uses_sector_kpis("sector") is True
+        assert ev._agent_uses_sector_kpis("financials") is True
+        # ownership/valuation/risk/technical do not
+        assert ev._agent_uses_sector_kpis("ownership") is False
+        assert ev._agent_uses_sector_kpis("valuation") is False
+        assert ev._agent_uses_sector_kpis("risk") is False
+        # unknown agent → False (defensive)
+        assert ev._agent_uses_sector_kpis("nonexistent_agent_xyz") is False
