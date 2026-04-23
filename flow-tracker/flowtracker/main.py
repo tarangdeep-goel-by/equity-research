@@ -25,6 +25,7 @@ from flowtracker.scan_commands import app as scan_app
 from flowtracker.commodity_commands import app as gold_app
 from flowtracker.macro_commands import app as macro_app
 from flowtracker.bhavcopy_commands import app as bhavcopy_app
+from flowtracker.fno_commands import app as fno_app
 from flowtracker.deals_commands import app as deals_app
 from flowtracker.insider_commands import app as insider_app
 from flowtracker.estimates_commands import app as estimates_app
@@ -53,6 +54,7 @@ app.add_typer(scan_app)
 app.add_typer(gold_app)
 app.add_typer(macro_app)
 app.add_typer(bhavcopy_app)
+app.add_typer(fno_app)
 app.add_typer(deals_app)
 app.add_typer(insider_app)
 app.add_typer(estimates_app)
