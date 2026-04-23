@@ -1,8 +1,12 @@
 # LaunchAgent plists
 
-macOS LaunchAgent definitions for flowtracker cron jobs. Companion shell scripts live in `../` and are expected to be accessible at `/Users/tarang/.local/share/flowtracker/scripts/` on the install host (symlink or copy).
+macOS LaunchAgent templates for flowtracker cron jobs. Files here end in `.plist.tmpl`
+— they contain `__HOME__` placeholders that the installer substitutes with the
+current user's `$HOME`. Companion shell scripts live in `../` and are expected to
+be accessible at `$HOME/.local/share/flowtracker/scripts/` on the install host
+(symlink or copy).
 
-All jobs log to `/Users/tarang/.local/share/flowtracker/cron.log`.
+All jobs log to `$HOME/.local/share/flowtracker/cron.log`.
 
 ## Inventory
 
@@ -14,14 +18,15 @@ All jobs log to `/Users/tarang/.local/share/flowtracker/cron.log`.
 
 ## Install
 
+Run the install script from the `flow-tracker` directory:
+
 ```
-cp scripts/plists/com.flowtracker.nightly-adj-close.plist ~/Library/LaunchAgents/
-cp scripts/plists/com.flowtracker.daily-fno.plist ~/Library/LaunchAgents/
-cp scripts/plists/com.flowtracker.quarterly-fno-universe.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.flowtracker.nightly-adj-close.plist
-launchctl load ~/Library/LaunchAgents/com.flowtracker.daily-fno.plist
-launchctl load ~/Library/LaunchAgents/com.flowtracker.quarterly-fno-universe.plist
+bash scripts/install-launch-agents.sh
 ```
+
+The script renders every `*.plist.tmpl` under `scripts/plists/` to
+`~/Library/LaunchAgents/` (with `__HOME__` substituted), then `launchctl load`s
+each one. Re-running is safe — existing plists are unloaded before reload.
 
 ## Verify
 
