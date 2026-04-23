@@ -1017,6 +1017,29 @@ async def _run_specialist(
         name, agent_status, len(report_text), len(evidence), len(called_tools), len(available_set), duration, total_cost,
     )
 
+    # Plan v3 A+G — post-run workflow verification.
+    # Compare the trace against MANDATORY_TOOLS_BY_AGENT[_SECTOR] and the
+    # peer-swap enforcement registry. Detection-only for now — log warnings
+    # so evals can measure the real gap before we wire in a 2nd-pass retry.
+    if agent_status == "success":
+        try:
+            from flowtracker.research.prompts import detect_sector
+            from flowtracker.research.workflow_verifier import check_trace, log_violations
+
+            sector = detect_sector(symbol)
+            # Strip the mcp__agent__ prefix on tool names for registry matching.
+            trace_for_check = trace.model_copy(update={
+                "tool_calls": [
+                    e.model_copy(update={"tool": e.tool.split("__")[-1]})
+                    for e in trace.tool_calls
+                ]
+            })
+            violations = check_trace(trace_for_check, sector)
+            if violations:
+                log_violations(violations)
+        except Exception as exc:  # noqa: BLE001 — verifier is advisory
+            logger.warning("[%s] workflow_verifier failed: %s", name, exc)
+
     # Save to vault (explainer output is saved by the caller to thesis/ paths)
     if name != "explainer":
         save_envelope(envelope)
