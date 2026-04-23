@@ -122,19 +122,29 @@ def stratified_sample(
 def run_analog_agent_as_of(symbol: str, as_of_date: str) -> tuple[float, bool]:
     """Invoke the historical_analog agent CLI for one sample.
 
-    NOTE: the current CLI doesn't support --as-of-date; backtest calls the
-    agent with live wall-clock state, meaning the feature-vector call inside
-    the agent uses today's data, not as_of_date's data. This is a known
-    simplification — proper as-of support is a Phase 2 CLI upgrade (plumb an
-    AS_OF env var through the agent prompt + data_api calls). For now,
-    backtest samples rely on the retrieval SQL itself being as-of-safe, which
-    it is (analog_builder uses quarter_end <= target_date).
+    As-of plumbing: ``FLOWTRACK_AS_OF=<as_of_date>`` is set in the child
+    environment so ``_build_temporal_context`` in prompts.py and the
+    ``ResearchDataAPI`` default-as-of helper both anchor to the sample's
+    as-of, not wall-clock. Combined with ``--skip-fetch`` (no live data
+    refresh into the DB), this keeps the backtest measuring directional
+    calibration at the sampled epoch.
+
+    Known residual leakage: cached vault JSONs (annual reports, decks) may
+    describe post-as-of periods. Directional_adjustments depend primarily
+    on analog retrieval + cohort stats which ARE as-of-safe via the
+    historical_states table + quarter_end <= target_date filter.
     """
+    import os
     cwd = Path(__file__).resolve().parents[3]
     start = time.monotonic()
+    env = os.environ.copy()
+    env["FLOWTRACK_AS_OF"] = as_of_date
     proc = subprocess.run(
-        ["uv", "run", "flowtrack", "research", "run", "historical_analog", "-s", symbol],
-        cwd=cwd, capture_output=True, text=True, timeout=900,
+        [
+            "uv", "run", "flowtrack", "research", "run", "historical_analog",
+            "-s", symbol, "--skip-fetch",
+        ],
+        cwd=cwd, capture_output=True, text=True, timeout=900, env=env,
     )
     return time.monotonic() - start, proc.returncode == 0
 
