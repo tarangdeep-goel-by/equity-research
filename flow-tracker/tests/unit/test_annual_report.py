@@ -790,3 +790,98 @@ class TestExtractorOptionsIsolation:
         src = inspect.getsource(de_mod._call_claude)
         assert "setting_sources=[]" in src
         assert "plugins=[]" in src
+
+
+class TestThinkingDisabledForExtraction:
+    """Every structured-JSON extraction call site must disable extended thinking.
+
+    Without this guard, max_turns=1 + a ThinkingBlock response → CLI returns
+    ResultMessage(subtype='error_max_turns', is_error=True) → subprocess exit
+    code 1 → the SDK wraps it as "Fatal error in message reader: Command failed
+    with exit code 1". Diagnosed 2026-04-23 when the HINDUNILVR/BHARTIARTL/
+    SUNPHARMA re-extract failed on segmental + corporate_governance sections.
+    """
+
+    def test_ar_extractor_disables_thinking(self):
+        import inspect
+        from flowtracker.research import annual_report_extractor as ar_mod
+        src = inspect.getsource(ar_mod._call_claude)
+        assert '"type": "disabled"' in src
+        assert "thinking=" in src
+
+    def test_concall_extractor_disables_thinking(self):
+        import inspect
+        from flowtracker.research import concall_extractor as ce_mod
+        src = inspect.getsource(ce_mod._call_claude)
+        assert '"type": "disabled"' in src
+        assert "thinking=" in src
+
+    def test_deck_extractor_disables_thinking(self):
+        import inspect
+        from flowtracker.research import deck_extractor as de_mod
+        src = inspect.getsource(de_mod._call_claude)
+        assert '"type": "disabled"' in src
+        assert "thinking=" in src
+
+
+class TestCmuxHooksDisabled:
+    """Every SDK call site must pass CMUX_CLAUDE_HOOKS_DISABLED=1 in env.
+
+    The cmux claude-wrapper at /Applications/cmux.app/Contents/Resources/bin/claude
+    injects SessionStart / UserPromptSubmit / PreToolUse hooks via --settings into
+    every `claude` subprocess. For our headless extractor / specialist / verifier
+    subprocesses those hooks add latency and a crash surface we don't need —
+    CMUX_CLAUDE_HOOKS_DISABLED=1 makes the wrapper pass straight through.
+    """
+
+    def test_ar_extractor_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import annual_report_extractor as ar_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(ar_mod._call_claude)
+
+    def test_concall_extractor_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import concall_extractor as ce_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(ce_mod._call_claude)
+
+    def test_deck_extractor_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import deck_extractor as de_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(de_mod._call_claude)
+
+    def test_specialist_runner_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import agent as agent_mod
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(agent_mod._run_specialist)
+
+    def test_verifier_disables_cmux_hooks(self):
+        import inspect
+        from flowtracker.research import verifier as vmod
+        # The verifier options live inside _run_verifier
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(vmod._run_verifier)
+
+
+class TestSectionPromptSchemas:
+    """Regression guards for the JSON schemas embedded in _SECTION_PROMPTS.
+
+    get_adr_gdr in data_api.py reads
+    notes_to_financials.share_capital.adr_gdr_details — so the prompt MUST
+    instruct the extractor to surface that nested shape. Without it the
+    ADR/GDR tool falls back to stubs even when the AR mentions depositary
+    receipts (plan v3 item I).
+    """
+
+    def test_notes_to_financials_declares_adr_gdr_schema(self):
+        from flowtracker.research.annual_report_extractor import _SECTION_PROMPTS
+
+        prompt = _SECTION_PROMPTS["notes_to_financials"]
+        # Schema field the get_adr_gdr consumer reads
+        assert "share_capital" in prompt
+        assert "adr_gdr_details" in prompt
+        assert "outstanding_units_mn" in prompt
+        assert "pct_of_total_equity" in prompt
+        assert "listed_on" in prompt
+        # Extraction hint keywords — what the LLM should look for in the AR
+        assert "depositary" in prompt.lower()
+        assert "ADR" in prompt
+        assert "GDR" in prompt

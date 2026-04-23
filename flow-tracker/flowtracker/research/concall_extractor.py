@@ -639,9 +639,12 @@ Rules:
 
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
-    max_budget: float = 0.50, max_turns: int = 1,
+    max_budget: float = 0.50, max_turns: int = 3,
     output_format: dict | None = None,
 ) -> str:
+    # max_turns=3 lets the model continue across turns when a section's JSON
+    # output exceeds the single-turn budget (see annual_report_extractor for
+    # the full rationale — same failure mode, same fix).
     """Call Claude via Agent SDK. Handles the TextBlock fallback for empty ResultMessage."""
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -649,11 +652,20 @@ async def _call_claude(
         max_budget_usd=max_budget,
         permission_mode="bypassPermissions",
         model=model,
+        # Structured JSON extraction — disable extended thinking. See
+        # annual_report_extractor._call_claude for the full rationale: thinking
+        # consumes a turn, max_turns=1 then hits error_max_turns → exit code 1.
+        thinking={"type": "disabled"},
         disallowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep",
                           "WebSearch", "WebFetch", "Agent", "Skill",
                           "NotebookEdit", "TodoWrite"],
         stderr=lambda line: logger.warning("[cli-stderr] %s", line),
-        env={"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000"},
+        env={
+            "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000",
+            # Bypass cmux's claude-wrapper hook injection — extractor subprocesses
+            # don't need SessionStart/UserPromptSubmit/PreToolUse tracking.
+            "CMUX_CLAUDE_HOOKS_DISABLED": "1",
+        },
         setting_sources=[],  # isolate from user hooks/plugins/skills
         plugins=[],          # no external plugins in extractor subprocess
     )
@@ -1020,12 +1032,18 @@ async def ensure_concall_data(
     quarters: int = 4,
     model: str = "claude-sonnet-4-6",
     industry: str | None = None,
+    force: bool = False,
 ) -> dict | None:
     """Ensure concall extraction data is available, extracting only new quarters.
 
     Per-quarter caching: if a quarter was already extracted successfully,
     it won't be re-extracted. Only quarters with PDFs but no extraction are processed.
     Cross-quarter narrative is regenerated only when new quarters are added.
+
+    When ``force=True``, bypass the per-quarter cache and re-extract every
+    available quarter. Use this after updating the sector-KPI schema or the
+    extraction prompt so that existing cached extractions pick up the new
+    fields (e.g. pharma R&D, FMCG UVG channels, telecom ARPU from E13).
 
     Returns the full extraction dict (same schema as concall_extraction_v2.json),
     or None if no concall PDFs exist for this symbol.
@@ -1042,12 +1060,15 @@ async def ensure_concall_data(
 
     available = {pdf.parent.name: pdf for pdf in pdfs}  # {"FY26-Q3": Path, ...}
 
-    # Step 2: Load existing extraction
+    # Step 2: Load existing extraction (skipped when force=True — we want every
+    # quarter re-extracted, discarding cached labels/fields)
     extraction_path = _VAULT_BASE / symbol / "fundamentals" / "concall_extraction_v2.json"
     existing: dict | None = None
     cached_quarters: dict[str, dict] = {}  # fy_quarter -> quarter dict
 
-    if extraction_path.exists():
+    if force:
+        logger.info("[concall_ensure] %s: force=True — re-extracting %d quarters", symbol, len(available))
+    elif extraction_path.exists():
         try:
             existing = json.loads(extraction_path.read_text())
             for q in existing.get("quarters", []):

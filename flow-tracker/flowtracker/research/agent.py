@@ -596,6 +596,12 @@ async def _run_specialist(
         stderr=_stderr_cb,
         setting_sources=[],  # isolate subprocess from user hooks/plugins/skills
         plugins=[],          # no external plugins in specialist subprocess
+        env={
+            # Bypass cmux's claude-wrapper hook injection — specialist
+            # subprocesses don't need SessionStart/UserPromptSubmit/PreToolUse
+            # tracking, and the hook calls add latency + a crash surface.
+            "CMUX_CLAUDE_HOOKS_DISABLED": "1",
+        },
     )
     effort = effort or DEFAULT_EFFORT.get(name)
     if effort:
@@ -1071,8 +1077,12 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
             max_turns=1,
             permission_mode="bypassPermissions",
             model="claude-haiku-4-5-20251001",
+            # Pure JSON extraction from a bounded report — disable thinking so
+            # max_turns=1 is always enough (same rationale as extractors).
+            thinking={"type": "disabled"},
             setting_sources=[],  # isolate from user hooks/plugins/skills
             plugins=[],          # no external plugins in briefing subprocess
+            env={"CMUX_CLAUDE_HOOKS_DISABLED": "1"},  # no cmux hook injection
         )
 
         result_text = ""

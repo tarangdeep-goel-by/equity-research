@@ -240,6 +240,7 @@ async def _run_verifier(
         max_budget_usd=0.20,
         permission_mode="bypassPermissions",
         model=model,
+        env={"CMUX_CLAUDE_HOOKS_DISABLED": "1"},  # no cmux hook injection
     )
 
     # Build the verification prompt with the report + evidence summary
