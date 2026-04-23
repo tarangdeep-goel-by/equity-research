@@ -537,3 +537,46 @@ def test_cohort_suppresses_p10_p90_when_small_sample(store: FlowStore) -> None:
     assert "p10_return_pct" not in twelve, "p10/p90 must suppress on N<5"
     assert "p90_return_pct" not in twelve
     assert twelve["individual_outcomes"] == [-30, 15, 45]
+
+
+def test_cohort_ranking_is_deterministic_on_distance_ties(store: FlowStore) -> None:
+    """Two candidates with identical distance must return in stable
+    (distance, symbol, quarter_end) order regardless of SQL iteration order."""
+    from flowtracker.research.analog_builder import retrieve_top_k_analogs
+
+    recent = (date.today() - timedelta(days=365 * 3)).isoformat()
+
+    # Seed two peers with identical feature values → identical distance to
+    # the target. Insert in reverse-alphabetical order so that SQL iteration
+    # without a stable tie-break would surface BETA before ALPHA.
+    store._conn.executemany(
+        "INSERT INTO historical_states "
+        "(symbol, quarter_end, pe_trailing, roce_current, promoter_pct, fii_pct, "
+        " mf_pct, industry, mcap_bucket) "
+        "VALUES (?, ?, 25.0, 20.0, 50.0, 15.0, 10.0, 'Chemicals', 'midcap')",
+        [("ZETA", recent), ("BETA", recent), ("ALPHA", recent)],
+    )
+    store._conn.commit()
+
+    target_features = {
+        "pe_trailing": 25.0, "roce_current": 20.0, "promoter_pct": 50.0,
+        "fii_pct": 15.0, "mf_pct": 10.0, "industry": "Chemicals",
+        "mcap_bucket": "midcap",
+    }
+
+    seen_orders: list[list[str]] = []
+    for _ in range(3):
+        result = retrieve_top_k_analogs(
+            store, target_symbol="TGT", target_date=date.today().isoformat(),
+            target_features=target_features, k=10, min_unique_symbols=1,
+        )
+        seen_orders.append([a["symbol"] for a in result["analogs"]])
+
+    # All three runs must yield the same order (determinism).
+    assert seen_orders[0] == seen_orders[1] == seen_orders[2], (
+        f"Non-deterministic order across runs: {seen_orders}"
+    )
+    # And that order must be ascending by symbol after the distance tie.
+    assert seen_orders[0] == ["ALPHA", "BETA", "ZETA"], (
+        f"Expected (distance, symbol, quarter_end) tie-break; got {seen_orders[0]}"
+    )

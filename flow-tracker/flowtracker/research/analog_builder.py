@@ -632,7 +632,9 @@ def retrieve_top_k_analogs(
                 continue
             row["distance"] = round(dist, 4)
             scored.append(row)
-        scored.sort(key=lambda r: r["distance"])
+        # Stable tie-break: identical distances fall back to (symbol, quarter_end)
+        # so re-runs return cohorts in the same order regardless of SQL iteration.
+        scored.sort(key=lambda r: (r["distance"], r["symbol"], r["quarter_end"]))
         last_scored, last_level, last_label = scored, level, label
         if len({r["symbol"] for r in scored[:k]}) >= min_unique_symbols:
             break

@@ -4312,7 +4312,13 @@ class FlowStore:
                 continue
             filtered[key] = row
 
-        return sorted(filtered.values(), key=lambda r: r["ex_date"])
+        # Deterministic order: compound actions sharing ex_date (split + bonus)
+        # must audit in the same sequence every run — tie-break on action_type
+        # then multiplier so recompute_adj_close sees a stable iteration order.
+        return sorted(
+            filtered.values(),
+            key=lambda r: (r["ex_date"], r["action_type"], r["multiplier"]),
+        )
 
     def upsert_estimate_revisions(self, data: dict) -> int:
         """Upsert estimate revision data (all periods for one symbol)."""
