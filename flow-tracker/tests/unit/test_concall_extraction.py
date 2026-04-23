@@ -1091,3 +1091,57 @@ class TestEnsureConcallData:
         result = await ce.ensure_concall_data("TEST", quarters=4)
         assert result is not None
         assert result["_new_quarters_extracted"] == 1
+
+    async def test_force_reextracts_cached_quarters(
+        self, monkeypatch, patch_claude_sdk, tmp_path: Path
+    ):
+        """force=True bypasses the cached-complete fast path and re-extracts every available quarter."""
+        monkeypatch.setattr(ce, "_VAULT_BASE", tmp_path)
+        monkeypatch.setattr(ce, "ensure_transcript_pdfs", lambda s, max_quarters=6: 0)
+
+        filings = tmp_path / "TEST" / "filings" / "FY26-Q3"
+        filings.mkdir(parents=True)
+        (filings / "concall.pdf").write_bytes(b"fake")
+
+        # Pre-populate a cached extraction marked complete with a stale label.
+        out_dir = tmp_path / "TEST" / "fundamentals"
+        out_dir.mkdir(parents=True)
+        existing = {
+            "symbol": "TEST",
+            "quarters_analyzed": 1,
+            "quarters": [
+                {
+                    "fy_quarter": "FY26-Q3",
+                    "extraction_status": "complete",
+                    "label": "stale",
+                }
+            ],
+            "cross_quarter_narrative": {},
+        }
+        (out_dir / "concall_extraction_v2.json").write_text(json.dumps(existing))
+
+        import pdfplumber
+
+        monkeypatch.setattr(
+            pdfplumber, "open", lambda p: _FakePdf([_FakePage("fresh Q3 content")])
+        )
+
+        call_count = {"n": 0}
+
+        async def _counting_query(*, prompt, options):  # noqa: ARG001
+            call_count["n"] += 1
+            yield _FakeResultMessage(
+                '{"label": "fresh", "fy_quarter": "FY26-Q3", '
+                '"operational_metrics": {}, "key_themes": []}'
+            )
+
+        monkeypatch.setattr(ce, "query", _counting_query)
+
+        # Without force, the fast path returns immediately with 0 new quarters.
+        # With force=True, the cached quarter is re-extracted.
+        result = await ce.ensure_concall_data("TEST", quarters=4, force=True)
+        assert result is not None
+        assert result["_new_quarters_extracted"] == 1
+        assert call_count["n"] >= 1
+        q3 = next(q for q in result["quarters"] if q["fy_quarter"] == "FY26-Q3")
+        assert q3.get("label") == "fresh"
