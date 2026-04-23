@@ -428,3 +428,25 @@ def test_get_fno_contracts_for_date_normalizes_sentinels(store):
     assert futures[0]["option_type"] is None
     assert options[0]["strike"] == 1500.0
     assert options[0]["option_type"] == "CE"
+
+
+# ---------------------------------------------------------------------------
+# Schema indexes (PR-7 ops hardening)
+# ---------------------------------------------------------------------------
+
+def test_fno_contracts_has_instrument_index(store):
+    """fno_contracts(instrument) index exists — needed for 'all FUTSTK' scans."""
+    indexes = {
+        row["name"]
+        for row in store._conn.execute("PRAGMA index_list('fno_contracts')").fetchall()
+    }
+    assert "ix_fno_instrument" in indexes, (
+        f"ix_fno_instrument missing from fno_contracts indexes: {sorted(indexes)}"
+    )
+
+    # Confirm it indexes the instrument column specifically.
+    cols = [
+        row["name"]
+        for row in store._conn.execute("PRAGMA index_info('ix_fno_instrument')").fetchall()
+    ]
+    assert cols == ["instrument"], f"ix_fno_instrument columns: {cols}"

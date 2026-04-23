@@ -1079,6 +1079,7 @@ CREATE TABLE IF NOT EXISTS fno_contracts (
 );
 CREATE INDEX IF NOT EXISTS ix_fno_symbol_date ON fno_contracts(symbol, trade_date);
 CREATE INDEX IF NOT EXISTS ix_fno_expiry ON fno_contracts(expiry_date);
+CREATE INDEX IF NOT EXISTS ix_fno_instrument ON fno_contracts(instrument);
 
 -- F&O ingestion (Sprint 2): participant-wise long/short OI across instrument
 -- categories (FII/DII/Pro/Client × idx_fut/idx_opt_ce/.../stk_opt_pe).

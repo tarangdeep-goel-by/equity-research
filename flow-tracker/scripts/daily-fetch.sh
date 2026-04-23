@@ -3,6 +3,8 @@
 set -o pipefail
 
 LOG="$HOME/.local/share/flowtracker/cron.log"
+ALERT_DIR="$HOME/.local/share/flowtracker/alerts"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 PROJECT="$HOME/Documents/Projects/equity-research/flow-tracker"
 UV="$HOME/.local/bin/uv"
 MAX_RETRIES=3
@@ -10,6 +12,17 @@ BACKOFF=300  # 5 minutes
 
 echo "=== $(date) === Daily Fetch ===" >> "$LOG"
 cd "$PROJECT" || { echo "FAIL: cd $PROJECT" >> "$LOG"; exit 1; }
+
+write_alert_marker() {
+    local reason="$1"
+    mkdir -p "$ALERT_DIR"
+    {
+        date -u +"%Y-%m-%dT%H:%M:%SZ"
+        echo "$SCRIPT_NAME: $reason"
+        echo "--- last 20 lines of $LOG ---"
+        tail -n 20 "$LOG" 2>/dev/null || true
+    } > "$ALERT_DIR/${SCRIPT_NAME%.sh}.failed"
+}
 
 run_with_retry() {
     local cmd="$1"
@@ -23,6 +36,7 @@ run_with_retry() {
         [ "$attempt" -lt "$MAX_RETRIES" ] && sleep $BACKOFF
     done
     echo "[FAIL] $label all $MAX_RETRIES attempts failed at $(date)" >> "$LOG"
+    write_alert_marker "$label all $MAX_RETRIES attempts failed"
     return 1
 }
 

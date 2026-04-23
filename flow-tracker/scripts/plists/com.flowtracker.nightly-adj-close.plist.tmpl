@@ -6,9 +6,12 @@
   snapshot + bhavcopy fetches have settled. Weekends included so weekend
   corrections to corporate_actions propagate.
 
+  This is a template: __HOME__ is substituted with $HOME by
+  scripts/install-launch-agents.sh at install time. Do not copy this file
+  to ~/Library/LaunchAgents/ directly — run the install script instead.
+
   Install:
-      cp scripts/plists/com.flowtracker.nightly-adj-close.plist ~/Library/LaunchAgents/
-      launchctl load ~/Library/LaunchAgents/com.flowtracker.nightly-adj-close.plist
+      bash scripts/install-launch-agents.sh
 
   Verify:
       launchctl list | grep flowtracker.nightly-adj-close
@@ -25,13 +28,13 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/tarang/.local/share/flowtracker/scripts/nightly-adj-close.sh</string>
+        <string>__HOME__/.local/share/flowtracker/scripts/nightly-adj-close.sh</string>
     </array>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/tarang/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
 
     <key>StartCalendarInterval</key>
@@ -43,9 +46,9 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
 </dict>
 </plist>

@@ -5,9 +5,12 @@
   refreshes the F&O-eligible list quarterly, but the CLI is idempotent so
   monthly "no change" runs are cheap and simpler than a true quarterly cron.
 
+  This is a template: __HOME__ is substituted with $HOME by
+  scripts/install-launch-agents.sh at install time. Do not copy this file
+  to ~/Library/LaunchAgents/ directly — run the install script instead.
+
   Install:
-      cp scripts/plists/com.flowtracker.quarterly-fno-universe.plist ~/Library/LaunchAgents/
-      launchctl load ~/Library/LaunchAgents/com.flowtracker.quarterly-fno-universe.plist
+      bash scripts/install-launch-agents.sh
 
   Verify:
       launchctl list | grep flowtracker.quarterly-fno-universe
@@ -24,13 +27,13 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/tarang/.local/share/flowtracker/scripts/quarterly-fno-universe.sh</string>
+        <string>__HOME__/.local/share/flowtracker/scripts/quarterly-fno-universe.sh</string>
     </array>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/tarang/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
 
     <key>StartCalendarInterval</key>
@@ -42,9 +45,9 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/tarang/.local/share/flowtracker/cron.log</string>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
 </dict>
 </plist>
