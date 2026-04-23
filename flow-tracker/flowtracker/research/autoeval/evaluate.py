@@ -829,7 +829,10 @@ def print_summary(results: dict[str, AgentEvalResult], target_numeric: int = 90)
     print(header)
     print(f"  {'-'*12}  {'-'*8}  " + "  ".join("-"*8 for _ in PARAM_SHORT) + "  -----")
     for name, r in sorted(results.items()):
-        status = "PASS" if r.grade_numeric >= target_numeric else "FAIL"
+        if r.grade == "SKIP":
+            status = "SKIP"
+        else:
+            status = "PASS" if r.grade_numeric >= target_numeric else "FAIL"
         prompt_fixes = sum(1 for i in r.issues if i.type == "PROMPT_FIX")
         overall = f"{r.grade:3s}({r.grade_numeric:2d})"
         params = []
@@ -847,6 +850,41 @@ def print_summary(results: dict[str, AgentEvalResult], target_numeric: int = 90)
 
 
 # ---------------------------------------------------------------------------
+# Pre-run data guards
+# ---------------------------------------------------------------------------
+
+def _agent_uses_sector_kpis(agent: str) -> bool:
+    """True iff this agent's prompt references the sector_kpis tool/section."""
+    from flowtracker.research.prompts import AGENT_PROMPTS_V2
+    entry = AGENT_PROMPTS_V2.get(agent)
+    if not entry:
+        return False
+    text = "".join(entry) if isinstance(entry, tuple) else entry
+    return "sector_kpis" in text
+
+
+def _sector_kpis_populated(symbol: str) -> bool:
+    """True iff get_sector_kpis(symbol) returns at least one extracted KPI.
+
+    Returns True when no sector framework applies (nothing to backfill) so
+    unrelated industries don't get skipped. Returns False only when a
+    framework exists and the concall extraction yielded zero KPIs — exactly
+    the case where `scripts/backfill_sector_kpis.py` would help.
+    """
+    from flowtracker.research.data_api import ResearchDataAPI
+    api = ResearchDataAPI()
+    data = api.get_sector_kpis(symbol)
+    if not isinstance(data, dict):
+        return True
+    err = data.get("error", "")
+    if "No sector KPI framework" in err:
+        return True  # industry not covered — don't skip
+    if err:
+        return False  # concall missing / empty
+    return bool(data.get("available_kpis"))
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -857,6 +895,21 @@ async def _eval_sector(agent: str, sector_name: str, sector_cfg: dict,
     sector_type = sector_cfg["type"]
 
     print(f"--- {agent} / {stock} ({sector_name}) ---")
+
+    # Pre-run data guard: if agent uses sector_kpis but symbol has no extracted
+    # KPIs, SKIP the pair so the gap is visible instead of silently degrading
+    # the report. Only triggers when sector framework exists (industry covered).
+    if _agent_uses_sector_kpis(agent) and not _sector_kpis_populated(stock):
+        msg = (
+            f"SKIP: sector_kpis missing for {stock}, "
+            f"run scripts/backfill_sector_kpis.py --symbols {stock} to populate."
+        )
+        print(f"  [WARN] {msg}", file=sys.stderr)
+        return AgentEvalResult(
+            agent=agent, stock=stock, sector=sector_type,
+            grade="SKIP", grade_numeric=0,
+            summary=f"SKIP_MISSING_KPIS: {msg}",
+        )
 
     # Step 1: Run agent (unless --skip-run)
     run_duration = 0.0
