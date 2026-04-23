@@ -76,8 +76,8 @@ class FnoParticipantOi(BaseModel):
     trade_date: date
     participant: str
     instrument_category: str
-    long_oi: int = 0
-    short_oi: int = 0
+    long_oi: int | None = 0
+    short_oi: int | None = 0
     long_turnover_cr: float | None = None
     short_turnover_cr: float | None = None
 
