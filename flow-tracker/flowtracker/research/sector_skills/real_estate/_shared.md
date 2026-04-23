@@ -52,3 +52,39 @@ Investor deck is the PRIMARY source for city-level presales, absorption rates, b
 ## Valuation Framework Priority (new — tighten v1)
 
 Framework priority for Indian real-estate developers: **P/Presales > NAV > P/Ops > Peer > PE**. PE is deprioritized due to IndAS 115 revenue-recognition distortions (booked revenue lags actual sales). If your prose argues against PE as a primary metric (e.g., "IndAS 115 distorts earnings"), your valuation MUST NOT blend PE-based numbers in later — per shared-preamble A1.1 (argue-then-use forbidden).
+
+## NAV Estimation — Mandatory Computation (new — plan v3 F)
+
+P/Adjusted-Book-Value from `get_quality_scores` is stated book value — it uses historical cost of the land bank, which for companies sitting on land acquired 10–20 years ago is dramatically below current market value. You MUST estimate NAV independently rather than anchoring valuation on stated P/B and declaring "NAV premium not computable".
+
+**Formula (back-of-envelope, document the inputs):**
+
+```
+nav_per_share =
+    (shareholders_equity_cr
+     + undisclosed_land_mtm_uplift_cr
+     − net_debt_premium_cr
+     + listed_subsidiary_mtm_uplift_cr)
+    / shares_outstanding
+```
+
+**Where each input comes from:**
+
+| Input | Source tool / section | Notes |
+|---|---|---|
+| `shareholders_equity_cr` | `get_fundamentals` → balance sheet → total equity | Standalone or consolidated — state which; cite section in narrative |
+| `undisclosed_land_mtm_uplift_cr` | `get_deck_insights(sub_section='segment_performance')` or `(sub_section='charts_described')` for land bank area in msf + disclosed estimated GDV; OR `get_annual_report(section='mdna')` for land-bank discussion. Uplift = (disclosed market-GDV − book-carrying-value), often 3–8× book for land acquired >10yrs ago. | If no disclosed GDV, state as a data gap rather than guessing — do NOT fabricate a multiple |
+| `net_debt_premium_cr` | `get_fundamentals` → net debt | Add a ~10% premium for project-finance mismatch (short borrowings vs multi-year receivables) only if supported by balance-sheet commentary; leave at zero otherwise |
+| `listed_subsidiary_mtm_uplift_cr` | `get_company_context(section='subsidiaries')` + market caps for any listed arm | Apply a 20–25% holding-company discount per conglomerate norm |
+| `shares_outstanding` | `get_valuation_snapshot` | Diluted share count, not face-value computation |
+
+**Worked skeleton (for clarity, not a template to paste):**
+
+> *Subject is GODREJPROP. From the FY25 investor deck, land bank = 107 msf with disclosed estimated GDV of ₹2.1 lakh Cr vs book value of ~₹8,500 Cr (source: FY25-Q4 deck, segment_performance). Land uplift = ₹2,10,000 − 8,500 = ₹2,01,500 Cr. Shareholders' equity (consolidated) = ₹12,400 Cr (source: FY25 AR, financial_statements). Net debt = ₹6,800 Cr, no project-finance premium applied (maturity profile clean per mdna). No listed subsidiaries.*
+>
+> *NAV = (12,400 + 2,01,500 − 6,800) / 29.8 Cr shares ≈ ₹7,050 per share. Current CMP = ₹2,400. NAV-implied upside = 194%. Framework: NAV-anchored valuation only, not PE.*
+
+**Rules:**
+- If *any* input is unavailable (e.g., land-bank msf or GDV not disclosed in deck or AR), DO NOT skip NAV — state the gap and either (a) compute with the remaining inputs using stated book NAV as a floor, or (b) raise as a specific open question citing the exact tool + section you checked. "Cannot estimate NAV without investor presentation" is a prompt violation — you MUST consult the deck first via `get_deck_insights`.
+- The 3–8× land-uplift range is a *sense-check*, not a formula input. Use disclosed GDV when available; otherwise anchor on peers' disclosed uplift ratios from the same geography.
+- A computed NAV wildly above CMP (say >3×) should be reconciled against realisation timing — land bank NAV assumes monetisation; if the pipeline is 15-year slow-burn, apply a 40–50% time-discount before quoting the NAV-upside number.

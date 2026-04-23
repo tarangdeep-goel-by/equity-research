@@ -2905,6 +2905,7 @@ class FlowStore:
                 ic.symbol, ic.company_name,
                 vs.market_cap, vs.pe_trailing,
                 sr.roce_pct,
+                asnap.bfsi_roa_pct,
                 fii.percentage AS fii_pct,
                 mf.percentage AS mf_pct,
                 vs.earnings_growth AS price_change_1yr_pct
@@ -2918,6 +2919,11 @@ class FlowStore:
                 AND sr.fiscal_year_end = (
                     SELECT MAX(sr2.fiscal_year_end) FROM screener_ratios sr2
                     WHERE sr2.symbol = ic.symbol
+                )
+            LEFT JOIN analytical_snapshot asnap ON ic.symbol = asnap.symbol
+                AND asnap.computed_date = (
+                    SELECT MAX(a2.computed_date) FROM analytical_snapshot a2
+                    WHERE a2.symbol = ic.symbol
                 )
             LEFT JOIN shareholding fii ON ic.symbol = fii.symbol
                 AND fii.category = 'FII'
@@ -2941,6 +2947,10 @@ class FlowStore:
             "mcap_cr": round(r["market_cap"], 2) if r["market_cap"] else None,
             "pe": round(r["pe_trailing"], 2) if r["pe_trailing"] else None,
             "roce_pct": round(r["roce_pct"], 2) if r["roce_pct"] else None,
+            # BFSI-only: ROA from analytical_snapshot.bfsi_roa_pct (computed
+            # by the weekly analytics cron). ROCE is meaningless for banks/
+            # NBFCs, so sector charts for BFSI prefer the ROA axis.
+            "roa_pct": round(r["bfsi_roa_pct"], 2) if r["bfsi_roa_pct"] else None,
             "fii_pct": round(r["fii_pct"], 2) if r["fii_pct"] else None,
             "mf_pct": round(r["mf_pct"], 2) if r["mf_pct"] else None,
             "price_change_1yr_pct": round(r["price_change_1yr_pct"], 2) if r["price_change_1yr_pct"] else None,

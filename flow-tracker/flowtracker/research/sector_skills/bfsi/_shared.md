@@ -60,3 +60,5 @@ Operating cash flow for banks and NBFCs is dominated by deposit and loan flow sw
 ## ROCE Exclusion for BFSI (new)
 
 ROCE is NOT a valid KPI for banks or NBFCs — it mixes interest income and borrowings denominators in non-meaningful ways. Do not include ROCE in the business profile table or financial summary. If `get_fundamentals` returns a ROCE value, ignore it for narrative. Use ROE, ROA, NIM, and C/I ratio instead.
+
+**Chart routing.** `render_chart(chart_type='sector_valuation_scatter')` auto-detects BFSI and plots PE vs ROA (not ROCE) as the quality axis. Call it the same way — don't pass a `y_metric` override, the sector detection handles it. If ROA coverage is thin across the peer set (fewer than 2 peers with `roa_pct` populated), the chart falls back to ROCE so something renders — note that as a data gap, not a valid comparison.
