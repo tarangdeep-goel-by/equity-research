@@ -1,9 +1,0 @@
-Run log: /Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval/run_logs/20260417T150716.log
-AutoEval (agent-first): agent=financials sectors=['regulated_power']
-Target: grade_numeric >= 90
-
---- financials / NTPC (regulated_power) ---
-  Report: 38818 chars
-  Evidence log loaded (2 lines)
-  Grading with Gemini...
-ERROR: google-genai not installed. Run: uv sync --extra autoeval
