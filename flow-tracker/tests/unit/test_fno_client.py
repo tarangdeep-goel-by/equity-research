@@ -8,6 +8,8 @@ response shapes stored in `tests/fixtures/fno/`.
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import date
 from pathlib import Path
 
@@ -357,3 +359,93 @@ def test_context_manager_closes_client():
         inner = client._client
         assert not inner.is_closed
     assert inner.is_closed
+
+
+# ---------------------------------------------------------------------------
+# Format-fallback + column-count fragility fixes (PR-5)
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_option_chain_parses_short_year_expiry():
+    """`"17-Apr-26"` (2-digit year) is parsed via the `%d-%b-%y` fallback."""
+    payload = {
+        "records": {
+            "expiryDates": ["17-Apr-26"],
+            "underlyingValue": 1500.0,
+            "data": [
+                {
+                    "strikePrice": 1500,
+                    "expiryDate": "17-Apr-26",
+                    "CE": {"openInterest": 100, "changeinOpenInterest": 0,
+                           "totalTradedVolume": 0, "impliedVolatility": 20.0,
+                           "lastPrice": 10.0},
+                    "PE": {"openInterest": 100, "changeinOpenInterest": 0,
+                           "totalTradedVolume": 0, "impliedVolatility": 22.0,
+                           "lastPrice": 12.0},
+                },
+            ],
+        }
+    }
+    respx.get("https://www.nseindia.com/option-chain").respond(200, text="<html>ok</html>")
+    respx.get(
+        "https://www.nseindia.com/api/option-chain-equities",
+        params={"symbol": "RELIANCE"},
+    ).respond(200, text=json.dumps(payload))
+
+    with FnoClient() as client:
+        snap = client.fetch_option_chain("RELIANCE")
+
+    assert snap.expiry_date == date(2026, 4, 17)
+    assert len(snap.strikes) == 1
+
+
+@respx.mock
+def test_participant_oi_logs_warning_on_column_mismatch(caplog):
+    """A CSV with a missing participant column logs a warning and marks the affected
+    category's long/short OI as None rather than silently zero-filling."""
+    trade_date = date(2026, 4, 17)
+    url = (
+        "https://archives.nseindia.com/content/nsccl/"
+        "fao_participant_oi_17042026.csv"
+    )
+
+    # Drop the two "Option Stock Put" columns → header has 11 per-category cols
+    # instead of 12 (6 categories × 2). Parser should WARN + leave stk_opt_pe
+    # long_oi/short_oi as None, other categories still parse normally.
+    bad_csv = (
+        "NSE - NSCCL\n"
+        "Participant wise Open Interest\n"
+        "Date: 17-Apr-2026\n"
+        "\n"
+        "Client Type,Future Index Long,Future Index Short,"
+        "Option Index Call Long,Option Index Put Long,"
+        "Option Index Call Short,Option Index Put Short,"
+        "Future Stock Long,Future Stock Short,"
+        "Option Stock Call Long,Option Stock Call Short,"
+        "Total Long Contracts,Total Short Contracts\n"
+        "FII,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,25000\n"
+    )
+    respx.get(url).respond(200, text=bad_csv)
+
+    with caplog.at_level(logging.WARNING, logger="flowtracker.fno_client"):
+        with FnoClient() as client:
+            rows = client.fetch_participant_oi(trade_date)
+
+    # A WARNING about column mismatch must have been emitted.
+    assert any(
+        "column" in rec.message.lower() and rec.levelno == logging.WARNING
+        for rec in caplog.records
+    ), f"expected column-mismatch warning, got: {[r.message for r in caplog.records]}"
+
+    # Parser still yielded 6 rows (one per category) — no raise.
+    assert len(rows) == 6
+    by_cat = {r.instrument_category: r for r in rows}
+
+    # Known/matched categories keep real values.
+    assert by_cat["stk_fut"].long_oi == 7000
+    assert by_cat["stk_fut"].short_oi == 8000
+
+    # Unmatched category (stk_opt_pe) is marked None, NOT zero-filled.
+    assert by_cat["stk_opt_pe"].long_oi is None
+    assert by_cat["stk_opt_pe"].short_oi is None

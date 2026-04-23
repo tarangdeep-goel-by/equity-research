@@ -245,6 +245,26 @@ class FnoClient:
         if reader.fieldnames:
             reader.fieldnames = [f.strip() for f in reader.fieldnames]
 
+        # Validate expected category columns exist; missing ones will be marked
+        # None rather than silently zero-filled via _parse_int fallback.
+        header_set = set(reader.fieldnames or [])
+        missing: list[tuple[str, str, str]] = [
+            (cat, lc, sc)
+            for cat, lc, sc in _PARTICIPANT_CATEGORIES
+            if lc not in header_set or sc not in header_set
+        ]
+        if missing:
+            logger.warning(
+                "Participant-OI header column mismatch: %d/%d expected "
+                "category columns missing (%s). Affected categories will be "
+                "recorded with None long_oi/short_oi. Header: %s",
+                len(missing) * 2,
+                len(_PARTICIPANT_CATEGORIES) * 2,
+                ",".join(cat for cat, _, _ in missing),
+                reader.fieldnames,
+            )
+        missing_cats = {cat for cat, _, _ in missing}
+
         records: list[FnoParticipantOi] = []
         for row in reader:
             row = {
@@ -258,12 +278,18 @@ class FnoClient:
                 continue
 
             for category, long_col, short_col in _PARTICIPANT_CATEGORIES:
+                if category in missing_cats:
+                    long_oi: int | None = None
+                    short_oi: int | None = None
+                else:
+                    long_oi = _parse_int(row.get(long_col, ""))
+                    short_oi = _parse_int(row.get(short_col, ""))
                 records.append(FnoParticipantOi(
                     trade_date=trade_date,
                     participant=participant,
                     instrument_category=category,
-                    long_oi=_parse_int(row.get(long_col, "")),
-                    short_oi=_parse_int(row.get(short_col, "")),
+                    long_oi=long_oi,
+                    short_oi=short_oi,
                     long_turnover_cr=None,
                     short_turnover_cr=None,
                 ))
@@ -292,12 +318,7 @@ class FnoClient:
             raise FnoFetchError(f"Option chain for {sym_upper} has no expiries")
 
         nearest_expiry_str = expiries[0]
-        try:
-            nearest_expiry = datetime.strptime(nearest_expiry_str, "%d-%b-%Y").date()
-        except ValueError as e:
-            raise FnoFetchError(
-                f"Option chain expiry parse failed ({nearest_expiry_str}): {e}"
-            ) from e
+        nearest_expiry = _parse_expiry_str(nearest_expiry_str)
 
         underlying = records.get("underlyingValue")
         if underlying is None:
@@ -473,6 +494,23 @@ def _parse_int(val: object) -> int:
         return int(float(s))
     except (ValueError, TypeError):
         return 0
+
+
+def _parse_expiry_str(s: str) -> date:
+    """Parse an NSE option-chain expiry string with a small format cascade.
+
+    Accepts `%d-%b-%Y` (e.g. "24-Apr-2026"), `%d-%b-%y` (e.g. "24-Apr-26"),
+    or ISO `%Y-%m-%d`. Raises FnoFetchError with a clear message if none match.
+    """
+    for fmt in ("%d-%b-%Y", "%d-%b-%y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    raise FnoFetchError(
+        f"Option chain expiry parse failed ({s}): tried formats "
+        f"%d-%b-%Y, %d-%b-%y, %Y-%m-%d"
+    )
 
 
 def _int_or_zero(val: object) -> int:
