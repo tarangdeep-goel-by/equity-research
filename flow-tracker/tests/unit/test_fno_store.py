@@ -3,6 +3,12 @@
 Covers upsert_fno_contracts, upsert_fno_participant_oi, upsert_fno_universe,
 get_fno_oi_history, get_fno_contracts_for_date, get_pcr, get_basis,
 get_oi_percentile, get_fii_derivative_positioning, get_fno_eligible_stocks.
+
+Note on clock: tests that drive data via `date.today()` (OI history/percentile)
+are NOT wrapped in @freeze_time because their production path
+(store.get_fno_oi_history) filters via SQLite's `date('now')`, which freezegun
+does not mock. Under real wall-clock, Python and SQLite time move together,
+so these tests remain robust. See individual test docstrings for details.
 """
 
 from __future__ import annotations
@@ -122,7 +128,13 @@ def test_upsert_fno_contracts_future_without_strike(store):
 # ---------------------------------------------------------------------------
 
 def test_get_fno_oi_history_returns_front_month(store):
-    """With two expiries per trade_date, only rows for the nearest expiry come back."""
+    """With two expiries per trade_date, only rows for the nearest expiry come back.
+
+    Note: intentionally NOT wrapped in @freeze_time — get_fno_oi_history's
+    90-day window is computed via SQLite's `date('now')`, which is not
+    mockable by freezegun. Python's date.today() and SQLite's date('now')
+    already move together under real wall-clock, so the test is robust.
+    """
     today = date.today()
     apr_expiry = today + timedelta(days=7)
     may_expiry = today + timedelta(days=42)
@@ -154,7 +166,10 @@ def test_get_fno_oi_history_returns_front_month(store):
 
 
 def test_get_fno_oi_history_window_filter(store):
-    """`days` filter excludes rows older than today - days."""
+    """`days` filter excludes rows older than today - days.
+
+    See note on test_get_fno_oi_history_returns_front_month re: unfrozen clock.
+    """
     today = date.today()
     expiry = today + timedelta(days=14)
     contracts = []
@@ -264,7 +279,10 @@ def test_get_basis_returns_none_when_missing(store):
 # ---------------------------------------------------------------------------
 
 def test_get_oi_percentile(store):
-    """Linear 90-day OI series: max-day percentile ≈100, min-day ≈low."""
+    """Linear 90-day OI series: max-day percentile ≈100, min-day ≈low.
+
+    See note on test_get_fno_oi_history_returns_front_month re: unfrozen clock.
+    """
     today = date.today()
     expiry = today + timedelta(days=14)
     contracts = []
@@ -293,7 +311,10 @@ def test_get_oi_percentile(store):
 
 
 def test_get_oi_percentile_returns_none_when_thin(store):
-    """<5 data points → None."""
+    """<5 data points → None.
+
+    See note on test_get_fno_oi_history_returns_front_month re: unfrozen clock.
+    """
     today = date.today()
     expiry = today + timedelta(days=14)
     contracts = []

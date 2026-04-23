@@ -14,6 +14,7 @@ from pathlib import Path
 import httpx
 import pytest
 import respx
+from freezegun import freeze_time
 
 from flowtracker.fno_client import FnoClient, FnoFetchError
 
@@ -168,8 +169,12 @@ def test_fetch_participant_oi_404_returns_empty():
 
 
 @respx.mock
+@freeze_time("2026-04-17")
 def test_fetch_eligible_universe_parses_csv():
-    """fo_mktlots CSV → FnoUniverse rows (eligible_since/last_verified = today)."""
+    """fo_mktlots CSV → FnoUniverse rows (eligible_since/last_verified = today).
+
+    Clock frozen so the `today` assertion stays stable as wall-clock drifts.
+    """
     url = "https://archives.nseindia.com/content/fo/fo_mktlots.csv"
     respx.get(url).respond(200, text=_read("sample_fo_mktlots.csv"))
 

@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from freezegun import freeze_time
 from typer.testing import CliRunner
 
 from flowtracker.fno_models import (
@@ -146,6 +147,7 @@ def test_fetch_command_empty_returns_exit_1(
 # ---------------------------------------------------------------------------
 
 
+@freeze_time("2026-04-17")
 def test_universe_refresh_shows_added(
     tmp_db: Path, store: FlowStore, monkeypatch
 ):
