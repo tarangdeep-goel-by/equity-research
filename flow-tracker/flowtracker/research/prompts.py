@@ -2309,3 +2309,40 @@ def _industry_to_sector_skill(industry: str | None) -> str | None:
         if keyword in industry_lower:
             return sector
     return None
+
+
+def detect_sector(symbol: str) -> str | None:
+    """Resolve the sector skill directory name for a symbol.
+
+    Mirrors the first-match dispatch that `build_specialist_prompt` uses
+    internally but exposed as a standalone function so other callers — notably
+    `workflow_verifier.check_trace` — can reason about (agent, sector) tuples
+    without rebuilding the prompt.
+
+    Cascade order and fallback match `build_specialist_prompt`:
+      1. `_SECTOR_DETECTORS` in priority order (holding → insurance → ... → it_services)
+      2. If no detector fires, `_industry_to_sector_skill` on the industry string
+      3. Conglomerate is additive — it wins only when nothing else did
+    """
+    try:
+        from flowtracker.research.data_api import ResearchDataAPI
+    except ImportError:
+        return None
+
+    try:
+        with ResearchDataAPI() as api:
+            for detector_name, sector_dir in _SECTOR_DETECTORS:
+                detector = getattr(api, detector_name, None)
+                if detector and detector(symbol):
+                    return sector_dir
+            # Fallback: industry-string mapping
+            industry = api._get_industry(symbol)
+            fallback = _industry_to_sector_skill(industry)
+            if fallback:
+                return fallback
+            # Conglomerate is additive; only emit if nothing else matched
+            if api._is_conglomerate(symbol):
+                return "conglomerate"
+    except Exception:  # noqa: BLE001 — detection is best-effort
+        return None
+    return None
