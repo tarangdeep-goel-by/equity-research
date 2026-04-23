@@ -723,6 +723,58 @@ class TestRenderSectorValuationScatter:
 
         assert render_sector_valuation_scatter("X", []) == ""
 
+    def test_explicit_y_metric_roa_uses_roa_and_labels_axis(self, tmp_path, monkeypatch):
+        """Explicit y_metric='roa_pct' plots ROA on the y-axis and labels it."""
+        from flowtracker.research import charts as charts_mod
+        from flowtracker.research.charts import render_sector_valuation_scatter
+
+        # Capture the ylabel the chart ends up setting.
+        labels: dict[str, str] = {}
+
+        class _FakeAx:
+            def scatter(self, *a, **k): pass
+            def annotate(self, *a, **k): pass
+            def axvline(self, *a, **k): pass
+            def axhline(self, *a, **k): pass
+            def text(self, *a, **k): pass
+            def set_xlabel(self, *a, **k): pass
+            def set_ylabel(self, s, *a, **k): labels["y"] = s
+            def set_title(self, *a, **k): pass
+            def legend(self, *a, **k): pass
+            def grid(self, *a, **k): pass
+            def get_xlim(self): return (0, 100)
+            def get_ylim(self): return (0, 100)
+
+        class _FakeFig:
+            def savefig(self, *a, **k): pass
+
+        monkeypatch.setattr(
+            charts_mod.plt, "subplots", lambda *a, **k: (_FakeFig(), _FakeAx())
+        )
+        monkeypatch.setattr(charts_mod.plt, "close", lambda *a, **k: None)
+        monkeypatch.setattr(charts_mod, "_chart_dir", lambda sym: tmp_path)
+
+        data = [
+            {"symbol": "HDFCBANK", "pe": 20, "roa_pct": 1.8, "mcap_cr": 1_000_000},
+            {"symbol": "ICICIBANK", "pe": 18, "roa_pct": 1.6, "mcap_cr": 800_000},
+            {"symbol": "SBIN", "pe": 12, "roa_pct": 1.1, "mcap_cr": 600_000},
+        ]
+        render_sector_valuation_scatter("HDFCBANK", data, y_metric="roa_pct")
+        assert "ROA" in labels["y"]
+
+    def test_falls_back_to_roce_when_roa_data_missing(self, tmp_path):
+        """If caller asks for ROA but data only has roce_pct, fall back rather than silent-fail."""
+        from flowtracker.research.charts import render_sector_valuation_scatter
+
+        data = [
+            {"symbol": "HDFCBANK", "pe": 20, "roce_pct": 14, "mcap_cr": 1_000_000},
+            {"symbol": "ICICIBANK", "pe": 18, "roce_pct": 16, "mcap_cr": 800_000},
+            {"symbol": "SBIN", "pe": 12, "roce_pct": 12, "mcap_cr": 600_000},
+        ]
+        # y_metric='roa_pct' with no roa_pct fields → fallback to roce_pct, chart renders
+        path = render_sector_valuation_scatter("HDFCBANK", data, y_metric="roa_pct")
+        _assert_png(path)
+
 
 class TestRenderSectorOwnershipFlow:
     def test_renders_png_additions_and_reductions(self, tmp_path):

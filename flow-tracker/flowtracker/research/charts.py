@@ -774,28 +774,80 @@ def render_sector_mcap_bar(symbol: str, ranked_data: list[dict]) -> str:
     return str(path)
 
 
-def render_sector_valuation_scatter(symbol: str, ranked_data: list[dict]) -> str:
-    """Scatter plot of PE vs ROCE for all stocks in the sector.
+# Sectors for which ROCE is a misleading profitability metric — the chart's
+# y-axis should fall back to ROA instead. ROCE treats deposits as "capital
+# employed" and interest paid as the cost of capital, both of which don't
+# line up with how a bank or NBFC actually generates returns.
+_BFSI_Y_METRIC_SECTORS = frozenset({
+    "bfsi", "private_bank", "broker", "amc", "exchange",
+    "gold_loan", "microfinance", "insurance",
+})
 
-    Quadrants: high ROCE + low PE = bargain, low ROCE + high PE = avoid.
+
+def _resolve_quality_metric(symbol: str, y_metric: str | None) -> str:
+    """Pick the y-axis quality metric. Explicit override wins; else sector."""
+    if y_metric:
+        return y_metric
+    try:
+        from flowtracker.research.prompts import detect_sector
+        sector = detect_sector(symbol)
+        if sector in _BFSI_Y_METRIC_SECTORS:
+            return "roa_pct"
+    except Exception:  # noqa: BLE001 — detection is best-effort; default to roce
+        pass
+    return "roce_pct"
+
+
+def render_sector_valuation_scatter(
+    symbol: str,
+    ranked_data: list[dict],
+    *,
+    y_metric: str | None = None,
+) -> str:
+    """Scatter plot of PE vs a quality metric (ROCE or ROA) for the sector.
+
+    Quadrants: high quality + low PE = bargain, low quality + high PE = avoid.
     Highlights the subject stock.
-    ranked_data: list of {symbol, pe, roce_pct, mcap_cr, ...}.
+
+    y_metric:
+      * ``"roce_pct"`` (default non-BFSI) — capital efficiency.
+      * ``"roa_pct"`` (auto-selected for BFSI sectors) — asset efficiency,
+        the right quality lens for banks/NBFCs where ROCE is meaningless.
+      * ``None`` — auto-detect via :func:`prompts.detect_sector`.
+
+    ranked_data must contain the selected metric; rows where it is missing
+    are skipped. Returns the written file path, or "" when there's too
+    little data to plot.
     """
     if not ranked_data or len(ranked_data) < 2:
         return ""
 
-    # Filter stocks with valid PE and ROCE
+    metric = _resolve_quality_metric(symbol, y_metric)
+
+    # Filter stocks with valid PE and the chosen quality metric
     valid = [d for d in ranked_data
-             if d.get("pe") and d.get("roce_pct")
-             and float(d["pe"]) > 0 and float(d["roce_pct"]) > 0]
+             if d.get("pe") and d.get(metric)
+             and float(d["pe"]) > 0 and float(d[metric]) > 0]
+
+    # Fallback: if BFSI-preferred ROA coverage is too thin (e.g., screener
+    # hasn't populated bfsi_roa_pct for enough peers), retry with ROCE so
+    # we still emit a chart rather than silently failing.
+    if len(valid) < 2 and metric != "roce_pct":
+        metric = "roce_pct"
+        valid = [d for d in ranked_data
+                 if d.get("pe") and d.get(metric)
+                 and float(d["pe"]) > 0 and float(d[metric]) > 0]
+
     if len(valid) < 2:
         return ""
+
+    metric_label = "ROA" if metric == "roa_pct" else "ROCE"
 
     fig, ax = plt.subplots(figsize=(10, 7))
 
     for d in valid:
         pe = float(d["pe"])
-        roce = float(d["roce_pct"])
+        quality = float(d[metric])
         mcap = float(d.get("mcap_cr", 1))
         sym = d.get("symbol", "?")
         is_subject = sym == symbol.upper()
@@ -805,32 +857,33 @@ def render_sector_valuation_scatter(symbol: str, ranked_data: list[dict]) -> str
         alpha = 1.0 if is_subject else 0.6
         zorder = 10 if is_subject else 5
 
-        ax.scatter(pe, roce, s=size, c=color, alpha=alpha, edgecolors=_TEXT if is_subject else _GRID,
+        ax.scatter(pe, quality, s=size, c=color, alpha=alpha, edgecolors=_TEXT if is_subject else _GRID,
                    linewidths=2 if is_subject else 0.5, zorder=zorder)
-        ax.annotate(sym, (pe, roce), textcoords="offset points", xytext=(6, 6),
+        ax.annotate(sym, (pe, quality), textcoords="offset points", xytext=(6, 6),
                     fontsize=8 if not is_subject else 10,
                     fontweight="bold" if is_subject else "normal",
                     color=_TEXT, alpha=0.9 if is_subject else 0.7)
 
     # Median lines for quadrant boundaries
     pes = [float(d["pe"]) for d in valid]
-    roces = [float(d["roce_pct"]) for d in valid]
+    qualities = [float(d[metric]) for d in valid]
     med_pe = sorted(pes)[len(pes) // 2]
-    med_roce = sorted(roces)[len(roces) // 2]
+    med_quality = sorted(qualities)[len(qualities) // 2]
 
     ax.axvline(med_pe, color=_YELLOW, linestyle="--", alpha=0.4, label=f"Median PE: {med_pe:.1f}")
-    ax.axhline(med_roce, color=_GREEN, linestyle="--", alpha=0.4, label=f"Median ROCE: {med_roce:.1f}%")
+    ax.axhline(med_quality, color=_GREEN, linestyle="--", alpha=0.4,
+               label=f"Median {metric_label}: {med_quality:.1f}%")
 
     # Quadrant labels
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
-    ax.text(xlim[0] + (med_pe - xlim[0]) * 0.5, ylim[1] - (ylim[1] - med_roce) * 0.15,
-            "BARGAIN\n(Low PE, High ROCE)", ha="center", fontsize=9, color=_GREEN, alpha=0.6)
-    ax.text(xlim[1] - (xlim[1] - med_pe) * 0.5, ylim[0] + (med_roce - ylim[0]) * 0.15,
-            "AVOID\n(High PE, Low ROCE)", ha="center", fontsize=9, color=_RED, alpha=0.6)
+    ax.text(xlim[0] + (med_pe - xlim[0]) * 0.5, ylim[1] - (ylim[1] - med_quality) * 0.15,
+            f"BARGAIN\n(Low PE, High {metric_label})", ha="center", fontsize=9, color=_GREEN, alpha=0.6)
+    ax.text(xlim[1] - (xlim[1] - med_pe) * 0.5, ylim[0] + (med_quality - ylim[0]) * 0.15,
+            f"AVOID\n(High PE, Low {metric_label})", ha="center", fontsize=9, color=_RED, alpha=0.6)
 
     ax.set_xlabel("PE Ratio (lower = cheaper)", fontsize=11)
-    ax.set_ylabel("ROCE % (higher = better quality)", fontsize=11)
+    ax.set_ylabel(f"{metric_label} % (higher = better quality)", fontsize=11)
     ax.set_title(f"Sector Valuation vs Quality — {symbol}'s Industry",
                  fontsize=14, fontweight="bold", pad=12)
     ax.legend(loc="upper right", fontsize=9)
