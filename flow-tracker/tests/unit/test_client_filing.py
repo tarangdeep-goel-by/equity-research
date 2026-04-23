@@ -710,18 +710,115 @@ class TestDownloadFiling:
             subcategory="Analyst Meet - Intimation",
             attachment_name="cached.pdf",
             filing_date="2026-01-25",
-            file_size=1000,
+            file_size=2000,
         )
         target_dir = tmp_path / "INDIAMART" / "filings" / "FY26-Q3"
         target_dir.mkdir(parents=True)
         target = target_dir / "concall.pdf"
-        target.write_bytes(b"x" * 1000)
+        target.write_bytes(b"x" * 2000)  # > 1KB to pass size sanity check
 
         with respx.mock:
             # No HTTP call should be made
             with FilingClient() as client:
                 result = client.download_filing(filing, base_dir=tmp_path)
         assert result == target
+
+    def test_existing_fresh_file_returned_without_download(self, tmp_path: Path):
+        """Fresh (mtime < 30 days), non-corrupt (size > 1KB) → returns cached path, no HTTP."""
+        filing = _make_filing(
+            headline="Concall transcript Q3",
+            subcategory="Earnings Call Transcript",
+            attachment_name="fresh.pdf",
+            filing_date="2026-01-25",
+        )
+        target_dir = tmp_path / "INDIAMART" / "filings" / "FY26-Q3"
+        target_dir.mkdir(parents=True)
+        target = target_dir / "concall.pdf"
+        target.write_bytes(b"%PDF" + b"x" * 2000)  # > 1KB
+
+        with respx.mock:
+            # No routes defined — any HTTP call would raise
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        assert result == target
+
+    def test_existing_stale_file_warns_but_reuses(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+    ):
+        """Stale (mtime > 30 days) → return cached path + WARNING logged."""
+        import os
+        import time as _time
+
+        filing = _make_filing(
+            headline="Concall transcript Q3",
+            subcategory="Earnings Call Transcript",
+            attachment_name="stale.pdf",
+            filing_date="2026-01-25",
+        )
+        target_dir = tmp_path / "INDIAMART" / "filings" / "FY26-Q3"
+        target_dir.mkdir(parents=True)
+        target = target_dir / "concall.pdf"
+        target.write_bytes(b"%PDF" + b"x" * 2000)
+        # Backdate mtime to 45 days ago
+        old_ts = _time.time() - (45 * 86400)
+        os.utime(target, (old_ts, old_ts))
+
+        with respx.mock:
+            with caplog.at_level("WARNING", logger="flowtracker.filing_client"):
+                with FilingClient() as client:
+                    result = client.download_filing(filing, base_dir=tmp_path)
+        assert result == target
+        assert any("stale" in r.message.lower() for r in caplog.records)
+
+    def test_force_refresh_bypasses_cache(self, tmp_path: Path):
+        """force_refresh=True → HTTP call made even with fresh cache."""
+        filing = _make_filing(
+            headline="Concall transcript Q3",
+            subcategory="Earnings Call Transcript",
+            attachment_name="refresh.pdf",
+            filing_date="2026-01-25",
+        )
+        target_dir = tmp_path / "INDIAMART" / "filings" / "FY26-Q3"
+        target_dir.mkdir(parents=True)
+        target = target_dir / "concall.pdf"
+        target.write_bytes(b"%PDF" + b"old" * 1000)
+
+        new_content = b"%PDF" + b"new" * 1000
+        with respx.mock:
+            route = respx.get(url__regex=r"AttachLive/refresh\.pdf").respond(
+                200, content=new_content,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(
+                    filing, base_dir=tmp_path, force_refresh=True,
+                )
+        assert result == target
+        assert route.called
+        assert target.read_bytes() == new_content
+
+    def test_corrupt_small_file_triggers_redownload(self, tmp_path: Path):
+        """Existing file < 1KB → treat as cache miss and re-download."""
+        filing = _make_filing(
+            headline="Concall transcript Q3",
+            subcategory="Earnings Call Transcript",
+            attachment_name="small.pdf",
+            filing_date="2026-01-25",
+        )
+        target_dir = tmp_path / "INDIAMART" / "filings" / "FY26-Q3"
+        target_dir.mkdir(parents=True)
+        target = target_dir / "concall.pdf"
+        target.write_bytes(b"tinycorrupt")  # < 1024 bytes
+
+        new_content = b"%PDF" + b"full" * 500
+        with respx.mock:
+            route = respx.get(url__regex=r"AttachLive/small\.pdf").respond(
+                200, content=new_content,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        assert result == target
+        assert route.called
+        assert target.read_bytes() == new_content
 
 
 class TestDownloadUrl:
