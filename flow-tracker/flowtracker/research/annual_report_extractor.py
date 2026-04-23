@@ -497,8 +497,14 @@ Return ONLY JSON:
 
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
-    max_budget: float = 0.40, max_turns: int = 1,
+    max_budget: float = 0.40, max_turns: int = 3,
 ) -> str:
+    # max_turns=3 (not 1): for sections like BHARTIARTL's segmental — many
+    # Africa country breakdowns + India segments — the JSON output exceeds the
+    # model's single-turn output budget (~8K tokens) and the response is
+    # truncated. With max_turns=1 the CLI returns error_max_turns; with 3 the
+    # model continues across turns. Non-truncating sections still finish in
+    # one turn, so the extra headroom is free.
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         max_turns=max_turns,

@@ -639,9 +639,12 @@ Rules:
 
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
-    max_budget: float = 0.50, max_turns: int = 1,
+    max_budget: float = 0.50, max_turns: int = 3,
     output_format: dict | None = None,
 ) -> str:
+    # max_turns=3 lets the model continue across turns when a section's JSON
+    # output exceeds the single-turn budget (see annual_report_extractor for
+    # the full rationale — same failure mode, same fix).
     """Call Claude via Agent SDK. Handles the TextBlock fallback for empty ResultMessage."""
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,

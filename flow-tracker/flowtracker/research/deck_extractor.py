@@ -188,9 +188,11 @@ Rules:
 
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
-    max_budget: float = 0.40, max_turns: int = 1,
+    max_budget: float = 0.40, max_turns: int = 3,
     output_format: dict | None = None,
 ) -> str:
+    # max_turns=3 — see annual_report_extractor for rationale (large JSON
+    # output can overflow a single turn → error_max_turns → exit code 1).
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         max_turns=max_turns,
