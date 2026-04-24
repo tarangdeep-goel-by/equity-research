@@ -1,0 +1,61 @@
+{
+  "description": "autoagent-pilot widened — 16 stocks across 8 sector_skill cells (2 stocks each). Each pair shares the same sector_skill directory so L3/L4 prompt edits have ≥2 stocks of evidence before being allowed.",
+  "cells": [
+    {
+      "sector_skill": "bfsi",
+      "pairs": [
+        {"eval_matrix_key": "bfsi",     "stock": "SBIN"},
+        {"eval_matrix_key": "bfsi_bob", "stock": "BANKBARODA"}
+      ]
+    },
+    {
+      "sector_skill": "private_bank",
+      "pairs": [
+        {"eval_matrix_key": "private_bank",       "stock": "HDFCBANK"},
+        {"eval_matrix_key": "private_bank_icici", "stock": "ICICIBANK"}
+      ]
+    },
+    {
+      "sector_skill": "pharma",
+      "pairs": [
+        {"eval_matrix_key": "pharma",     "stock": "SUNPHARMA"},
+        {"eval_matrix_key": "pharma_drl", "stock": "DRREDDY"}
+      ]
+    },
+    {
+      "sector_skill": "it_services",
+      "pairs": [
+        {"eval_matrix_key": "it_services",       "stock": "TCS"},
+        {"eval_matrix_key": "it_services_infy", "stock": "INFY"}
+      ]
+    },
+    {
+      "sector_skill": "metals",
+      "pairs": [
+        {"eval_matrix_key": "metals",      "stock": "VEDL"},
+        {"eval_matrix_key": "metals_hind", "stock": "HINDALCO"}
+      ]
+    },
+    {
+      "sector_skill": "fmcg",
+      "pairs": [
+        {"eval_matrix_key": "fmcg",      "stock": "HINDUNILVR"},
+        {"eval_matrix_key": "fmcg_nest", "stock": "NESTLEIND"}
+      ]
+    },
+    {
+      "sector_skill": "platform",
+      "pairs": [
+        {"eval_matrix_key": "platform",        "stock": "ETERNAL"},
+        {"eval_matrix_key": "platform_nykaa", "stock": "NYKAA"}
+      ]
+    },
+    {
+      "sector_skill": "insurance",
+      "pairs": [
+        {"eval_matrix_key": "insurance",      "stock": "POLICYBZR"},
+        {"eval_matrix_key": "insurance_hdfc", "stock": "HDFCLIFE"}
+      ]
+    }
+  ]
+}
