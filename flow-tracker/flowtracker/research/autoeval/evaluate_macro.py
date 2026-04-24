@@ -209,7 +209,8 @@ async def eval_macro_report(
     opts = ClaudeAgentOptions(
         system_prompt=system_prompt,
         model="gemini-3.1-pro-preview",
-        setting_sources=[],
+        # [""] workaround for SDK #794 — see extractors for full rationale.
+        setting_sources=[""],
         plugins=[],
     )
 

@@ -235,20 +235,28 @@ class TestRunSpecialistRetry:
 
 
 class TestSpecialistOptionsIsolation:
-    """Fix 2: _run_specialist must construct ClaudeAgentOptions with
-    setting_sources=[] and plugins=[] to isolate its subprocess from user
-    hooks/plugins/skills."""
+    """_run_specialist and _extract_briefing must construct ClaudeAgentOptions
+    with setting_sources=[""] and plugins=[] to isolate their subprocesses
+    from user hooks/plugins/skills.
 
-    def test_setting_sources_empty_in_run_specialist(self):
+    [""] (not []) is the SDK #794 workaround — empty list is falsy and the
+    --setting-sources flag never reaches the CLI, letting
+    ~/.claude/settings.json hooks leak in.
+    https://github.com/anthropics/claude-agent-sdk-python/issues/794
+    """
+
+    def test_setting_sources_workaround_in_run_specialist(self):
         import inspect
 
         src = inspect.getsource(agent_mod._run_specialist)
-        assert "setting_sources=[]" in src
+        assert 'setting_sources=[""]' in src
+        assert "setting_sources=[]" not in src
         assert "plugins=[]" in src
 
-    def test_setting_sources_empty_in_extract_briefing(self):
+    def test_setting_sources_workaround_in_extract_briefing(self):
         import inspect
 
         src = inspect.getsource(agent_mod._extract_briefing)
-        assert "setting_sources=[]" in src
+        assert 'setting_sources=[""]' in src
+        assert "setting_sources=[]" not in src
         assert "plugins=[]" in src
