@@ -28,6 +28,11 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "liquidity_coverage_ratio_pct", "label": "LCR %", "unit": "pct", "description": "Liquidity Coverage Ratio", "aliases": ["lcr_pct", "lcr"]},
             {"key": "cost_to_income_ratio_pct", "label": "Cost to Income %", "unit": "pct", "description": "Operating expenses divided by net total income", "aliases": ["c_to_i_pct", "cost_income_ratio", "c_i_ratio"]},
             {"key": "roau_pct", "label": "ROA %", "unit": "pct", "description": "Annualized net profit divided by average total assets", "aliases": ["roa_pct", "roa", "return_on_assets_pct"]},
+            # Tier-2 additions 2026-04-24 per Gemini review — deposit-war + RBI scrutiny focus
+            {"key": "cd_ratio_pct", "label": "Credit-to-Deposit Ratio %", "unit": "pct", "description": "Total advances divided by total deposits — RBI is hammering private banks on elevated C/D", "aliases": ["credit_deposit_ratio_pct", "c_d_ratio_pct"]},
+            {"key": "retail_deposit_growth_pct", "label": "Retail Deposit Growth %", "unit": "pct", "description": "YoY growth in granular low-cost retail deposits (the scarcity resource in the current cycle)"},
+            {"key": "recoveries_and_upgrades_cr", "label": "Recoveries & Upgrades", "unit": "cr", "description": "Gross recoveries + upgrades from NPAs in crores — needed to compute net slippages"},
+            {"key": "ridf_shortfall_cr", "label": "RIDF/PSL Shortfall", "unit": "cr", "description": "Priority Sector Lending shortfall parked in RIDF bonds (yield drag for private banks)"},
         ],
     },
     "nbfcs": {
@@ -43,6 +48,11 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "credit_cost_pct", "label": "Credit Cost %", "unit": "pct", "description": "ECL provisions as % of average AUM"},
             {"key": "capital_adequacy_ratio_pct", "label": "CRAR %", "unit": "pct", "description": "Total Capital Adequacy Ratio"},
             {"key": "cost_to_income_ratio_pct", "label": "Cost to Income %", "unit": "pct", "description": "Operating expenses divided by total net income"},
+            # Tier-2 additions 2026-04-24 per Gemini review — IndAS + capital-light growth signals
+            {"key": "co_lending_aum_cr", "label": "Co-Lending AUM", "unit": "cr", "description": "Co-lending / direct-assignment AUM in crores — how NBFCs manage capital efficiency"},
+            {"key": "off_book_aum_pct", "label": "Off-Book AUM %", "unit": "pct", "description": "Securitized / direct-assignment off-book AUM as % of total AUM"},
+            {"key": "bt_out_rate_pct", "label": "BT-Out Rate %", "unit": "pct", "description": "Balance-Transfer-Out attrition rate (housing/credit card). Elevated BT-out = pricing pressure"},
+            {"key": "stage_2_assets_pct", "label": "Stage 2 Assets %", "unit": "pct", "description": "SMA-1/SMA-2 Stage 2 assets as % of AUM — early-warning leading indicator over Stage 3"},
         ],
     },
     "insurance": {
@@ -58,6 +68,12 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "combined_ratio_pct", "label": "Combined Ratio %", "unit": "pct", "description": "(General) Sum of loss ratio and expense ratio"},
             {"key": "loss_ratio_pct", "label": "Loss Ratio %", "unit": "pct", "description": "(General) Net incurred claims / net earned premium"},
             {"key": "solvency_ratio_times", "label": "Solvency Ratio", "unit": "ratio", "description": "Available solvency margin / required solvency margin (min 1.5x)"},
+            # Tier-2 additions 2026-04-24 per Gemini review — product mix drives VNB margin
+            {"key": "product_mix_ulip_pct", "label": "ULIP Mix %", "unit": "pct", "description": "(Life) Unit-Linked Insurance Plans as % of APE"},
+            {"key": "product_mix_nonpar_pct", "label": "Non-Par Mix %", "unit": "pct", "description": "(Life) Non-Par savings as % of APE (highest-margin segment)"},
+            {"key": "product_mix_protection_pct", "label": "Protection Mix %", "unit": "pct", "description": "(Life) Pure-protection plans as % of APE"},
+            {"key": "motor_od_loss_ratio_pct", "label": "Motor OD Loss Ratio %", "unit": "pct", "description": "(General) Own-Damage claims / OD earned premium"},
+            {"key": "motor_tp_loss_ratio_pct", "label": "Motor TP Loss Ratio %", "unit": "pct", "description": "(General) Third-Party claims / TP earned premium"},
         ],
     },
     "it_services": {
@@ -72,6 +88,10 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "offshore_revenue_mix_pct", "label": "Offshore Mix %", "unit": "pct", "description": "% of effort/revenue delivered from offshore (India)"},
             {"key": "active_clients_number", "label": "Active Clients", "unit": "number", "description": "Total active billing clients"},
             {"key": "ebit_margin_pct", "label": "EBIT Margin %", "unit": "pct", "description": "Operating profit margin before interest and taxes"},
+            # Tier-2 additions 2026-04-24 per Gemini review — GenAI + pyramid + concentration
+            {"key": "genai_pipeline_usd_mn", "label": "GenAI Pipeline", "unit": "usd_mn", "description": "Disclosed GenAI deal pipeline or TCV in USD Millions — PoC→production conversion is the current theme"},
+            {"key": "fresher_additions_number", "label": "Fresher Additions", "unit": "number", "description": "Gross campus/fresher hires this quarter — leading indicator of demand visibility vs lagging headcount"},
+            {"key": "top_5_client_growth_pct", "label": "Top-5 Client Growth %", "unit": "pct", "description": "Revenue growth from top-5 clients — concentration risk + BFSI discretionary-spend sensitivity"},
         ],
     },
     "pharma": {
@@ -90,10 +110,16 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "usfda_facility_status", "label": "USFDA Facility Status", "unit": "string", "description": "Current USFDA inspection status for manufacturing facilities. Expected values: 'active_no_observations' | '483s_open' | 'warning_letter' | 'unknown'", "aliases": ["us_fda_status", "fda_status", "usfda_status"]},
             {"key": "anda_approvals_ltm", "label": "ANDA Approvals (LTM)", "unit": "number", "description": "Trailing twelve month count of ANDA approvals from US FDA", "aliases": ["anda_approvals_ttm", "anda_approvals_trailing"]},
             {"key": "key_molecule_pipeline", "label": "Key Molecule Pipeline", "unit": "list", "description": "List of strategic molecules in pipeline with optional launch dates (expect list of strings or {name, launch_date} objects)", "aliases": ["molecule_pipeline", "pipeline_molecules", "key_pipeline"]},
+            # Tier-2 additions 2026-04-24 per Gemini review — pure formulations is dead money; CDMO + biosimilars drive multiples
+            {"key": "cdmo_revenue_cr", "label": "CDMO Revenue", "unit": "cr", "description": "Contract Development & Manufacturing revenue in crores (Divi's, Syngene, Suven) — premium-multiple segment"},
+            {"key": "biosimilar_market_share_pct", "label": "Biosimilar Market Share %", "unit": "pct", "description": "Market share in key biosimilar molecule (US/EU) — critical for Biocon, Dr. Reddy's"},
+            {"key": "complex_generics_mix_pct", "label": "Complex Generics Mix %", "unit": "pct", "description": "Complex generics / specialty / injectables as % of revenue (vs plain vanilla generics)"},
         ],
     },
     "fmcg": {
-        "industries": ["FMCG", "Consumer Food", "Household & Personal Products", "Packaged Foods", "Beverages - Non-Alcoholic"],
+        # Personal Products mapped here (HUL, Godrej Consumer etc.) per 2026-04-24
+        # correction — was falling through to no-sector previously.
+        "industries": ["FMCG", "Consumer Food", "Household & Personal Products", "Packaged Foods", "Beverages - Non-Alcoholic", "Personal Products"],
         "kpis": [
             {"key": "underlying_volume_growth_pct", "label": "Volume Growth %", "unit": "pct", "description": "YoY growth in actual units sold, stripping out price/mix", "aliases": ["uvg_pct", "uvg", "volume_growth_pct"]},
             {"key": "price_led_growth_pct", "label": "Price/Mix Growth %", "unit": "pct", "description": "Revenue growth from price hikes or premiumization", "aliases": ["price_growth_pct", "price_mix_growth_pct"]},
@@ -103,14 +129,16 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "advertising_and_promotion_spend_pct", "label": "A&P Spend %", "unit": "pct", "description": "Ad and promotion expenses as % of revenue"},
             {"key": "direct_reach_outlets_number", "label": "Direct Reach", "unit": "number", "description": "Retail outlets directly serviced by distributors"},
             {"key": "new_product_contribution_pct", "label": "NPD Contribution %", "unit": "pct", "description": "% of sales from new product launches"},
-            # E13 additions — canonical short-form keys + channel split
-            {"key": "uvg_pct", "label": "UVG %", "unit": "pct", "description": "Underlying volume growth % (short-form canonical; see also underlying_volume_growth_pct)", "aliases": ["underlying_volume_growth_pct", "volume_growth_pct"]},
-            {"key": "price_growth_pct", "label": "Price Growth %", "unit": "pct", "description": "Price-led growth % (short-form canonical; see also price_led_growth_pct)", "aliases": ["price_led_growth_pct", "price_mix_growth_pct"]},
             {"key": "channel_gt_pct", "label": "General Trade %", "unit": "pct", "description": "General Trade share of sales (kirana / traditional distribution)", "aliases": ["gt_pct", "general_trade_pct", "gt_share_pct"]},
             {"key": "channel_mt_pct", "label": "Modern Trade %", "unit": "pct", "description": "Modern Trade share of sales (supermarkets / hypermarkets)", "aliases": ["mt_pct", "modern_trade_pct", "mt_share_pct"]},
             {"key": "channel_ecom_pct", "label": "E-Commerce %", "unit": "pct", "description": "E-commerce / online share of sales", "aliases": ["ecom_pct", "ecommerce_pct", "online_pct", "d2c_pct"]},
-            {"key": "rural_growth_pct", "label": "Rural Growth % (short)", "unit": "pct", "description": "Rural growth % short-form canonical (see also rural_revenue_growth_pct)", "aliases": ["rural_revenue_growth_pct"]},
-            {"key": "urban_growth_pct", "label": "Urban Growth % (short)", "unit": "pct", "description": "Urban growth % short-form canonical (see also urban_revenue_growth_pct)", "aliases": ["urban_revenue_growth_pct"]},
+            # Tier-2 additions 2026-04-24 per Gemini review — Q-com salience + bottom-line margin
+            # Also: dropped short-form duplicate keys uvg_pct / price_growth_pct /
+            # rural_growth_pct / urban_growth_pct (moved into aliases of their
+            # long-form canonical counterparts). Schema now has a single canonical
+            # key per concept — prevents DB normalization headaches downstream.
+            {"key": "qcom_salience_pct", "label": "Q-Com Salience %", "unit": "pct", "description": "Quick-commerce (Blinkit/Zepto/Instamart/BB Now) revenue as % of total — the #1 topic on every FMCG concall", "aliases": ["quick_commerce_salience_pct", "qcom_mix_pct", "q_commerce_pct"]},
+            {"key": "ebitda_margin_pct", "label": "EBITDA Margin %", "unit": "pct", "description": "Operating EBITDA margin post A&P — the actual bottom-line driver (gross margin alone misses A&P flex)"},
         ],
     },
     "auto": {
@@ -124,6 +152,11 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "ev_sales_mix_pct", "label": "EV Mix %", "unit": "pct", "description": "Electric Vehicles as % of total volumes"},
             {"key": "export_volumes_number", "label": "Export Volumes", "unit": "number", "description": "Total units exported"},
             {"key": "raw_material_cost_pct", "label": "RM Cost %", "unit": "pct", "description": "Raw material cost as % of sales"},
+            # Tier-2 additions 2026-04-24 per Gemini review — segment-specific EV + tractors + weeks not days
+            {"key": "ev_2w_mix_pct", "label": "EV 2W Mix %", "unit": "pct", "description": "Electric 2-wheelers as % of 2W volumes (Bajaj, TVS, Hero, Ola) — blended EV mix is useless across segments"},
+            {"key": "ev_pv_mix_pct", "label": "EV PV Mix %", "unit": "pct", "description": "Electric passenger vehicles as % of PV volumes (Tata Motors, M&M, Hyundai)"},
+            {"key": "tractor_volumes_number", "label": "Tractor Volumes", "unit": "number", "description": "Tractor units sold (Escorts, M&M) — decoupled from PV/CV cycles, driven by monsoon + MSP"},
+            {"key": "dealer_inventory_weeks", "label": "Dealer Inventory Weeks", "unit": "weeks", "description": "Dealer inventory in weeks (Indian OEMs guide in weeks, not days; FADA reports in days) — convert if needed", "aliases": ["channel_inventory_weeks"]},
         ],
     },
     "cement": {
@@ -137,6 +170,9 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "trade_sales_mix_pct", "label": "Trade Mix %", "unit": "pct", "description": "% of sales through dealer/retail (B2C) vs institutional (B2B)"},
             {"key": "premium_product_mix_pct", "label": "Premium Mix %", "unit": "pct", "description": "% of trade sales from premium brands"},
             {"key": "green_energy_share_pct", "label": "Green Power %", "unit": "pct", "description": "% of power from WHRS, Solar, Wind"},
+            # Tier-2 additions 2026-04-24 per Gemini review — regional pricing + clinker bottleneck
+            {"key": "regional_dominant_mix_pct", "label": "Dominant Region Mix %", "unit": "pct", "description": "Largest-region volume share (N/S/E/W/Central) — Indian cement pricing is regional, so sensitivity to that region's pricing cycle is key"},
+            {"key": "clinker_capacity_utilization_pct", "label": "Clinker Capacity Utilization %", "unit": "pct", "description": "Clinker production as % of installed clinker capacity — clinker is the true bottleneck; grinding is easily added"},
         ],
     },
     "metals_and_mining": {
@@ -149,6 +185,9 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "ebitda_per_ton_rs", "label": "EBITDA per Ton", "unit": "rs", "description": "EBITDA / sales volume"},
             {"key": "value_added_products_mix_pct", "label": "VAP Mix %", "unit": "pct", "description": "% of sales from Value Added Products"},
             {"key": "net_debt_cr", "label": "Net Debt", "unit": "cr", "description": "Total borrowings minus cash in crores"},
+            # Tier-2 additions 2026-04-24 per Gemini review — steel margin driver + Coal India e-auction
+            {"key": "coking_coal_cost_usd_per_ton", "label": "Coking Coal Cost", "unit": "usd_per_ton", "description": "Landed coking coal cost per ton — single biggest variable for Tata Steel / JSW Steel margins"},
+            {"key": "e_auction_premium_pct", "label": "E-Auction Premium %", "unit": "pct", "description": "(Coal India) E-auction realization premium over FSA — drives the earnings beats"},
         ],
     },
     "real_estate": {
@@ -163,6 +202,11 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "unsold_inventory_mn_sqft", "label": "Unsold Inventory", "unit": "mn_sqft", "description": "Pending inventory available for sale"},
             {"key": "operating_cash_flow_cr", "label": "Operating Cash Flow", "unit": "cr", "description": "Collections minus construction/opex"},
             {"key": "net_debt_cr", "label": "Net Debt", "unit": "cr", "description": "Gross debt minus cash"},
+            # Tier-2 additions 2026-04-24 per Gemini review — margin on unsold + BD replenishment + annuity
+            {"key": "inventory_months", "label": "Inventory Months", "unit": "months", "description": "Unsold inventory divided by TTM pre-sales run-rate — the canonical cycle indicator for Indian RE"},
+            {"key": "embedded_ebitda_margin_pct", "label": "Embedded EBITDA Margin %", "unit": "pct", "description": "EBITDA margin embedded in the pre-sales / unsold book — real story beyond headline pre-sales"},
+            {"key": "bd_addition_gdv_cr", "label": "BD Addition GDV", "unit": "cr", "description": "Business Development (land / JDA) additions' Gross Development Value — land bank replenishment is what the multiple trades on"},
+            {"key": "annuity_income_cr", "label": "Annuity Income", "unit": "cr", "description": "Rental / lease income from operational commercial assets (DLF, Macrotech, Phoenix) — separate from trading revenue"},
         ],
     },
     "telecom": {
@@ -176,10 +220,14 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "minutes_of_usage_mou", "label": "MOU", "unit": "minutes", "description": "Voice Minutes Of Usage per subscriber per month"},
             {"key": "network_capex_cr", "label": "Network Capex", "unit": "cr", "description": "Capex on towers, spectrum, fiber in crores"},
             # E13 additions — Africa subsidiary (Bharti Airtel / Africa Telecom)
-            {"key": "arpu_inr", "label": "ARPU (INR)", "unit": "inr", "description": "Average Revenue Per User per month in INR (short-form canonical; see also arpu_rs)", "aliases": ["arpu_rs", "arpu"]},
-            {"key": "subscribers_mn", "label": "Subscribers (Mn)", "unit": "mn", "description": "Active subscriber base in millions (short-form canonical; see also total_subscriber_base_mn)", "aliases": ["total_subscriber_base_mn", "total_subscribers_mn"]},
+            # Note: short-form duplicates `arpu_inr` / `subscribers_mn` dropped
+            # 2026-04-24; they lived on as aliases of `arpu_rs` / `total_subscriber_base_mn`.
             {"key": "africa_cc_growth_pct", "label": "Africa CC Growth %", "unit": "pct", "description": "Constant-currency revenue growth % for Africa subsidiary (YoY)", "aliases": ["africa_constant_currency_growth_pct", "africa_cc_revenue_growth_pct"]},
             {"key": "africa_fx_devaluation_pct", "label": "Africa FX Devaluation %", "unit": "pct", "description": "Local-currency devaluation % impacting Africa reported revenue (negative = headwind)", "aliases": ["africa_fx_impact_pct", "africa_currency_devaluation_pct"]},
+            # Tier-2 additions 2026-04-24 per Gemini review — FTTH + B2B + 5G capex split
+            {"key": "ftth_subs_mn", "label": "FTTH Subscribers", "unit": "mn", "description": "Home broadband / FTTH / wireline subscribers in millions (JioFiber, Airtel Xstream) — the ARPU-accretive growth segment", "aliases": ["fttx_subs_mn", "wireline_subs_mn", "home_broadband_subs_mn"]},
+            {"key": "enterprise_revenue_growth_pct", "label": "Enterprise Revenue Growth %", "unit": "pct", "description": "YoY growth in enterprise / B2B / digital services revenue — the hidden cash cow"},
+            {"key": "capex_5g_cr", "label": "5G Capex", "unit": "cr", "description": "5G-specific network capex in crores (separated from general network_capex_cr to track end of investment cycle)"},
         ],
     },
     "chemicals": {
@@ -192,6 +240,9 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "csm_revenue_mix_pct", "label": "CSM Revenue %", "unit": "pct", "description": "Revenue from Custom Synthesis & Manufacturing"},
             {"key": "new_products_commercialized_number", "label": "New Products Commercialized", "unit": "number", "description": "New molecules scaled to commercial production"},
             {"key": "capex_incurred_cr", "label": "Capex Incurred", "unit": "cr", "description": "Capex for capacity expansion in crores"},
+            # Tier-2 additions 2026-04-24 per Gemini review — destocking cycle + fluorine specialty
+            {"key": "inventory_days", "label": "Inventory Days", "unit": "days", "description": "Days of inventory on hand — agrochem destocking is the only thing moving this sector currently"},
+            {"key": "ebitda_per_kg_rs", "label": "EBITDA per Kg", "unit": "rs", "description": "EBITDA per kg of product sold — essential for refrigerant / fluorine specialty players (SRF, Navin Fluorine)"},
         ],
     },
     "power_and_utilities": {
@@ -204,6 +255,9 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "at_and_c_losses_pct", "label": "AT&C Losses %", "unit": "pct", "description": "(Discoms) Aggregate Technical & Commercial losses"},
             {"key": "merchant_sales_realization_rs_per_kwh", "label": "Merchant Realization", "unit": "rs", "description": "Per unit realization on power exchange"},
             {"key": "renewable_capacity_gw", "label": "Renewable Capacity", "unit": "gw", "description": "Installed renewable energy capacity in GW"},
+            # Tier-2 additions 2026-04-24 per Gemini review — merchant pricing + FGD mandate
+            {"key": "merchant_sales_mix_pct", "label": "Merchant Sales Mix %", "unit": "pct", "description": "Merchant / exchange sales (IEX) as % of total volume — IEX rates hitting Rs 10/unit; un-tied capacity is where operating leverage sits (Tata Power, JSW Energy)"},
+            {"key": "fgd_capex_cr", "label": "FGD Capex", "unit": "cr", "description": "Flue Gas Desulfurization capex in crores (regulatory mandate for thermal plants) — material capex drag until completion"},
         ],
     },
     "oil_and_gas": {
@@ -216,6 +270,9 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "marketing_margin_rs_per_liter", "label": "Marketing Margin", "unit": "rs", "description": "(OMCs) Retail margin per liter of petrol/diesel"},
             {"key": "petrochemical_production_kmt", "label": "Petchem Production", "unit": "kmt", "description": "Petrochemical production volume in KMT"},
             {"key": "cgd_sales_volume_mmscmd", "label": "CGD Volume", "unit": "mmscmd", "description": "(City Gas) CNG + PNG sales in MMSCMD"},
+            # Tier-2 additions 2026-04-24 per Gemini review — OMC inventory swing + govt under-recoveries
+            {"key": "inventory_gain_loss_cr", "label": "Inventory Gain/Loss", "unit": "cr", "description": "Crude inventory revaluation P&L impact in crores — drives most headline EBITDA beats/misses for IOCL, BPCL, HPCL"},
+            {"key": "marketing_under_recovery_cr", "label": "Marketing Under-Recovery", "unit": "cr", "description": "Under-recovery on retail petrol/diesel sales in crores — material when govt freezes fuel prices (pre-elections)"},
         ],
     },
     # --- Added 2026-04-24 per Gemini review — covers ~30% of Nifty 500 mcap
@@ -256,12 +313,15 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "retail": {
+        # Note: "Personal Products" is NOT here — HUL/Godrej Consumer are FMCG
+        # (consumer staples), not retail. Nykaa-type beauty retail is covered by
+        # "Beauty & Personal Care" which is kept below.
         "industries": [
             "Retailing", "Department Stores", "Speciality Retail", "Specialty Retail",
             "Restaurants & Cafes", "Restaurants",
             "Textiles - Apparel", "Apparel Retail",
             "Consumer Staples Distribution & Retail",
-            "Personal Products", "Beauty & Personal Care",
+            "Beauty & Personal Care",
         ],
         "kpis": [
             {"key": "sssg_pct", "label": "SSSG %", "unit": "pct", "description": "Same-Store Sales Growth YoY — the headline retail metric"},

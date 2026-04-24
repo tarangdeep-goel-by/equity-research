@@ -103,8 +103,14 @@ class TestPharmaKpisInCanonicalList:
 # E13 — FMCG new canonical keys
 # ---------------------------------------------------------------------------
 class TestFmcgKpisInCanonicalList:
-    """FMCG must register uvg_pct, price_growth_pct, channel_gt/mt/ecom_pct,
-    rural_growth_pct, urban_growth_pct as canonical keys."""
+    """FMCG must register all these keys as either canonical or alias.
+
+    The short-form canonical duplicates (`uvg_pct`, `price_growth_pct`,
+    `rural_growth_pct`, `urban_growth_pct`) were dropped 2026-04-24 and
+    moved to aliases of their long-form counterparts. The test checks the
+    UNION of canonical + aliases so lookup-side code that still uses short
+    forms continues to work (once PR-C wires alias normalization).
+    """
 
     _REQUIRED = (
         "uvg_pct",
@@ -116,25 +122,37 @@ class TestFmcgKpisInCanonicalList:
         "urban_growth_pct",
     )
 
-    def test_fmcg_kpis_in_canonical_list(self):
+    @staticmethod
+    def _all_lookup_keys(kpis: list[dict]) -> set[str]:
+        keys: set[str] = set()
+        for kpi in kpis:
+            keys.add(kpi["key"])
+            keys.update(kpi.get("aliases") or [])
+        return keys
+
+    def test_fmcg_kpis_in_canonical_or_alias(self):
         fmcg = SECTOR_KPI_CONFIG["fmcg"]["kpis"]
-        canonical_keys = {k["key"] for k in fmcg}
+        lookup = self._all_lookup_keys(fmcg)
         for required in self._REQUIRED:
-            assert required in canonical_keys, f"fmcg canonical KPIs missing '{required}'"
+            assert required in lookup, f"fmcg missing '{required}' (as canonical or alias)"
 
     def test_fmcg_keys_resolve_via_industry(self):
-        keys = get_kpi_keys_for_industry("FMCG")
-        assert keys is not None
+        kpis = get_kpis_for_industry("FMCG")
+        assert kpis is not None
+        lookup = self._all_lookup_keys(kpis)
         for required in self._REQUIRED:
-            assert required in keys
+            assert required in lookup
 
 
 # ---------------------------------------------------------------------------
 # E13 — Telecom new canonical keys
 # ---------------------------------------------------------------------------
 class TestTelecomKpisInCanonicalList:
-    """Telecom must register arpu_inr, subscribers_mn, africa_cc_growth_pct,
-    africa_fx_devaluation_pct as canonical keys."""
+    """Telecom must register all these keys as either canonical or alias.
+
+    The short-form duplicates (`arpu_inr`, `subscribers_mn`) were dropped
+    2026-04-24 and moved to aliases of `arpu_rs` / `total_subscriber_base_mn`.
+    """
 
     _REQUIRED = (
         "arpu_inr",
@@ -143,17 +161,26 @@ class TestTelecomKpisInCanonicalList:
         "africa_fx_devaluation_pct",
     )
 
-    def test_telecom_kpis_in_canonical_list(self):
+    @staticmethod
+    def _all_lookup_keys(kpis: list[dict]) -> set[str]:
+        keys: set[str] = set()
+        for kpi in kpis:
+            keys.add(kpi["key"])
+            keys.update(kpi.get("aliases") or [])
+        return keys
+
+    def test_telecom_kpis_in_canonical_or_alias(self):
         telecom = SECTOR_KPI_CONFIG["telecom"]["kpis"]
-        canonical_keys = {k["key"] for k in telecom}
+        lookup = self._all_lookup_keys(telecom)
         for required in self._REQUIRED:
-            assert required in canonical_keys, f"telecom canonical KPIs missing '{required}'"
+            assert required in lookup, f"telecom missing '{required}' (as canonical or alias)"
 
     def test_telecom_keys_resolve_via_industry(self):
-        keys = get_kpi_keys_for_industry("Telecom - Services")
-        assert keys is not None
+        kpis = get_kpis_for_industry("Telecom - Services")
+        assert kpis is not None
+        lookup = self._all_lookup_keys(kpis)
         for required in self._REQUIRED:
-            assert required in keys
+            assert required in lookup
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +321,83 @@ class TestSectorMapping:
 # Six new sectors added 2026-04-24 per Gemini review (covers ~30% of Nifty 500
 # mcap previously falling through to generic extraction)
 # ---------------------------------------------------------------------------
+class TestTier2KpiAdditions:
+    """Tier-2 KPIs added 2026-04-24 per Gemini review. Regression guards
+    so future edits don't silently drop these institutional-grade keys."""
+
+    @pytest.mark.parametrize("sector,required", [
+        ("banks", ["cd_ratio_pct", "retail_deposit_growth_pct", "recoveries_and_upgrades_cr", "ridf_shortfall_cr"]),
+        ("nbfcs", ["co_lending_aum_cr", "off_book_aum_pct", "bt_out_rate_pct", "stage_2_assets_pct"]),
+        ("insurance", ["product_mix_ulip_pct", "product_mix_nonpar_pct", "product_mix_protection_pct", "motor_od_loss_ratio_pct", "motor_tp_loss_ratio_pct"]),
+        ("it_services", ["genai_pipeline_usd_mn", "fresher_additions_number", "top_5_client_growth_pct"]),
+        ("pharma", ["cdmo_revenue_cr", "biosimilar_market_share_pct", "complex_generics_mix_pct"]),
+        ("fmcg", ["qcom_salience_pct", "ebitda_margin_pct"]),
+        ("auto", ["ev_2w_mix_pct", "ev_pv_mix_pct", "tractor_volumes_number", "dealer_inventory_weeks"]),
+        ("cement", ["regional_dominant_mix_pct", "clinker_capacity_utilization_pct"]),
+        ("metals_and_mining", ["coking_coal_cost_usd_per_ton", "e_auction_premium_pct"]),
+        ("real_estate", ["inventory_months", "embedded_ebitda_margin_pct", "bd_addition_gdv_cr", "annuity_income_cr"]),
+        ("telecom", ["ftth_subs_mn", "enterprise_revenue_growth_pct", "capex_5g_cr"]),
+        ("chemicals", ["inventory_days", "ebitda_per_kg_rs"]),
+        ("power_and_utilities", ["merchant_sales_mix_pct", "fgd_capex_cr"]),
+        ("oil_and_gas", ["inventory_gain_loss_cr", "marketing_under_recovery_cr"]),
+    ])
+    def test_sector_has_tier2_kpis(self, sector, required):
+        canonical = {k["key"] for k in SECTOR_KPI_CONFIG[sector]["kpis"]}
+        missing = [k for k in required if k not in canonical]
+        assert not missing, f"{sector} missing tier-2 KPIs: {missing}"
+
+
+class TestFmcgDedup:
+    """Short-form duplicate canonical keys (uvg_pct, price_growth_pct,
+    rural_growth_pct, urban_growth_pct) were dropped 2026-04-24 — they live
+    only as aliases of their long-form counterparts."""
+
+    @pytest.mark.parametrize("dropped_key,canonical_key", [
+        ("uvg_pct", "underlying_volume_growth_pct"),
+        ("price_growth_pct", "price_led_growth_pct"),
+        ("rural_growth_pct", "rural_revenue_growth_pct"),
+        ("urban_growth_pct", "urban_revenue_growth_pct"),
+    ])
+    def test_shortform_not_canonical(self, dropped_key, canonical_key):
+        fmcg_canonical = {k["key"] for k in SECTOR_KPI_CONFIG["fmcg"]["kpis"]}
+        assert dropped_key not in fmcg_canonical, (
+            f"{dropped_key!r} was dropped — use {canonical_key!r} instead"
+        )
+        aliases_of_canonical = next(
+            (k.get("aliases") or []) for k in SECTOR_KPI_CONFIG["fmcg"]["kpis"]
+            if k["key"] == canonical_key
+        )
+        assert dropped_key in aliases_of_canonical, (
+            f"{dropped_key!r} must remain reachable as an alias of {canonical_key!r}"
+        )
+
+
+class TestTelecomDedup:
+    """arpu_inr / subscribers_mn short-form duplicates dropped 2026-04-24."""
+
+    @pytest.mark.parametrize("dropped_key,canonical_key", [
+        ("arpu_inr", "arpu_rs"),
+        ("subscribers_mn", "total_subscriber_base_mn"),
+    ])
+    def test_shortform_not_canonical(self, dropped_key, canonical_key):
+        telecom_canonical = {k["key"] for k in SECTOR_KPI_CONFIG["telecom"]["kpis"]}
+        assert dropped_key not in telecom_canonical
+        aliases = next(
+            (k.get("aliases") or []) for k in SECTOR_KPI_CONFIG["telecom"]["kpis"]
+            if k["key"] == canonical_key
+        )
+        assert dropped_key in aliases
+
+
+class TestPersonalProductsRoutesToFmcg:
+    """HUL / Godrej Consumer are FMCG (consumer staples), not retail.
+    'Personal Products' must route to fmcg so HUL gets the 13-KPI FMCG set
+    instead of falling through to retail."""
+
+    def test_personal_products_maps_to_fmcg(self):
+        assert get_sector_for_industry("Personal Products") == "fmcg"
+
+
 class TestNewSectorsRegistered:
     """capital_goods, hospitals, retail, amc_capital_markets, consumer_durables,
     logistics must all be registered with non-empty KPIs and industries.
