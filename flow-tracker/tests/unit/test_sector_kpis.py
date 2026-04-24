@@ -288,3 +288,84 @@ class TestSectorMapping:
 
     def test_unknown_industry_returns_none(self):
         assert get_sector_for_industry("Underwater Basket Weaving") is None
+
+
+# ---------------------------------------------------------------------------
+# Six new sectors added 2026-04-24 per Gemini review (covers ~30% of Nifty 500
+# mcap previously falling through to generic extraction)
+# ---------------------------------------------------------------------------
+class TestNewSectorsRegistered:
+    """capital_goods, hospitals, retail, amc_capital_markets, consumer_durables,
+    logistics must all be registered with non-empty KPIs and industries.
+    """
+
+    NEW_SECTORS = (
+        "capital_goods", "hospitals", "retail",
+        "amc_capital_markets", "consumer_durables", "logistics",
+    )
+
+    def test_all_new_sectors_present(self):
+        for s in self.NEW_SECTORS:
+            assert s in SECTOR_KPI_CONFIG, f"sector {s!r} missing from SECTOR_KPI_CONFIG"
+
+    def test_each_new_sector_has_kpis_and_industries(self):
+        for s in self.NEW_SECTORS:
+            cfg = SECTOR_KPI_CONFIG[s]
+            assert cfg["kpis"], f"{s} has no KPIs"
+            assert cfg["industries"], f"{s} has no industries listed"
+            # Every KPI must have the 4 required fields
+            for kpi in cfg["kpis"]:
+                for field in ("key", "label", "unit", "description"):
+                    assert field in kpi, f"{s}/{kpi.get('key','?')} missing {field!r}"
+
+
+class TestNewSectorRouting:
+    """Industries added in the 6 new sectors must route correctly."""
+
+    @pytest.mark.parametrize("industry,expected_sector", [
+        # capital_goods
+        ("Industrial Machinery", "capital_goods"),
+        ("Heavy Electrical Equipment", "capital_goods"),
+        ("Aerospace & Defense", "capital_goods"),
+        # hospitals
+        ("Healthcare Services", "hospitals"),
+        ("Hospitals & Healthcare Services", "hospitals"),
+        ("Diagnostic Services", "hospitals"),
+        # retail
+        ("Retailing", "retail"),
+        ("Speciality Retail", "retail"),
+        ("Restaurants", "retail"),
+        # amc_capital_markets
+        ("Asset Management", "amc_capital_markets"),
+        ("Financial - Capital Markets", "amc_capital_markets"),
+        ("Exchanges & Data", "amc_capital_markets"),
+        # consumer_durables
+        ("Consumer Durables", "consumer_durables"),
+        ("Household Appliances", "consumer_durables"),
+        ("Wires & Cables", "consumer_durables"),
+        # logistics
+        ("Logistics", "logistics"),
+        ("Airlines", "logistics"),
+        ("Marine Ports & Services", "logistics"),
+    ])
+    def test_industry_routes_to_expected_sector(self, industry, expected_sector):
+        assert get_sector_for_industry(industry) == expected_sector
+
+
+class TestNewSectorCanonicalKpis:
+    """Spot-check the flagship KPIs per new sector — if any of these are missing
+    a buy-side PM will complain. These aren't an exhaustive list; they're the
+    must-have ones per the Gemini review."""
+
+    @pytest.mark.parametrize("sector,required", [
+        ("capital_goods", ["order_inflow_cr", "order_book_cr", "book_to_bill_ratio"]),
+        ("hospitals", ["arpob_rs", "occupancy_pct", "alos_days", "same_hospital_revenue_growth_pct"]),
+        ("retail", ["sssg_pct", "store_additions_net_number", "revenue_per_sqft_rs"]),
+        ("amc_capital_markets", ["total_aum_cr", "equity_aum_mix_pct", "sip_flows_cr", "yield_on_aum_bps"]),
+        ("consumer_durables", ["channel_inventory_days", "category_market_share_pct", "commodity_cost_impact_bps"]),
+        ("logistics", ["plf_passenger_load_factor_pct", "rask_rs", "cask_rs", "yield_per_kg_rs"]),
+    ])
+    def test_sector_has_flagship_kpis(self, sector, required):
+        canonical = {k["key"] for k in SECTOR_KPI_CONFIG[sector]["kpis"]}
+        missing = [k for k in required if k not in canonical]
+        assert not missing, f"{sector} missing flagship KPIs: {missing}"
