@@ -75,6 +75,24 @@ _TRANSCRIPT_BODY_DISCLOSURE_MARKERS = (
     "disclosure under regulation 30",
 )
 
+# Pages/text thresholds for investor-deck sanity check. Real investor presentation
+# decks are 15-50 pages with lots of visuals but still 5,000+ chars of extractable
+# text in the first 3 pages (title + agenda + company overview always have text).
+# Analyst/Investor Meet cover letters (BSE Reg 30 announcements with "investor
+# presentation" in the headline) are 1-3 pages with <2,000 chars of dial-in info.
+_MIN_DECK_PAGES = 5
+_MIN_DECK_TEXT_CHARS = 2500
+# Phrases that strongly indicate the PDF is a cover letter, not a real deck.
+_DECK_BODY_DISCLOSURE_MARKERS = (
+    "dial-in",
+    "dial in",
+    "analyst / investor meet",
+    "analyst/investor meet",
+    "disclosure under regulation 30",
+    "sebi (listing obligations",
+    "conference call dial",
+)
+
 
 def _looks_like_real_transcript(pdf_path: Path) -> bool:
     """Return True if the PDF contents look like an actual concall transcript.
@@ -115,6 +133,50 @@ def _looks_like_real_transcript(pdf_path: Path) -> bool:
         return False
     lower = sample.lower()
     if any(m in lower for m in _TRANSCRIPT_BODY_DISCLOSURE_MARKERS):
+        return False
+    return True
+
+
+def _looks_like_real_deck(pdf_path: Path) -> bool:
+    """Return True if the PDF looks like an actual investor-presentation deck.
+
+    Guards against Reg 30 disclosure cover letters that BSE indexes under
+    "Analyst / Investor Meet" with "investor presentation" in the headline —
+    observed pattern on HDFCBANK FY25-Q4 through FY26-Q3: every filing stored
+    as `investor_deck.pdf` is a 1-3 page dial-in announcement, not the real
+    deck. The real deck is uploaded to the bank's own website.
+
+    Returns True on any parse failure so we never destroy a cached PDF for a
+    transient error — the caller keeps the file and logs instead.
+    """
+    try:
+        import pypdfium2 as pdfium  # type: ignore[import-untyped]
+    except ImportError:
+        return True  # no way to check; accept
+
+    try:
+        doc = pdfium.PdfDocument(str(pdf_path))
+    except Exception:
+        return True
+
+    try:
+        pages = len(doc)
+        if pages < _MIN_DECK_PAGES:
+            return False
+        # Sample first 3 pages — cover letters front-load "Sub: Intimation of
+        # ... audio call" disclaimer text; real decks front-load the title
+        # slide + company overview with extractable text.
+        sample = "".join(
+            doc[i].get_textpage().get_text_range()
+            for i in range(min(3, pages))
+        )
+    finally:
+        doc.close()
+
+    if len(sample.strip()) < _MIN_DECK_TEXT_CHARS:
+        return False
+    lower = sample.lower()
+    if any(m in lower for m in _DECK_BODY_DISCLOSURE_MARKERS):
         return False
     return True
 
@@ -543,6 +605,17 @@ class FilingClient:
                             "letter, not a transcript (see filing_client."
                             "_looks_like_real_transcript for thresholds). "
                             "Headline: %r",
+                            filing.symbol, file_path.name,
+                            len(resp.content), filing.headline[:120],
+                        )
+                        file_path.unlink(missing_ok=True)
+                        return None
+                    if ftype == "investor_deck" and not _looks_like_real_deck(file_path):
+                        logger.warning(
+                            "Rejected %s/%s — %d bytes looks like Reg 30 "
+                            "analyst-meet cover letter, not an investor deck "
+                            "(see filing_client._looks_like_real_deck for "
+                            "thresholds). Headline: %r",
                             filing.symbol, file_path.name,
                             len(resp.content), filing.headline[:120],
                         )

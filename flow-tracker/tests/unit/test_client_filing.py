@@ -959,17 +959,19 @@ class TestTranscriptSanityFilter:
         assert result is not None
         assert result.exists()
 
-    def test_sanity_filter_does_not_apply_to_investor_deck(self, tmp_path: Path, monkeypatch):
-        """The sanity check is concall-specific — a 1-page deck must still
-        be accepted (some decks are 1-2 summary pages)."""
+    def test_transcript_filter_does_not_apply_to_investor_deck(self, tmp_path: Path, monkeypatch):
+        """Concall-specific sanity check must not fire on a deck — decks have
+        their own `_looks_like_real_deck` gate."""
         from flowtracker import filing_client as fc_mod
 
-        called_for_deck = False
-        def _spy(path):
-            nonlocal called_for_deck
-            called_for_deck = True
+        transcript_called = False
+        def _transcript_spy(path):
+            nonlocal transcript_called
+            transcript_called = True
             return False
-        monkeypatch.setattr(fc_mod, "_looks_like_real_transcript", _spy)
+        monkeypatch.setattr(fc_mod, "_looks_like_real_transcript", _transcript_spy)
+        # Accept deck sanity so the file passes through
+        monkeypatch.setattr(fc_mod, "_looks_like_real_deck", lambda p: True)
 
         filing = _make_filing(
             headline="Investor Presentation Q3",
@@ -983,7 +985,70 @@ class TestTranscriptSanityFilter:
             with FilingClient() as client:
                 result = client.download_filing(filing, base_dir=tmp_path)
         assert result is not None
-        assert called_for_deck is False
+        assert transcript_called is False
+
+
+class TestDeckSanityFilter:
+    """Post-download sanity check for investor decks — Reg 30 "Analyst /
+    Investor Meet" cover letters get indexed with "investor presentation" in
+    the headline and saved as `investor_deck.pdf`, but contain only dial-in
+    info (1-3 pages, <2500 chars of extractable text). These must be rejected
+    so the extractor never sees them.
+    """
+
+    def test_cover_letter_deck_is_rejected(self, tmp_path: Path, monkeypatch):
+        from flowtracker import filing_client as fc_mod
+
+        monkeypatch.setattr(fc_mod, "_looks_like_real_deck", lambda p: False)
+
+        filing = _make_filing(
+            headline="Investor Presentation Q3FY26",
+            subcategory="Investor Presentation",
+            attachment_name="bad_deck.pdf",
+            filing_date="2026-01-25",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"AttachLive/bad_deck\.pdf").respond(
+                200, content=b"%PDF-1.4 only 1 page of dial-in info" * 5,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
+        expected_path = tmp_path / "INDIAMART" / "filings" / "FY26-Q3" / "investor_deck.pdf"
+        assert not expected_path.exists()
+
+    def test_real_deck_is_kept(self, tmp_path: Path, monkeypatch):
+        from flowtracker import filing_client as fc_mod
+
+        monkeypatch.setattr(fc_mod, "_looks_like_real_deck", lambda p: True)
+
+        filing = _make_filing(
+            headline="Q3 FY26 Investor Presentation",
+            subcategory="Investor Presentation",
+            attachment_name="real_deck.pdf",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"AttachLive/real_deck\.pdf").respond(
+                200, content=b"%PDF-1.4 real 30-page deck content" * 200,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is not None
+        assert result.name == "investor_deck.pdf"
+
+
+class TestLooksLikeRealDeck:
+    """Unit tests for the content-based deck sanity helper."""
+
+    def test_missing_file_accepts(self, tmp_path: Path):
+        from flowtracker.filing_client import _looks_like_real_deck
+        assert _looks_like_real_deck(tmp_path / "does_not_exist.pdf") is True
+
+    def test_corrupt_pdf_accepts(self, tmp_path: Path):
+        from flowtracker.filing_client import _looks_like_real_deck
+        p = tmp_path / "bad.pdf"
+        p.write_bytes(b"not a pdf at all")
+        assert _looks_like_real_deck(p) is True
 
 
 class TestLooksLikeRealTranscript:
