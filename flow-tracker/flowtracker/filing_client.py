@@ -46,6 +46,78 @@ _RESEARCH_KEYWORDS = [
 # Default PDF storage location — in vault alongside research
 _DEFAULT_FILING_DIR = Path.home() / "vault" / "stocks"
 
+# Headline fragments that indicate a filing is a *disclosure* (announcing a
+# call happened) rather than the actual transcript. These cover letters are
+# 1-3 pages, list the URL where the real transcript lives on the company
+# website, and contain zero call content. Audit 2026-04-24 found 570/5378
+# concall.pdf files in the vault were cover letters matching these markers
+# (31 symbols had zero real transcripts on BSE — AXISBANK, ADANIENT, JSWSTEEL,
+# ABCAPITAL, LICHSGFIN, etc. file Reg 30 disclosures only).
+_DISCLOSURE_HEADLINE_MARKERS = (
+    "audio recording",
+    "audio-recording",
+    "intimation of",
+    "schedule of",
+    "disclosure under regulation 30",
+)
+
+# Pages/text thresholds for transcript sanity check. Real concall transcripts
+# are 10-35 pages with 15,000+ chars of extractable text. Cover letters are
+# 1-3 pages with ~1,200 chars.
+_MIN_TRANSCRIPT_PAGES = 4
+_MIN_TRANSCRIPT_TEXT_CHARS = 3000
+# Phrases that strongly indicate the content is a cover letter, not a call.
+_TRANSCRIPT_BODY_DISCLOSURE_MARKERS = (
+    "audio recording of",
+    "audio-call-transcript",
+    "transcript is available",
+    "audio is available",
+    "disclosure under regulation 30",
+)
+
+
+def _looks_like_real_transcript(pdf_path: Path) -> bool:
+    """Return True if the PDF contents look like an actual concall transcript.
+
+    Guards against Reg 30 disclosure cover letters that BSE indexes under
+    "Analyst / Investor Meet" with "earnings call" in the headline. See
+    `_DISCLOSURE_HEADLINE_MARKERS` and the blast-radius audit in
+    plans/remediation-plan-post-review-2026-04-24.md (issue: 570 cover
+    letters across 31 always-bad symbols).
+
+    Returns True on any parse failure so we never destroy a cached PDF for
+    a transient error — the caller keeps the file and logs instead.
+    """
+    try:
+        import pypdfium2 as pdfium  # type: ignore[import-untyped]
+    except ImportError:
+        return True  # no way to check; accept
+
+    try:
+        doc = pdfium.PdfDocument(str(pdf_path))
+    except Exception:
+        return True
+
+    try:
+        pages = len(doc)
+        if pages < _MIN_TRANSCRIPT_PAGES:
+            return False
+        # Sample first 3 pages — cover letters always front-load the
+        # disclaimer text; full transcripts front-load the speaker roster.
+        sample = "".join(
+            doc[i].get_textpage().get_text_range()
+            for i in range(min(3, pages))
+        )
+    finally:
+        doc.close()
+
+    if len(sample.strip()) < _MIN_TRANSCRIPT_TEXT_CHARS:
+        return False
+    lower = sample.lower()
+    if any(m in lower for m in _TRANSCRIPT_BODY_DISCLOSURE_MARKERS):
+        return False
+    return True
+
 
 def _parse_bse_date(date_str: str) -> str | None:
     """Parse BSE date formats to YYYY-MM-DD."""
@@ -394,10 +466,16 @@ class FilingClient:
         # Determine file type from headline/subcategory
         hl = filing.headline.lower()
         sc = (filing.subcategory or "").lower()
+
+        # Disclosure cover letters (Reg 30 "audio recording of earnings call...",
+        # "intimation of analyst meet", "schedule of...") are BSE filings that
+        # announce a call/meet but contain no transcript content. Skip them —
+        # they were the #1 source of cover-letter-as-concall.pdf pollution
+        # (570/5378 files in the 2026-04-24 audit).
+        if any(m in hl for m in _DISCLOSURE_HEADLINE_MARKERS):
+            return None
+
         if "transcript" in hl or "transcript" in sc or "concall" in hl:
-            ftype = "concall"
-        elif "analyst" in sc and ("transcript" in hl or "concall" in hl or "earnings" in hl):
-            # "Analyst / Investor Meet" with transcript-like headline = concall
             ftype = "concall"
         elif "investor presentation" in sc or "investor presentation" in hl or "investor deck" in hl:
             ftype = "investor_deck"
@@ -409,7 +487,10 @@ class FilingClient:
         else:
             # Only concall / investor_deck / annual_report are consumed by the
             # research pipeline. Everything else (results, newspaper, analyst
-            # meets, etc.) is skipped to keep the vault lean.
+            # meets without a transcript keyword, etc.) is skipped — we used
+            # to also accept "earnings" + "Analyst" subcategory as concall,
+            # but that matched Reg 30 cover letters. Require an explicit
+            # "transcript"/"concall" keyword now.
             return None
 
         # Determine FY quarter from filing date
@@ -452,6 +533,21 @@ class FilingClient:
                 if resp.status_code == 200 and len(resp.content) > 100:
                     file_path.write_bytes(resp.content)
                     logger.info("Downloaded %s (%d KB)", file_path.name, len(resp.content) // 1024)
+                    # Sanity filter: a "concall" PDF that's actually a cover
+                    # letter (1-3 pages, references the real transcript URL
+                    # on the company website) must not pollute the vault.
+                    # Real transcripts are 10-35 pages with 15k+ chars.
+                    if ftype == "concall" and not _looks_like_real_transcript(file_path):
+                        logger.warning(
+                            "Rejected %s/%s — %d bytes looks like disclosure cover "
+                            "letter, not a transcript (see filing_client."
+                            "_looks_like_real_transcript for thresholds). "
+                            "Headline: %r",
+                            filing.symbol, file_path.name,
+                            len(resp.content), filing.headline[:120],
+                        )
+                        file_path.unlink(missing_ok=True)
+                        return None
                     return file_path
                 if resp.status_code in (404,):
                     # Permanent failure — don't retry

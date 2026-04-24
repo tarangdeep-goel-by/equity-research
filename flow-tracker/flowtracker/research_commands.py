@@ -356,6 +356,18 @@ def thesis(
             from flowtracker.filing_client import FilingClient
             fc = FilingClient()
             filings = fc.fetch_research_filings(symbol)
+            # Prefer real transcripts over disclosure cover letters. BSE often
+            # has both for the same quarter (the Reg 30 cover letter arrives
+            # the day of the call, the transcript 1-2 weeks later). download_filing
+            # is first-wins per (symbol, FY-Q, ftype), so sort transcript-like
+            # filings to the front to claim the slot.
+            def _transcript_priority(f):
+                hl = (f.headline or "").lower()
+                sc = (f.subcategory or "").lower()
+                if "transcript" in hl or "transcript" in sc or "concall" in hl:
+                    return 0
+                return 1
+            filings = sorted(filings, key=_transcript_priority)
             downloaded = 0
             for filing in filings:
                 path = fc.download_filing(filing)
