@@ -26,18 +26,17 @@ MAX_GRADE = 97       # A+
 AUTOEVAL_DIR = Path("/Users/tarang/Documents/Projects/equity-research/flow-tracker/flowtracker/research/autoeval")
 HISTORY_DIR = AUTOEVAL_DIR / "eval_history"
 
-# eval-pipeline.sh invokes `autoeval -a business --sectors <matrix_key>` which
+# eval-pipeline.sh invokes `autoeval -a <agent> --sectors <matrix_key>` which
 # runs async_main_agent (agent-first mode). That writes archives named
-# `{ts}_all_for_business.json` with a `results` dict keyed by the `--sectors`
+# `{ts}_all_for_{agent}.json` with a `results` dict keyed by the `--sectors`
 # values (e.g. {"bfsi": {...stock result...}}).
-ARCHIVE_GLOB = "*_all_for_business.json"
 
 
-def find_stock_result(matrix_key: str, since_ts: datetime) -> tuple[Path, dict] | None:
+def find_stock_result(matrix_key: str, since_ts: datetime, agent: str) -> tuple[Path, dict] | None:
     """Walk eval_history archives newer than since_ts and return the newest
     (archive_path, stock_result) where `results[matrix_key]` is populated.
     """
-    candidates = sorted(HISTORY_DIR.glob(ARCHIVE_GLOB))
+    candidates = sorted(HISTORY_DIR.glob(f"*_all_for_{agent}.json"))
     for path in reversed(candidates):
         ts_str = path.name.split("_", 1)[0]
         ts = datetime.strptime(ts_str, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
@@ -77,6 +76,8 @@ def main() -> None:
     ap.add_argument("--benchmark", required=True, help="benchmark.json path")
     ap.add_argument("--since-ts", required=True, help="ISO8601 UTC — benchmark start time")
     ap.add_argument("--commit", required=True, help="git short SHA")
+    ap.add_argument("--agent", default="business",
+                    help="Specialist agent whose eval_history archives to read (default: business)")
     ap.add_argument("--description", default="", help="one-line description of this iteration")
     ap.add_argument("--tsv", required=True, help="results.tsv path to append to")
     ap.add_argument("--diagnose-json", default=None, help="if set, also write diagnosis JSON here")
@@ -94,7 +95,7 @@ def main() -> None:
         for pair in cell["pairs"]:
             key = pair["eval_matrix_key"]
             stock = pair["stock"]
-            found = find_stock_result(key, since_ts)
+            found = find_stock_result(key, since_ts, args.agent)
             if found is None:
                 missing.append(f"{key}:{stock}")
                 per_stock.append({"eval_matrix_key": key, "stock": stock,
