@@ -821,6 +821,188 @@ class TestDownloadFiling:
         assert target.read_bytes() == new_content
 
 
+class TestDisclosureCoverLetterGuard:
+    """Regression guards for the 2026-04-24 filing-fetch audit — Reg 30
+    "audio recording of earnings call" cover letters were being filed under
+    "Analyst / Investor Meet" with "EARNINGS CALL: ..." headlines and
+    classified as concalls. Audit found 570/5378 concall.pdf files were
+    cover letters across 31 always-broken symbols (AXISBANK, ADANIENT,
+    JSWSTEEL, ABCAPITAL, LICHSGFIN, ...).
+    """
+
+    def test_audio_recording_headline_is_skipped(self, tmp_path: Path):
+        """Reg 30 cover letter ("AUDIO RECORDING of earnings call...") must
+        not be downloaded as a concall — headline contains the disclosure
+        marker 'audio recording' which indicates the filing is announcing
+        a call, not containing one."""
+        filing = _make_filing(
+            symbol="AXISBANK",
+            bse_scrip_code="532215",
+            headline=(
+                "AUDIO RECORDING OF EARNINGS CALL OF AXIS BANK LIMITED "
+                "FOR THE QUARTER AND HALF YEAR ENDED SEPTEMBER 30, 2025"
+            ),
+            subcategory="Analyst / Investor Meet",
+            filing_date="2025-10-15",
+            attachment_name="axis_cover.pdf",
+        )
+        with FilingClient() as client:
+            # No respx stub — if the classifier returned "concall" and tried
+            # to download, respx-less call would raise. Disclosure marker
+            # should short-circuit before any network call.
+            result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
+
+    def test_schedule_of_analyst_meet_is_skipped(self, tmp_path: Path):
+        """'Schedule of analysts/institutional investors meet' is a calendar
+        intimation — not a transcript and not a presentation."""
+        filing = _make_filing(
+            headline="Schedule of analysts/institutional investors meet",
+            subcategory="Analyst / Investor Meet",
+            attachment_name="sched.pdf",
+        )
+        with FilingClient() as client:
+            result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
+
+    def test_intimation_of_board_meeting_is_skipped(self, tmp_path: Path):
+        filing = _make_filing(
+            headline="Intimation of Board Meeting — Audited results",
+            subcategory="Board Meeting",
+            attachment_name="bm.pdf",
+        )
+        with FilingClient() as client:
+            result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
+
+    def test_earnings_without_transcript_keyword_is_skipped(self, tmp_path: Path):
+        """Old classifier accepted any 'earnings' + 'Analyst' subcategory
+        as concall. New rule: explicit 'transcript' or 'concall' required.
+        This test pins the tightening.
+        """
+        filing = _make_filing(
+            headline="EARNINGS CALL: AUDITED FINANCIAL RESULTS OF THE BANK",
+            subcategory="Analyst / Investor Meet",
+            attachment_name="call.pdf",
+        )
+        with FilingClient() as client:
+            result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
+
+    def test_transcript_keyword_still_classifies_as_concall(self, tmp_path: Path):
+        """Sanity: the tightening must NOT regress real transcript filings."""
+        filing = _make_filing(
+            headline="Transcript of Earnings Call — Q3 FY26",
+            subcategory="Earnings Call Transcript",
+            attachment_name="transcript.pdf",
+            filing_date="2026-01-25",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"AttachLive/transcript\.pdf").respond(
+                200, content=b"%PDF-1.4" + b"x" * 2000,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        # Sanity filter will call _looks_like_real_transcript on a fake PDF;
+        # pypdfium2 fails to parse junk bytes → helper returns True (accept).
+        assert result is not None
+        assert result.name == "concall.pdf"
+
+
+class TestTranscriptSanityFilter:
+    """Post-download sanity check — concall PDFs that look like cover letters
+    (≤3 pages, <3000 chars, contain 'audio recording' / 'transcript is
+    available' markers in body) must be rejected and deleted.
+    """
+
+    def test_cover_letter_pdf_is_rejected(self, tmp_path: Path, monkeypatch):
+        """If _looks_like_real_transcript returns False, the file must be
+        deleted and download_filing returns None."""
+        from flowtracker import filing_client as fc_mod
+
+        monkeypatch.setattr(fc_mod, "_looks_like_real_transcript", lambda p: False)
+
+        filing = _make_filing(
+            headline="Transcript of Earnings Call",
+            subcategory="Earnings Call Transcript",
+            attachment_name="cover_looking.pdf",
+            filing_date="2026-01-25",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"AttachLive/cover_looking\.pdf").respond(
+                200, content=b"%PDF-1.4 cover letter content here" * 10,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is None
+        # File must be cleaned up (no zombie cover-letter in vault)
+        expected_path = tmp_path / "INDIAMART" / "filings" / "FY26-Q3" / "concall.pdf"
+        assert not expected_path.exists()
+
+    def test_real_transcript_pdf_is_kept(self, tmp_path: Path, monkeypatch):
+        from flowtracker import filing_client as fc_mod
+
+        monkeypatch.setattr(fc_mod, "_looks_like_real_transcript", lambda p: True)
+
+        filing = _make_filing(
+            headline="Transcript of Earnings Call",
+            subcategory="Earnings Call Transcript",
+            attachment_name="real.pdf",
+            filing_date="2026-01-25",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"AttachLive/real\.pdf").respond(
+                200, content=b"%PDF-1.4 real transcript" * 100,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is not None
+        assert result.exists()
+
+    def test_sanity_filter_does_not_apply_to_investor_deck(self, tmp_path: Path, monkeypatch):
+        """The sanity check is concall-specific — a 1-page deck must still
+        be accepted (some decks are 1-2 summary pages)."""
+        from flowtracker import filing_client as fc_mod
+
+        called_for_deck = False
+        def _spy(path):
+            nonlocal called_for_deck
+            called_for_deck = True
+            return False
+        monkeypatch.setattr(fc_mod, "_looks_like_real_transcript", _spy)
+
+        filing = _make_filing(
+            headline="Investor Presentation Q3",
+            subcategory="Investor Presentation",
+            attachment_name="deck.pdf",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"AttachLive/deck\.pdf").respond(
+                200, content=b"%PDF" + b"y" * 500,
+            )
+            with FilingClient() as client:
+                result = client.download_filing(filing, base_dir=tmp_path)
+        assert result is not None
+        assert called_for_deck is False
+
+
+class TestLooksLikeRealTranscript:
+    """Unit tests for the content-based sanity helper itself."""
+
+    def test_missing_file_accepts(self, tmp_path: Path):
+        """Helper must never hard-fail on missing file — if we can't check,
+        we accept (caller keeps the PDF)."""
+        from flowtracker.filing_client import _looks_like_real_transcript
+        assert _looks_like_real_transcript(tmp_path / "does_not_exist.pdf") is True
+
+    def test_corrupt_pdf_accepts(self, tmp_path: Path):
+        """Unparseable bytes → accept (err on side of keeping)."""
+        from flowtracker.filing_client import _looks_like_real_transcript
+        p = tmp_path / "bad.pdf"
+        p.write_bytes(b"not a pdf at all")
+        assert _looks_like_real_transcript(p) is True
+
+
 class TestDownloadUrl:
     """Test FilingClient.download_url for direct URL downloads (NSE annual reports)."""
 
