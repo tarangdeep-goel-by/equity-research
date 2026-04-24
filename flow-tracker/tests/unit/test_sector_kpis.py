@@ -321,6 +321,75 @@ class TestSectorMapping:
 # Six new sectors added 2026-04-24 per Gemini review (covers ~30% of Nifty 500
 # mcap previously falling through to generic extraction)
 # ---------------------------------------------------------------------------
+class TestAliasNormalization:
+    """2026-04-24 — canonicalize_operational_metrics collapses LLM-emitted
+    alias keys to canonical form so downstream consumers never see duplicate
+    concepts (e.g. gnpa_pct alongside gross_npa_pct).
+    """
+
+    def test_alias_map_for_banks_contains_known_aliases(self):
+        from flowtracker.research.sector_kpis import get_alias_map_for_industry
+        m = get_alias_map_for_industry("Private Sector Bank")
+        assert m.get("gnpa_pct") == "gross_npa_pct"
+        assert m.get("nnpa_pct") == "net_npa_pct"
+        assert m.get("pcr") == "provision_coverage_ratio_pct"
+
+    def test_alias_map_empty_for_unknown_industry(self):
+        from flowtracker.research.sector_kpis import get_alias_map_for_industry
+        assert get_alias_map_for_industry("Underwater Basket Weaving") == {}
+
+    def test_canonicalize_renames_alias_to_canonical(self):
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+        ops = {
+            "gnpa_pct": {"value": 1.5},          # alias → gross_npa_pct
+            "casa_ratio_pct": {"value": 42.0},   # canonical — untouched
+            "random_non_kpi_key": {"value": "keep"},  # pass-through
+        }
+        result, renamed = canonicalize_operational_metrics(ops, "Private Sector Bank")
+        assert "gross_npa_pct" in result, "alias should be renamed to canonical"
+        assert "gnpa_pct" not in result, "alias key should no longer appear"
+        assert result["gross_npa_pct"] == {"value": 1.5}
+        assert result["casa_ratio_pct"] == {"value": 42.0}
+        assert result["random_non_kpi_key"] == {"value": "keep"}
+        assert renamed == ["gnpa_pct"]
+
+    def test_canonicalize_canonical_wins_on_collision(self):
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+        # LLM emits BOTH canonical AND alias — canonical wins, alias dropped
+        ops = {
+            "gross_npa_pct": {"value": 1.5, "yoy_change": 0.1},   # canonical
+            "gnpa_pct": {"value": 99.0, "source": "stale"},        # alias drop
+        }
+        result, renamed = canonicalize_operational_metrics(ops, "Private Sector Bank")
+        assert result["gross_npa_pct"] == {"value": 1.5, "yoy_change": 0.1}
+        assert "gnpa_pct" not in result
+        assert renamed == [], "no rename — alias was dropped due to canonical collision"
+
+    def test_canonicalize_pass_through_when_no_sector(self):
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+        ops = {"gnpa_pct": {"value": 1.5}}
+        result, renamed = canonicalize_operational_metrics(ops, "Underwater Basket Weaving")
+        assert result == ops
+        assert renamed == []
+
+    def test_canonicalize_non_dict_input_pass_through(self):
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+        # Defensive — e.g. a malformed extraction returned a list
+        result, renamed = canonicalize_operational_metrics(["not", "a", "dict"], "Private Sector Bank")
+        assert result == ["not", "a", "dict"]
+        assert renamed == []
+
+    def test_canonicalize_fmcg_shortform_alias(self):
+        """FMCG dropped short-form canonicals in PR-B — now they're aliases.
+        Extractor should still accept `uvg_pct` from the LLM and canonicalize."""
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+        ops = {"uvg_pct": {"value": 5.5}}
+        result, renamed = canonicalize_operational_metrics(ops, "FMCG")
+        assert "underlying_volume_growth_pct" in result
+        assert "uvg_pct" not in result
+        assert renamed == ["uvg_pct"]
+
+
 class TestTier2KpiAdditions:
     """Tier-2 KPIs added 2026-04-24 per Gemini review. Regression guards
     so future edits don't silently drop these institutional-grade keys."""

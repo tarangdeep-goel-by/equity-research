@@ -443,3 +443,95 @@ def build_extraction_hint(industry: str) -> str:
     lines.append("If a KPI is mentioned in the concall, extract it with {value, yoy_change, qoq_change, context}.")
     lines.append("If a KPI is NOT mentioned, set its value to null — do NOT omit the key.")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Alias normalization (added 2026-04-24 per Gemini review)
+# ---------------------------------------------------------------------------
+# Each KPI may declare an `aliases` list. The extractor prompt asks the LLM
+# to emit the canonical `key`, but models drift: they'll emit "gnpa_pct" when
+# they should emit "gross_npa_pct", or "arpu_inr" for "arpu_rs". Prior to
+# this wiring, such responses would cause the validation loop to add a null
+# entry for the canonical key AND leave the alias-keyed entry alongside —
+# producing duplicate-concept rows downstream.
+#
+# `canonicalize_operational_metrics` collapses alias keys to their canonical
+# form. If the LLM emits BOTH the canonical key and an alias (e.g. drift mid-
+# response), the canonical wins; the alias payload is dropped with a log
+# warning so ops can see it happened.
+
+
+def get_alias_map_for_industry(industry: str) -> dict[str, str]:
+    """Return {alias_key -> canonical_key} for the industry's sector.
+
+    Cross-sector collisions are not possible within a single call because
+    this map is scoped to one industry/sector. Returns {} if no sector
+    matches the industry (generic/unknown cases).
+    """
+    kpis = get_kpis_for_industry(industry)
+    if not kpis:
+        return {}
+    mapping: dict[str, str] = {}
+    for kpi in kpis:
+        canonical = kpi["key"]
+        for alias in kpi.get("aliases") or ():
+            # Self-alias is a no-op; skip collisions against another kpi's key
+            if alias == canonical:
+                continue
+            mapping[alias] = canonical
+    return mapping
+
+
+def canonicalize_operational_metrics(
+    ops: dict,
+    industry: str,
+    *,
+    logger=None,
+) -> tuple[dict, list[str]]:
+    """Collapse alias-keyed entries in `ops` to their canonical key form.
+
+    Returns (canonicalized_dict, list_of_aliases_that_were_renamed).
+    The returned list is for logging/metrics; callers can ignore it.
+
+    Rules:
+    - If `ops` contains only an alias (e.g. `"gnpa_pct": {...}`), it's
+      renamed to the canonical (`gross_npa_pct`).
+    - If `ops` contains BOTH the canonical AND an alias for the same
+      concept, the canonical wins; the alias entry is dropped and the
+      collision logged.
+    - Unrelated keys (not aliases, not canonical) pass through untouched.
+    - If the industry doesn't map to a sector, `ops` is returned unchanged.
+    """
+    if not isinstance(ops, dict):
+        return ops, []
+    alias_map = get_alias_map_for_industry(industry)
+    if not alias_map:
+        return ops, []
+
+    renamed: list[str] = []
+    out: dict = {}
+    seen_canonical: set[str] = set()
+
+    # First pass — preserve all canonical entries exactly as-is.
+    for k, v in ops.items():
+        if k not in alias_map:
+            out[k] = v
+            seen_canonical.add(k)
+
+    # Second pass — rewrite alias entries to their canonical name.
+    for k, v in ops.items():
+        if k in alias_map:
+            canonical = alias_map[k]
+            if canonical in seen_canonical:
+                # Collision: canonical already present. Drop the alias payload.
+                if logger is not None:
+                    logger.warning(
+                        "canonicalize: dropping alias %r because canonical %r already present",
+                        k, canonical,
+                    )
+                continue
+            out[canonical] = v
+            renamed.append(k)
+            seen_canonical.add(canonical)
+
+    return out, renamed
