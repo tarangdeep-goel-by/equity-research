@@ -238,9 +238,24 @@ class TestPharmaKpisInCanonicalList:
             assert key in canonical, f"pharma canonical KPIs missing '{key}'"
 
 
+def _union_keys(kpis: list[dict]) -> set[str]:
+    """Helper: all lookup forms (canonical key + aliases)."""
+    out: set[str] = set()
+    for k in kpis:
+        out.add(k["key"])
+        out.update(k.get("aliases") or [])
+    return out
+
+
 class TestFmcgKpisInCanonicalList:
     """E13 — FMCG canonical keys for volume growth, channel split,
-    rural/urban growth must be registered."""
+    rural/urban growth must be registered (as canonical OR alias).
+
+    2026-04-24: short-form duplicates uvg_pct / price_growth_pct /
+    rural_growth_pct / urban_growth_pct were dropped as canonical keys
+    and moved to aliases of their long-form counterparts per the Gemini
+    review. Test now checks the union so alias-driven lookup still works.
+    """
 
     _REQUIRED_KEYS = (
         "uvg_pct",
@@ -252,17 +267,21 @@ class TestFmcgKpisInCanonicalList:
         "urban_growth_pct",
     )
 
-    def test_fmcg_kpis_in_canonical_list(self):
+    def test_fmcg_kpis_in_canonical_or_alias(self):
         from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
 
-        canonical = {k["key"] for k in SECTOR_KPI_CONFIG["fmcg"]["kpis"]}
+        lookup = _union_keys(SECTOR_KPI_CONFIG["fmcg"]["kpis"])
         for key in self._REQUIRED_KEYS:
-            assert key in canonical, f"fmcg canonical KPIs missing '{key}'"
+            assert key in lookup, f"fmcg missing '{key}' (as canonical or alias)"
 
 
 class TestTelecomKpisInCanonicalList:
     """E13 — telecom canonical keys for ARPU (INR), subscribers, Africa
-    constant-currency growth, Africa FX devaluation must be registered."""
+    constant-currency growth, Africa FX devaluation must be registered
+    (as canonical OR alias).
+
+    2026-04-24: arpu_inr / subscribers_mn dropped as canonical, now aliases.
+    """
 
     _REQUIRED_KEYS = (
         "arpu_inr",
@@ -271,12 +290,12 @@ class TestTelecomKpisInCanonicalList:
         "africa_fx_devaluation_pct",
     )
 
-    def test_telecom_kpis_in_canonical_list(self):
+    def test_telecom_kpis_in_canonical_or_alias(self):
         from flowtracker.research.sector_kpis import SECTOR_KPI_CONFIG
 
-        canonical = {k["key"] for k in SECTOR_KPI_CONFIG["telecom"]["kpis"]}
+        lookup = _union_keys(SECTOR_KPI_CONFIG["telecom"]["kpis"])
         for key in self._REQUIRED_KEYS:
-            assert key in canonical, f"telecom canonical KPIs missing '{key}'"
+            assert key in lookup, f"telecom missing '{key}' (as canonical or alias)"
 
 
 # ---------------------------------------------------------------------------
