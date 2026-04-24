@@ -894,10 +894,25 @@ async def _extract_single_quarter(
 
     # Validate canonical KPIs if sector is known
     if industry and extraction.get("extraction_status") in ("complete", "recovered"):
-        from flowtracker.research.sector_kpis import get_kpis_for_industry
+        from flowtracker.research.sector_kpis import (
+            canonicalize_operational_metrics,
+            get_kpis_for_industry,
+        )
         canonical = get_kpis_for_industry(industry)
         if canonical:
             ops = extraction.get("operational_metrics", {})
+            # Step 1: collapse any alias keys the LLM emitted into their
+            # canonical form (e.g. "gnpa_pct" → "gross_npa_pct").
+            # See sector_kpis.canonicalize_operational_metrics docstring for
+            # rules (canonical wins on collision, unrelated keys pass through).
+            ops, renamed = canonicalize_operational_metrics(ops, industry, logger=logger)
+            if renamed:
+                logger.info(
+                    "Canonicalized %d alias KPI keys for %s %s: %s",
+                    len(renamed), symbol, quarter_label, renamed,
+                )
+            # Step 2: backfill missing canonical keys with null-finding markers
+            # so downstream consumers always see the full sector KPI set.
             for kpi in canonical:
                 key = kpi["key"]
                 if key not in ops:
