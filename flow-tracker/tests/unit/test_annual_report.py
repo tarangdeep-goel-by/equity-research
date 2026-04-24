@@ -758,37 +758,48 @@ class TestSubprocessCrashRetry:
 
 
 class TestExtractorOptionsIsolation:
-    """Extractor subprocesses must set setting_sources=[] and plugins=[] so
-    they don't spawn with the user's hooks/plugins/skills loaded."""
+    """Extractor subprocesses must set setting_sources=[""] (NOT []) and
+    plugins=[] so they don't spawn with the user's hooks/plugins/skills
+    loaded.
 
-    def test_setting_sources_empty_in_ar_options(self):
-        """_call_claude in annual_report_extractor must construct
-        ClaudeAgentOptions with setting_sources=[] and plugins=[]."""
+    [""] is the documented workaround for SDK #794 — an empty list is
+    falsy in subprocess_cli._build_command's truthiness check, so the
+    --setting-sources flag never reaches the CLI and it loads all default
+    sources (including ~/.claude/settings.json hooks). [""] is truthy,
+    emits --setting-sources "" which the CLI interprets as "no sources."
+    https://github.com/anthropics/claude-agent-sdk-python/issues/794
+    """
+
+    def test_setting_sources_workaround_in_ar_options(self):
         import inspect
         import flowtracker.research.annual_report_extractor as ar_mod
 
         src = inspect.getsource(ar_mod._call_claude)
-        assert "setting_sources=[]" in src, (
-            "annual_report_extractor._call_claude is missing setting_sources=[]"
+        assert 'setting_sources=[""]' in src, (
+            "annual_report_extractor._call_claude must use setting_sources=[\"\"] "
+            "(SDK #794 workaround — [] is silently ignored due to truthiness bug)"
         )
-        assert "plugins=[]" in src, (
-            "annual_report_extractor._call_claude is missing plugins=[]"
+        assert "setting_sources=[]" not in src, (
+            "setting_sources=[] is broken per SDK #794 — use [\"\"]"
         )
+        assert "plugins=[]" in src
 
-    def test_setting_sources_empty_in_concall_options(self):
+    def test_setting_sources_workaround_in_concall_options(self):
         import inspect
         from flowtracker.research import concall_extractor as ce_mod
 
         src = inspect.getsource(ce_mod._call_claude)
-        assert "setting_sources=[]" in src
+        assert 'setting_sources=[""]' in src
+        assert "setting_sources=[]" not in src
         assert "plugins=[]" in src
 
-    def test_setting_sources_empty_in_deck_options(self):
+    def test_setting_sources_workaround_in_deck_options(self):
         import inspect
         from flowtracker.research import deck_extractor as de_mod
 
         src = inspect.getsource(de_mod._call_claude)
-        assert "setting_sources=[]" in src
+        assert 'setting_sources=[""]' in src
+        assert "setting_sources=[]" not in src
         assert "plugins=[]" in src
 
 
@@ -824,41 +835,89 @@ class TestThinkingDisabledForExtraction:
         assert "thinking=" in src
 
 
-class TestCmuxHooksDisabled:
-    """Every SDK call site must pass CMUX_CLAUDE_HOOKS_DISABLED=1 in env.
+class TestNoDeadCmuxHooksEnv:
+    """CMUX_CLAUDE_HOOKS_DISABLED=1 was dead code.
 
-    The cmux claude-wrapper at /Applications/cmux.app/Contents/Resources/bin/claude
-    injects SessionStart / UserPromptSubmit / PreToolUse hooks via --settings into
-    every `claude` subprocess. For our headless extractor / specialist / verifier
-    subprocesses those hooks add latency and a crash surface we don't need —
-    CMUX_CLAUDE_HOOKS_DISABLED=1 makes the wrapper pass straight through.
+    SDK 0.1.5x uses a bundled CLI at
+    .venv/.../claude_agent_sdk/_bundled/claude — it NEVER invokes the cmux
+    wrapper at /Applications/cmux.app/.../claude, regardless of PATH order.
+    So the env var was targeting a wrapper that wasn't in the subprocess
+    spawn chain.
+
+    The real user-hook-leak fix is setting_sources=[""] (see
+    TestExtractorOptionsIsolation + SDK #794). These regression guards
+    ensure the dead env doesn't creep back in via copy-paste.
     """
 
-    def test_ar_extractor_disables_cmux_hooks(self):
+    def test_ar_extractor_has_no_dead_cmux_env(self):
         import inspect
         from flowtracker.research import annual_report_extractor as ar_mod
-        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(ar_mod._call_claude)
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" not in inspect.getsource(ar_mod._call_claude)
 
-    def test_concall_extractor_disables_cmux_hooks(self):
+    def test_concall_extractor_has_no_dead_cmux_env(self):
         import inspect
         from flowtracker.research import concall_extractor as ce_mod
-        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(ce_mod._call_claude)
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" not in inspect.getsource(ce_mod._call_claude)
 
-    def test_deck_extractor_disables_cmux_hooks(self):
+    def test_deck_extractor_has_no_dead_cmux_env(self):
         import inspect
         from flowtracker.research import deck_extractor as de_mod
-        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(de_mod._call_claude)
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" not in inspect.getsource(de_mod._call_claude)
 
-    def test_specialist_runner_disables_cmux_hooks(self):
+    def test_specialist_runner_has_no_dead_cmux_env(self):
         import inspect
         from flowtracker.research import agent as agent_mod
-        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(agent_mod._run_specialist)
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" not in inspect.getsource(agent_mod._run_specialist)
 
-    def test_verifier_disables_cmux_hooks(self):
+    def test_verifier_has_no_dead_cmux_env(self):
         import inspect
         from flowtracker.research import verifier as vmod
-        # The verifier options live inside _run_verifier
-        assert "CMUX_CLAUDE_HOOKS_DISABLED" in inspect.getsource(vmod._run_verifier)
+        assert "CMUX_CLAUDE_HOOKS_DISABLED" not in inspect.getsource(vmod._run_verifier)
+
+
+class TestSdkPostExitLogFilter:
+    """SDK issue #800 — the bundled CLI occasionally exits non-zero during
+    shutdown even after a successful ResultMessage landed. The SDK logs this
+    at ERROR with a hard-coded stderr literal "Check stderr output for details".
+    flowtracker.research.__init__ installs a log filter that demotes this
+    specific log line to DEBUG so extractor runs don't look catastrophic.
+    https://github.com/anthropics/claude-agent-sdk-python/issues/800
+    """
+
+    def test_filter_demotes_post_exit_error_to_debug(self):
+        import logging
+        import flowtracker.research  # ensures filter is installed  # noqa: F401
+
+        logger = logging.getLogger("claude_agent_sdk._internal.query")
+        record = logger.makeRecord(
+            logger.name, logging.ERROR, __file__, 0,
+            "Fatal error in message reader: %s", ("Command failed with exit code 1",),
+            None,
+        )
+        # Filters run on logger.handle(); run each directly to verify outcome
+        for f in logger.filters:
+            f.filter(record)
+        assert record.levelno == logging.DEBUG, (
+            "Post-exit 'Fatal error in message reader' must be demoted to DEBUG "
+            "by the filter in flowtracker.research.__init__"
+        )
+
+    def test_filter_leaves_other_errors_alone(self):
+        import logging
+        import flowtracker.research  # noqa: F401
+
+        logger = logging.getLogger("claude_agent_sdk._internal.query")
+        record = logger.makeRecord(
+            logger.name, logging.ERROR, __file__, 0,
+            "Some unrelated SDK error", (),
+            None,
+        )
+        for f in logger.filters:
+            f.filter(record)
+        assert record.levelno == logging.ERROR, (
+            "Filter must NOT demote unrelated SDK errors — only the known-"
+            "spurious post-exit 'Fatal error in message reader' prefix"
+        )
 
 
 class TestSectionPromptSchemas:

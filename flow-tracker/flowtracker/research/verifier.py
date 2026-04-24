@@ -240,7 +240,11 @@ async def _run_verifier(
         max_budget_usd=0.20,
         permission_mode="bypassPermissions",
         model=model,
-        env={"CMUX_CLAUDE_HOOKS_DISABLED": "1"},  # no cmux hook injection
+        # [""] workaround for SDK #794 — empty list is falsy and leaks
+        # ~/.claude/settings.json hooks into the verifier subprocess.
+        # https://github.com/anthropics/claude-agent-sdk-python/issues/794
+        setting_sources=[""],
+        plugins=[],
     )
 
     # Build the verification prompt with the report + evidence summary

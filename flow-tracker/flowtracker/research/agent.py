@@ -594,14 +594,12 @@ async def _run_specialist(
         permission_mode="bypassPermissions",
         model=model,
         stderr=_stderr_cb,
-        setting_sources=[],  # isolate subprocess from user hooks/plugins/skills
-        plugins=[],          # no external plugins in specialist subprocess
-        env={
-            # Bypass cmux's claude-wrapper hook injection — specialist
-            # subprocesses don't need SessionStart/UserPromptSubmit/PreToolUse
-            # tracking, and the hook calls add latency + a crash surface.
-            "CMUX_CLAUDE_HOOKS_DISABLED": "1",
-        },
+        # [""] (not []) workaround for SDK #794 — empty list is falsy and
+        # never emits --setting-sources, letting ~/.claude/settings.json
+        # hooks leak into every subprocess.
+        # https://github.com/anthropics/claude-agent-sdk-python/issues/794
+        setting_sources=[""],
+        plugins=[],  # no external plugins in specialist subprocess
     )
     effort = effort or DEFAULT_EFFORT.get(name)
     if effort:
@@ -1103,9 +1101,9 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
             # Pure JSON extraction from a bounded report — disable thinking so
             # max_turns=1 is always enough (same rationale as extractors).
             thinking={"type": "disabled"},
-            setting_sources=[],  # isolate from user hooks/plugins/skills
-            plugins=[],          # no external plugins in briefing subprocess
-            env={"CMUX_CLAUDE_HOOKS_DISABLED": "1"},  # no cmux hook injection
+            # [""] workaround for SDK #794 — see specialist options above.
+            setting_sources=[""],
+            plugins=[],  # no external plugins in briefing subprocess
         )
 
         result_text = ""

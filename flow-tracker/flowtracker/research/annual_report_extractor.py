@@ -523,15 +523,15 @@ async def _call_claude(
         stderr=lambda line: logger.warning("[cli-stderr] %s", line),
         env={
             "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "180000",
-            # Bypass cmux's claude-wrapper hook injection
-            # (/Applications/cmux.app/Contents/Resources/bin/claude). Extractor
-            # subprocesses are headless and short-lived; SessionStart /
-            # UserPromptSubmit / PreToolUse hooks fire into the cmux daemon
-            # dozens of times per run, adding latency and a subprocess-crash
-            # surface we don't need.
-            "CMUX_CLAUDE_HOOKS_DISABLED": "1",
         },
-        setting_sources=[],  # isolate from user hooks/plugins/skills
+        # [""] (not []) is the documented workaround for SDK #794 — an empty
+        # list is falsy in _build_command's truthiness check, so the
+        # --setting-sources flag never reaches the CLI and it loads all
+        # default sources (incl. ~/.claude/settings.json hooks that fire
+        # inside every subprocess). [""] is truthy, emits --setting-sources ""
+        # which the CLI interprets as "no sources."
+        # https://github.com/anthropics/claude-agent-sdk-python/issues/794
+        setting_sources=[""],
         plugins=[],          # no external plugins in extractor subprocess
     )
     text_blocks: list[str] = []
