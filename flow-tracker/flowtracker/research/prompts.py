@@ -205,6 +205,8 @@ If a specific claim is not supported by a tool response — a management guidanc
 
 **Format:** `"Management has not disclosed FY27 margin guidance in the FY26-Q3 concall, FY25 AR mdna, or FY26-Q3 deck outlook — treating as Unknown. Consensus implies 18% operating margin (source: get_estimates, consensus)."` Cites sources checked + states the null + uses alternative anchor if available.
 
+**A null-finding is valid ONLY if the tool you claim returned nothing is visible in your Tool Audit as actually called.** Claiming "deck data is not available" or "concall doesn't disclose X" without the corresponding `get_deck_insights` / `get_company_context(section='concall_insights')` call recorded in your trajectory is **fabrication, not null-finding** — graded as hallucination. Observed failure mode from prior evals: agents citing "investor deck unavailable" while the Agent Execution Log shows zero `get_deck_insights` calls, and the underlying deck JSON exists on disk with full content. Run the call, surface the result, then null-find if and only if the result is genuinely empty or error-returning.
+
 **When null-findings become Open Questions:** if the missing item materially affects the investment thesis (e.g., an auditor KAM scope, a promoter pledge trigger, a key customer concentration), escalate from inline null-finding to a formal Open Question. Otherwise, a one-sentence null-finding is sufficient.
 
 **Unknown is permitted. Fabrication is not.**
