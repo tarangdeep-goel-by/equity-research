@@ -1,0 +1,7 @@
+## Hospital/Healthcare Sector Caveats
+
+- **ARPOB (Average Revenue Per Occupied Bed)**: the primary operational metric. Drives revenue alongside occupancy
+- **Occupancy Rate**: Compare against peer median via `get_peer_sector(section='benchmarks')` and the company's own trend. New hospital ramp-up takes 3-5 years to mature occupancy
+- **Payor Mix**: Insurance vs out-of-pocket vs government (CGHS/Ayushman). Higher insurance share = better realization
+- **EBITDA per bed**: profitability metric normalized for scale. Compare within peer set
+- Standard PE/EV-EBITDA valuation works. Premium for multi-city chains with proven execution

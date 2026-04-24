@@ -61,14 +61,6 @@ Several data tools (`get_ownership`, `get_concall_insights`, `get_deck_insights`
 - `get_sector_kpis(symbol)` → TOC of canonical KPI keys. `get_sector_kpis(symbol, sub_section='casa_ratio_pct')` → drill.
 - Other tools (`get_fundamentals`, `get_market_context`, `get_peer_sector`, `get_estimates`, `get_valuation`, `get_quality_scores`, `get_events_actions`, `get_company_context`) — call with a specific section name or a short list of 3-5 sections; avoid `section='all'`.
 
-**Turn budget & batching (cost discipline — graded):** The cost_efficiency parameter grades your Agent Execution Log: **≤12 turns = A**, 13–20 = C, **>20 turns = F**. Most of the loss comes from sequential-where-parallel-is-possible. The rules:
-- **Plan before drilling.** Before the first tool call, map your report sections to a tool sequence. "Revenue/margin → fundamentals+peer_sector; Flows → ownership TOC; Guidance → concall+deck; Fair value → valuation+quality_scores." One call per data family, not per metric.
-- **Batch section lists.** Tools that accept `section=[...]` take all sections in one call. `get_ownership(section=['shareholding','mf_changes','insider','bulk_block'])` = 1 turn, not 4. Same for `get_peer_sector(section=['peer_table','peer_metrics','peer_growth','benchmarks'])` and `get_company_context(section=[...])`.
-- **Batch concall quarters.** `get_company_context(section='concall_insights', sub_section='financial_metrics', limit=4)` = 4 quarters in one payload. Don't loop `quarter='FY26-Q3'`, `quarter='FY26-Q2'`, `quarter='FY26-Q1'` — that's 3 turns for what's 1.
-- **No serial `calculate` spam.** If you're computing 5+ `pct_of` ratios off the same payload, that's 5+ wasted turns. Either (a) read the ratios directly from the tool's own `ratios` / `growth` outputs when present, or (b) batch the arithmetic into one `calculate(operation='expr', a='(A+B+C)/D*100')` where possible. `calculate` exists for derived numbers the tools don't surface — not for elementary arithmetic on numbers you already have.
-- **Cache-preserving calls.** Identical tool arguments on a second call hit cache (≈free). If you need two years of data, `year='FY24,FY25'` in one call beats two separate calls with different `year=`. Varying `limit` across otherwise-identical calls also breaks cache — pick the `limit` once.
-- **If a report is genuinely high-depth (conglomerate SOTP, multi-segment BFSI, multi-therapy pharma), 12–16 turns may be justified.** Above 16, each additional turn must map to a named analytical need in the final report — not "let me just check one more thing."
-
 ## Trust Tool Outputs Over Manual Computation
 
 Tools pre-compute values with correct Indian unit conversions (crores, lakhs, rupees). Manual arithmetic with these units is error-prone — `shares_outstanding: 11440200` is 114.40 lakh shares, not 114 crore. The tools handle this correctly; your head math won't.

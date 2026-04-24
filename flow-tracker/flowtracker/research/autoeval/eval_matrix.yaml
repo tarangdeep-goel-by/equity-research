@@ -90,3 +90,45 @@ sectors:
     stock: HINDUNILVR
     type: FMCG
     why: "Volume vs price growth, distribution moat, rural demand, premiumization"
+
+  # ---- autoagent-pilot benchmark pairs (adds 2nd stock per sector_skill cell) ----
+  bfsi_bob:
+    stock: BANKBARODA
+    type: PSU bank
+    why: "autoagent-pilot — 2nd bfsi stock for L3/L4 overfitting guard vs SBIN"
+
+  private_bank_icici:
+    stock: ICICIBANK
+    type: Private bank
+    why: "autoagent-pilot — 2nd private_bank stock for L3/L4 overfitting guard vs HDFCBANK"
+
+  pharma_drl:
+    stock: DRREDDY
+    type: Pharma
+    why: "autoagent-pilot — 2nd pharma stock for L3/L4 overfitting guard vs SUNPHARMA"
+
+  it_services_infy:
+    stock: INFY
+    type: IT services
+    why: "autoagent-pilot — 2nd it_services stock for L3/L4 overfitting guard vs TCS"
+
+  # ---- autoagent-pilot widened benchmark (task #12) — 4 more cells × 2 stocks ----
+  metals_hind:
+    stock: HINDALCO
+    type: Non-ferrous metals
+    why: "autoagent-pilot widened — 2nd metals stock for L3/L4 overfitting guard vs VEDL"
+
+  fmcg_nest:
+    stock: NESTLEIND
+    type: FMCG
+    why: "autoagent-pilot widened — 2nd fmcg stock for L3/L4 overfitting guard vs HINDUNILVR"
+
+  platform_nykaa:
+    stock: NYKAA
+    type: E-commerce / Beauty platform
+    why: "autoagent-pilot widened — 2nd platform stock for L3/L4 overfitting guard vs ETERNAL"
+
+  insurance_hdfc:
+    stock: HDFCLIFE
+    type: Life insurance
+    why: "autoagent-pilot widened — 2nd insurance stock for L3/L4 overfitting guard vs POLICYBZR"
