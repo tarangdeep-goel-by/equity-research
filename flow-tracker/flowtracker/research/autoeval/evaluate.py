@@ -69,6 +69,7 @@ class AgentEvalResult:
     eval_duration_s: float = 0.0
     run_skipped: bool = False
     raw_gemini_response: str = ""
+    tool_coverage: dict = field(default_factory=dict)  # {tools_called, tools_available, coverage_pct, uncalled_tools}
 
 
 @dataclass
@@ -111,8 +112,15 @@ Grade this {agent} report on how well it covers ITS scope, not the full investme
 4. **Actionability** — Clear, evidence-backed conclusions? Bull/bear framework? Identifiable catalysts and risks?
 5. **Sector Framework** — Are the RIGHT analytical frameworks applied for THIS sector type? (e.g., BFSI needs NIM/CASA/CD ratio/credit costs; metals needs EV/EBITDA/cycle positioning; platform needs unit economics/GMV)
 6. **Data Sourcing** — Are claims backed by cited data? Sources attributed? Tool data used correctly?
-7. **Tool-Use Discipline** — Judge from the Agent Execution Log. A: retried on truncation/empty, chose the right tool first time, ≤1 wasted call, surfaced data-quality gaps honestly. B+: mostly disciplined but one tool choice was suboptimal or one "attempted" metric had no backing tool calls. C: gave up on first empty result, called same tool ≥3× without changing args, or claimed "attempted" without evidence. F: ignored the tool layer / no tool use. **Requires the Execution Log — if absent, grade N/A (return numeric=85).**
-8. **Cost Efficiency** — Judge from the Agent Execution Log. A: full-depth report with <$0.30 cost AND ≤8 turns AND cache hit rate ≥70%. B+: $0.30–$0.60 OR 9–12 turns OR cache hit rate 50–70%. C: $0.60–$1.00 OR 13–20 turns OR cache hit rate 30–50%. F: >$1.00 OR >20 turns for similar depth, or cache hit rate <30% (re-pays for context). Cache hit rate is surfaced directly on the "Cache hit rate:" line — do not re-derive from raw tokens. **Requires the Execution Log — if absent, grade N/A (return numeric=85).**
+
+## Tool Coverage — Track, Do Not Grade
+
+Separately from the 6 graded parameters, the Agent Execution Log exposes which
+tools were available to the agent and which were actually called. **Report this
+as a diagnostic fact — not a grade.** Turn count, cost, and tool-use discipline
+are NOT graded any more; we only track whether the agent used the full tool
+surface or skipped available tools. If the execution log is absent, leave the
+tool_coverage fields null.
 
 ## Grade Scale
 A+ (97) = Institutional quality — you would send this to a portfolio manager without edits
@@ -127,8 +135,8 @@ F  (50) = Fundamentally flawed
 ## Grading Calibration
 - **Grade harshly.** A B+ is a good report. An A means institutional quality. Most reports should land in B to A- range.
 - For EACH parameter, you MUST identify at least one weakness or gap, even if minor. No parameter gets a perfect score without explicit justification.
-- Your **overall grade_numeric** must equal the arithmetic mean of the 8 parameter numeric scores (rounded to nearest integer). Do not inflate the overall above the average.
-- If the Agent Execution Log is absent or shows only legacy format (no turns/retries/cost telemetry), grade tool_use_discipline and cost_efficiency as numeric=85 (B+) with rationale "legacy trace — telemetry not captured" and exclude both from your averaging.
+- Your **overall grade_numeric** must equal the arithmetic mean of the 6 parameter numeric scores (rounded to nearest integer). Do not inflate the overall above the average.
+- Tool coverage is reported as a fact but is NEVER factored into the overall grade.
 
 ## Critical Instructions
 - Do NOT grade the accuracy of specific numbers. Your training data is outdated — the report uses live data. Focus on frameworks, logic, and completeness.
@@ -156,9 +164,13 @@ The report may include an execution log showing tools called, tools available bu
     "completeness": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
     "actionability": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
     "sector_framework": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
-    "data_sourcing": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}},
-    "tool_use_discipline": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<cite log evidence; if log absent, use 85 + 'legacy trace'>"}},
-    "cost_efficiency": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<cite cost/turns; if log absent, use 85 + 'legacy trace'>"}}
+    "data_sourcing": {{"grade": "<A+..F>", "numeric": <50-97>, "rationale": "<1-2 sentences>"}}
+  }},
+  "tool_coverage": {{
+    "tools_available": <int or null>,
+    "tools_called": <int or null>,
+    "coverage_pct": <0-100 float or null>,
+    "uncalled_tools": ["<tool_name>", ...]
   }},
   "overall": {{
     "grade": "<A+..F>",
@@ -318,8 +330,8 @@ def format_agent_evidence(
                 )
                 # Cache hit rate: reads / (reads + fresh context written or sent)
                 # High hit rate = efficient re-use of cached prompt prefix.
-                # Surfaced explicitly so Gemini can reference it in cost_efficiency grading
-                # without re-deriving from raw numbers.
+                # Surfaced as a diagnostic in the execution log (no longer
+                # graded since cost_efficiency was removed from the rubric).
                 cache_denominator = cr_tok + cw_tok + in_tok
                 if cache_denominator > 0:
                     hit_rate = 100.0 * cr_tok / cache_denominator
@@ -686,6 +698,10 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
                 rationale=param_data.get("rationale", ""),
             )
 
+    tool_coverage = parsed.get("tool_coverage") or {}
+    if not isinstance(tool_coverage, dict):
+        tool_coverage = {}
+
     return AgentEvalResult(
         agent=agent,
         stock=stock,
@@ -699,6 +715,7 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
         report_length=len(report_md),
         eval_duration_s=eval_duration,
         raw_gemini_response=raw_text[:3000],
+        tool_coverage=tool_coverage,
     )
 
 
@@ -818,8 +835,6 @@ def print_summary(results: dict[str, AgentEvalResult], target_numeric: int = 90)
         "actionability": "Action",
         "sector_framework": "Sector",
         "data_sourcing": "Data",
-        "tool_use_discipline": "Tools",
-        "cost_efficiency": "Cost",
     }
 
     print(f"\n{'='*90}")
