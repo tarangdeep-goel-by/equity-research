@@ -1915,21 +1915,63 @@ class ResearchDataAPI:
         return self._store.get_chart_data(symbol, chart_type)
 
     def get_peer_comparison(self, symbol: str) -> dict:
-        """Peer comparison for the subject vs Yahoo-recommended peers.
+        """Peer comparison for the subject vs a vetted peer set.
 
-        Yahoo picks the peer set; company_snapshot supplies the data columns
-        (Screener-sourced financials + yfinance valuation). Returns subject
-        snapshot + list of peer snapshots with Yahoo similarity scores.
+        Primary source is Yahoo's peer recommendations (peer_links table).
+        Falls back to Screener's peer_comparison table when Yahoo's set is
+        empty or sector-mismatched:
 
-        If the agent suspects the Yahoo peer set is sector-mismatched, it can
-        call get_screener_peers as an explicit cross-reference.
+          (a) **empty** — Yahoo returned no peers for this symbol at all.
+          (b) **sector-mismatched** — >50% of Yahoo peers belong to a
+              different industry than the subject (e.g. SBIN's Yahoo list
+              historically includes LT, RELIANCE — both non-banking).
+
+        Provenance surfaced via `source` and `fallback_reason` fields so
+        callers can see which peer set they got and why.
+
+        Returned shape is unchanged for callers that don't check source —
+        still {subject, peers, peer_count, source}. Peers from the fallback
+        path have `screener_fallback=true` and no `yahoo_score`.
         """
         subject = self._store.get_company_snapshot(symbol) or {"symbol": symbol}
+        subject_industry = (subject.get("industry") or "").strip().lower()
+
         peer_links = self._store.get_peer_links(symbol)
         peer_symbols = [p["peer_symbol"] for p in peer_links]
         peer_snapshots = (
             self._store.get_company_snapshots(peer_symbols) if peer_symbols else []
         )
+
+        # Fallback trigger (a): Yahoo returned nothing
+        if not peer_snapshots:
+            return self._screener_peer_fallback(
+                symbol, subject,
+                reason="No Yahoo peers found for this symbol",
+            )
+
+        # Fallback trigger (b): sector mismatch — >50% of Yahoo peers in a
+        # different industry than the subject. Skip the check when we lack
+        # a subject industry (can't validate).
+        if subject_industry:
+            mismatch_count = sum(
+                1 for p in peer_snapshots
+                if (p.get("industry") or "").strip().lower() != subject_industry
+                and (p.get("industry") or "").strip()  # don't penalize missing peer industry
+            )
+            if peer_snapshots and mismatch_count > len(peer_snapshots) / 2:
+                mismatched_industries = sorted({
+                    (p.get("industry") or "unknown")
+                    for p in peer_snapshots
+                    if (p.get("industry") or "").strip().lower() != subject_industry
+                })[:3]
+                return self._screener_peer_fallback(
+                    symbol, subject,
+                    reason=f"{mismatch_count} of {len(peer_snapshots)} Yahoo peers mismatched "
+                           f"subject industry '{subject.get('industry')}' "
+                           f"(e.g. {', '.join(mismatched_industries)})",
+                )
+
+        # Happy path — Yahoo peers look sector-consistent.
         score_map = {p["peer_symbol"]: p["score"] for p in peer_links}
         for snap in peer_snapshots:
             snap["yahoo_score"] = score_map.get(snap["symbol"])
@@ -1938,6 +1980,28 @@ class ResearchDataAPI:
             "peers": _clean(peer_snapshots),
             "peer_count": len(peer_snapshots),
             "source": "yahoo_recommendations",
+        }
+
+    def _screener_peer_fallback(self, symbol: str, subject: dict, reason: str) -> dict:
+        """Build a peer_comparison-shaped response from Screener peers.
+
+        Invoked when Yahoo peers are empty or sector-mismatched. Keeps the
+        same return schema so agents don't need to special-case the path.
+        """
+        screener_rows = self._store.get_peers(symbol) or []
+        peer_symbols = [r["peer_symbol"] for r in screener_rows if r.get("peer_symbol")]
+        peer_snapshots = (
+            self._store.get_company_snapshots(peer_symbols) if peer_symbols else []
+        )
+        for snap in peer_snapshots:
+            snap["screener_fallback"] = True
+            snap["yahoo_score"] = None
+        return {
+            "subject": _clean(subject),
+            "peers": _clean(peer_snapshots),
+            "peer_count": len(peer_snapshots),
+            "source": "screener_fallback",
+            "fallback_reason": reason,
         }
 
     def get_screener_peers(self, symbol: str) -> list[dict]:
