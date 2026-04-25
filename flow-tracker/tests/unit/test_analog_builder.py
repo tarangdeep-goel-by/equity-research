@@ -580,3 +580,131 @@ def test_cohort_ranking_is_deterministic_on_distance_ties(store: FlowStore) -> N
     assert seen_orders[0] == ["ALPHA", "BETA", "ZETA"], (
         f"Expected (distance, symbol, quarter_end) tie-break; got {seen_orders[0]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# PR-12: industry-as-of provenance + FLOWTRACK_AS_OF in materialization
+# (issues #4 + #13 in plans/remediation-plan-post-review-2026-04-24.md)
+# ---------------------------------------------------------------------------
+
+def test_industry_with_source_falls_back_when_no_history(store: FlowStore) -> None:
+    """No historical industry source exists yet — must flag current_fallback."""
+    from flowtracker.research.analog_builder import _industry_with_source
+
+    store._conn.execute(
+        "INSERT INTO index_constituents (symbol, index_name, industry) VALUES (?, ?, ?)",
+        ("SBIN", "NIFTY 50", "Bank"),
+    )
+    store._conn.commit()
+
+    industry, source = _industry_with_source(store, "SBIN", "2018-03-31")
+    assert industry == "Bank"
+    assert source == "current_fallback"
+
+    # Symbol absent from index_constituents → both fields None (not a silent
+    # "Unknown" string, which would leak into cohort filtering).
+    industry, source = _industry_with_source(store, "DELISTED_X", "2018-03-31")
+    assert industry is None
+    assert source is None
+
+
+def test_historical_states_has_industry_asof_columns(tmp_db) -> None:
+    """Migration is idempotent and lands the two new columns on a fresh DB."""
+    s = FlowStore(db_path=tmp_db)
+    try:
+        cols = {row["name"] for row in s._conn.execute("PRAGMA table_info(historical_states)")}
+        assert "industry_as_of_date" in cols, cols
+        assert "industry_source" in cols, cols
+    finally:
+        s.close()
+    # Re-init must not raise (idempotent ALTER guard).
+    s2 = FlowStore(db_path=tmp_db)
+    s2.close()
+
+
+def test_compute_feature_vector_emits_industry_provenance(store: FlowStore) -> None:
+    """Feature vector exposes industry_source so upsert can persist it."""
+    from flowtracker.research.analog_builder import compute_feature_vector
+
+    store._conn.execute(
+        "INSERT INTO index_constituents (symbol, index_name, industry) VALUES (?, ?, ?)",
+        ("ACME", "NIFTY 50", "Chemicals"),
+    )
+    store._conn.commit()
+
+    vec = compute_feature_vector(store, "ACME", "2020-03-31")
+    assert vec["industry"] == "Chemicals"
+    assert vec["industry_source"] == "current_fallback"
+    assert vec["industry_as_of_date"] == "2020-03-31"
+
+
+def test_upsert_writes_industry_source_field(store: FlowStore) -> None:
+    """Round-trip: materialize_analog_states upsert populates the new columns."""
+    from scripts.materialize_analog_states import upsert_feature_row
+
+    vec = {
+        "pe_trailing": 25.0, "roce_current": 18.0, "promoter_pct": 50.0,
+        "fii_pct": 12.0, "mf_pct": 8.0, "industry": "Bank", "mcap_bucket": "largecap",
+        "listed_days": 5000, "is_backfilled": False,
+        "industry_as_of_date": "2020-03-31", "industry_source": "current_fallback",
+    }
+    upsert_feature_row(store, "SBIN", "2020-03-31", vec)
+    store._conn.commit()
+
+    row = store._conn.execute(
+        "SELECT industry, industry_as_of_date, industry_source "
+        "FROM historical_states WHERE symbol = ? AND quarter_end = ?",
+        ("SBIN", "2020-03-31"),
+    ).fetchone()
+    assert row["industry"] == "Bank"
+    assert row["industry_as_of_date"] == "2020-03-31"
+    assert row["industry_source"] == "current_fallback"
+
+
+def test_materialize_resolves_as_of_env_then_cli(monkeypatch) -> None:
+    """CLI flag wins over env var; env var wins over today; both honored."""
+    from scripts.materialize_analog_states import _resolve_as_of, quarter_ends
+
+    monkeypatch.setenv("FLOWTRACK_AS_OF", "2024-12-31")
+    assert _resolve_as_of(None) == date(2024, 12, 31)
+    # CLI flag overrides env var
+    assert _resolve_as_of("2023-06-30") == date(2023, 6, 30)
+
+    monkeypatch.delenv("FLOWTRACK_AS_OF", raising=False)
+    # Default: today (loose check — must be today's date, not far past)
+    assert _resolve_as_of(None) == date.today()
+
+    # Quarter-walk respects the resolved date — no 2025+ quarters when as_of=2024-12-31
+    qtrs = quarter_ends(years=2, end_date=date(2024, 12, 31))
+    assert qtrs[0] == "2024-12-31"  # latest is the as_of itself
+    assert all(q <= "2024-12-31" for q in qtrs)
+
+
+def test_compute_forward_returns_no_lookahead_beyond_horizon(store: FlowStore) -> None:
+    """``_price_at_or_after`` must not pull a price far beyond the 12m horizon.
+
+    Setup: as_of = 2023-01-01, horizon end = 2024-01-01. We seed a price at
+    as_of and then a single price 18 months later (2024-07-01) — there are
+    no rows in between. Without the gap cap the 12m return would compute
+    against the 2024-07-01 price (an 18-month return). With the cap the
+    horizon misses and the function honestly returns ``None``.
+    """
+    from flowtracker.research.analog_builder import compute_forward_returns
+
+    _seed_prices(store, "GAP", [
+        ("2023-01-02", 100.0),
+        # Big trading-data gap, then price re-appears 18 months later
+        ("2024-07-01", 200.0),
+    ])
+    rets = compute_forward_returns(store, "GAP", "2023-01-01")
+    # 12m horizon is 2024-01-01; nearest forward price is 2024-07-01
+    # which is >30 days past the horizon → must be None, not +100%.
+    assert rets["return_12m_pct"] is None, (
+        "compute_forward_returns leaked >horizon lookahead: returned a "
+        "12m return computed against an 18-month-out price"
+    )
+    # 6m horizon (2023-07-01): nearest forward price is also 2024-07-01,
+    # which is a full year past — also must be None.
+    assert rets["return_6m_pct"] is None
+    # 3m horizon (2023-04-01): also far beyond cap.
+    assert rets["return_3m_pct"] is None
