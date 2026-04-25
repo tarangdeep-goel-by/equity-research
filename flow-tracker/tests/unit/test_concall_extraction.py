@@ -6,7 +6,48 @@ import json
 
 import pytest
 
-from flowtracker.research.concall_extractor import _build_partial_extraction, _extract_json
+from flowtracker.research.concall_extractor import (
+    _CONCALL_EXTRACTION_SCHEMA,
+    _build_partial_extraction,
+    _extract_json,
+)
+
+
+# ---------------------------------------------------------------------------
+# comparable_growth_metrics — Strategy 3 of screener-discontinuity plan
+# ---------------------------------------------------------------------------
+class TestComparableGrowthMetricsSchema:
+    """The extraction schema must surface management's like-for-like statements."""
+
+    def test_field_present_in_schema(self):
+        props = _CONCALL_EXTRACTION_SCHEMA["json_schema"]["schema"]["properties"]
+        assert "comparable_growth_metrics" in props
+
+    def test_field_is_array_of_objects(self):
+        field = _CONCALL_EXTRACTION_SCHEMA["json_schema"]["schema"]["properties"][
+            "comparable_growth_metrics"
+        ]
+        assert field["type"] == "array"
+        assert field["items"]["type"] == "object"
+
+    def test_required_subfields(self):
+        props = _CONCALL_EXTRACTION_SCHEMA["json_schema"]["schema"]["properties"][
+            "comparable_growth_metrics"
+        ]["items"]["properties"]
+        for k in ("metric", "value", "comparable_basis", "period", "context", "speaker"):
+            assert k in props, f"missing {k} in comparable_growth_metrics schema"
+
+    def test_listed_in_concall_sections_constant(self):
+        """The data_api dispatch tuple must include the new section so
+        get_concall_insights(section_filter='comparable_growth_metrics') works."""
+        from flowtracker.research.data_api import ResearchDataAPI
+        assert "comparable_growth_metrics" in ResearchDataAPI._CONCALL_SECTIONS
+
+    def test_preamble_references_new_subsection(self):
+        """SHARED_PREAMBLE_V2 must direct agents to call this fallback."""
+        from flowtracker.research.prompts import SHARED_PREAMBLE_V2
+        assert "comparable_growth_metrics" in SHARED_PREAMBLE_V2
+        assert "like-for-like" in SHARED_PREAMBLE_V2.lower() or "comparable basis" in SHARED_PREAMBLE_V2.lower()
 
 
 # ---------------------------------------------------------------------------

@@ -3358,6 +3358,10 @@ class ResearchDataAPI:
         "subsidiaries",
         "qa_session",
         "flags",
+        # Management's "like-for-like / comparable basis" growth statements.
+        # Backstop for trend math when annual_financials has a reclassification
+        # flag — see plans/screener-data-discontinuity.md Strategy 3.
+        "comparable_growth_metrics",
     )
 
     def get_concall_insights(
