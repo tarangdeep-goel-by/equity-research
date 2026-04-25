@@ -98,9 +98,16 @@ class TestConcurrentReadWrite:
 
     def test_concurrent_read_write(self, tmp_db):
         """Reader and writer run simultaneously without crash."""
+        # Use today-relative dates so the rows stay inside get_flows(days=30)
+        # regardless of when the suite runs (was previously hardcoded
+        # 2026-03-25/26 — fell out of the 30-day window once today drifted past
+        # ~2026-04-25).
+        d_pre = (date.today() - timedelta(days=2)).isoformat()
+        d_new = (date.today() - timedelta(days=1)).isoformat()
+
         # Pre-populate
         with FlowStore(db_path=tmp_db) as store:
-            store.upsert_flows([make_daily_flow(dt="2026-03-25")])
+            store.upsert_flows([make_daily_flow(dt=d_pre)])
 
         results: list[int] = []
         errors: list[Exception] = []
@@ -116,7 +123,7 @@ class TestConcurrentReadWrite:
         def writer(db_path: Path) -> None:
             try:
                 with FlowStore(db_path=db_path) as store:
-                    store.upsert_flows([make_daily_flow(dt="2026-03-26")])
+                    store.upsert_flows([make_daily_flow(dt=d_new)])
             except Exception as e:
                 errors.append(e)
 
