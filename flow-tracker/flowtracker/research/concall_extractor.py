@@ -137,6 +137,26 @@ _CONCALL_EXTRACTION_SCHEMA = {
                     "type": "object",
                     "additionalProperties": {"type": "string"},
                 },
+                # Management-stated "like-for-like / comparable basis" growth.
+                # Backstop for when Screener's annual_financials has a
+                # reclassification flag (Strategy 3 of
+                # plans/screener-data-discontinuity.md) — management's own
+                # comparable numbers are higher precision than computing-
+                # from-non-corrupted-lines.
+                "comparable_growth_metrics": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "metric": {"type": "string"},
+                            "value": {"type": "string"},
+                            "comparable_basis": {"type": "string"},
+                            "period": {"type": "string"},
+                            "context": {"type": "string"},
+                            "speaker": {"type": "string"},
+                        },
+                    },
+                },
             },
         },
     },
@@ -572,7 +592,31 @@ Extract into this JSON structure:
     // A flat dictionary of EVERY specific number mentioned in the call.
     // This serves as a quick reference — even numbers not in the structured sections above.
     // Examples: "total_customers": "8.6M", "app_downloads": "50M", "market_share": "60%"
-  }
+  },
+
+  "comparable_growth_metrics": [
+    // Management's "like-for-like" / "on a comparable basis" / "ex-merger" /
+    // "ex-FX" / "constant currency" / "pre-merger comparable" growth statements.
+    // These are management-adjusted figures stated in the concall for any metric
+    // whose YoY comparison is distorted by a one-off (merger, demerger, divestiture,
+    // FX, regulatory reclass, accounting standard change). Capture them VERBATIM —
+    // these become the authoritative cross-period comparison when Screener's
+    // as-reported numbers are bucketing-corrupted.
+    //
+    // Trigger phrases to look for: "on a like-for-like basis", "comparable basis",
+    // "ex-merger", "excluding merger impact", "pre-merger comparable", "constant
+    // currency", "ex-FX", "organic growth", "underlying growth", "adjusted for
+    // [event]", "normalized for [event]", "if we exclude", "stripping out".
+    {
+      "metric": "<the metric, e.g. 'NII', 'opex', 'revenue', 'EPS', 'CASA growth'>",
+      "value": "<exact value as stated, e.g. '7.2%', '₹15,200 Cr', '+9 bps'>",
+      "comparable_basis": "<the adjustment, e.g. 'like-for-like ex HDFC Ltd merger', 'pre-merger comparable basis', 'constant currency', 'ex-Cairn demerger'>",
+      "period": "<comparison period, e.g. 'FY26 vs FY25', 'Q4 YoY', 'TTM'>",
+      "context": "<full quote or close paraphrase showing the management adjustment logic>",
+      "speaker": "<CFO|CEO|MD|name if stated, else null>"
+    }
+    // Empty array [] if no comparable-basis statements were made — DO NOT invent.
+  ]
 }
 ```
 
@@ -752,7 +796,8 @@ async def _recover_json_from_prose(
         '  "financial_metrics": { "consolidated": {"revenue_from_operations_cr": {"value": null}, "ebitda_cr": {"value": null, "margin_pct": null}, "net_profit_cr": {"value": null}}, "segment_breakdown": [{"segment": "", "revenue_cr": null, "growth": "", "margin_pct": null}] },\n'
         '  "management_commentary": { "guidance": {"revenue_growth": "", "margin_target": ""}, "strategy_updates": [], "challenges_acknowledged": [] },\n'
         '  "flags": { "guidance_change": "", "positive_surprises": [], "red_flags": [] },\n'
-        '  "key_numbers_mentioned": {}\n'
+        '  "key_numbers_mentioned": {},\n'
+        '  "comparable_growth_metrics": [{"metric": "", "value": "", "comparable_basis": "", "period": "", "context": "", "speaker": ""}]\n'
         "}\n"
         "```\n\n"
         f"Prose to convert:\n{prose[:8000]}"

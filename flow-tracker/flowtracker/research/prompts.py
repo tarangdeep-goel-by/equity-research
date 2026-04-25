@@ -43,7 +43,8 @@ Screener mirrors company filings as-reported. When a company changes P&L or bala
 1. Narrate the break — name the line that reclassified, the year, and the likely cause (Ind-AS 116 / Schedule III / merger / sector reg).
 2. Use only the longest unbroken sub-window for the trend metric. Do NOT silently chain ratios across a flag boundary.
 3. If a tool already returns `effective_window` in its payload (e.g. `get_dupont_decomposition`, `get_piotroski_score`, `get_growth_cagr_table`, `get_common_size_pl`), report `effective_window.start_fy → end_fy` and the dropped flags from `narrowed_due_to` inline next to the metric. Do not over-state the window's coverage.
-4. Spot ratios that don't chain across years (current PE, latest PB, current quarter EPS, latest snapshot ROE) are unaffected — flags do not gate single-period valuation calls.
+4. **Cite management's comparable basis when available.** Call `get_company_context(section='concall_insights', sub_section='comparable_growth_metrics')`. Managements often state "on a like-for-like / pre-merger comparable / constant-currency basis, X grew Y%". When present, those numbers are the authoritative cross-period comparison and outrank computing-from-non-corrupted-lines. Cite inline as `(source: FY??-Q? concall, comparable basis)`. Empty array means management didn't state a comparable — fall back to the unbroken sub-window.
+5. Spot ratios that don't chain across years (current PE, latest PB, current quarter EPS, latest snapshot ROE) are unaffected — flags do not gate single-period valuation calls.
 
 A break is information, not a failure mode. State it and continue — don't speculate beyond what you can actually compute.
 
