@@ -1769,13 +1769,33 @@ class ResearchDataAPI:
     # --- Macro Context ---
 
     def get_macro_snapshot(self) -> dict:
-        """Current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec."""
-        row = self._store._conn.execute(
-            "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 1"
-        ).fetchone()
-        if row:
-            return _clean(dict(row))
-        return {}
+        """Current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec.
+
+        Coalesces field-by-field across the most recent 7 rows so that a
+        partially-populated today-row (e.g. only USD/INR fetched mid-day)
+        falls forward to the most recent prior value for any null field.
+        The top-level ``date`` is the latest row's date; per-field
+        ``<field>_as_of`` records the source date when it differs.
+        """
+        rows = self._store._conn.execute(
+            "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 7"
+        ).fetchall()
+        if not rows:
+            return {}
+        latest_date = rows[0]["date"]
+        result: dict = {"date": latest_date}
+        keys = set(rows[0].keys())
+        for field in ("india_vix", "usd_inr", "brent_crude", "gsec_10y"):
+            if field not in keys:
+                continue
+            for row in rows:
+                v = row[field]
+                if v is not None:
+                    result[field] = v
+                    if row["date"] != latest_date:
+                        result[f"{field}_as_of"] = row["date"]
+                    break
+        return _clean(result)
 
     def get_fii_dii_streak(self) -> dict:
         """Current FII/DII buying/selling streak."""
@@ -1792,7 +1812,12 @@ class ResearchDataAPI:
         return _clean([r.model_dump() for r in rows])
 
     def get_commodity_snapshot(self) -> dict:
-        """Current commodity prices with 1M/3M/1Y changes."""
+        """Current commodity prices with 1M/3M/1Y changes.
+
+        Includes gold, silver (USD + INR variants from commodity_prices) and
+        Brent crude (sourced from macro_daily.brent_crude). Brent carries
+        forward across the most recent rows when the latest row is null.
+        """
         result = {}
         for commodity in ("GOLD", "GOLD_INR", "SILVER", "SILVER_INR"):
             prices = self._store.get_commodity_prices(commodity, days=400)
@@ -1820,7 +1845,33 @@ class ResearchDataAPI:
                 "change_1y_pct": _change(252),
             }
 
-        return result if result else {"available": False, "reason": "No commodity data"}
+        # Brent crude from macro_daily — surface as a commodity entry.
+        # Use only non-null brent_crude rows so 1M/3M/1Y deltas are computed
+        # against actual prices, and the latest entry carries forward when
+        # today's row is partial.
+        brent_rows = self._store._conn.execute(
+            "SELECT date, brent_crude FROM macro_daily "
+            "WHERE brent_crude IS NOT NULL ORDER BY date ASC"
+        ).fetchall()
+        brent_data = [(r["date"], r["brent_crude"]) for r in brent_rows]
+        if brent_data:
+            latest_brent = brent_data[-1][1]
+
+            def _brent_change(days_ago: int, _data=brent_data, _latest=latest_brent) -> float | None:
+                target_idx = max(0, len(_data) - days_ago)
+                if target_idx < len(_data) and _data[target_idx][1]:
+                    return round((_latest - _data[target_idx][1]) / _data[target_idx][1] * 100, 1)
+                return None
+
+            result["brent"] = {
+                "price": latest_brent,
+                "date": brent_data[-1][0],
+                "change_1m_pct": _brent_change(22),
+                "change_3m_pct": _brent_change(66),
+                "change_1y_pct": _brent_change(252),
+            }
+
+        return _clean(result) if result else {"available": False, "reason": "No commodity data"}
 
     # --- Filings ---
 

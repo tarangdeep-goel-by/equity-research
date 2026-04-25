@@ -210,6 +210,70 @@ class TestMacroSnapshot:
         assert "india_vix" in data
         assert "usd_inr" in data
 
+    def test_carries_forward_partial_today_row(self, tmp_db, monkeypatch):
+        """Today's row has only usd_inr; vix/brent/gsec must carry forward
+        from yesterday's complete row, while top-level ``date`` stays today.
+        """
+        from flowtracker.macro_models import MacroSnapshot
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        store = FlowStore(db_path=tmp_db)
+        store.upsert_macro_snapshots([
+            MacroSnapshot(
+                date="2026-04-24",
+                india_vix=19.71,
+                usd_inr=94.11,
+                brent_crude=99.78,
+                gsec_10y=6.40,
+            ),
+            MacroSnapshot(
+                date="2026-04-25",
+                india_vix=None,
+                usd_inr=94.22,
+                brent_crude=None,
+                gsec_10y=None,
+            ),
+        ])
+        store.close()
+
+        api = ResearchDataAPI()
+        try:
+            data = api.get_macro_snapshot()
+        finally:
+            api.close()
+
+        # Top-level date is today's date (latest row).
+        assert data["date"] == "2026-04-25"
+        # usd_inr from today's row.
+        assert data["usd_inr"] == 94.22
+        # Other fields carried forward from 2026-04-24.
+        assert data["india_vix"] == 19.71
+        assert data["brent_crude"] == 99.78
+        assert data["gsec_10y"] == 6.40
+        # ``<field>_as_of`` records the source date when it differs.
+        assert data["india_vix_as_of"] == "2026-04-24"
+        assert data["brent_crude_as_of"] == "2026-04-24"
+        assert data["gsec_10y_as_of"] == "2026-04-24"
+        # No as_of marker for today-sourced field.
+        assert "usd_inr_as_of" not in data
+
+
+class TestCommoditySnapshot:
+    def test_includes_brent(self, api: ResearchDataAPI):
+        """Brent crude (from macro_daily.brent_crude) must be exposed
+        alongside gold/silver with the same delta shape.
+        """
+        data = api.get_commodity_snapshot()
+        assert isinstance(data, dict)
+        assert "brent" in data
+        brent = data["brent"]
+        assert "price" in brent
+        assert "date" in brent
+        assert "change_1m_pct" in brent
+        assert "change_3m_pct" in brent
+        assert "change_1y_pct" in brent
+        assert isinstance(brent["price"], (int, float))
+
 
 class TestFiiDiiStreak:
     def test_returns_dict_with_fii_dii_keys(self, api: ResearchDataAPI):

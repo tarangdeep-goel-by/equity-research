@@ -282,6 +282,134 @@ def test_body_text_fallback_skipped_when_heading_slice_is_large_enough():
     assert idx["mdna"]["char_start"] == 0
 
 
+def test_auditor_report_iar_with_annexure_a_subsection_picks_iar_body():
+    """Regression for HDFCBANK FY25 bug: the IAR has many L2 sub-headings
+    (Opinion, Basis for Opinion, Key Audit Matters, Other Information,
+    Auditor's Responsibilities, …). The CARO sub-section appears as
+    'Annexure A to Independent Auditor's Report' WITHIN the IAR body.
+
+    Old heuristic: largest-section-wins picked the Annexure A heading
+    (because it matches the auditor regex) and ended at the next L2
+    heading inside it — yielding a 200-char header-only slice, missing
+    the entire IAR body with KAMs.
+
+    Fix: prefer the IAR start anchor ('Report on Audit of the
+    [Standalone|Consolidated] Financial Statements'), exclude Annexure-A
+    sub-headings as candidate starts, and end the auditor section at the
+    next canonical-section heading or at the financial statements
+    (Balance Sheet / Profit and Loss / Cash Flow), NOT at the next L2.
+    """
+    md = (
+        "## DIRECTORS' REPORT\n\n"
+        + ("dr body " * 50) + "\n\n"
+        # Start of standalone IAR — this is the heading the fix must anchor on.
+        "## To the Members of HDFC Bank Limited\n\n"
+        "## Report on Audit of the Standalone Financial Statements\n\n"
+        "## Opinion\n\n"
+        + ("opinion body " * 100) + "\n\n"
+        "## Basis for Opinion\n\n"
+        + ("basis body " * 50) + "\n\n"
+        "## Key audit matters\n\n"
+        + ("KAM 1: Provisioning for advances " * 100) + "\n\n"
+        + ("KAM 2: Information technology " * 100) + "\n\n"
+        "## Other Information\n\n"
+        + ("other info " * 50) + "\n\n"
+        "## Auditor's responsibilities for the audit of the Standalone Financial Statements\n\n"
+        + ("auditor resp body " * 50) + "\n\n"
+        "## Other Matters\n\n"
+        + ("other matters body " * 30) + "\n\n"
+        "## Report on other legal and regulatory requirements\n\n"
+        + ("RoLRR body " * 30) + "\n\n"
+        # Annexure A — sub-section of IAR (the CARO/IFC report). The bug
+        # was that this header was the only heading the OLD regex could
+        # match; it then ended at the next L2 inside the annexure (~240 chars).
+        "## Annexure A to Independent Auditor's Report\n\n"
+        "## Report on the Internal Financial Controls\n\n"
+        + ("IFC body " * 30) + "\n\n"
+        "## Management's Responsibility for Internal Financial Controls\n\n"
+        + ("ifc resp body " * 30) + "\n\n"
+        # End boundary: financial statements.
+        "## STANDALONE PROFIT AND LOSS ACCOUNT\n\n"
+        + ("PnL body " * 30) + "\n\n"
+        "## STANDALONE CASH FLOW STATEMENT\n\n"
+        + ("CF body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+
+    assert "auditor_report" in idx, "auditor_report section must be detected"
+    aud = idx["auditor_report"]
+    # Slice should be the full IAR body — many KB, not the 240-char annexure header.
+    assert aud["size_chars"] > 5_000, (
+        f"Expected IAR body >5KB, got {aud['size_chars']} chars — "
+        f"matched_heading={aud.get('matched_heading')!r}"
+    )
+    text = slice_section(md, idx, "auditor_report")
+    # Must contain the actual IAR body markers.
+    assert "Opinion" in text
+    assert "Key audit matters" in text or "KAM 1" in text
+    assert "KAM 1: Provisioning for advances" in text
+    assert "KAM 2: Information technology" in text
+    # Must NOT extend into the financial statements.
+    assert "STANDALONE PROFIT AND LOSS ACCOUNT" not in text
+    assert "PnL body" not in text
+
+
+def test_auditor_report_excludes_annexure_a_as_section_start():
+    """Annexure A is a sub-section of the IAR (CARO / IFC report) — it
+    should NOT be picked as the auditor_report section start, even when
+    no IAR start anchor is detectable as a heading.
+    """
+    md = (
+        "## DIRECTORS' REPORT\n\n"
+        + ("dr body " * 50) + "\n\n"
+        # Only the Annexure A heading is detected as auditor-related —
+        # but it points at the CARO report, not the IAR. With the old
+        # heuristic this would be picked. With the fix, the auditor
+        # section must either be absent or come from a different anchor.
+        "## Annexure A to Independent Auditor's Report\n\n"
+        + ("annexure body " * 100) + "\n\n"
+        "## STANDALONE PROFIT AND LOSS ACCOUNT\n\n"
+        + ("pnl body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    # Either the section is absent OR (if a body-text fallback fires) it
+    # comes from a non-Annexure source. The Annexure heading itself must
+    # not be the matched_heading.
+    if "auditor_report" in idx:
+        matched = idx["auditor_report"].get("matched_heading", "").lower()
+        assert "annexure" not in matched, (
+            f"Annexure A must not be picked as auditor_report start; "
+            f"got matched_heading={matched!r}"
+        )
+
+
+def test_auditor_report_anchored_on_report_on_audit_heading():
+    """The 'Report on Audit of the (Standalone|Consolidated) Financial
+    Statements' heading is the canonical IAR opener in Indian banks/NBFCs
+    and many large issuers. It must match auditor_report.
+    """
+    md = (
+        "## DIRECTORS' REPORT\n\n"
+        + ("dr " * 50) + "\n\n"
+        "## Report on Audit of the Consolidated Financial Statements\n\n"
+        + ("auditor body " * 200) + "\n\n"
+        "## Opinion\n\n"
+        + ("opinion " * 100) + "\n\n"
+        "## CONSOLIDATED BALANCE SHEET\n\n"
+        + ("bs body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "auditor_report" in idx
+    aud = idx["auditor_report"]
+    assert aud["size_chars"] > 2_000
+    text = slice_section(md, idx, "auditor_report")
+    assert "auditor body" in text
+    assert "CONSOLIDATED BALANCE SHEET" not in text
+
+
 def test_section_not_present_is_absent_from_index():
     md = "# Just a cover\n\nNothing else here.\n"
     headings = _scan_headings(md)

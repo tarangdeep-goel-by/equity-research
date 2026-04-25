@@ -14,6 +14,33 @@ from flowtracker.fund_client import nse_symbol
 logger = logging.getLogger(__name__)
 
 
+def _format_quarter(value) -> str:
+    """Format a yfinance earnings-history index value as YYYY-MM-DD.
+
+    Real yfinance returns `pd.Timestamp` (DatetimeIndex). Some test mocks pass a
+    plain string like "2025Q1" or "Q1 2025" — pass those through unchanged.
+    Returns empty string for unparseable / NaT / None inputs.
+    """
+    if value is None:
+        return ""
+    # pandas Timestamp / numpy datetime — render as YYYY-MM-DD
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        try:
+            s = iso()
+        except Exception:
+            return ""
+        # Drop time component if present
+        return s.split("T")[0] if s and s != "NaT" else ""
+    s = str(value).strip()
+    if s in ("", "NaT", "nan", "None"):
+        return ""
+    # If it looks like an ISO datetime ("2025-03-31 00:00:00"), keep the date part.
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    return s
+
+
 def _extract_cy_ny_eps(ticker) -> tuple[float | None, float | None]:
     """Pull consensus EPS for current year (`0y`) and next year (`+1y`) from
     yfinance's `earnings_estimate` DataFrame. Returns (None, None) on any
@@ -118,13 +145,27 @@ class EstimatesClient:
                 eh = ticker.get_earnings_history()
                 if eh is not None and not eh.empty:
                     surprises = []
-                    for _, row in eh.iterrows():
+                    for idx, row in eh.iterrows():
                         actual = row.get("epsActual")
                         estimate = row.get("epsEstimate")
                         surprise = None
                         if actual is not None and estimate is not None and estimate != 0:
                             surprise = round((actual - estimate) / abs(estimate) * 100, 2)
-                        quarter = str(row.get("quarter", ""))
+                        # quarter is the DataFrame index (named "quarter"), not a column.
+                        # Real yfinance returns a DatetimeIndex; legacy mocks may pass it
+                        # as a column with a default RangeIndex. Prefer the column when
+                        # present (avoids picking up "0", "1", ...); otherwise use index.
+                        col_q = str(row.get("quarter", "") or "").strip()
+                        quarter = col_q or _format_quarter(idx)
+                        if not quarter:
+                            # Skip rows we can't anchor to a quarter — quarter_end is part
+                            # of the UNIQUE constraint and must never be empty.
+                            logger.warning(
+                                "Skipping earnings row for %s: no quarter (idx=%r)",
+                                symbol,
+                                idx,
+                            )
+                            continue
                         surprises.append(EarningsSurprise(
                             symbol=symbol,
                             quarter_end=quarter,

@@ -53,9 +53,18 @@ AR_SECTIONS: dict[str, list[str]] = {
         r"enterprise\s+risk\s+management",
     ],
     "auditor_report": [
+        # Canonical IAR opener variants. Order matters only inside
+        # `_AUDITOR_EXCLUDE_RE` (below) which subtracts Annexure-A headings
+        # from the candidate set.
         r"independent\s+auditor'?s?\s+report",
         r"auditor'?s?\s+report",
         r"report\s+of\s+the\s+(independent\s+)?auditor",
+        # Indian banks / NBFCs / large issuers: Docling often emits the
+        # IAR body without an explicit "Independent Auditor's Report"
+        # heading; the actual section opener is "Report on Audit of the
+        # [Standalone|Consolidated] Financial Statements" (HDFCBANK FY25,
+        # SBIN FY25, etc.).
+        r"report\s+on\s+(the\s+)?audit\s+of\s+the\s+(standalone|consolidated)\s+financial\s+statements",
     ],
     "corporate_governance": [
         r"corporate\s+governance(\s+report)?",
@@ -93,6 +102,35 @@ AR_SECTIONS: dict[str, list[str]] = {
         r"share[\s-]?based\s+payments?\s+disclosure",
     ],
 }
+
+
+# Headings that look like they match `auditor_report` but are actually
+# *sub-sections* of the IAR (CARO / Internal Financial Controls report).
+# These must NOT be picked as the section start — the real IAR body lives
+# above them and the sub-section heading would yield a tiny header-only slice
+# (HDFCBANK FY25: 239 chars instead of ~40KB).
+_AUDITOR_EXCLUDE_RE = re.compile(
+    r"annexure\s+[a-z0-9]+\s+(to|of)\s+(the\s+)?(independent\s+)?auditor",
+    re.IGNORECASE,
+)
+
+# Headings that mark the end of the auditor_report section. The IAR body
+# is normally followed by the audited financial statements (Balance Sheet,
+# Profit and Loss, Cash Flow). The IAR itself contains many L2 sub-headings
+# (Opinion, Basis for Opinion, Key Audit Matters, …) so the default
+# same-or-higher-level end heuristic over-cuts the section. For
+# `auditor_report` we instead end at the next financial-statements anchor
+# or the next OTHER canonical-section heading, whichever comes first.
+_AUDITOR_END_RE = re.compile(
+    r"^(\s*)("
+    r"(consolidated|standalone)?\s*balance\s+sheet"
+    r"|(consolidated|standalone)?\s*statement\s+of\s+(the\s+)?profit\s+(and|&)\s+loss"
+    r"|(consolidated|standalone)?\s*profit\s+(and|&)\s+loss\s+(account|statement)"
+    r"|(consolidated|standalone)?\s*cash\s+flow\s+statement"
+    r"|statement\s+of\s+changes\s+in\s+equity"
+    r")",
+    re.IGNORECASE,
+)
 
 
 # Minimum size for a heading-based section match to be trusted without fallback.
@@ -137,6 +175,13 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
         text = h["text"]
         for canonical, regexes in compiled.items():
             if any(rx.search(text) for rx in regexes):
+                # Exclude Annexure A / B / etc. sub-sections of the IAR from
+                # being picked as the auditor_report section start — they're
+                # sub-sections (CARO / Internal Financial Controls report),
+                # not the main IAR body.
+                if canonical == "auditor_report" and _AUDITOR_EXCLUDE_RE.search(text):
+                    matched_heading_ids.add(h["char_offset"])
+                    break
                 candidates.setdefault(canonical, []).append(h)
                 matched_heading_ids.add(h["char_offset"])
                 break  # one canonical per heading
@@ -153,7 +198,7 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
     for canonical, hits in candidates.items():
         scored = []
         for h in hits:
-            end = _find_section_end(md, headings, h)
+            end = _find_section_end(md, headings, h, canonical=canonical, all_compiled=compiled)
             scored.append((end - h["char_offset"], h, end))
         # Largest section wins (real header has more content than a forward reference).
         scored.sort(key=lambda t: t[0], reverse=True)
@@ -290,10 +335,49 @@ def _body_text_fallback(
     return best
 
 
-def _find_section_end(md: str, headings: list[dict], h: dict) -> int:
-    """Return char offset where this section ends — start of next same-or-higher-level heading."""
-    end = len(md)
+def _find_section_end(
+    md: str,
+    headings: list[dict],
+    h: dict,
+    canonical: str | None = None,
+    all_compiled: dict[str, list[re.Pattern]] | None = None,
+) -> int:
+    """Return char offset where this section ends.
+
+    Default: start of next same-or-higher-level heading (works for most
+    sections that nest sub-headings cleanly under their own opener).
+
+    Special case for `auditor_report`: the IAR opener is L2 in most ARs
+    but the IAR body itself fans out into many L2 sub-headings (Opinion,
+    Basis for Opinion, Key Audit Matters, Other Information, …) so the
+    default rule over-cuts the section to the first sub-heading. Instead,
+    end at the first downstream heading that EITHER:
+      - matches a financial-statements anchor (Balance Sheet, P&L, Cash
+        Flow, Statement of Changes in Equity) — this is what follows the
+        IAR in every Indian AR, OR
+      - matches a DIFFERENT canonical section (BRSR, Corporate Governance,
+        etc.) — for layouts where the IAR is followed by another report.
+    Falls back to default behaviour if neither anchor is found.
+    """
     h_idx = headings.index(h)
+    if canonical == "auditor_report":
+        for fwd in headings[h_idx + 1:]:
+            text = fwd["text"]
+            if _AUDITOR_END_RE.search(text):
+                return fwd["char_offset"]
+            if all_compiled is not None:
+                for other, other_rxs in all_compiled.items():
+                    if other == canonical:
+                        continue
+                    if any(rx.search(text) for rx in other_rxs):
+                        # Skip Annexure-A-style sub-headings — they're not
+                        # "other sections", they're part of the IAR.
+                        if other == "auditor_report":
+                            continue
+                        return fwd["char_offset"]
+        return len(md)
+
+    end = len(md)
     for fwd in headings[h_idx + 1:]:
         if fwd["level"] <= h["level"]:
             end = fwd["char_offset"]

@@ -109,6 +109,47 @@ class TestFetchGsecYield:
 
         assert result == 7.15
 
+    def test_skips_security_coupon_uses_ytm_column(self):
+        """CCIL 4-column layout: tenor | security | (extra) | YTM.
+
+        The Security cell contains a coupon like '6.33% GS 2035' \u2014 the parser
+        must not return that coupon as the yield. It must return the YTM cell.
+        Regression test for the gsec_10y NULL-since-2026-04-18 bug where the
+        previous regex matched the security coupon (6.33) instead of the
+        actual YTM (6.8537).
+        """
+        html = """
+        <table>
+        <thead><tr><th>Date</th><th>Tenor Bucket</th><th>Security</th><th>YTM (%)</th></tr></thead>
+        <tbody>
+        <tr><td>2026-04-24</td><td>4Y-5Y</td><td>6.36% GS 2031</td><td>6.7025</td></tr>
+        <tr><td>2026-04-24</td><td>9Y-10Y</td><td>6.33% GS 2035</td><td>6.8537</td></tr>
+        <tr><td>2026-04-24</td><td>13Y-15Y</td><td>6.68% GS 2040</td><td>7.2962</td></tr>
+        </tbody>
+        </table>
+        """
+        with respx.mock:
+            respx.get(url__regex=r"ccilindia\.com").respond(200, text=html)
+            with MacroClient() as client:
+                result = client._fetch_gsec_yield()
+
+        assert result == 6.85, f"expected YTM 6.85, got {result} (probably coupon)"
+
+    def test_implausible_value_returns_none(self):
+        """If the parsed value is outside the plausible 10Y yield range
+        (3%-12%), return None and log error rather than persist garbage."""
+        html = """
+        <table>
+        <tr><td>9Y-10Y</td><td>foo</td><td>0.5</td></tr>
+        </table>
+        """
+        with respx.mock:
+            respx.get(url__regex=r"ccilindia\.com").respond(200, text=html)
+            with MacroClient() as client:
+                result = client._fetch_gsec_yield()
+
+        assert result is None
+
 
 class TestSnapshotGsecCarryForward:
     """fetch_snapshot must carry today's gsec forward to all prior days in window."""
