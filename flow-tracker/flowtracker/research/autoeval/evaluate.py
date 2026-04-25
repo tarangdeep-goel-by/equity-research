@@ -899,6 +899,28 @@ def _sector_kpis_populated(symbol: str) -> bool:
     return bool(data.get("available_kpis"))
 
 
+def _fno_eligible(symbol: str) -> bool:
+    """True iff symbol is in NSE's F&O-eligible universe (`fno_universe` table).
+
+    Powers the fno_positioning skip guard — the agent reasons about
+    derivative positioning, which only exists for the ~200 F&O-eligible
+    stocks. Non-eligible symbols would produce empty briefings that
+    waste a Gemini grading call. SKIP keeps the gap visible without
+    grade pollution.
+
+    Failure-soft: any exception (DB unreachable, table missing, empty
+    universe) returns False so the SKIP path engages rather than crashing
+    the run. Operators can populate the universe via `flowtrack fno
+    universe refresh`.
+    """
+    from flowtracker.store import FlowStore
+    try:
+        with FlowStore() as store:
+            return symbol.upper() in set(store.get_fno_eligible_stocks())
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -924,6 +946,21 @@ async def _eval_sector(agent: str, sector_name: str, sector_cfg: dict,
             agent=agent, stock=stock, sector=sector_type,
             grade="SKIP", grade_numeric=0,
             summary=f"SKIP_MISSING_KPIS: {msg}",
+        )
+
+    # Pre-run eligibility guard: fno_positioning is scoped to F&O-eligible
+    # stocks only. Non-eligible symbols would produce a graceful-empty
+    # briefing that wastes a grading call. SKIP keeps the gap visible.
+    if agent == "fno_positioning" and not _fno_eligible(stock):
+        msg = (
+            f"SKIP: {stock} not in NSE F&O eligibility universe, "
+            f"run `flowtrack fno universe refresh` to repopulate if missing."
+        )
+        print(f"  [WARN] {msg}", file=sys.stderr)
+        return AgentEvalResult(
+            agent=agent, stock=stock, sector=sector_type,
+            grade="SKIP", grade_numeric=0,
+            summary=f"SKIP_NOT_FNO_ELIGIBLE: {msg}",
         )
 
     # Step 1: Run agent (unless --skip-run)
