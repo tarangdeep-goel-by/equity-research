@@ -650,3 +650,94 @@ class TestSectorKpisSkipGuard:
         assert ev._agent_uses_sector_kpis("risk") is False
         # unknown agent → False (defensive)
         assert ev._agent_uses_sector_kpis("nonexistent_agent_xyz") is False
+
+
+class TestFnoPositioningEligibilityGuard:
+    """_eval_sector skips fno_positioning for symbols outside the NSE F&O
+    eligibility universe. Other agents are unaffected."""
+
+    @pytest.fixture
+    def _no_run_agent(self, monkeypatch):
+        """Stub run_agent so a failed pre-guard doesn't shell out to flowtrack."""
+        calls = {"count": 0}
+
+        def fake_run(agent, stock):
+            calls["count"] += 1
+            return 0.1, True
+
+        monkeypatch.setattr(ev, "run_agent", fake_run)
+        return calls
+
+    def test_skips_fno_positioning_when_not_eligible(self, monkeypatch, capsys, _no_run_agent):
+        """fno_positioning + non-eligible stock → SKIP with SKIP_NOT_FNO_ELIGIBLE marker."""
+        monkeypatch.setattr(ev, "_fno_eligible", lambda _sym: False)
+        import asyncio
+        result = asyncio.run(ev._eval_sector(
+            agent="fno_positioning", sector_name="bfsi",
+            sector_cfg={"stock": "TINPLATE", "type": "Steel/SME"},
+            target_numeric=90, skip_run=False, cycle=0,
+        ))
+        assert result.grade == "SKIP"
+        assert "SKIP_NOT_FNO_ELIGIBLE" in result.summary
+        assert "TINPLATE" in result.summary
+        assert "fno universe refresh" in result.summary
+        assert _no_run_agent["count"] == 0, "agent must NOT be invoked when skipped"
+        err = capsys.readouterr().err
+        assert "SKIP: TINPLATE not in NSE F&O eligibility universe" in err
+
+    def test_runs_fno_positioning_when_eligible(self, monkeypatch, _no_run_agent):
+        """fno_positioning + eligible stock → agent runs (no SKIP)."""
+        monkeypatch.setattr(ev, "_fno_eligible", lambda _sym: True)
+        monkeypatch.setattr(ev, "_sector_kpis_populated", lambda _sym: True)
+        monkeypatch.setattr(ev, "read_report", lambda _a, _s: "# Report\n\nbody")
+        monkeypatch.setattr(ev, "read_agent_evidence", lambda _a, _s: "")
+
+        async def fake_eval(agent, stock, sector_type, report_md, evidence=""):
+            return ev.AgentEvalResult(
+                agent=agent, stock=stock, sector=sector_type,
+                grade="A-", grade_numeric=90,
+            )
+
+        monkeypatch.setattr(ev, "eval_with_gemini", fake_eval)
+        import asyncio
+        result = asyncio.run(ev._eval_sector(
+            agent="fno_positioning", sector_name="bfsi",
+            sector_cfg={"stock": "RELIANCE", "type": "Conglomerate"},
+            target_numeric=90, skip_run=False, cycle=0,
+        ))
+        assert result.grade == "A-"
+        assert _no_run_agent["count"] == 1
+
+    def test_does_not_skip_other_agents_when_not_fno_eligible(self, monkeypatch, _no_run_agent):
+        """ownership agent on a non-F&O stock → runs normally; eligibility guard
+        is scoped to fno_positioning only."""
+        monkeypatch.setattr(ev, "_fno_eligible", lambda _sym: False)
+        monkeypatch.setattr(ev, "_sector_kpis_populated", lambda _sym: True)
+        monkeypatch.setattr(ev, "read_report", lambda _a, _s: "# Report\n\nbody")
+        monkeypatch.setattr(ev, "read_agent_evidence", lambda _a, _s: "")
+
+        async def fake_eval(agent, stock, sector_type, report_md, evidence=""):
+            return ev.AgentEvalResult(
+                agent=agent, stock=stock, sector=sector_type,
+                grade="B+", grade_numeric=87,
+            )
+
+        monkeypatch.setattr(ev, "eval_with_gemini", fake_eval)
+        import asyncio
+        result = asyncio.run(ev._eval_sector(
+            agent="ownership", sector_name="auto",
+            sector_cfg={"stock": "TINPLATE", "type": "Steel/SME"},
+            target_numeric=90, skip_run=False, cycle=0,
+        ))
+        assert result.grade != "SKIP"
+        assert _no_run_agent["count"] == 1
+
+    def test_fno_eligible_helper_failure_soft(self, monkeypatch):
+        """If FlowStore raises (DB missing, table missing), helper returns False
+        so the SKIP path engages instead of crashing the whole run."""
+        class _BoomStore:
+            def __enter__(self): raise RuntimeError("simulated DB boom")
+            def __exit__(self, *a): return False
+
+        monkeypatch.setattr("flowtracker.store.FlowStore", lambda *a, **k: _BoomStore())
+        assert ev._fno_eligible("RELIANCE") is False

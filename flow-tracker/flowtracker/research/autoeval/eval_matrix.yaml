@@ -14,6 +14,11 @@ agents:
   - risk
   - technical
   - sector
+  # Sprint 3 — F&O Positioning. Tier-3 supplementary specialist; runs only for
+  # F&O-eligible symbols. _fno_eligible() in evaluate.py SKIPs non-eligible
+  # rows so the matrix can stay sector-balanced without forcing every stock
+  # to be derivative-traded.
+  - fno_positioning
 
 sectors:
   bfsi:
