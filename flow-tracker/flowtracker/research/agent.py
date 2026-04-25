@@ -41,6 +41,7 @@ from flowtracker.research.tools import (
     _tool_result_cache,
     BUSINESS_AGENT_TOOLS_V2,
     FINANCIAL_AGENT_TOOLS_V2,
+    FNO_POSITIONING_AGENT_TOOLS_V2,
     HISTORICAL_ANALOG_AGENT_TOOLS_V2,
     MACRO_AGENT_TOOLS_V2,
     NEWS_AGENT_TOOLS_V2,
@@ -77,6 +78,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "news": "claude-sonnet-4-6",
     "macro": "claude-sonnet-4-6",
     "historical_analog": "claude-sonnet-4-6",
+    "fno_positioning": "claude-sonnet-4-6",
     "synthesis": "claude-opus-4-6",
     "verifier": "claude-haiku-4-5-20251001",
     "web_research": "claude-sonnet-4-6",
@@ -95,6 +97,7 @@ DEFAULT_EFFORT: dict[str, str] = {
     "news": "medium",
     "macro": "medium",
     "historical_analog": "medium",  # structured pattern matching, not deep reasoning
+    "fno_positioning": "medium",  # structured derivative-positioning interpretation
     "web_research": "medium",  # fact-retrieval, not deep reasoning
     "explainer": "high",
 }
@@ -110,6 +113,7 @@ AGENT_TOOLS: dict[str, list] = {
     "news": NEWS_AGENT_TOOLS_V2,
     "macro": MACRO_AGENT_TOOLS_V2,
     "historical_analog": HISTORICAL_ANALOG_AGENT_TOOLS_V2,
+    "fno_positioning": FNO_POSITIONING_AGENT_TOOLS_V2,
 }
 
 # Agent failure severity tiers for synthesis confidence capping
@@ -120,6 +124,7 @@ AGENT_TIERS = {
     "business": 2, "ownership": 2,
     # Tier 3: Enhancers — sector, market timing, historical analog priors
     "sector": 3, "technical": 3, "news": 3, "macro": 3, "historical_analog": 3,
+    "fno_positioning": 3,  # F&O-eligible only; gracefully empty for non-eligible stocks
 }
 
 # Tier-aware retry counts — tier-1 agents are critical, get extra retries
@@ -136,6 +141,7 @@ AGENT_MAX_TURNS: dict[str, int] = {
     "news": 25,
     "macro": 25,
     "historical_analog": 20,  # 3-5 tool calls + clustering + report
+    "fno_positioning": 15,  # 5 F&O tools + 2 context tools + report
     "web_research": 20,
 }
 
@@ -150,6 +156,7 @@ AGENT_MAX_BUDGET: dict[str, float] = {
     "news": 0.50,
     "macro": 0.60,
     "historical_analog": 0.50,
+    "fno_positioning": 0.40,
     "web_research": 0.50,
 }
 
@@ -250,6 +257,10 @@ _SYNTHESIS_FIELDS = {
     # Historical Analog (Part 1.5) — cohort health + relaxation metadata
     "unique_symbols", "relaxation_level", "relaxation_label", "primary_horizon",
     "toxic_intersections",
+    # F&O Positioning (Sprint 3) — derivative-positioning signals for F&O-eligible stocks
+    "fno_eligible", "as_of_date",
+    "futures_positioning", "options_positioning", "fii_derivative_stance",
+    "interpretation", "key_levels",
 }
 
 
@@ -1441,7 +1452,7 @@ async def run_all_agents(
     from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
-    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro", "historical_analog"]
+    agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro", "historical_analog", "fno_positioning"]
 
     pipeline_started = datetime.now(timezone.utc).isoformat()
     pipeline_start_mono = time.monotonic()
