@@ -1679,12 +1679,16 @@ class TestAnalyticalProfile:
 
 
 class TestPeerComparison:
-    def test_returns_yahoo_peer_dict(self, api):
+    def test_returns_peer_dict(self, api):
+        # PR #103 (peer-source-fallback) added auto-fallback Yahoo→Screener when the
+        # Yahoo recommendation set is sector-noisy; SBIN's live peer set goes down
+        # the screener_fallback path. Either source is a valid contract output;
+        # the consumer-facing shape (subject + peers + source label) is what matters.
         result = api.get_peer_comparison("SBIN")
         assert isinstance(result, dict)
         assert "subject" in result
         assert "peers" in result
-        assert result.get("source") == "yahoo_recommendations"
+        assert result.get("source") in {"yahoo_recommendations", "screener_fallback"}
 
 
 class TestScreenerPeersFallback:
