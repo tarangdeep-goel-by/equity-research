@@ -602,6 +602,22 @@ class ResearchDataAPI:
         rows = self._store.get_annual_financials(symbol, limit=years)
         return _clean([r.model_dump() for r in rows])
 
+    def get_data_quality_flags(
+        self, symbol: str, min_severity: str = "MEDIUM"
+    ) -> list[dict]:
+        """Reclassification flags for `annual_financials` — see flowtracker.data_quality
+        and plans/screener-data-discontinuity.md.
+
+        Each flag marks a YoY break (prior_fy → curr_fy) on a specific line
+        where Screener's bucketing changed (Schedule III, Ind-AS 116 leases,
+        merger/demerger). Multi-year ratios that span a flagged boundary are
+        corrupt — agents should narrow their window or narrate the break.
+
+        min_severity: 'LOW' returns everything; 'MEDIUM' filters out the noisy
+        100-200% band; 'HIGH' returns only sign flips and >500% jumps.
+        """
+        return self._store.get_data_quality_flags(symbol, min_severity=min_severity)
+
     def get_screener_ratios(self, symbol: str, years: int = 10) -> list[dict]:
         """Efficiency ratios: debtor days, inventory days, CCC, working capital days, ROCE%."""
         rows = self._store.get_screener_ratios(symbol, limit=years)
@@ -2961,16 +2977,40 @@ class ResearchDataAPI:
         return [result] if result else []
 
     def get_dupont_decomposition(self, symbol: str) -> dict:
-        """ROE = margin × turnover × leverage (10yr). Uses Screener annual_financials, falls back to FMP key_metrics."""
+        """ROE = margin × turnover × leverage (10yr). Uses Screener annual_financials, falls back to FMP key_metrics.
+
+        If MEDIUM+ data_quality_flags overlap the requested window, the result
+        is computed only on the longest unbroken segment, and the dropped
+        boundary is reported in `effective_window.narrowed_due_to`. Agents should
+        narrate the break rather than chain ratios across it.
+        """
+        from flowtracker.data_quality import longest_unflagged_window
+
         # Try Screener data first
         annuals = self._store.get_annual_financials(symbol, limit=10)
         if annuals:
+            # Narrow to longest unbroken segment if flags overlap.
+            flags = self._store.get_data_quality_flags(symbol, min_severity="MEDIUM")
+            relevant = [f for f in flags if f["curr_fy"] in {a.fiscal_year_end for a in annuals}]
+            segment, dropped = longest_unflagged_window(annuals, relevant)
+            effective_window = {
+                "start_fy": segment[-1].fiscal_year_end if segment else None,
+                "end_fy": segment[0].fiscal_year_end if segment else None,
+                "n_years": len(segment),
+                "narrowed_due_to": [
+                    {"prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                     "line": f["line"], "severity": f["severity"]}
+                    for f in dropped
+                ],
+            }
             decomp = []
-            for i, a in enumerate(annuals):
+            for i, a in enumerate(segment):
                 total_equity = (a.equity_capital or 0) + (a.reserves or 0)
-                # Use average of T and T-1 for balance sheet items (more accurate for growing companies)
-                if i + 1 < len(annuals):
-                    prev = annuals[i + 1]
+                # Use average of T and T-1 for balance sheet items (more accurate
+                # for growing companies). Pull from `segment` not `annuals` so the
+                # prior-year sample stays within the same bucketing era.
+                if i + 1 < len(segment):
+                    prev = segment[i + 1]
                     prev_equity = (prev.equity_capital or 0) + (prev.reserves or 0)
                     prev_ta = prev.total_assets or 0
                     avg_ta = (a.total_assets + prev_ta) / 2 if prev_ta > 0 else a.total_assets
@@ -2991,7 +3031,7 @@ class ResearchDataAPI:
                         "roe_dupont": round(roe, 4),
                     })
             if decomp:
-                return {"source": "screener", "years": decomp}
+                return {"source": "screener", "years": decomp, "effective_window": effective_window}
 
         # Fallback to FMP
         metrics = self._store.get_fmp_key_metrics(symbol, limit=10)
