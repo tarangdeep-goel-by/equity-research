@@ -816,6 +816,31 @@ CREATE TABLE IF NOT EXISTS analog_forward_returns (
     PRIMARY KEY (symbol, as_of_date)
 );
 
+-- Historical Analog (PR-13, issue #23): symbols absent from the live universe
+-- (delisted, demerged, suspended, parked) so cohort base rates aren't biased
+-- toward the current index. Populated by detect_delisted_from_gaps() (≥180d
+-- bhavcopy gap) and consumed by materialize_analog_states.py --include-delisted.
+CREATE TABLE IF NOT EXISTS delisted_symbols (
+    symbol TEXT PRIMARY KEY,
+    last_active_date TEXT,
+    observations INTEGER,
+    reason TEXT,
+    detected_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Historical Analog (PR-13, issue #23): day-over-day price moves >40% with no
+-- matching corporate_actions row (±2 trading days). Manual triage queue —
+-- written by scripts/reconcile_price_cliffs.py, consumed by humans.
+CREATE TABLE IF NOT EXISTS unresolved_cliffs (
+    symbol TEXT NOT NULL,
+    trade_date TEXT NOT NULL,
+    prev_close REAL,
+    close REAL,
+    return_pct REAL,
+    detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, trade_date)
+);
+
 CREATE TABLE IF NOT EXISTS estimate_revisions (
     symbol TEXT NOT NULL,
     date TEXT NOT NULL,
@@ -1148,6 +1173,7 @@ class FlowStore:
         self._migrate_daily_stock_data()
         self._migrate_historical_states()
         self._migrate_fno_tables()
+        self._migrate_survivorship_tables()
 
     def _migrate_analytical_snapshot(self) -> None:
         """Add new columns to analytical_snapshot if they don't exist."""
@@ -1250,6 +1276,21 @@ class FlowStore:
                 self._conn.execute(
                     f"ALTER TABLE daily_stock_data ADD COLUMN {col_name} {col_type}"
                 )
+        self._conn.commit()
+
+    def _migrate_survivorship_tables(self) -> None:
+        """PR-13: idempotent PRAGMA guard for delisted_symbols + unresolved_cliffs."""
+        for table, expected in (
+            ("delisted_symbols",
+             {"symbol", "last_active_date", "observations", "reason", "detected_at"}),
+            ("unresolved_cliffs",
+             {"symbol", "trade_date", "prev_close", "close", "return_pct", "detected_at"}),
+        ):
+            cols = {row[1] for row in
+                    self._conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if cols:
+                missing = expected - cols
+                assert not missing, f"{table} missing {missing}"
         self._conn.commit()
 
     def _migrate_fno_tables(self) -> None:
@@ -4221,6 +4262,63 @@ class FlowStore:
             "SELECT * FROM corporate_actions WHERE symbol = ? ORDER BY ex_date DESC",
             (symbol.upper(),),
         ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- Survivorship-bias instrumentation (PR-13, issues #3 + #23) --
+
+    def upsert_delisted_symbols(self, rows: list[dict]) -> int:
+        """Upsert ``delisted_symbols`` rows. Reason ∈ {gap_180d, manually_parked, unknown}."""
+        for r in rows:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO delisted_symbols "
+                "(symbol, last_active_date, observations, reason) VALUES (?, ?, ?, ?)",
+                (r["symbol"].upper(), r.get("last_active_date"),
+                 r.get("observations"), r.get("reason", "unknown")),
+            )
+        self._conn.commit()
+        return len(rows)
+
+    def get_delisted_symbols(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT symbol, last_active_date, observations, reason, detected_at "
+            "FROM delisted_symbols ORDER BY symbol"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def detect_delisted_from_gaps(self, gap_days: int = 180) -> list[dict]:
+        """Single GROUP BY scan — symbols whose latest bhavcopy row is ≥gap_days old."""
+        rows = self._conn.execute(
+            "SELECT symbol, MAX(date) AS last_active_date, COUNT(*) AS observations "
+            "FROM daily_stock_data GROUP BY symbol "
+            "HAVING DATE(MAX(date)) <= DATE('now', '-' || ? || ' days')",
+            (gap_days,),
+        ).fetchall()
+        return [{"symbol": r["symbol"], "last_active_date": r["last_active_date"],
+                 "observations": r["observations"], "reason": "gap_180d"} for r in rows]
+
+    def upsert_unresolved_cliffs(self, rows: list[dict]) -> int:
+        for r in rows:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO unresolved_cliffs "
+                "(symbol, trade_date, prev_close, close, return_pct) VALUES (?, ?, ?, ?, ?)",
+                (r["symbol"].upper(), r["trade_date"], r.get("prev_close"),
+                 r.get("close"), r.get("return_pct")),
+            )
+        self._conn.commit()
+        return len(rows)
+
+    def get_unresolved_cliffs(self, symbol: str | None = None) -> list[dict]:
+        if symbol:
+            rows = self._conn.execute(
+                "SELECT symbol, trade_date, prev_close, close, return_pct, detected_at "
+                "FROM unresolved_cliffs WHERE symbol = ? ORDER BY trade_date DESC",
+                (symbol.upper(),),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT symbol, trade_date, prev_close, close, return_pct, detected_at "
+                "FROM unresolved_cliffs ORDER BY symbol, trade_date DESC"
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def recompute_adj_close(self, symbol: str) -> int:
