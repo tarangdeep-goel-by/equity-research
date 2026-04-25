@@ -357,30 +357,127 @@ class ResearchDataAPI:
         cutoff = date.today() - timedelta(days=days)
         return first_dt >= cutoff, row["first_date"]
 
+    # --- SOTP: Auto-Discovery (PR-14) ---
+
+    _SOTP_SUFFIX_PAT = re.compile(
+        r"\s+(limited|ltd|pvt|private|company|corp|corporation)\s*$"
+    )
+
+    @staticmethod
+    def _clean_company_name(name: str) -> str:
+        """Normalize for substring matching: strip suffixes (LIMITED/LTD/PVT/...), lowercase."""
+        if not name:
+            return ""
+        s = re.sub(r"[.,]+", " ", name.strip().lower())
+        prev = None
+        while prev != s:
+            prev = s
+            s = ResearchDataAPI._SOTP_SUFFIX_PAT.sub("", s).strip()
+        return re.sub(r"\s+", " ", s)
+
+    def _discover_recent_listings(self, days: int = 180) -> list[dict]:
+        """Symbols whose earliest daily_stock_data row is within the last `days` (cap 540)."""
+        days = max(1, min(int(days), 540))
+        rows = self._store._conn.execute(
+            "SELECT symbol, MIN(date) AS listed_on, COUNT(*) AS observations "
+            "FROM daily_stock_data GROUP BY symbol "
+            "HAVING listed_on >= DATE('now', '-' || ? || ' days') "
+            "ORDER BY listed_on DESC",
+            (days,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def _find_promoter_owned_children(
+        self, parent_symbol: str, candidate_symbols: list[str], min_pct: float = 50.0,
+    ) -> list[dict]:
+        """Latest-quarter promoter rows whose holder_name contains parent name (>= min_pct)."""
+        parent_key = self._clean_company_name(
+            self.get_company_info(parent_symbol).get("company_name", "") or ""
+        )
+        if not parent_key:
+            return []
+        conn = self._store._conn
+        hits: list[dict] = []
+        for sym in candidate_symbols:
+            sym_u = sym.upper()
+            qrow = conn.execute(
+                "SELECT MAX(quarter) AS q FROM shareholder_detail "
+                "WHERE symbol = ? AND classification LIKE 'Promoter%'",
+                (sym_u,),
+            ).fetchone()
+            if not qrow or not qrow["q"]:
+                logger.debug("auto_discovery: no named promoter rows for %s", sym_u)
+                continue
+            last_q = qrow["q"]
+            for pr in conn.execute(
+                "SELECT holder_name, percentage FROM shareholder_detail "
+                "WHERE symbol = ? AND classification LIKE 'Promoter%' AND quarter = ?",
+                (sym_u, last_q),
+            ).fetchall():
+                pct = pr["percentage"] or 0.0
+                if parent_key in self._clean_company_name(pr["holder_name"] or "") and pct >= min_pct:
+                    hits.append({
+                        "symbol": sym_u,
+                        "parent_ownership_pct": round(float(pct), 2),
+                        "promoter_name": pr["holder_name"],
+                        "last_quarter": last_q,
+                    })
+                    break
+        return hits
+
     def get_listed_subsidiaries(self, symbol: str) -> dict | list[dict] | None:
         """Get listed subsidiary valuations for SOTP analysis.
 
-        Reads parent→subsidiary mappings from DB, fetches live market caps
-        from yfinance, and computes per-share value to the parent.
-        Returns None if the company has no listed subsidiaries in DB.
-
-        Plan v2 §7 E10: emits `subsidiaries_listed_recently` flag and per-row
-        `recently_listed`/`listed_on` fields when a subsidiary appears in the
-        last 180 days of bhavcopy listings. Rows with no market cap data yet are
-        tagged `market_cap_cr: null, needs_refresh: true` so agents can see them.
-
-        Returns a dict of shape:
-          {"subsidiaries": [...], "subsidiaries_listed_recently": [...], "_meta": {...}}
-        (legacy list return shape preserved only when zero freshness signal exists).
+        Reads curated parent→subsidiary mappings, fetches live market caps,
+        and computes per-share value to the parent. PR-14 augments with
+        `auto_discovered_candidates` — recently-listed symbols whose latest
+        promoter row names this parent (substring match, >=50% holding).
+        Returns None only when both curated and auto-discovery yield nothing.
         """
         subs = self._store.get_listed_subsidiaries(symbol)
+
+        # Always run auto-discovery so recently-listed children surface
+        # even when no curated mapping exists yet.
+        auto_window_days = 180
+        recent = self._discover_recent_listings(days=auto_window_days)
+        curated_subsymbols = {s["sub_symbol"].upper() for s in subs}
+        candidate_syms = [
+            r["symbol"] for r in recent if r["symbol"].upper() not in curated_subsymbols
+        ]
+        recent_idx = {r["symbol"]: r for r in recent}
+        auto_discovered = [
+            {
+                "subsidiary": h["symbol"],
+                "symbol": h["symbol"],
+                "parent_ownership_pct": h["parent_ownership_pct"],
+                "promoter_name": h["promoter_name"],
+                "listed_on": recent_idx.get(h["symbol"], {}).get("listed_on"),
+                "last_quarter": h["last_quarter"],
+                "confidence": "auto_discovered_needs_verification",
+            }
+            for h in self._find_promoter_owned_children(symbol, candidate_syms)
+        ]
+
+        def _auto_only_payload() -> dict:
+            return {
+                "subsidiaries": [],
+                "subsidiaries_listed_recently": [],
+                "auto_discovered_candidates": auto_discovered,
+                "_meta": {
+                    "freshness_check": "bhavcopy_earliest_date",
+                    "freshness_window_days": auto_window_days,
+                    "auto_discovery_window_days": auto_window_days,
+                },
+            }
+
         if not subs:
-            return None
+            return _auto_only_payload() if auto_discovered else None
 
         import yfinance as yf
         parent_shares = self.get_valuation_snapshot(symbol).get("shares_outstanding", 0)
         if not parent_shares:
-            return None
+            # Curated rows can't be priced — surface auto-discovery if any.
+            return _auto_only_payload() if auto_discovered else None
 
         recently_listed: list[str] = []
         results = []
@@ -438,6 +535,7 @@ class ResearchDataAPI:
         return {
             "subsidiaries": results,
             "subsidiaries_listed_recently": recently_listed,
+            "auto_discovered_candidates": auto_discovered,
             "_meta": {
                 "freshness_check": (
                     "bhavcopy_earliest_date"
@@ -447,6 +545,7 @@ class ResearchDataAPI:
                     else "unavailable"
                 ),
                 "freshness_window_days": 180,
+                "auto_discovery_window_days": auto_window_days,
             },
         }
 
