@@ -177,31 +177,46 @@ def save_envelope(envelope: BriefingEnvelope) -> dict[str, Path]:
     """Save a BriefingEnvelope to vault. Returns dict of saved file paths.
 
     Macro escape hatch: when ``FLOWTRACK_MACRO_OUT_DIR`` is set and agent is
-    ``macro``, the report markdown is redirected there (autoeval as-of)."""
+    ``macro``, the report markdown is redirected there (autoeval as-of).
+
+    Backtest escape hatch: when ``FLOWTRACK_BACKTEST_OUT_DIR`` is set and
+    agent is ``historical_analog``, the briefing JSON (and report markdown)
+    are redirected there so the analog backtest harness does NOT overwrite
+    live ``~/vault/stocks/{symbol}/briefings/historical_analog.json``."""
     symbol = envelope.symbol.upper()
     base = _VAULT_BASE / symbol
 
     # Save report markdown
     macro_override = os.environ.get("FLOWTRACK_MACRO_OUT_DIR")
+    backtest_override = os.environ.get("FLOWTRACK_BACKTEST_OUT_DIR")
     if envelope.agent == "macro" and macro_override:
         reports_dir = Path(macro_override)
         reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = reports_dir / "macro.md"
+    elif envelope.agent == "historical_analog" and backtest_override:
+        reports_dir = Path(backtest_override)
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        report_path = reports_dir / "historical_analog.md"
     else:
         reports_dir = base / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
         report_path = reports_dir / f"{envelope.agent}.md"
     report_path.write_text(envelope.report, encoding="utf-8")
 
-    # Save briefing JSON
-    briefings_dir = base / "briefings"
-    briefings_dir.mkdir(parents=True, exist_ok=True)
-    briefing_path = briefings_dir / f"{envelope.agent}.json"
+    # Save briefing JSON (backtest override redirects this too — its sole purpose)
+    if envelope.agent == "historical_analog" and backtest_override:
+        briefings_dir = Path(backtest_override)
+        briefings_dir.mkdir(parents=True, exist_ok=True)
+        briefing_path = briefings_dir / "historical_analog.json"
+    else:
+        briefings_dir = base / "briefings"
+        briefings_dir.mkdir(parents=True, exist_ok=True)
+        briefing_path = briefings_dir / f"{envelope.agent}.json"
     briefing_path.write_text(
         json.dumps(envelope.briefing, indent=2, default=str), encoding="utf-8"
     )
 
-    # Save evidence JSON
+    # Save evidence JSON (always to symbol vault; evidence is reusable across runs)
     evidence_dir = base / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     evidence_path = evidence_dir / f"{envelope.agent}.json"
