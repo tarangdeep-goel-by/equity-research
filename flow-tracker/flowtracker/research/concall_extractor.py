@@ -150,6 +150,13 @@ _CONCALL_EXTRACTION_SCHEMA = {
                         "properties": {
                             "metric": {"type": "string"},
                             "value": {"type": "string"},
+                            # Schema enrichments (Gemini review fix):
+                            # base_value verifies the math behind growth claims;
+                            # metric_type disambiguates "15%" vs "₹15,200 Cr" vs "+9 bps";
+                            # is_pro_forma flags stricter adjustments (remove one-offs).
+                            "base_value": {"type": "string"},
+                            "metric_type": {"type": "string"},
+                            "is_pro_forma": {"type": "boolean"},
                             "comparable_basis": {"type": "string"},
                             "period": {"type": "string"},
                             "context": {"type": "string"},
@@ -606,16 +613,22 @@ Extract into this JSON structure:
     // Trigger phrases to look for: "on a like-for-like basis", "comparable basis",
     // "ex-merger", "excluding merger impact", "pre-merger comparable", "constant
     // currency", "ex-FX", "organic growth", "underlying growth", "adjusted for
-    // [event]", "normalized for [event]", "if we exclude", "stripping out".
+    // [event]", "normalized for [event]", "if we exclude", "stripping out",
+    // "pro-forma", "constant perimeter", "excluding one-offs".
     {
       "metric": "<the metric, e.g. 'NII', 'opex', 'revenue', 'EPS', 'CASA growth'>",
       "value": "<exact value as stated, e.g. '7.2%', '₹15,200 Cr', '+9 bps'>",
-      "comparable_basis": "<the adjustment, e.g. 'like-for-like ex HDFC Ltd merger', 'pre-merger comparable basis', 'constant currency', 'ex-Cairn demerger'>",
+      "base_value": "<implicit base when growth + endpoint disclosed, e.g. '₹13,200 Cr' for 'grew 15% to ₹15,200 Cr'; null if not derivable>",
+      "metric_type": "<one of: 'percentage' | 'absolute' | 'ratio' | 'bps' — disambiguates the value field for downstream parsers>",
+      "is_pro_forma": "<true iff management used 'pro-forma' (stricter than simple comparable — typically removes one-offs entirely); false otherwise>",
+      "comparable_basis": "<the adjustment, e.g. 'like-for-like ex HDFC Ltd merger', 'pre-merger comparable basis', 'constant currency', 'ex-Cairn demerger', 'excluding one-time gain on disposal'>",
       "period": "<comparison period, e.g. 'FY26 vs FY25', 'Q4 YoY', 'TTM'>",
       "context": "<full quote or close paraphrase showing the management adjustment logic>",
       "speaker": "<CFO|CEO|MD|name if stated, else null>"
     }
     // Empty array [] if no comparable-basis statements were made — DO NOT invent.
+    // Do NOT extract ordinary growth statements ("revenue grew 15%") — only
+    // ones with explicit comparable framing (a trigger phrase from the list).
   ]
 }
 ```
@@ -797,7 +810,7 @@ async def _recover_json_from_prose(
         '  "management_commentary": { "guidance": {"revenue_growth": "", "margin_target": ""}, "strategy_updates": [], "challenges_acknowledged": [] },\n'
         '  "flags": { "guidance_change": "", "positive_surprises": [], "red_flags": [] },\n'
         '  "key_numbers_mentioned": {},\n'
-        '  "comparable_growth_metrics": [{"metric": "", "value": "", "comparable_basis": "", "period": "", "context": "", "speaker": ""}]\n'
+        '  "comparable_growth_metrics": [{"metric": "", "value": "", "base_value": "", "metric_type": "", "is_pro_forma": false, "comparable_basis": "", "period": "", "context": "", "speaker": ""}]\n'
         "}\n"
         "```\n\n"
         f"Prose to convert:\n{prose[:8000]}"
