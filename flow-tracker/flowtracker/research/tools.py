@@ -2404,3 +2404,108 @@ HISTORICAL_ANALOG_AGENT_TOOLS_V2 = [
     # Plus shared context tools for understanding the target stock
     get_analytical_profile, get_company_context,
 ]
+
+
+# ---------------------------------------------------------------------------
+# F&O Positioning Agent (Sprint 3)
+#
+# Eligibility-gated derivatives positioning tools. Wraps ResearchDataAPI
+# methods that read from the F&O ingestion tables (fno_universe,
+# fut_oi_history, opt_oi_snapshot, fii_deriv_flow, futures_basis).
+# ---------------------------------------------------------------------------
+
+
+@tool(
+    "get_fno_positioning",
+    "Composite F&O positioning snapshot for an F&O-eligible stock. Returns "
+    "futures positioning (current OI, OI percentile vs 90d, OI trend, basis %, "
+    "5d OI change), options positioning (PCR OI + label, max-pain strike, ATM IV), "
+    "FII derivative stance (index-fut net-long %, trend), and as-of date. "
+    "If symbol is NOT F&O-eligible (not in fno_universe), returns "
+    "{'fno_eligible': false, 'reason': 'symbol not in NSE F&O eligibility list'} — "
+    "the agent should treat this as terminal: write status=empty and exit.",
+    {"symbol": str},
+    annotations=READ_ONLY,
+)
+async def get_fno_positioning(args):
+    with ResearchDataAPI() as api:
+        data = api.get_fno_positioning(args["symbol"])
+    if data is None:
+        data = {"fno_eligible": False, "reason": "symbol not in NSE F&O eligibility list"}
+    return _with_dedup("get_fno_positioning",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_oi_history",
+    "Daily front-month futures OI + close + volume for the last N trading days "
+    "(default 90). Use to assess OI build-up direction, momentum, and liquidity. "
+    "Returns empty list for non-F&O symbols.",
+    {"symbol": str, "days": int},
+    annotations=READ_ONLY,
+)
+async def get_oi_history(args):
+    with ResearchDataAPI() as api:
+        data = api.get_oi_history(args["symbol"], args.get("days", 90))
+    return _with_dedup("get_oi_history",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_option_chain_concentration",
+    "Strike-wise CE/PE OI concentration for the front expiry — returns the highest "
+    "call-OI strike (likely OI resistance), highest put-OI strike (likely OI "
+    "support), max-pain strike, and totals. Returns null for non-F&O symbols or "
+    "symbols with no option contracts in the latest bhavcopy.",
+    {"symbol": str},
+    annotations=READ_ONLY,
+)
+async def get_option_chain_concentration(args):
+    with ResearchDataAPI() as api:
+        data = api.get_option_chain_concentration(args["symbol"])
+    return _with_dedup("get_option_chain_concentration",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_fii_derivative_flow",
+    "Market-wide FII derivative positioning over the last N trading days "
+    "(default 30). Returns daily rows of index-fut long/short OI + net-long %, "
+    "index-options CE/PE OI, stock-fut long/short OI + net-long %. Use this to "
+    "cross-reference cash-segment FII flow with derivative positioning — divergence "
+    "(e.g. FII reducing cash holdings while adding index shorts) is a signal-rich pattern.",
+    {"days": int},
+    annotations=READ_ONLY,
+)
+async def get_fii_derivative_flow(args):
+    with ResearchDataAPI() as api:
+        data = api.get_fii_derivative_flow(args.get("days", 30))
+    return _with_dedup("get_fii_derivative_flow",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_futures_basis",
+    "Spot-futures basis (front month) trajectory over the last N trading days "
+    "(default 30). basis_pct = (futures - spot) / spot * 100. Negative basis "
+    "near expiry signals distress / forced selling; positive spike signals "
+    "aggressive buying. Returns empty list for non-F&O symbols.",
+    {"symbol": str, "days": int},
+    annotations=READ_ONLY,
+)
+async def get_futures_basis(args):
+    with ResearchDataAPI() as api:
+        data = api.get_futures_basis(args["symbol"], args.get("days", 30))
+    return _with_dedup("get_futures_basis",
+                       {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+FNO_POSITIONING_AGENT_TOOLS_V2 = [
+    get_fno_positioning,
+    get_oi_history,
+    get_option_chain_concentration,
+    get_fii_derivative_flow,
+    get_futures_basis,
+    # Plus shared context for cross-referencing cash-segment positioning
+    get_company_context, get_ownership, get_market_context,
+]
