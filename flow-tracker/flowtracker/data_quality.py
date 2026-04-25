@@ -66,6 +66,48 @@ JUMP_LOW = 1.0       # 100%-200%
 SEVERITY_RANK = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
 
 
+def longest_unflagged_window(
+    annuals_desc: list, flags: list[dict]
+) -> tuple[list, list[dict]]:
+    """Split a DESC-ordered annual series at flag boundaries; return the
+    longest unbroken run plus the flags that excluded the other segments.
+
+    annuals_desc: list of objects/dicts with `.fiscal_year_end` or ['fiscal_year_end'].
+    flags: list of flag dicts (as returned by store.get_data_quality_flags) —
+           each must have a 'curr_fy' key. A flag with curr_fy=X means the
+           bucketing changed between (X-1) and X, so X cannot be aggregated
+           with the year before it.
+
+    Returns (longest_segment, dropped_flags). If no flags or annuals empty,
+    longest_segment is the full input list and dropped_flags is empty.
+    """
+    if not annuals_desc:
+        return [], []
+
+    def _fy(obj) -> str:
+        return obj["fiscal_year_end"] if isinstance(obj, dict) else obj.fiscal_year_end
+
+    flagged_curr_fys = {f["curr_fy"] for f in flags}
+    if not flagged_curr_fys:
+        return list(annuals_desc), []
+
+    segments: list[list] = [[annuals_desc[0]]]
+    for i in range(1, len(annuals_desc)):
+        # annuals_desc[i-1] is the newer year in this consecutive pair.
+        # A flag with curr_fy = annuals_desc[i-1].fy marks a break before this row.
+        if _fy(annuals_desc[i - 1]) in flagged_curr_fys:
+            segments.append([annuals_desc[i]])
+        else:
+            segments[-1].append(annuals_desc[i])
+
+    # Tie-break: max() returns the first occurrence, which in DESC order is
+    # the most recent segment — prefer the current era over old ones.
+    longest = max(segments, key=len)
+    longest_fys = {_fy(a) for a in longest}
+    dropped = [f for f in flags if f["curr_fy"] not in longest_fys]
+    return longest, dropped
+
+
 @dataclass(frozen=True)
 class Flag:
     symbol: str

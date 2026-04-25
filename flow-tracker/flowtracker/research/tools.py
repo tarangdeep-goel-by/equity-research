@@ -699,7 +699,8 @@ async def get_technical_indicators(args):
 
 @tool(
     "get_dupont_decomposition",
-    "Decompose ROE into Net Profit Margin × Asset Turnover × Equity Multiplier (10yr history). Shows what's driving ROE — margin, efficiency, or leverage.",
+    "Decompose ROE into Net Profit Margin × Asset Turnover × Equity Multiplier (10yr history). Shows what's driving ROE — margin, efficiency, or leverage. "
+    "Returns `effective_window` showing which years were actually used; if MEDIUM+ data_quality_flags overlap the requested 10yr range, the result is computed only on the longest unbroken segment and the dropped boundary is reported in `effective_window.narrowed_due_to`.",
     {"symbol": str},
     annotations=READ_ONLY,
 )
@@ -707,6 +708,23 @@ async def get_dupont_decomposition(args):
     with ResearchDataAPI() as api:
         data = api.get_dupont_decomposition(args["symbol"])
     return _with_dedup("get_dupont_decomposition", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_data_quality_flags",
+    "Get reclassification breaks in Screener annual_financials for this symbol. "
+    "Call BEFORE computing any multi-year ratio (DuPont, F-score, margin walk, CAGR, leverage trend) — "
+    "if any MEDIUM+ flag overlaps your window, the trend is corrupted by accounting bucketing changes "
+    "(Schedule III amendments, Ind-AS 116 lease transition, mergers/demergers, sector regulator mandates). "
+    "Each flag has prior_fy, curr_fy, line, prior_val, curr_val, jump_pct, flag_type (RECLASS|SIGN_FLIP), severity (HIGH|MEDIUM|LOW). "
+    "Default min_severity=MEDIUM. Empty list = no breaks in the stored history.",
+    {"symbol": str, "min_severity": str},
+    annotations=READ_ONLY,
+)
+async def get_data_quality_flags(args):
+    with ResearchDataAPI() as api:
+        data = api.get_data_quality_flags(args["symbol"], args.get("min_severity", "MEDIUM"))
+    return _with_dedup("get_data_quality_flags", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -2264,6 +2282,7 @@ RESEARCH_TOOLS = [
     get_wacc_params,
     get_yahoo_peers,
     get_screener_peers,
+    get_data_quality_flags,
 ]
 
 # V1 agent registries (BUSINESS_TOOLS, *_AGENT_TOOLS, _PEER_TOOLS) removed — see *_AGENT_TOOLS_V2 below
@@ -2283,6 +2302,7 @@ FINANCIAL_AGENT_TOOLS_V2 = [
     get_estimates, get_events_actions, get_fair_value_analysis,
     get_chart_data, render_chart, calculate,
     get_annual_report, get_deck_insights,
+    get_data_quality_flags,
 ]
 
 OWNERSHIP_AGENT_TOOLS_V2 = [
@@ -2298,6 +2318,7 @@ VALUATION_AGENT_TOOLS_V2 = [
     get_company_context, get_quality_scores, get_market_context,
     get_chart_data, render_chart, calculate,
     get_annual_report, get_deck_insights,
+    get_data_quality_flags,
 ]
 
 RISK_AGENT_TOOLS_V2 = [
@@ -2316,7 +2337,7 @@ TECHNICAL_AGENT_TOOLS_V2 = [
 SECTOR_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_company_context, get_peer_sector,
     get_market_context, get_fundamentals, get_estimates, get_yahoo_peers, get_screener_peers,
-    get_valuation, get_chart_data, render_chart, calculate,
+    get_valuation, get_chart_data, render_chart, calculate, get_data_quality_flags,
 ]
 
 NEWS_AGENT_TOOLS_V2 = [
