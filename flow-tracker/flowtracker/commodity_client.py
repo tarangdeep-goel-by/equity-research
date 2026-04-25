@@ -18,6 +18,17 @@ _GOLD_TICKER = "GC=F"      # COMEX Gold Futures
 _SILVER_TICKER = "SI=F"    # COMEX Silver Futures
 _USDINR_TICKER = "INR=X"   # USD/INR exchange rate
 
+# Industrial metals — closest yfinance proxies for LME contracts.
+# HG=F is COMEX copper (USD/lb), the only liquid copper future on yfinance — LME
+# copper itself is not exposed. ALI=F is the CME aluminium future tracking LME
+# settlements (USD/MT). Zinc (ZNC=F) and lead (PB=F) are unavailable on yfinance
+# (ZNC=F returns a stale constant; PB=F returns no data); agents should treat
+# their absence as "no data" rather than zero.
+_METALS_TICKERS: dict[str, tuple[str, str]] = {
+    "ALUMINIUM": ("ALI=F", "USD/MT"),
+    "COPPER": ("HG=F", "USD/lb"),
+}
+
 # mfapi.in scheme codes
 _ETF_SCHEMES = {
     "140088": "Nippon India ETF Gold BeES",
@@ -125,6 +136,62 @@ class CommodityClient:
             if inr_rate:
                 silver_inr = round((close * inr_rate) / _OZ_TO_GRAMS * 1000, 2)
                 records.append(CommodityPrice(date=d, symbol="SILVER_INR", price=silver_inr, unit="INR/kg"))
+
+        return records
+
+    def fetch_metals(self, days: int = 30) -> list[CommodityPrice]:
+        """Fetch industrial metals prices (aluminium / copper / zinc) for the last N days.
+
+        Returns CommodityPrice records keyed by symbol (ALUMINIUM, COPPER, ZINC).
+        Units follow yfinance contract conventions — USD/MT for ALI=F and ZNC=F,
+        USD/lb for HG=F (COMEX copper). No INR conversion — LME pricing is
+        conventionally USD; agents convert downstream if needed.
+        """
+        period = f"{days}d"
+        records: list[CommodityPrice] = []
+
+        for symbol, (ticker, unit) in _METALS_TICKERS.items():
+            try:
+                hist = yf.Ticker(ticker).history(period=period)
+            except Exception as e:
+                logger.warning("Failed to fetch %s (%s): %s", symbol, ticker, e)
+                continue
+            if hist.empty:
+                logger.warning("No data for %s (%s) — skipping", symbol, ticker)
+                continue
+            for idx, row in hist.iterrows():
+                d = idx.strftime("%Y-%m-%d")
+                close = row["Close"]
+                if math.isnan(close):
+                    continue
+                records.append(CommodityPrice(
+                    date=d, symbol=symbol, price=round(close, 4), unit=unit,
+                ))
+
+        return records
+
+    def fetch_metals_history(self, start: str = "2010-01-01") -> list[CommodityPrice]:
+        """Fetch full metals history from a start date — same logic as fetch_metals."""
+        end = date.today().isoformat()
+        records: list[CommodityPrice] = []
+
+        for symbol, (ticker, unit) in _METALS_TICKERS.items():
+            try:
+                hist = yf.Ticker(ticker).history(start=start, end=end)
+            except Exception as e:
+                logger.warning("Failed to fetch %s history (%s): %s", symbol, ticker, e)
+                continue
+            if hist.empty:
+                logger.warning("No history for %s (%s) — skipping", symbol, ticker)
+                continue
+            for idx, row in hist.iterrows():
+                d = idx.strftime("%Y-%m-%d")
+                close = row["Close"]
+                if math.isnan(close):
+                    continue
+                records.append(CommodityPrice(
+                    date=d, symbol=symbol, price=round(close, 4), unit=unit,
+                ))
 
         return records
 

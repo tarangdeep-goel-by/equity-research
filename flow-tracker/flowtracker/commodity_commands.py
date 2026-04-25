@@ -51,6 +51,36 @@ def fetch(
 
 
 @app.command()
+def metals(
+    backfill: Annotated[
+        bool, typer.Option("--backfill", help="Fetch full history from 2010")
+    ] = False,
+    days: Annotated[
+        int, typer.Option("-d", "--days", help="Days of recent data")
+    ] = 30,
+    start: Annotated[
+        str, typer.Option("--start", help="Backfill start date (YYYY-MM-DD)")
+    ] = "2010-01-01",
+) -> None:
+    """Fetch industrial metals prices (aluminium / copper) from yfinance.
+
+    HG=F is COMEX copper (USD/lb) — the only liquid copper future on yfinance.
+    ALI=F is CME aluminium tracking LME settlements (USD/MT). Zinc (ZNC=F
+    stale) and lead (PB=F empty) are not exposed via yfinance.
+    """
+    with CommodityClient() as client, FlowStore() as store:
+        if backfill:
+            console.print(f"[dim]Fetching metals history from {start}...[/]")
+            prices_data = client.fetch_metals_history(start=start)
+        else:
+            prices_data = client.fetch_metals(days)
+
+        num_prices = store.upsert_commodity_prices(prices_data)
+
+    console.print(f"[green]Stored {num_prices} metals price rows.[/]")
+
+
+@app.command()
 def prices(
     days: Annotated[
         int, typer.Option("-d", "--days", help="Number of days to show")

@@ -18,6 +18,42 @@ from flowtracker.utils import _clean
 logger = logging.getLogger(__name__)
 
 
+# Tolerance for cross-source share-count agreement. yfinance occasionally lags
+# Screener by a bonus-issue adjustment (e.g. NESTLEIND: yfinance=1928M vs
+# Screener=964M = exact 2x off). When the two disagree by more than this
+# fraction, prefer Screener and log a warning so the discrepancy is traceable.
+_SHARE_COUNT_TOLERANCE = 0.05
+
+
+def _reconcile_shares_outstanding(
+    yfinance_shares: float | int | None,
+    screener_shares: float | int | None,
+    symbol: str,
+) -> float | int | None:
+    """Pick the trustworthy share count when two sources disagree.
+
+    Rule: if both populated and they disagree by >_SHARE_COUNT_TOLERANCE,
+    prefer Screener (more reliable for Indian-corporate-action adjustments)
+    and log loudly. If only one is populated, use whichever has data.
+    Returns None when neither is populated.
+    """
+    if screener_shares and yfinance_shares:
+        spread = abs(screener_shares - yfinance_shares) / max(
+            screener_shares, yfinance_shares
+        )
+        if spread > _SHARE_COUNT_TOLERANCE:
+            logger.warning(
+                "share-count mismatch %s: screener=%s yfinance=%s "
+                "(spread=%.1f%%) — using screener",
+                symbol,
+                screener_shares,
+                yfinance_shares,
+                spread * 100,
+            )
+        return screener_shares
+    return screener_shares or yfinance_shares
+
+
 def _percentile_rank(values: list[float], value: float) -> float:
     """Simple percentile rank: % of values strictly below the given value."""
     below = sum(1 for v in values if v < value)
@@ -592,15 +628,82 @@ class ResearchDataAPI:
 
     # --- Core Financials ---
 
+    def _apply_insurance_headline(self, symbol: str, rows: list[dict]) -> list[dict]:
+        """Add `headline_revenue` to each row.
+
+        For insurers (industry in `_INSURANCE_INDUSTRIES`), Screener's "Revenue"
+        line bundles mark-to-market gains/losses on policyholder funds, which
+        produces wild year-on-year swings unrelated to underwriting activity
+        (e.g. HDFCLIFE FY23 -28% then FY24 +44%). The clean industry-standard
+        top line is **Net Premium Earned** (gross premium written minus
+        reinsurance ceded) — the actual business activity.
+
+        Behaviour:
+        - Insurers with `net_premium_earned` populated  → `headline_revenue =
+          net_premium_earned`, `revenue` unchanged, `notes` annotated.
+        - Insurers with `net_premium_earned` NULL       → `headline_revenue
+          = revenue` (fallback) + `data_quality_note` flagging the MTM-mixed
+          line. **Currently this is the case for every insurer in the DB**
+          because Screener's Excel "Sales" row is the only top-line we plumb;
+          the policyholder-account schedule that exposes Net Premium is not
+          parsed yet (follow-up task).
+        - Non-insurers                                  → `headline_revenue
+          = revenue`, no annotation.
+
+        The original `revenue` value is preserved in every case; this is an
+        additive transform.
+        """
+        if not rows:
+            return rows
+        is_insurer = self._is_insurance(symbol)
+        for row in rows:
+            rev = row.get("revenue")
+            if not is_insurer:
+                row["headline_revenue"] = rev
+                continue
+            npe = row.get("net_premium_earned")
+            if npe is not None:
+                row["headline_revenue"] = npe
+                row["headline_metric"] = "net_premium_earned"
+                row["notes"] = (
+                    "headline metric is Net Premium Earned for industry='insurance' "
+                    "(Screener Revenue includes MTM on policyholder funds)"
+                )
+            else:
+                row["headline_revenue"] = rev
+                row["headline_metric"] = "revenue (fallback)"
+                row["data_quality_note"] = (
+                    "industry='insurance': Screener 'Revenue' includes mark-to-market "
+                    "gains/losses on policyholder investment funds and produces wild "
+                    "year-on-year swings unrelated to underwriting. Net Premium Earned "
+                    "is the clean top line but is not yet ingested for this stock — "
+                    "treat revenue trend with caution."
+                )
+        return rows
+
     def get_quarterly_results(self, symbol: str, quarters: int = 12) -> list[dict]:
-        """Quarterly P&L data (revenue, expenses, operating profit, net income, EPS, margins)."""
+        """Quarterly P&L data (revenue, expenses, operating profit, net income, EPS, margins).
+
+        Adds `headline_revenue` per row. For insurers this prefers
+        `net_premium_earned` (cleaner business metric) when available; otherwise
+        falls back to Screener `revenue` with a `data_quality_note`.
+        See `_apply_insurance_headline` for the full rule.
+        """
         rows = self._store.get_quarterly_results(symbol, limit=quarters)
-        return _clean([r.model_dump() for r in rows])
+        cleaned = _clean([r.model_dump() for r in rows])
+        return self._apply_insurance_headline(symbol, cleaned)
 
     def get_annual_financials(self, symbol: str, years: int = 10) -> list[dict]:
-        """Annual P&L + Balance Sheet + Cash Flow (10yr history)."""
+        """Annual P&L + Balance Sheet + Cash Flow (10yr history).
+
+        Adds `headline_revenue` per row. For insurers this prefers
+        `net_premium_earned` (cleaner business metric) when available; otherwise
+        falls back to Screener `revenue` with a `data_quality_note`.
+        See `_apply_insurance_headline` for the full rule.
+        """
         rows = self._store.get_annual_financials(symbol, limit=years)
-        return _clean([r.model_dump() for r in rows])
+        cleaned = _clean([r.model_dump() for r in rows])
+        return self._apply_insurance_headline(symbol, cleaned)
 
     def get_screener_ratios(self, symbol: str, years: int = 10) -> list[dict]:
         """Efficiency ratios: debtor days, inventory days, CCC, working capital days, ROCE%."""
@@ -672,7 +775,33 @@ class ResearchDataAPI:
         # Pre-compute derived values so agents don't do unit math
         price = snap.get("price") or 0
         float_shares = snap.get("float_shares") or 0
-        shares = snap.get("shares_outstanding") or 0
+
+        # Reconcile share count: yfinance occasionally lags Screener by a
+        # corporate-action factor (NESTLEIND, HDFCBANK seen with exact 2x bug).
+        # Cross-check against Screener's annual_financials.num_shares (raw count)
+        # and prefer Screener when the two disagree by >5%.
+        yfinance_shares = snap.get("shares_outstanding") or 0
+        screener_shares: float | None = None
+        for a in self._store.get_annual_financials(symbol, limit=3):
+            if getattr(a, "num_shares", None):
+                screener_shares = a.num_shares
+                break
+        reconciled = _reconcile_shares_outstanding(
+            yfinance_shares, screener_shares, symbol
+        )
+        shares = reconciled or 0
+        if reconciled and reconciled != yfinance_shares:
+            # Replace the raw field so downstream consumers
+            # (e.g. get_listed_subsidiaries) see the corrected value.
+            snap["shares_outstanding"] = (
+                int(reconciled)
+                if isinstance(reconciled, float) and reconciled.is_integer()
+                else reconciled
+            )
+            # Recompute mcap from the trustworthy share count. yfinance's mcap
+            # carries the same 2x bug as its share count.
+            if price:
+                snap["market_cap"] = round(price * shares / 1e7, 2)
         mcap = snap.get("market_cap") or 0  # already in crores
         if float_shares and price:
             snap["free_float_mcap_cr"] = round(float_shares * price / 1e7, 2)
@@ -1821,19 +1950,25 @@ class ResearchDataAPI:
     # --- Macro Context ---
 
     def get_macro_snapshot(self) -> dict:
-        """Current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec.
+        """Current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec, system credit.
 
         Coalesces field-by-field across the most recent 7 rows so that a
         partially-populated today-row (e.g. only USD/INR fetched mid-day)
         falls forward to the most recent prior value for any null field.
         The top-level ``date`` is the latest row's date; per-field
         ``<field>_as_of`` records the source date when it differs.
+
+        Also embeds ``system_credit`` — the latest RBI WSS weekly aggregate
+        (credit/deposit YoY growth, C/D ratio, M3 growth) for bank-sector
+        macro grounding. ``system_credit`` key is omitted when no WSS rows
+        exist.
         """
         rows = self._store._conn.execute(
             "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 7"
         ).fetchall()
         if not rows:
-            return {}
+            sc = self.get_system_credit_snapshot()
+            return _clean({"system_credit": sc}) if sc else {}
         latest_date = rows[0]["date"]
         result: dict = {"date": latest_date}
         keys = set(rows[0].keys())
@@ -1847,7 +1982,21 @@ class ResearchDataAPI:
                     if row["date"] != latest_date:
                         result[f"{field}_as_of"] = row["date"]
                     break
+        sc = self.get_system_credit_snapshot()
+        if sc:
+            result["system_credit"] = sc
         return _clean(result)
+
+    def get_system_credit_snapshot(self) -> dict:
+        """Latest RBI WSS weekly system-credit aggregate as a plain dict.
+
+        Returns ``{}`` if no row exists. Use for bank/macro agents to ground
+        system-level credit/deposit growth claims (eval P1 fix).
+        """
+        record = self._store.get_latest_system_credit()
+        if record is None:
+            return {}
+        return _clean(record.model_dump())
 
     def get_fii_dii_streak(self) -> dict:
         """Current FII/DII buying/selling streak."""
@@ -1871,7 +2020,13 @@ class ResearchDataAPI:
         forward across the most recent rows when the latest row is null.
         """
         result = {}
-        for commodity in ("GOLD", "GOLD_INR", "SILVER", "SILVER_INR"):
+        # Industrial metals (ALUMINIUM, COPPER) included alongside gold/silver.
+        # HG=F is COMEX copper (USD/lb) — only liquid copper future on yfinance.
+        # Zinc (ZNC=F stale) and lead (PB=F empty) are unavailable on yfinance.
+        for commodity in (
+            "GOLD", "GOLD_INR", "SILVER", "SILVER_INR",
+            "ALUMINIUM", "COPPER",
+        ):
             prices = self._store.get_commodity_prices(commodity, days=400)
             if not prices:
                 continue
@@ -1882,6 +2037,7 @@ class ResearchDataAPI:
 
             data.sort(key=lambda x: x[0])
             latest = data[-1][1]
+            unit = prices[0].unit
 
             def _change(days_ago: int, _data=data, _latest=latest) -> float | None:
                 target_idx = max(0, len(_data) - days_ago)
@@ -1891,6 +2047,7 @@ class ResearchDataAPI:
 
             result[commodity.lower()] = {
                 "price": latest,
+                "unit": unit,
                 "date": data[-1][0],
                 "change_1m_pct": _change(22),
                 "change_3m_pct": _change(66),

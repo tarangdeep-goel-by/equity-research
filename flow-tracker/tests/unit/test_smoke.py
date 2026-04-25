@@ -74,6 +74,8 @@ HELP_COMMANDS = [
     ["macro", "fetch", "--help"],
     ["macro", "summary", "--help"],
     ["macro", "trend", "--help"],
+    ["macro", "wss-fetch", "--help"],
+    ["macro", "wss-summary", "--help"],
 
     # bhavcopy
     ["bhavcopy", "--help"],

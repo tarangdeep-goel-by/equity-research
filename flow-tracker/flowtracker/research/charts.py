@@ -636,6 +636,49 @@ def render_fair_value_range(symbol: str, fair_value_data: dict) -> str:
     return str(path)
 
 
+def _build_expense_slices(api, symbol: str) -> list[dict]:
+    """Build expense slices from `annual_financials` latest year.
+
+    Returns `[{name, value}]` with only non-null, non-zero categories.
+    For banks/insurers (where raw_material_cost / power_and_fuel are not
+    populated), `interest` (the COGS-equivalent) is added as a slice.
+
+    Empty list if no annual financials are on file.
+    """
+    rows = api.get_annual_financials(symbol, years=1)
+    if not rows:
+        return []
+    row = rows[0]
+    is_bfsi = api._is_bfsi(symbol) or api._is_insurance(symbol)
+
+    # Order: largest-cost-first by typical magnitude. Names match Screener's
+    # canonical labels — no fabrication.
+    candidates: list[tuple[str, str]] = [
+        ("raw_material_cost", "Raw Material"),
+        ("power_and_fuel", "Power & Fuel"),
+        ("employee_cost", "Employee"),
+        ("selling_and_admin", "Selling & Admin"),
+        ("other_mfr_exp", "Other Mfg"),
+        ("other_expenses_detail", "Other"),
+    ]
+    if is_bfsi:
+        # Interest is a bank's primary cost-of-funds (COGS-equivalent).
+        candidates.insert(0, ("interest", "Interest"))
+
+    slices: list[dict] = []
+    for field, label in candidates:
+        val = row.get(field) if isinstance(row, dict) else getattr(row, field, None)
+        if val is None:
+            continue
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            continue
+        if v > 0:
+            slices.append({"name": label, "value": v})
+    return slices
+
+
 def render_expense_pie(symbol: str, expense_data: list[dict]) -> str:
     """Render expense breakdown pie chart."""
     if not expense_data:
@@ -1664,7 +1707,21 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
         elif chart_type == "fair_value_range":
             path = render_fair_value_range(symbol, data or api.get_fair_value(symbol))
         elif chart_type == "expense_pie":
-            path = render_expense_pie(symbol, data or api.get_expense_breakdown(symbol))
+            slices = data if data is not None else _build_expense_slices(api, symbol)
+            if isinstance(slices, list) and len(slices) < 2:
+                # Sparse breakdown — render is misleading with <2 slices.
+                # Don't fabricate; surface what we have so callers can degrade.
+                return {
+                    "sparse": True,
+                    "chart_type": chart_type,
+                    "symbol": symbol,
+                    "categories": slices or [],
+                    "message": (
+                        "Expense breakdown too sparse to chart "
+                        f"({len(slices) if isinstance(slices, list) else 0} categories on file)."
+                    ),
+                }
+            path = render_expense_pie(symbol, slices)
         elif chart_type == "composite_radar":
             path = render_composite_radar(symbol, data or _get_composite_score(symbol))
 

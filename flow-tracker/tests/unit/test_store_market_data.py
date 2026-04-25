@@ -13,7 +13,7 @@ import pytest
 from flowtracker.store import FlowStore
 from flowtracker.bhavcopy_models import DailyStockData
 from flowtracker.commodity_models import CommodityPrice
-from flowtracker.macro_models import MacroSnapshot
+from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit
 from flowtracker.deals_models import BulkBlockDeal
 from flowtracker.insider_models import InsiderTransaction
 from tests.fixtures.factories import (
@@ -252,6 +252,87 @@ class TestMacroDaily:
         latest = store.get_macro_latest()
         assert latest is not None
         assert latest.gsec_10y == 7.00
+
+
+# ---------------------------------------------------------------------------
+# macro_system_credit (RBI WSS)
+# ---------------------------------------------------------------------------
+
+
+class TestMacroSystemCredit:
+    def test_upsert_and_get_latest_round_trip(self, store: FlowStore):
+        record = MacroSystemCredit(
+            release_date="2026-04-24",
+            as_of_date="2026-04-15",
+            aggregate_deposits_cr=25648470.0,
+            bank_credit_cr=20921084.0,
+            deposit_growth_yoy=12.2,
+            credit_growth_yoy=15.0,
+            non_food_credit_growth_yoy=15.1,
+            cd_ratio=81.57,
+            m3_growth_yoy=11.9,
+            source="RBI_WSS",
+        )
+        rowcount = store.upsert_system_credit(record)
+        assert rowcount == 1
+
+        latest = store.get_latest_system_credit()
+        assert latest is not None
+        assert latest.release_date == "2026-04-24"
+        assert latest.as_of_date == "2026-04-15"
+        assert latest.credit_growth_yoy == pytest.approx(15.0)
+        assert latest.deposit_growth_yoy == pytest.approx(12.2)
+        assert latest.cd_ratio == pytest.approx(81.57)
+        assert latest.m3_growth_yoy == pytest.approx(11.9)
+        assert latest.source == "RBI_WSS"
+
+    def test_upsert_replaces_same_release(self, store: FlowStore):
+        """Re-upserting the same release_date overwrites prior values."""
+        record1 = MacroSystemCredit(
+            release_date="2026-04-24", credit_growth_yoy=14.0,
+        )
+        store.upsert_system_credit(record1)
+        record2 = MacroSystemCredit(
+            release_date="2026-04-24", credit_growth_yoy=15.5,
+        )
+        store.upsert_system_credit(record2)
+
+        latest = store.get_latest_system_credit()
+        assert latest.credit_growth_yoy == 15.5
+
+    def test_get_latest_returns_most_recent_release(self, store: FlowStore):
+        store.upsert_system_credit(MacroSystemCredit(
+            release_date="2026-04-17", credit_growth_yoy=16.1,
+        ))
+        store.upsert_system_credit(MacroSystemCredit(
+            release_date="2026-04-24", credit_growth_yoy=15.0,
+        ))
+        latest = store.get_latest_system_credit()
+        assert latest.release_date == "2026-04-24"
+        assert latest.credit_growth_yoy == 15.0
+
+    def test_get_trend_orders_newest_first(self, store: FlowStore):
+        for d, g in [
+            ("2026-04-03", 16.5), ("2026-04-10", 16.3),
+            ("2026-04-17", 16.1), ("2026-04-24", 15.0),
+        ]:
+            store.upsert_system_credit(MacroSystemCredit(
+                release_date=d, credit_growth_yoy=g,
+            ))
+        trend = store.get_system_credit_trend(weeks=10)
+        assert len(trend) == 4
+        assert trend[0].release_date == "2026-04-24"
+        assert trend[-1].release_date == "2026-04-03"
+
+    def test_get_trend_respects_weeks_limit(self, store: FlowStore):
+        for d in ["2026-04-03", "2026-04-10", "2026-04-17", "2026-04-24"]:
+            store.upsert_system_credit(MacroSystemCredit(release_date=d))
+        trend = store.get_system_credit_trend(weeks=2)
+        assert len(trend) == 2
+        assert trend[0].release_date == "2026-04-24"
+
+    def test_get_latest_empty(self, store: FlowStore):
+        assert store.get_latest_system_credit() is None
 
 
 # ---------------------------------------------------------------------------

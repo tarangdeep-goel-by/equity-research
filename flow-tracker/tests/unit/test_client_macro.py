@@ -1,4 +1,4 @@
-"""Tests for macro_client.py — VIX, USD/INR, Brent, G-sec yield."""
+"""Tests for macro_client.py — VIX, USD/INR, Brent, G-sec yield, RBI WSS."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import pandas as pd
 import respx
 
 from flowtracker.macro_client import MacroClient
+from flowtracker.macro_models import MacroSystemCredit
 
 
 def _make_hist(closes: list[float], dates: list[str]) -> pd.DataFrame:
@@ -242,3 +243,173 @@ class TestFetchHistoryGsec:
         assert snapshots[-1].gsec_10y == 6.48
         assert snapshots[0].gsec_10y is None
         assert snapshots[1].gsec_10y is None
+
+
+# WSS HTML fixture mimicking the post-tag-strip / whitespace-collapse output of
+# the real BS_viewWssExtract.aspx page. We embed the labels and numeric layout
+# directly so the parser exercises the same regex paths.
+_FAKE_WSS_INDEX_HTML = '''
+<html><body>
+<a href="javascript:..(SelectedDate=4/24/2026..)">Apr 24, 2026</a>
+<a href="javascript:..(SelectedDate=4/17/2026..)">Apr 17, 2026</a>
+</body></html>
+'''
+
+_FAKE_WSS_DETAIL_HTML = '''
+<html><body>
+<table>
+<tr><td>4. Scheduled Commercial Banks - Business in India (₹ Crore)</td></tr>
+<tr><td>Item Outstanding as on Apr. 15, 2026 Variation over Fortnight Financial year so far Year-on-Year 2025-26 2026-27 2025 2026</td></tr>
+<tr><td>1 2 3 4 5 6</td></tr>
+<tr><td>2 Liabilities to Others</td></tr>
+<tr><td>2.1 Aggregate Deposits 25648470 -581447 280265 -581447 2107472 2787604</td></tr>
+<tr><td>2.1a Growth (Per cent) -2.2 1.2 -2.2 10.2 12.2</td></tr>
+<tr><td>2.1.1 Demand 3220633 -467496 -59486 -467496 176617 582070</td></tr>
+<tr><td>2.1.2 Time 22427836 -113951 339750 -113951 1930855 2205534</td></tr>
+<tr><td>2.2 Borrowings 892979 84770 -46643 84770 93267 24374</td></tr>
+<tr><td>2.3 Other Demand and Time Liabilities 1061704 -66349 -61666 -66349 102718 61738</td></tr>
+<tr><td>7 Bank Credit 20921084 -438864 -56081 -438864 1696095 2733192</td></tr>
+<tr><td>7.1a Growth (Per cent) -2.1 -0.3 -2.1 10.3 15.0</td></tr>
+<tr><td>7a.1 Food Credit 68489 -17 -1782 -17 13439 -1782</td></tr>
+<tr><td>7a.2 Non-food credit 20852595 -438847 -54299 -438847 1682656 2734974</td></tr>
+<tr><td>Note: Data include the impact of merger of a non-bank with a bank w.e.f. July 1, 2023.</td></tr>
+<tr><td>6. Money Stock: Components and Sources (₹ Crore)</td></tr>
+<tr><td>M3 31465906 30927112 -538794 -1.7 344097 1.3 -538794 -1.7 2370729 9.4 3296425 11.9</td></tr>
+<tr><td>1 Components</td></tr>
+<tr><td>1.1 Currency with the Public 4067578 4142452 74874 1.8 63002 1.7 74874 1.8 239499 6.9 448699 12.1</td></tr>
+</table>
+</body></html>
+'''
+
+
+class TestFetchRbiWss:
+    """Test _fetch_rbi_wss against synthetic but layout-faithful HTML."""
+
+    def test_happy_path_extracts_credit_deposit_growth(self):
+        with respx.mock:
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx$").respond(
+                200, text=_FAKE_WSS_INDEX_HTML,
+            )
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx\?SelectedDate=4/24/2026").respond(
+                200, text=_FAKE_WSS_DETAIL_HTML,
+            )
+            with MacroClient() as client:
+                result = client._fetch_rbi_wss()
+
+        assert result is not None
+        assert isinstance(result, MacroSystemCredit)
+        assert result.release_date == "2026-04-24"
+        assert result.as_of_date == "2026-04-15"
+        # Outstandings (₹ Cr)
+        assert result.aggregate_deposits_cr == 25648470.0
+        assert result.bank_credit_cr == 20921084.0
+        # YoY growth — last value on Growth (Per cent) line
+        assert result.deposit_growth_yoy == 12.2
+        assert result.credit_growth_yoy == 15.0
+        # Non-food credit: derived from variation / prev_year_out
+        # nums = [20852595, -438847, -54299, -438847, 1682656, 2734974]
+        # prev = 20852595 - 2734974 = 18117621; growth = 2734974/18117621*100 = 15.097..
+        assert result.non_food_credit_growth_yoy == 15.1
+        # CD ratio = 20921084 / 25648470 * 100 = 81.57%
+        assert result.cd_ratio == 81.57
+        # M3 row last value is YoY current-year %
+        assert result.m3_growth_yoy == 11.9
+        assert result.source == "RBI_WSS"
+
+    def test_explicit_selected_date_skips_index(self):
+        with respx.mock:
+            # Index call should NOT be made when selected_date passed
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx\?SelectedDate=4/17/2026").respond(
+                200, text=_FAKE_WSS_DETAIL_HTML,
+            )
+            with MacroClient() as client:
+                result = client._fetch_rbi_wss(selected_date="4/17/2026")
+
+        assert result is not None
+        assert result.release_date == "2026-04-17"
+
+    def test_empty_html_returns_none(self):
+        empty_html = "<html><body>No WSS data</body></html>"
+        with respx.mock:
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx$").respond(
+                200, text=_FAKE_WSS_INDEX_HTML,
+            )
+            respx.get(url__regex=r"SelectedDate=4/24/2026").respond(200, text=empty_html)
+            with MacroClient() as client:
+                result = client._fetch_rbi_wss()
+
+        assert result is None
+
+    def test_http_failure_returns_none(self):
+        with respx.mock:
+            respx.get(url__regex=r"BS_viewWssExtract").respond(500)
+            with MacroClient() as client:
+                result = client._fetch_rbi_wss()
+
+        assert result is None
+
+    def test_no_release_dates_on_index_returns_none(self):
+        with respx.mock:
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx$").respond(
+                200, text="<html><body>No links here</body></html>",
+            )
+            with MacroClient() as client:
+                result = client._fetch_rbi_wss()
+
+        assert result is None
+
+    def test_implausible_growth_dropped(self):
+        """Growth > 30% (e.g. parser confusion) returns None for that field
+        rather than persisting garbage. Other fields can still populate.
+        """
+        # Inject an impossible 99.9 deposit growth, plausible credit
+        bad_html = _FAKE_WSS_DETAIL_HTML.replace(
+            "2.1a Growth (Per cent) -2.2 1.2 -2.2 10.2 12.2",
+            "2.1a Growth (Per cent) -2.2 1.2 -2.2 10.2 99.9",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx$").respond(
+                200, text=_FAKE_WSS_INDEX_HTML,
+            )
+            respx.get(url__regex=r"SelectedDate=4/24/2026").respond(200, text=bad_html)
+            with MacroClient() as client:
+                result = client._fetch_rbi_wss()
+
+        assert result is not None
+        # Bad value was dropped, not persisted
+        assert result.deposit_growth_yoy is None
+        # Other fields still populated
+        assert result.credit_growth_yoy == 15.0
+
+    def test_implausible_cd_ratio_dropped(self):
+        """If outstandings produce an out-of-range CD ratio, drop it."""
+        # Make credit much larger than deposits (CD ratio > 95)
+        bad_html = _FAKE_WSS_DETAIL_HTML.replace(
+            "7 Bank Credit 20921084",
+            "7 Bank Credit 99000000",
+        )
+        with respx.mock:
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx$").respond(
+                200, text=_FAKE_WSS_INDEX_HTML,
+            )
+            respx.get(url__regex=r"SelectedDate=4/24/2026").respond(200, text=bad_html)
+            with MacroClient() as client:
+                result = client._fetch_rbi_wss()
+
+        assert result is not None
+        # CD ratio dropped (99M/25.6M = 386% — out of [60, 95])
+        assert result.cd_ratio is None
+
+    def test_fetch_system_credit_public_wrapper(self):
+        with respx.mock:
+            respx.get(url__regex=r"BS_viewWssExtract\.aspx$").respond(
+                200, text=_FAKE_WSS_INDEX_HTML,
+            )
+            respx.get(url__regex=r"SelectedDate=4/24/2026").respond(
+                200, text=_FAKE_WSS_DETAIL_HTML,
+            )
+            with MacroClient() as client:
+                result = client.fetch_system_credit()
+
+        assert result is not None
+        assert result.release_date == "2026-04-24"

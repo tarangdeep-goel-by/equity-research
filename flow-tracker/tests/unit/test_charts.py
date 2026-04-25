@@ -630,6 +630,158 @@ class TestRenderExpensePieEdgeCases:
 
 
 # ---------------------------------------------------------------------------
+# render_chart('expense_pie', ...) — graceful degradation for banks/sparse
+# ---------------------------------------------------------------------------
+
+class TestExpensePieDispatcher:
+    """Verify the render_chart dispatcher builds expense slices from
+    annual_financials (latest year) and degrades honestly when sparse.
+    """
+
+    def _patch_api(self, monkeypatch, *, annual_row: dict, is_bfsi: bool = False,
+                   is_insurance: bool = False):
+        """Stub ResearchDataAPI used inside render_chart to avoid touching the DB."""
+
+        class _StubAPI:
+            def __init__(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def get_annual_financials(self, symbol, years=10):
+                return [annual_row] if annual_row else []
+
+            def _is_bfsi(self, symbol):
+                return is_bfsi
+
+            def _is_insurance(self, symbol):
+                return is_insurance
+
+        monkeypatch.setattr(
+            "flowtracker.research.data_api.ResearchDataAPI", _StubAPI
+        )
+
+    def test_bank_row_renders_pie_with_interest_slice(self, tmp_path, monkeypatch):
+        """Bank-shaped row (employee + other_expenses_detail + interest) → pie renders."""
+        from flowtracker.research.charts import render_chart
+
+        self._patch_api(
+            monkeypatch,
+            annual_row={
+                "fiscal_year_end": "2025-03-31",
+                "revenue": 462489.35,
+                "raw_material_cost": None,
+                "power_and_fuel": None,
+                "selling_and_admin": 18159.0,
+                "other_mfr_exp": 1268.0,
+                "employee_cost": 64353.0,
+                "other_expenses_detail": 46066.0,
+                "interest": 295524.0,
+            },
+            is_bfsi=True,
+        )
+
+        out = render_chart("SBIN", "expense_pie")
+        assert "path" in out, f"Expected rendered path, got: {out}"
+        assert "sparse" not in out
+        _assert_png(out["path"])
+
+    def test_sparse_single_category_returns_sparse_indicator(self, tmp_path, monkeypatch):
+        """Only 1 expense category populated → sparse indicator, not raise, not (no data)."""
+        from flowtracker.research.charts import render_chart
+
+        self._patch_api(
+            monkeypatch,
+            annual_row={
+                "fiscal_year_end": "2025-03-31",
+                "revenue": 1000.0,
+                "employee_cost": 250.0,
+                # everything else None / 0
+                "raw_material_cost": None,
+                "power_and_fuel": None,
+                "selling_and_admin": None,
+                "other_mfr_exp": None,
+                "other_expenses_detail": None,
+                "interest": None,
+            },
+            is_bfsi=False,
+        )
+
+        out = render_chart("X", "expense_pie")
+        assert out.get("sparse") is True
+        assert out["chart_type"] == "expense_pie"
+        assert out["symbol"] == "X"
+        assert out["categories"] == [{"name": "Employee", "value": 250.0}]
+        assert "message" in out
+
+    def test_no_annual_financials_returns_sparse(self, tmp_path, monkeypatch):
+        """No annual_financials row at all → sparse with 0 categories."""
+        from flowtracker.research.charts import render_chart
+
+        self._patch_api(monkeypatch, annual_row={}, is_bfsi=False)
+        # annual_row={} → get_annual_financials returns [] (empty dict skipped)
+
+        class _EmptyAPI:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def get_annual_financials(self, s, years=10): return []
+            def _is_bfsi(self, s): return False
+            def _is_insurance(self, s): return False
+
+        monkeypatch.setattr(
+            "flowtracker.research.data_api.ResearchDataAPI", _EmptyAPI
+        )
+
+        out = render_chart("NODATA", "expense_pie")
+        assert out.get("sparse") is True
+        assert out["categories"] == []
+
+    def test_manufacturing_row_renders_pie(self, tmp_path, monkeypatch):
+        """Standard manufacturing row (DRREDDY-like, all 6 fields) → pie renders."""
+        from flowtracker.research.charts import render_chart
+
+        self._patch_api(
+            monkeypatch,
+            annual_row={
+                "fiscal_year_end": "2025-03-31",
+                "revenue": 32643.9,
+                "raw_material_cost": 10524.6,
+                "employee_cost": 5594.4,
+                "power_and_fuel": 562.5,
+                "selling_and_admin": 4721.9,
+                "other_mfr_exp": 2563.2,
+                "other_expenses_detail": 674.9,
+                "interest": 282.9,
+            },
+            is_bfsi=False,
+        )
+
+        out = render_chart("DRREDDY", "expense_pie")
+        assert "path" in out
+        _assert_png(out["path"])
+
+    def test_explicit_data_passthrough_unchanged(self, tmp_path, monkeypatch):
+        """Pre-shaped data passed in directly bypasses the helper (back-compat)."""
+        from flowtracker.research.charts import render_chart
+
+        # API stub shouldn't be touched, but provide one to be safe
+        self._patch_api(monkeypatch, annual_row={}, is_bfsi=False)
+
+        data = [
+            {"name": "Employee Cost", "value": 20_000},
+            {"name": "Raw Materials", "value": 45_000},
+            {"name": "Power & Fuel", "value": 8_000},
+        ]
+        out = render_chart("X", "expense_pie", data=data)
+        assert "path" in out
+        _assert_png(out["path"])
+
+
+# ---------------------------------------------------------------------------
 # render_composite_radar edge cases
 # ---------------------------------------------------------------------------
 
