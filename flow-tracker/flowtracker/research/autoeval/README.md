@@ -36,6 +36,27 @@ uv run flowtrack research autoeval -a business --sectors bfsi,it_services,metals
 uv run flowtrack research autoeval --progress
 ```
 
+## Macro autoeval
+
+The macro agent is graded by a parallel harness — sector-agnostic, flat-date matrix instead of (sector, stock) pairs. The macro rubric checks regime-reasoning discipline rather than sector framework coverage.
+
+```bash
+# Run macro agent + grade for every date in eval_matrix_macro.yaml
+uv run flowtrack research autoeval-macro
+
+# Grade existing reports only (no agent runs)
+uv run flowtrack research autoeval-macro --skip-run --note baseline
+
+# One date only
+uv run flowtrack research autoeval-macro --dates 2025-11-01
+```
+
+**Rubric (5 dimensions)** — `anchor_exhaustion`, `trajectory_check`, `fact_view`, `india_transmission`, `stale_policy`. See `evaluate_macro.py::MACRO_EVAL_SYSTEM` for the full prompt. Anchor exhaustion is enforced live: the harness calls `get_macro_catalog()` pre-grade and injects the expected anchor list into the Gemini prompt.
+
+**Backdated grading** — every date entry sets `FLOWTRACK_AS_OF` in the macro agent's child env (also `FLOWTRACK_MACRO_OUT_DIR` so backdated reports land at `~/vault/macro/<date>/macro.md` instead of polluting `~/vault/stocks/NIFTY/`). The `--skip-run` path then reads the same per-as-of override dir.
+
+**Results** — `results_macro.tsv` (next to `results.tsv`); per-run JSON archives at `eval_history/macro_<ts>.json`. The `--progress` chart shows the most recent ~10 macro grades when the TSV exists.
+
 ## How We Used It (Session 2026-04-07)
 
 ### Step-by-step workflow

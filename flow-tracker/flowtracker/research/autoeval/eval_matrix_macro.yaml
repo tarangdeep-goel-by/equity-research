@@ -34,3 +34,9 @@ eval_dates:
 
   - date: "2026-03-15"
     why: "Post-Fed-Mar-FOMC; pre-Indian fiscal year-end; macro risk-off stress test"
+
+  - date: "2026-04-15"
+    why: "Post-RBI Apr MPR decision; FY27 starts; first read on FY27 capex/credit cycle"
+
+  - date: "2026-04-22"
+    why: "Earnings-season peak (Q4 FY26 large-caps reporting); macro priors collide with bottom-up"

@@ -167,6 +167,7 @@ HELP_COMMANDS = [
     ["research", "thesis-status", "--help"],
     ["research", "run", "--help"],
     ["research", "verify", "--help"],
+    ["research", "autoeval-macro", "--help"],
 ]
 # fmt: on
 
