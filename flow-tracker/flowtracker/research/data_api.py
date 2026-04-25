@@ -2090,22 +2090,92 @@ class ResearchDataAPI:
 
         Invoked when Yahoo peers are empty or sector-mismatched. Keeps the
         same return schema so agents don't need to special-case the path.
+
+        Two enrichment fixes vs. the prior implementation:
+
+        (1) When a Screener peer's `company_snapshot` is missing or has
+            empty market_cap_cr (common for small-cap peers Screener
+            recommends but we don't track), fall back to the peer_comparison
+            row's own `market_cap` field. Without this, conglomerate peers
+            uniformly returned mcap=0 and looked like microcaps.
+
+        (2) Filter the peer set to the subject's industry where possible.
+            Screener's peer recommendation API is itself sector-noisy for
+            conglomerates (HINDUNILVR's recommended peers include a sugar
+            mill and a chemicals company; VEDL's include specialty
+            chemicals). We keep peers whose industry matches the subject,
+            and surface a `peer_quality_warning` when we drop the count
+            below 2.
         """
         screener_rows = self._store.get_peers(symbol) or []
-        peer_symbols = [r["peer_symbol"] for r in screener_rows if r.get("peer_symbol")]
+        screener_by_sym = {
+            r["peer_symbol"]: r for r in screener_rows if r.get("peer_symbol")
+        }
+        peer_symbols = list(screener_by_sym.keys())
         peer_snapshots = (
             self._store.get_company_snapshots(peer_symbols) if peer_symbols else []
         )
-        for snap in peer_snapshots:
+        snap_by_sym = {s["symbol"]: dict(s) for s in peer_snapshots}
+
+        # Enrich every Screener peer — even those without a company_snapshot
+        # row — using the peer_comparison row as the data source of last
+        # resort. Subject's own row is excluded (already in `subject`).
+        enriched: list[dict] = []
+        for sym in peer_symbols:
+            if sym == symbol:
+                continue
+            screener = screener_by_sym.get(sym, {})
+            snap = snap_by_sym.get(sym, {"symbol": sym})
+            # Backfill mcap from peer_comparison.market_cap when snapshot is
+            # missing or zero. Screener stores market_cap in Cr already.
+            if not snap.get("market_cap_cr") and screener.get("market_cap"):
+                snap["market_cap_cr"] = screener["market_cap"]
+            # Backfill name + PE + ROCE from screener row when snapshot is
+            # entirely synthetic.
+            if not snap.get("name") and screener.get("peer_name"):
+                snap["name"] = screener["peer_name"]
+            if not snap.get("pe_trailing") and screener.get("pe"):
+                snap["pe_trailing"] = screener["pe"]
             snap["screener_fallback"] = True
             snap["yahoo_score"] = None
-        return {
+            enriched.append(snap)
+
+        # Industry filter: keep peers whose industry matches the subject's.
+        # Skip the filter when subject industry is unknown (can't validate).
+        subject_industry = (subject.get("industry") or "").strip().lower()
+        warnings: list[str] = []
+        if subject_industry and enriched:
+            matched = [
+                p for p in enriched
+                if (p.get("industry") or "").strip().lower() == subject_industry
+            ]
+            if len(matched) >= 2:
+                # Drop sector-mismatched peers if we still have ≥2 left
+                dropped = len(enriched) - len(matched)
+                if dropped > 0:
+                    warnings.append(
+                        f"Filtered out {dropped} sector-mismatched peer(s) "
+                        f"from Screener recommendation"
+                    )
+                enriched = matched
+            else:
+                # Not enough sector-matched peers — keep all but warn
+                warnings.append(
+                    "Screener peer set is sector-noisy and "
+                    "subject industry is underrepresented; treat peer "
+                    "comparisons with caution"
+                )
+
+        result: dict = {
             "subject": _clean(subject),
-            "peers": _clean(peer_snapshots),
-            "peer_count": len(peer_snapshots),
+            "peers": _clean(enriched),
+            "peer_count": len(enriched),
             "source": "screener_fallback",
             "fallback_reason": reason,
         }
+        if warnings:
+            result["peer_quality_warning"] = warnings
+        return result
 
     def get_screener_peers(self, symbol: str) -> list[dict]:
         """Screener.in-recommended peers from peer_comparison table.
