@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -173,14 +174,23 @@ def save_trace(trace: PipelineTrace) -> Path:
 
 
 def save_envelope(envelope: BriefingEnvelope) -> dict[str, Path]:
-    """Save a BriefingEnvelope to vault. Returns dict of saved file paths."""
+    """Save a BriefingEnvelope to vault. Returns dict of saved file paths.
+
+    Macro escape hatch: when ``FLOWTRACK_MACRO_OUT_DIR`` is set and agent is
+    ``macro``, the report markdown is redirected there (autoeval as-of)."""
     symbol = envelope.symbol.upper()
     base = _VAULT_BASE / symbol
 
     # Save report markdown
-    reports_dir = base / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    report_path = reports_dir / f"{envelope.agent}.md"
+    macro_override = os.environ.get("FLOWTRACK_MACRO_OUT_DIR")
+    if envelope.agent == "macro" and macro_override:
+        reports_dir = Path(macro_override)
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        report_path = reports_dir / "macro.md"
+    else:
+        reports_dir = base / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        report_path = reports_dir / f"{envelope.agent}.md"
     report_path.write_text(envelope.report, encoding="utf-8")
 
     # Save briefing JSON

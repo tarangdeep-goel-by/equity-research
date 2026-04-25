@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import subprocess
 import sys
 import time
@@ -50,6 +51,9 @@ from flowtracker.research.autoeval.evaluate import (
 
 MACRO_MATRIX_PATH = Path(__file__).parent / "eval_matrix_macro.yaml"
 MACRO_RESULTS_TSV = Path(__file__).parent / "results_macro.tsv"
+MACRO_HISTORY_DIR = Path(__file__).parent / "eval_history"
+GEMINI_RETRY_ATTEMPTS = 3
+GEMINI_RETRY_BACKOFF_S = 30
 
 
 # ---------------------------------------------------------------------------
@@ -120,13 +124,11 @@ def load_macro_matrix() -> dict:
         return yaml.safe_load(f)
 
 
-def fetch_anchor_catalog() -> list[str]:
-    """Return the list of ``status='complete'`` anchors from get_macro_catalog.
-
-    Used to populate the rubric's anchor-exhaustion expected list at eval
-    time. Returning an empty list when the tool is unavailable is safe —
-    the grader falls back to generic anchor-class coverage.
-    """
+def fetch_anchor_catalog(as_of_date: str | None = None) -> list[str]:
+    """Return ``status='complete'`` anchors from get_macro_catalog, optionally
+    filtered to ``publication_date <= as_of_date``. WARN-and-pass-through
+    when the catalog rows lack publication_date (current state of
+    list_current_anchors in macro_anchors.py)."""
     from flowtracker.research.data_api import ResearchDataAPI
 
     try:
@@ -137,34 +139,63 @@ def fetch_anchor_catalog() -> list[str]:
         return []
 
     anchors = catalog.get("anchors") if isinstance(catalog, dict) else catalog or []
-    completed: list[str] = []
+    completed: list[dict] = []
     for a in anchors:
         if not isinstance(a, dict):
             continue
-        if a.get("status") == "complete":
-            name = a.get("name") or a.get("title") or a.get("id")
-            if name:
-                completed.append(str(name))
-    return completed
+        if a.get("status") != "complete":
+            continue
+        completed.append(a)
+
+    if as_of_date and completed:
+        has_pub_date = any(
+            (a.get("publication_date") or a.get("date")) for a in completed
+        )
+        if not has_pub_date:
+            print(
+                "  [WARN] get_macro_catalog has no publication_date — "
+                "skipping anchor temporal filter",
+                file=sys.stderr,
+            )
+        else:
+            filtered: list[dict] = []
+            for a in completed:
+                pub = a.get("publication_date") or a.get("date")
+                if pub and str(pub) > as_of_date:
+                    continue
+                filtered.append(a)
+            completed = filtered
+
+    names: list[str] = []
+    for a in completed:
+        name = a.get("name") or a.get("title") or a.get("id") or a.get("doc_type")
+        if name:
+            names.append(str(name))
+    return names
+
+
+def macro_out_dir(as_of_date: str) -> Path:
+    """Return the per-run vault dir for a backdated macro report."""
+    return Path.home() / "vault" / "macro" / as_of_date
 
 
 def run_macro_agent(as_of_date: str, placeholder_symbol: str) -> tuple[float, bool]:
-    """Invoke the macro agent via CLI for the given as-of date.
-
-    The CLI doesn't take --as-of today, so this runs macro against the live
-    system date. For backdated eval points (the common case in this matrix)
-    callers should document that the grade reflects agent behavior at the
-    wall-clock eval time, not a simulated as-of. A proper as-of harness is
-    a Phase 2 upgrade.
-    """
+    """Invoke the macro agent CLI with FLOWTRACK_AS_OF + FLOWTRACK_MACRO_OUT_DIR
+    set in the child env. Mirrors backtest_historical_analog.run_analog_agent_as_of.
+    The out-dir override prevents backdated reports from polluting
+    ~/vault/stocks/{placeholder_symbol}/ (briefing.save_envelope honors it)."""
     cwd = Path(__file__).resolve().parents[3]
     start = time.monotonic()
+    env = os.environ.copy()
+    env["FLOWTRACK_AS_OF"] = as_of_date
+    env["FLOWTRACK_MACRO_OUT_DIR"] = str(macro_out_dir(as_of_date))
     proc = subprocess.Popen(
         ["uv", "run", "flowtrack", "research", "run", "macro", "-s", placeholder_symbol],
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env=env,
     )
     try:
         while proc.poll() is None:
@@ -184,11 +215,41 @@ def run_macro_agent(as_of_date: str, placeholder_symbol: str) -> tuple[float, bo
     return time.monotonic() - start, proc.returncode == 0
 
 
-def read_macro_report(placeholder_symbol: str) -> str:
+def read_macro_report(placeholder_symbol: str, as_of_date: str | None = None) -> str:
+    """Read the macro report. Prefer the per-as-of override dir if present."""
+    if as_of_date:
+        override = macro_out_dir(as_of_date) / "macro.md"
+        if override.exists():
+            return override.read_text()
     path = Path.home() / "vault" / "stocks" / placeholder_symbol / "reports" / "macro.md"
     if not path.exists():
         return ""
     return path.read_text()
+
+
+async def _gemini_with_retry(
+    query_fn,
+    attempts: int = GEMINI_RETRY_ATTEMPTS,
+    backoff_s: float = GEMINI_RETRY_BACKOFF_S,
+) -> str:
+    """Retry ``query_fn()`` up to ``attempts`` times with ``backoff_s`` sleeps.
+    Resilience for transient Gemini 503/timeout blips; the 1800s subprocess
+    timeout already bounds total wall-clock."""
+    last_exc: Exception | None = None
+    for i in range(attempts):
+        try:
+            return await query_fn()
+        except Exception as exc:
+            last_exc = exc
+            if i < attempts - 1:
+                print(
+                    f"  [WARN] Gemini attempt {i + 1}/{attempts} failed: {exc}; "
+                    f"retrying in {backoff_s}s",
+                    file=sys.stderr,
+                )
+                await asyncio.sleep(backoff_s)
+    assert last_exc is not None
+    raise last_exc
 
 
 async def eval_macro_report(
@@ -214,20 +275,28 @@ async def eval_macro_report(
         plugins=[],
     )
 
-    raw = ""
-    try:
+    async def _one_attempt() -> str:
+        raw_local = ""
         async for msg in query(prompt=user_prompt, options=opts):
             text = getattr(msg, "content", None) or getattr(msg, "text", "") or ""
             if isinstance(text, list):
                 text = "".join(str(c) for c in text)
-            raw += str(text)
+            raw_local += str(text)
+        return raw_local
+
+    try:
+        raw = await _gemini_with_retry(
+            _one_attempt,
+            attempts=GEMINI_RETRY_ATTEMPTS,
+            backoff_s=GEMINI_RETRY_BACKOFF_S,
+        )
     except Exception as exc:
         return AgentEvalResult(
             agent="macro", stock="NIFTY", sector="_macro_",
             grade="ERR", grade_numeric=0,
             summary=f"Gemini grading failed: {exc}",
             eval_duration_s=time.monotonic() - t0,
-            raw_gemini_response=raw,
+            raw_gemini_response="",
         )
 
     parsed = _extract_json(raw)
@@ -264,51 +333,94 @@ async def eval_macro_report(
     )
 
 
-def append_macro_tsv(result: AgentEvalResult, as_of_date: str, cycle: int) -> None:
+def append_macro_tsv(result: AgentEvalResult, as_of_date: str, note: str) -> None:
     MACRO_RESULTS_TSV.parent.mkdir(parents=True, exist_ok=True)
     is_new = not MACRO_RESULTS_TSV.exists()
     with open(MACRO_RESULTS_TSV, "a") as f:
         if is_new:
-            f.write("timestamp\tcycle\tas_of_date\tgrade\tgrade_numeric\tprompt_fixes\tissues\tsummary\n")
+            f.write("timestamp\tnote\tas_of_date\tgrade\tgrade_numeric\tprompt_fixes\tissues\tsummary\n")
         ts = datetime.now(timezone.utc).isoformat()
         prompt_fixes = sum(1 for i in result.issues if i.type == "PROMPT_FIX")
         issues_count = len(result.issues)
         summary = (result.summary or "").replace("\t", " ").replace("\n", " ")[:300]
-        f.write(f"{ts}\t{cycle}\t{as_of_date}\t{result.grade}\t{result.grade_numeric}\t{prompt_fixes}\t{issues_count}\t{summary}\n")
+        note_clean = (note or "").replace("\t", " ").replace("\n", " ")[:120]
+        f.write(f"{ts}\t{note_clean}\t{as_of_date}\t{result.grade}\t{result.grade_numeric}\t{prompt_fixes}\t{issues_count}\t{summary}\n")
+
+
+def archive_eval_run(
+    result: AgentEvalResult,
+    as_of_date: str,
+    anchors: list[str],
+    report_md: str,
+    note: str,
+    run_duration_s: float,
+) -> Path:
+    """Write per-run JSON to ``eval_history/macro_<ts>.json`` (parity with
+    evaluate.py::write_last_run). Gitignored by workspace CLAUDE.md."""
+    import hashlib
+
+    MACRO_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M")
+    archive_path = MACRO_HISTORY_DIR / f"macro_{ts}.json"
+    report_hash = hashlib.sha256(report_md.encode("utf-8")).hexdigest() if report_md else ""
+    archive = {
+        "agent": "macro",
+        "as_of_date": as_of_date,
+        "note": note,
+        "anchors_used": anchors,
+        "report_chars": len(report_md or ""),
+        "report_sha256": report_hash,
+        "run_duration_s": run_duration_s,
+        "result": asdict(result),
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    archive_path.write_text(json.dumps(archive, indent=2, default=str))
+    return archive_path
 
 
 async def _eval_one_date(date_entry: dict, placeholder_symbol: str,
-                         skip_run: bool, cycle: int) -> AgentEvalResult:
+                         skip_run: bool, note: str) -> tuple[AgentEvalResult, list[str], str, float]:
+    """Returns (result, anchors_used, report_md, run_duration_s) for archival."""
     as_of_date = date_entry["date"]
     print(f"--- macro / {as_of_date} ({date_entry.get('why', '')}) ---")
 
+    run_duration = 0.0
     if not skip_run:
-        print(f"  Running macro agent...")
-        duration, success = run_macro_agent(as_of_date, placeholder_symbol)
-        print(f"  Macro completed in {duration:.1f}s (success={success})")
+        print(f"  Running macro agent (FLOWTRACK_AS_OF={as_of_date})...")
+        run_duration, success = run_macro_agent(as_of_date, placeholder_symbol)
+        print(f"  Macro completed in {run_duration:.1f}s (success={success})")
         if not success:
-            return AgentEvalResult(
-                agent="macro", stock=placeholder_symbol, sector="_macro_",
-                grade="ERR", grade_numeric=0, summary="Macro agent run failed",
-                run_duration_s=duration,
+            return (
+                AgentEvalResult(
+                    agent="macro", stock=placeholder_symbol, sector="_macro_",
+                    grade="ERR", grade_numeric=0, summary="Macro agent run failed",
+                    run_duration_s=run_duration,
+                ),
+                [], "", run_duration,
             )
 
-    report_md = read_macro_report(placeholder_symbol)
+    report_md = read_macro_report(placeholder_symbol, as_of_date=as_of_date)
     if not report_md:
-        return AgentEvalResult(
-            agent="macro", stock=placeholder_symbol, sector="_macro_",
-            grade="ERR", grade_numeric=0, summary="No macro report found",
+        return (
+            AgentEvalResult(
+                agent="macro", stock=placeholder_symbol, sector="_macro_",
+                grade="ERR", grade_numeric=0, summary="No macro report found",
+                run_duration_s=run_duration,
+            ),
+            [], "", run_duration,
         )
     print(f"  Report: {len(report_md)} chars")
 
-    print(f"  Fetching anchor catalog...")
-    anchors = fetch_anchor_catalog()
+    print(f"  Fetching anchor catalog (filter <= {as_of_date})...")
+    anchors = fetch_anchor_catalog(as_of_date=as_of_date)
     print(f"  Complete anchors: {len(anchors)}")
 
     print(f"  Grading with Gemini...")
     result = await eval_macro_report(as_of_date, report_md, anchors)
+    result.run_duration_s = run_duration
+    result.report_length = len(report_md)
     print(f"  Grade: {result.grade} ({result.grade_numeric})")
-    return result
+    return result, anchors, report_md, run_duration
 
 
 async def async_main(args: argparse.Namespace) -> None:
@@ -323,13 +435,21 @@ async def async_main(args: argparse.Namespace) -> None:
         entries = matrix["eval_dates"]
 
     print(f"Macro AutoEval: {len(entries)} date(s), target_numeric >= {target_numeric}")
+    if args.note:
+        print(f"  note: {args.note}")
     print()
 
     results: list[AgentEvalResult] = []
     for entry in entries:
-        r = await _eval_one_date(entry, placeholder_symbol, args.skip_run, args.cycle)
+        r, anchors, report_md, run_dur = await _eval_one_date(
+            entry, placeholder_symbol, args.skip_run, args.note,
+        )
         results.append(r)
-        append_macro_tsv(r, entry["date"], args.cycle)
+        append_macro_tsv(r, entry["date"], args.note)
+        archive_path = archive_eval_run(
+            r, entry["date"], anchors, report_md, args.note, run_dur,
+        )
+        print(f"  Archived: {archive_path}")
         print()
 
     print("=" * 70)
@@ -348,7 +468,8 @@ def main() -> None:
                         help="Comma-separated dates (default: all in eval_matrix_macro.yaml)")
     parser.add_argument("--skip-run", action="store_true",
                         help="Skip macro agent runs, grade existing report only")
-    parser.add_argument("--cycle", type=int, default=0, help="Cycle number for results_macro.tsv")
+    parser.add_argument("--note", type=str, default="",
+                        help="Free-form note written into eval_history archive (e.g. 'baseline', 'post-prompt-fix-3')")
     args = parser.parse_args()
     asyncio.run(async_main(args))
 
