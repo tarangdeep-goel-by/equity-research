@@ -62,3 +62,17 @@ Operating cash flow for banks and NBFCs is dominated by deposit and loan flow sw
 ROCE is NOT a valid KPI for banks or NBFCs — it mixes interest income and borrowings denominators in non-meaningful ways. Do not include ROCE in the business profile table or financial summary. If `get_fundamentals` returns a ROCE value, ignore it for narrative. Use ROE, ROA, NIM, and C/I ratio instead.
 
 **Chart routing.** `render_chart(chart_type='sector_valuation_scatter')` auto-detects BFSI and plots PE vs ROA (not ROCE) as the quality axis. Call it the same way — don't pass a `y_metric` override, the sector detection handles it. If ROA coverage is thin across the peer set (fewer than 2 peers with `roa_pct` populated), the chart falls back to ROCE so something renders — note that as a data gap, not a valid comparison.
+
+## Rate Transmission (ALM) Mechanics for Indian Banks (new)
+
+Indian banks price loans on **EBLR** (External Benchmark Lending Rate, tied to repo — mandatory for retail/MSME floating loans since 2019) or **MCLR** (older reference, 6-12 month reset). Deposits reprice at term-deposit maturity (weighted-average tenor typically 12-24 months). The asymmetry between fast-repricing loans and slow-repricing deposits is the core ALM story:
+
+- **Repo CUT** → EBLR-linked loan yields drop **within the same quarter**; term-deposit cost drops **over the next 3-6 quarters** as matured TDs roll over at lower rates. **NIM COMPRESSES in the cut quarter and normalizes 2-3 quarters later** as deposits catch up. A "rate cut benefits NIM early" claim is directionally wrong.
+- **Repo HIKE** → symmetric: NIM EXPANDS in the hike quarter, compresses as deposit costs catch up.
+- **Repo PAUSE after a cut cycle** → deposits continue to reprice lower, while loan yields are flat → **NIM EXPANDS** as the deposit-cost tailwind finally plays through. This is the opposite of "pause compresses NIM".
+
+For any macro / sector / business / financials / valuation report that discusses a bank's NIM under a rate regime, state the loan-book mix (EBLR vs MCLR vs fixed — usually disclosed in concall financial_metrics or AR segmental) BEFORE claiming directional NIM impact. Misstating the direction is a sector_framework-level COMPUTATION error.
+
+## Systemic CD Ratio Constraint (new)
+
+When forecasting credit growth for any listed Indian bank — across macro, sector, business, financials, or valuation — reference the **systemic (industry-wide) Credit-Deposit ratio** from RBI data (via `get_market_context(section='macro')` or cited RBI bulletins). The system CD-ratio sits around the RBI's 78% advisory comfort level since 2024; when it's above, the industry faces a **deposit-mobilization headwind** that caps aggregate credit growth regardless of individual-bank demand. Omitting this when discussing bank growth trajectories is a completeness gap — individual-bank CD ratio alone doesn't describe the macro constraint.
