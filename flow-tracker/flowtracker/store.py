@@ -331,6 +331,27 @@ CREATE TABLE IF NOT EXISTS standalone_financials (
     UNIQUE(symbol, fiscal_year_end)
 );
 
+-- Reclassification flags for annual_financials. See flowtracker/data_quality.py
+-- and plans/screener-data-discontinuity.md for the detector and rationale.
+-- Each row marks a YoY break between (prior_fy, curr_fy) on a specific line.
+CREATE TABLE IF NOT EXISTS data_quality_flags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    prior_fy TEXT NOT NULL,
+    curr_fy TEXT NOT NULL,
+    line TEXT NOT NULL,
+    prior_val REAL NOT NULL,
+    curr_val REAL NOT NULL,
+    jump_pct REAL NOT NULL,
+    rev_change_pct REAL NOT NULL,
+    flag_type TEXT NOT NULL,   -- RECLASS or SIGN_FLIP
+    severity TEXT NOT NULL,    -- HIGH / MEDIUM / LOW
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, curr_fy, line)
+);
+CREATE INDEX IF NOT EXISTS idx_dqf_symbol ON data_quality_flags(symbol);
+CREATE INDEX IF NOT EXISTS idx_dqf_severity ON data_quality_flags(severity);
+
 CREATE TABLE IF NOT EXISTS mf_daily_flows (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
@@ -2313,6 +2334,68 @@ class FlowStore:
             other_expenses_detail=r["other_expenses_detail"], total_expenses=r["total_expenses"],
             operating_profit=r["operating_profit"],
         ) for r in rows]
+
+    # -- Data Quality Flags (Screener reclassification discontinuities) --
+
+    def upsert_data_quality_flags(self, flags: list) -> int:
+        """Insert/replace flags. Idempotent on (symbol, curr_fy, line).
+
+        flags: iterable of flowtracker.data_quality.Flag dataclasses.
+        Returns row count written.
+        """
+        cursor = self._conn.cursor()
+        count = 0
+        for f in flags:
+            cursor.execute(
+                "INSERT OR REPLACE INTO data_quality_flags "
+                "(symbol, prior_fy, curr_fy, line, prior_val, curr_val, "
+                "jump_pct, rev_change_pct, flag_type, severity) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (
+                    f.symbol.upper(), f.prior_fy, f.curr_fy, f.line,
+                    f.prior_val, f.curr_val, f.jump_pct, f.revenue_change_pct,
+                    f.flag_type, f.severity,
+                ),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_data_quality_flags(
+        self, symbol: str, min_severity: str | None = None
+    ) -> list[dict]:
+        """Get flags for a symbol, ordered by curr_fy DESC, severity HIGH→LOW.
+
+        min_severity: if set, returns only flags at or above this tier
+                      ("LOW" returns all, "HIGH" only HIGH).
+        """
+        sev_rank = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+        sql = (
+            "SELECT symbol, prior_fy, curr_fy, line, prior_val, curr_val, "
+            "jump_pct, rev_change_pct, flag_type, severity "
+            "FROM data_quality_flags WHERE symbol = ?"
+        )
+        params: tuple = (symbol.upper(),)
+        if min_severity:
+            allowed = [s for s, r in sev_rank.items() if r >= sev_rank[min_severity]]
+            sql += f" AND severity IN ({','.join('?' * len(allowed))})"
+            params = (*params, *allowed)
+        sql += " ORDER BY curr_fy DESC, severity"
+        rows = self._conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def clear_data_quality_flags(self, symbol: str | None = None) -> int:
+        """Delete flags. If symbol is None, deletes all (for full re-backfill)."""
+        cursor = self._conn.cursor()
+        if symbol:
+            cursor.execute(
+                "DELETE FROM data_quality_flags WHERE symbol = ?",
+                (symbol.upper(),),
+            )
+        else:
+            cursor.execute("DELETE FROM data_quality_flags")
+        self._conn.commit()
+        return cursor.rowcount
 
     # -- Standalone Financials (for SOTP: consolidated - standalone = subsidiary contribution) --
 
