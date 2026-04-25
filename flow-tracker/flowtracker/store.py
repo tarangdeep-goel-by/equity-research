@@ -40,6 +40,7 @@ from flowtracker.fno_models import FnoContract, FnoParticipantOi, FnoUniverse
 import logging
 
 _val_logger = logging.getLogger("flowtracker.validation")
+_logger = logging.getLogger("flowtracker.store")
 
 # Ranges designed to catch unit errors (rupees stored as crores).
 # A ₹500 Cr company in rupees = 5,000,000,000 — must exceed upper bound.
@@ -4209,7 +4210,7 @@ class FlowStore:
         own end-of-run recompute (avoids redundant work across many symbols).
         """
         count = 0
-        touched_symbols: set[str] = set()
+        touched_symbols: dict[str, list[str]] = {}
         for a in actions:
             self._conn.execute(
                 "INSERT OR REPLACE INTO corporate_actions "
@@ -4220,16 +4221,21 @@ class FlowStore:
             )
             count += 1
             if a["action_type"] in ("split", "bonus"):
-                touched_symbols.add(a["symbol"].upper())
+                touched_symbols.setdefault(a["symbol"].upper(), []).append(a["action_type"])
         self._conn.commit()
 
         if recompute_adj_close and touched_symbols:
-            for sym in touched_symbols:
+            for sym, action_types in touched_symbols.items():
                 self.recompute_adj_close(sym)
                 # Invalidate any cached Screener price chart — it's now stale
                 # (pre-adjustment). Next fund chart fetch will repopulate from
                 # Screener's post-adjusted series. PE chart stays valid (ratio).
-                self.invalidate_screener_price_charts(sym)
+                deleted = self.invalidate_screener_price_charts(sym)
+                if deleted:
+                    _logger.info(
+                        "invalidated %d screener_chart rows for %s after %s",
+                        deleted, sym, action_types,
+                    )
 
         return count
 
@@ -4253,7 +4259,12 @@ class FlowStore:
         deleted = cursor.rowcount
         if deleted and recompute_adj_close and action_type in ("split", "bonus"):
             self.recompute_adj_close(symbol.upper())
-            self.invalidate_screener_price_charts(symbol.upper())
+            n = self.invalidate_screener_price_charts(symbol.upper())
+            if n:
+                _logger.info(
+                    "invalidated %d screener_chart rows for %s after delete %s",
+                    n, symbol.upper(), [action_type],
+                )
         return deleted
 
     def get_corporate_actions(self, symbol: str) -> list[dict]:
