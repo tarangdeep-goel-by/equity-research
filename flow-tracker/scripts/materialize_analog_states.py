@@ -43,16 +43,36 @@ def quarter_ends(years: int, end_date: date | None = None) -> list[str]:
     return sorted(set(out), reverse=True)
 
 
-def target_symbols(store: FlowStore, only_symbol: str | None = None) -> list[str]:
-    """Universe: Nifty 500 constituents (Nifty 50 + Next 50 + Midcap 150 + Smallcap 250)."""
+def target_symbols(
+    store: FlowStore, only_symbol: str | None = None,
+    include_delisted: bool = False,
+) -> list[str]:
+    """Universe: Nifty 500 constituents (Nifty 50 + Next 50 + Midcap 150 + Smallcap 250).
+
+    With ``include_delisted=True`` (PR-13, issue #3 — survivorship bias) the
+    cohort is the **UNION** of (a) currently-indexed symbols and (b) any symbol
+    with ≥3000 ``daily_stock_data`` observations. Union — not replace —
+    preserves recent IPOs and demergers (e.g. TMPV) which haven't yet
+    accumulated 3K rows but ARE in the live index.
+    """
     if only_symbol:
         return [only_symbol.upper()]
-    rows = store._conn.execute(
-        "SELECT DISTINCT symbol FROM index_constituents "
-        "WHERE index_name IN ('NIFTY 50', 'NIFTY NEXT 50', 'NIFTY MIDCAP 150', 'NIFTY SMALLCAP 250') "
-        "ORDER BY symbol"
-    ).fetchall()
-    return [r["symbol"] for r in rows]
+    indexed = {
+        r["symbol"] for r in store._conn.execute(
+            "SELECT DISTINCT symbol FROM index_constituents "
+            "WHERE index_name IN ('NIFTY 50', 'NIFTY NEXT 50', "
+            "'NIFTY MIDCAP 150', 'NIFTY SMALLCAP 250')"
+        ).fetchall()
+    }
+    if not include_delisted:
+        return sorted(indexed)
+    long_history = {
+        r["symbol"] for r in store._conn.execute(
+            "SELECT symbol FROM daily_stock_data "
+            "GROUP BY symbol HAVING COUNT(*) >= 3000"
+        ).fetchall()
+    }
+    return sorted(indexed | long_history)
 
 
 def upsert_feature_row(store: FlowStore, symbol: str, qtr: str, vec: dict) -> None:
@@ -101,7 +121,7 @@ def upsert_returns_row(store: FlowStore, symbol: str, qtr: str, rets: dict) -> N
 
 def materialize(
     store: FlowStore, only_symbol: str | None, years: int,
-    as_of: date | None = None,
+    as_of: date | None = None, include_delisted: bool = False,
 ) -> dict:
     """Materialize feature + return rows up through ``as_of`` (default: today).
 
@@ -111,7 +131,7 @@ def materialize(
     correctly anchored agent prompts (PR #80) but materialization still
     contaminated the cohort with wall-clock data.
     """
-    symbols = target_symbols(store, only_symbol)
+    symbols = target_symbols(store, only_symbol, include_delisted=include_delisted)
     qtrs = quarter_ends(years, end_date=as_of)
     print(
         f"Materializing {len(symbols)} symbols × {len(qtrs)} quarter-ends = "
@@ -184,13 +204,21 @@ def main() -> int:
         "--as-of", dest="as_of", default=None,
         help="ISO date YYYY-MM-DD; falls back to FLOWTRACK_AS_OF env var, then today.",
     )
+    parser.add_argument(
+        "--include-delisted", action="store_true",
+        help=("UNION current index with all daily_stock_data symbols having "
+              "≥3000 observations. Mitigates survivorship bias (PR-13)."),
+    )
     args = parser.parse_args()
 
     as_of = _resolve_as_of(args.as_of)
 
     store = FlowStore()
     try:
-        stats = materialize(store, args.symbol, args.years, as_of=as_of)
+        stats = materialize(
+            store, args.symbol, args.years, as_of=as_of,
+            include_delisted=args.include_delisted,
+        )
         print(
             f"\n✓ Done in {stats['elapsed_sec']:.1f}s: "
             f"{stats['symbols']} symbols, {stats['feature_rows']:,} feature rows, "

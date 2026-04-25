@@ -336,6 +336,13 @@
       'severity',
       'symbol',
     ]),
+    'delisted_symbols': list([
+      'detected_at',
+      'last_active_date',
+      'observations',
+      'reason',
+      'symbol',
+    ]),
     'earnings_surprises': list([
       'eps_actual',
       'eps_estimate',
@@ -787,6 +794,14 @@
       'symbol',
       'total_assets',
     ]),
+    'unresolved_cliffs': list([
+      'close',
+      'detected_at',
+      'prev_close',
+      'return_pct',
+      'symbol',
+      'trade_date',
+    ]),
     'valuation_snapshot': list([
       'avg_volume',
       'beta',
@@ -854,6 +869,7 @@
     'daily_flows',
     'daily_stock_data',
     'data_quality_flags',
+    'delisted_symbols',
     'earnings_surprises',
     'estimate_revisions',
     'financial_schedules',
@@ -891,6 +907,7 @@
     'shareholder_detail',
     'shareholding',
     'standalone_financials',
+    'unresolved_cliffs',
     'valuation_snapshot',
     'watchlist',
   ])
