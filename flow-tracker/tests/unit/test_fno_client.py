@@ -8,8 +8,10 @@ response shapes stored in `tests/fixtures/fno/`.
 
 from __future__ import annotations
 
+import io
 import json
 import logging
+import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -28,6 +30,14 @@ def _read(name: str) -> str:
     return (FIXTURES / name).read_text()
 
 
+def _zip_csv(text: str, member: str = "bhavcopy.csv") -> bytes:
+    """Wrap a CSV string into a single-member ZIP archive (NSE 2026 format)."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(member, text)
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # fetch_fno_bhavcopy
 # ---------------------------------------------------------------------------
@@ -39,9 +49,9 @@ def test_fetch_fno_bhavcopy_parses_csv():
     trade_date = date(2026, 4, 17)
     url = (
         "https://nsearchives.nseindia.com/content/fo/"
-        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv"
+        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv.zip"
     )
-    respx.get(url).respond(200, text=_read("sample_bhavcopy.csv"))
+    respx.get(url).respond(200, content=_zip_csv(_read("sample_bhavcopy.csv")))
 
     with FnoClient() as client:
         contracts = client.fetch_fno_bhavcopy(trade_date)
@@ -77,7 +87,7 @@ def test_fetch_fno_bhavcopy_404_returns_empty():
     trade_date = date(2026, 4, 17)
     url = (
         "https://nsearchives.nseindia.com/content/fo/"
-        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv"
+        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv.zip"
     )
     respx.get(url).respond(404)
 
@@ -93,9 +103,9 @@ def test_fetch_fno_bhavcopy_skips_empty_ticker_rows():
     trade_date = date(2026, 4, 17)
     url = (
         "https://nsearchives.nseindia.com/content/fo/"
-        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv"
+        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv.zip"
     )
-    respx.get(url).respond(200, text=_read("sample_bhavcopy.csv"))
+    respx.get(url).respond(200, content=_zip_csv(_read("sample_bhavcopy.csv")))
 
     with FnoClient() as client:
         contracts = client.fetch_fno_bhavcopy(trade_date)
@@ -109,7 +119,7 @@ def test_fetch_fno_bhavcopy_skips_empty_ticker_rows():
 
 _BHAV_URL = (
     "https://nsearchives.nseindia.com/content/fo/"
-    "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv"
+    "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv.zip"
 )
 _BHAV_HEADER = (
     "TradDt,BizDt,Sgmt,Src,FinInstrmTp,FinInstrmId,ISIN,TckrSymb,SctySrs,"
@@ -132,7 +142,7 @@ def _bhav_csv(instr: str, strike: str, optn: str) -> str:
 @respx.mock
 def test_bhavcopy_optstk_missing_strike_raises():
     """OPTSTK row with empty StrkPric must raise FnoFetchError identifying the row."""
-    respx.get(_BHAV_URL).respond(200, text=_bhav_csv("STO", "", "CE"))
+    respx.get(_BHAV_URL).respond(200, content=_zip_csv(_bhav_csv("STO", "", "CE")))
 
     with FnoClient() as client, pytest.raises(FnoFetchError) as exc_info:
         client.fetch_fno_bhavcopy(date(2026, 4, 17))
@@ -144,7 +154,7 @@ def test_bhavcopy_optstk_missing_strike_raises():
 @respx.mock
 def test_bhavcopy_optstk_valid_strike_parses():
     """OPTSTK row with StrkPric='1500.0' parses correctly with strike=1500.0."""
-    respx.get(_BHAV_URL).respond(200, text=_bhav_csv("STO", "1500.0", "CE"))
+    respx.get(_BHAV_URL).respond(200, content=_zip_csv(_bhav_csv("STO", "1500.0", "CE")))
 
     with FnoClient() as client:
         contracts = client.fetch_fno_bhavcopy(date(2026, 4, 17))
@@ -158,7 +168,7 @@ def test_bhavcopy_optstk_valid_strike_parses():
 @respx.mock
 def test_bhavcopy_futstk_missing_strike_parses_as_none():
     """FUTSTK row with empty StrkPric is legal — strike stays None (no regression)."""
-    respx.get(_BHAV_URL).respond(200, text=_bhav_csv("STF", "", ""))
+    respx.get(_BHAV_URL).respond(200, content=_zip_csv(_bhav_csv("STF", "", "")))
 
     with FnoClient() as client:
         contracts = client.fetch_fno_bhavcopy(date(2026, 4, 17))
@@ -349,7 +359,7 @@ def test_retry_gives_up_after_max_attempts(monkeypatch):
     trade_date = date(2026, 4, 17)
     url = (
         "https://nsearchives.nseindia.com/content/fo/"
-        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv"
+        "BhavCopy_NSE_FO_0_0_0_20260417_F_0000.csv.zip"
     )
     respx.get(url).respond(500)
 

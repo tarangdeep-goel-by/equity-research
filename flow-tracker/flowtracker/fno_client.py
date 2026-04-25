@@ -16,6 +16,7 @@ import csv
 import io
 import logging
 import time
+import zipfile
 from datetime import date, datetime
 from urllib.parse import quote
 
@@ -151,12 +152,15 @@ class FnoClient:
     def fetch_fno_bhavcopy(self, trade_date: date) -> list[FnoContract]:
         """Fetch per-contract EOD F&O bhavcopy for a trading day.
 
-        Returns [] on 404 (holiday/weekend). Uses NSE's 2024+ ISO-column CSV format.
+        Returns [] on 404 (holiday/weekend). Uses NSE's 2024+ ISO-column CSV
+        format, which NSE now distributes as a single-member ZIP archive
+        (`.csv.zip`) instead of plain `.csv`. The unzipped CSV schema is
+        unchanged.
         """
         date_str = trade_date.strftime("%Y%m%d")
         url = (
             f"{_ARCHIVES_URL}/content/fo/"
-            f"BhavCopy_NSE_FO_0_0_0_{date_str}_F_0000.csv"
+            f"BhavCopy_NSE_FO_0_0_0_{date_str}_F_0000.csv.zip"
         )
 
         resp = self._request_with_retry("GET", url)
@@ -164,7 +168,18 @@ class FnoClient:
             logger.info("No F&O bhavcopy for %s (holiday/weekend)", trade_date)
             return []
 
-        return self._parse_fno_bhavcopy_csv(resp.text)
+        try:
+            with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+                names = zf.namelist()
+                if not names:
+                    logger.warning("Empty F&O bhavcopy zip for %s", trade_date)
+                    return []
+                csv_text = zf.read(names[0]).decode("utf-8", errors="replace")
+        except zipfile.BadZipFile as e:
+            logger.error("F&O bhavcopy zip parse failed for %s: %s", trade_date, e)
+            return []
+
+        return self._parse_fno_bhavcopy_csv(csv_text)
 
     def _parse_fno_bhavcopy_csv(self, text: str) -> list[FnoContract]:
         """Parse the NSE 2024+ F&O bhavcopy CSV into FnoContract records."""

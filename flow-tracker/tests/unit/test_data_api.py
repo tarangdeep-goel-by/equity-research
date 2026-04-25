@@ -320,6 +320,65 @@ class TestTechnicalIndicators:
         assert "indicator" in data[0]
 
 
+class TestFnoMetrics:
+    """get_fno_metrics aggregates fno_contracts into PCR + rollover + OI legs."""
+
+    def _seed(self, store, symbol: str, trade_date: str = "2026-04-24") -> None:
+        from flowtracker.fno_models import FnoContract
+        from datetime import date
+
+        td = date.fromisoformat(trade_date)
+        cur_exp = date.fromisoformat("2026-04-30")
+        nxt_exp = date.fromisoformat("2026-05-28")
+
+        rows: list[FnoContract] = [
+            # Two future expiries: current 100 OI, next 50 OI → rollover = 50/(100+50) = 33.3%
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="FUTSTK",
+                expiry_date=cur_exp, open_interest=100, change_in_oi=10,
+            ),
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="FUTSTK",
+                expiry_date=nxt_exp, open_interest=50, change_in_oi=5,
+            ),
+            # Calls 200, Puts 100 → PCR = 0.5
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="OPTSTK",
+                expiry_date=cur_exp, strike=500.0, option_type="CE",
+                open_interest=200, change_in_oi=-20,
+            ),
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="OPTSTK",
+                expiry_date=cur_exp, strike=500.0, option_type="PE",
+                open_interest=100, change_in_oi=15,
+            ),
+        ]
+        store.upsert_fno_contracts(rows)
+
+    def test_returns_none_when_no_fno_data(self, api: ResearchDataAPI):
+        assert api.get_fno_metrics("UNKNOWNSYM") is None
+
+    def test_pcr_and_rollover_aggregation(self, api: ResearchDataAPI):
+        self._seed(api._store, "FNOTEST")
+        m = api.get_fno_metrics("FNOTEST")
+        assert m is not None
+        assert m["futures_oi"] == 150
+        assert m["call_oi"] == 200
+        assert m["put_oi"] == 100
+        assert m["pcr"] == 0.5
+        # Rollover %: next/(curr+next) = 50/150 = 33.3%
+        assert m["rollover_pct"] == 33.3
+
+    def test_technical_indicators_includes_fno_when_present(
+        self, api: ResearchDataAPI,
+    ):
+        self._seed(api._store, "SBIN")
+        rows = api.get_technical_indicators("SBIN")
+        assert rows
+        assert "fno" in rows[0]
+        assert rows[0]["fno"]["pcr"] == 0.5
+
+
 class TestDupontDecomposition:
     def test_screener_path(self, api: ResearchDataAPI):
         """Should use Screener annual_financials data (source='screener')."""

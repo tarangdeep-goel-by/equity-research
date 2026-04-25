@@ -2609,11 +2609,106 @@ class ResearchDataAPI:
         rows = self._store.get_fmp_dcf_history(symbol, limit=10)
         return _clean([r.model_dump() for r in rows])
 
+    def get_fno_metrics(self, symbol: str) -> dict | None:
+        """F&O derivatives metrics for the latest trading day with data.
+
+        Returns aggregate open interest by instrument leg, put-call ratio
+        (PCR), and rollover percentage (next-expiry OI share of the
+        current+next pair, computed only when ≥2 future expiries exist).
+
+        None when no F&O contracts are on file for the symbol.
+        """
+        conn = self._store._conn
+        row = conn.execute(
+            "SELECT MAX(trade_date) AS max_date FROM fno_contracts WHERE symbol = ?",
+            (symbol,),
+        ).fetchone()
+        if not row or not row["max_date"]:
+            return None
+        latest = row["max_date"]
+
+        aggs = conn.execute(
+            """
+            SELECT instrument, option_type,
+                   SUM(open_interest) AS total_oi,
+                   SUM(change_in_oi)  AS oi_change
+            FROM fno_contracts
+            WHERE symbol = ? AND trade_date = ?
+            GROUP BY instrument, option_type
+            """,
+            (symbol, latest),
+        ).fetchall()
+        if not aggs:
+            return None
+
+        futures_oi = futures_oi_change = 0
+        call_oi = call_oi_change = 0
+        put_oi = put_oi_change = 0
+        for a in aggs:
+            instr = a["instrument"]
+            opt = a["option_type"]
+            oi = a["total_oi"] or 0
+            chg = a["oi_change"] or 0
+            if instr in ("FUTSTK", "FUTIDX"):
+                futures_oi += oi
+                futures_oi_change += chg
+            elif instr in ("OPTSTK", "OPTIDX") and opt == "CE":
+                call_oi += oi
+                call_oi_change += chg
+            elif instr in ("OPTSTK", "OPTIDX") and opt == "PE":
+                put_oi += oi
+                put_oi_change += chg
+
+        pcr = round(put_oi / call_oi, 3) if call_oi > 0 else None
+
+        # Rollover %: share of next-month future OI in the (current + next) pair.
+        # Convention: as expiry approaches, rollover trend = next/(curr+next).
+        expiries = conn.execute(
+            """
+            SELECT expiry_date, SUM(open_interest) AS oi
+            FROM fno_contracts
+            WHERE symbol = ? AND trade_date = ?
+              AND instrument IN ('FUTSTK', 'FUTIDX')
+            GROUP BY expiry_date
+            ORDER BY expiry_date ASC
+            """,
+            (symbol, latest),
+        ).fetchall()
+        rollover_pct = None
+        if len(expiries) >= 2:
+            cur_oi = expiries[0]["oi"] or 0
+            nxt_oi = expiries[1]["oi"] or 0
+            if (cur_oi + nxt_oi) > 0:
+                rollover_pct = round(nxt_oi / (cur_oi + nxt_oi) * 100, 1)
+
+        return {
+            "date": latest,
+            "futures_oi": futures_oi,
+            "futures_oi_change": futures_oi_change,
+            "call_oi": call_oi,
+            "call_oi_change": call_oi_change,
+            "put_oi": put_oi,
+            "put_oi_change": put_oi_change,
+            "pcr": pcr,
+            "rollover_pct": rollover_pct,
+            "total_oi": futures_oi + call_oi + put_oi,
+        }
+
     def get_technical_indicators(self, symbol: str) -> list[dict]:
-        """Latest RSI, MACD, SMA-50, SMA-200, ADX. FMP primary, yfinance fallback."""
+        """Latest RSI, MACD, SMA-50, SMA-200, ADX (FMP primary, yfinance fallback).
+
+        Augments the indicator row with F&O fields (PCR, futures/call/put OI,
+        rollover %) when F&O contracts exist for the symbol — required for
+        F&O-listed stocks per the technical-agent prompt.
+        """
+        fno = self.get_fno_metrics(symbol)
+
         rows = self._store.get_fmp_technical_indicators(symbol)
         if rows:
-            return _clean([r.model_dump() for r in rows])
+            out = [r.model_dump() for r in rows]
+            if fno and out:
+                out[0] = {**out[0], "fno": fno}
+            return _clean(out)
 
         # Fallback: compute basic technicals from daily_stock_data (bhavcopy).
         # Use adj_close — SMA-50/SMA-200/RSI-14 over 200 days are directly
@@ -2668,6 +2763,9 @@ class ResearchDataAPI:
             else:
                 result["sma_cross"] = "golden_cross"
                 result["sma_cross_note"] = "SMA50 above SMA200 — bullish trend signal (golden cross)"
+
+        if fno:
+            result["fno"] = fno
 
         return [result] if result else []
 
