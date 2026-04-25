@@ -4776,25 +4776,29 @@ class ResearchDataAPI:
 
         Pre-computed so agents don't calculate CAGRs themselves.
 
-        Each horizon's start↔end pair is checked against MEDIUM+ data_quality_flags;
-        any horizon that spans a flag boundary returns null and the dropped flag
-        is reported in `effective_window.narrowed_due_to`. Spot ratios that don't
-        chain across years (latest values) are unaffected.
+        Per-metric × per-horizon nullification (Gemini review fix): each
+        metric has a dependency set of underlying line items. A horizon's
+        CAGR for that metric is suppressed only if a MEDIUM+ flag in that
+        horizon falls on a dependency line. Revenue / net_income / EPS are
+        never invalidated by reclass flags (they're aggregates that survive
+        bucketing changes); EBITDA depends on operating_profit + depreciation;
+        FCF depends on depreciation. So a `depreciation` reclass nullifies
+        EBITDA + FCF CAGRs across that horizon but lets revenue / NI / EPS
+        survive.
         """
         annual = self.get_annual_financials(symbol, years=11)
         if len(annual) < 2:
             return {"error": "Need at least 2 years of financials"}
 
-        # Flags whose curr_fy falls anywhere in the loaded history. A horizon
-        # that starts at-or-before the flag's prior_fy and ends at-or-after the
-        # flag's curr_fy spans the break.
+        # Flags whose curr_fy falls anywhere in the loaded history.
         all_flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
-        flag_curr_fys = {f["curr_fy"] for f in all_flags
-                         if f["curr_fy"] in {r["fiscal_year_end"] for r in annual}}
+        loaded_fys = {r["fiscal_year_end"] for r in annual}
+        relevant_flags = [f for f in all_flags if f["curr_fy"] in loaded_fys]
 
-        def _spans_flag(latest_fy: str, oldest_fy: str) -> list[str]:
-            """Return curr_fys of flags between (oldest, latest] inclusive of latest."""
-            return [c for c in flag_curr_fys if oldest_fy < c <= latest_fy]
+        def _flags_in_horizon(latest_fy: str, oldest_fy: str) -> list[dict]:
+            """Return flags whose curr_fy is in (oldest, latest] — i.e. fall
+            inside this horizon's start↔end pair."""
+            return [f for f in relevant_flags if oldest_fy < f["curr_fy"] <= latest_fy]
 
         def _cagr(latest_val: float, oldest_val: float, years: int) -> float | None:
             if oldest_val and oldest_val > 0 and latest_val and latest_val > 0 and years > 0:
@@ -4830,10 +4834,21 @@ class ResearchDataAPI:
         n = len(annual)
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
 
+        # Per-metric dependency sets. A flag on a line in this set invalidates
+        # the metric's CAGR for any horizon spanning the flag boundary.
+        # revenue / net_income / EPS are reported aggregates that survive
+        # bucketing reshuffles within other components — empty deps.
+        metric_deps: dict[str, set[str]] = {
+            "revenue":    set(),
+            "net_income": set(),
+            "eps":        set(),
+            "ebitda":     {"operating_profit", "depreciation"},
+            "fcf":        {"depreciation"},
+        }
+
         # EBITDA and FCF are meaningless for BFSI (interest is core revenue/cost, not opex;
         # no inventory/receivables/capex cycle). Suppress entirely — the agent shouldn't
-        # see these rows at all. Including them has caused hallucinations ("EBITDA as NII
-        # proxy") in past eval runs.
+        # see these rows at all.
         metric_defs = [
             ("revenue", lambda d, _: _get(d, "revenue")),
             ("net_income", lambda d, _: _get(d, "net_income")),
@@ -4843,12 +4858,24 @@ class ResearchDataAPI:
             metric_defs.insert(1, ("ebitda", lambda d, _: _ebitda(d)))
             metric_defs.append(("fcf", lambda d, prev: _fcf(d, prev)))
 
-        # Per-horizon flag check — once per horizon, reused across metrics.
         latest_fy = annual[0]["fiscal_year_end"]
-        horizon_breaks: dict[str, list[str]] = {}  # "1y" -> [flag curr_fys]
+        # Per-horizon flag bucket — flags that fall in each horizon's window.
+        horizon_flags: dict[str, list[dict]] = {}
         for label, idx in (("1y", 1), ("3y", 3), ("5y", 5), ("10y", 10)):
             if idx < len(annual):
-                horizon_breaks[label] = _spans_flag(latest_fy, annual[idx]["fiscal_year_end"])
+                horizon_flags[label] = _flags_in_horizon(latest_fy, annual[idx]["fiscal_year_end"])
+
+        # narrowed_due_to: list of (flag, horizon, metrics_affected) — which CAGR cells
+        # got nulled by which flag.
+        narrowed_due_to: list[dict] = []
+
+        def _cell_suppressed(metric: str, horizon: str) -> tuple[bool, list[dict]]:
+            """Return (suppressed, applicable_flags) for one (metric, horizon) cell."""
+            deps = metric_deps.get(metric, set())
+            if not deps:
+                return False, []
+            applicable = [f for f in horizon_flags.get(horizon, []) if f["line"] in deps]
+            return bool(applicable), applicable
 
         metrics = {}
         for label, extract in metric_defs:
@@ -4858,14 +4885,24 @@ class ResearchDataAPI:
                 values.append(extract(d, prev))
 
             row = {}
-            if len(values) >= 2 and values[0] and values[1] and not horizon_breaks.get("1y"):
-                row["1y"] = _yoy(values[0], values[1])
-            if len(values) >= 4 and values[0] and values[3] and not horizon_breaks.get("3y"):
-                row["3y"] = _cagr(values[0], values[3], 3)
-            if len(values) >= 6 and values[0] and values[5] and not horizon_breaks.get("5y"):
-                row["5y"] = _cagr(values[0], values[5], 5)
-            if len(values) >= 11 and values[0] and values[10] and not horizon_breaks.get("10y"):
-                row["10y"] = _cagr(values[0], values[10], 10)
+            for h_label, idx, compute in (
+                ("1y", 1, lambda v: _yoy(v[0], v[1])),
+                ("3y", 3, lambda v: _cagr(v[0], v[3], 3)),
+                ("5y", 5, lambda v: _cagr(v[0], v[5], 5)),
+                ("10y", 10, lambda v: _cagr(v[0], v[10], 10)),
+            ):
+                if idx >= len(values) or not values[0] or not values[idx]:
+                    continue
+                suppressed, applicable_flags = _cell_suppressed(label, h_label)
+                if suppressed:
+                    for f in applicable_flags:
+                        narrowed_due_to.append({
+                            "prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                            "line": f["line"], "severity": f["severity"],
+                            "horizon": h_label, "metric_affected": label,
+                        })
+                    continue  # leave cell unset
+                row[h_label] = compute(values)
 
             row["latest"] = round(values[0], 2) if values[0] else None
             metrics[label] = row
@@ -4883,20 +4920,10 @@ class ResearchDataAPI:
         else:
             trajectory = "unknown"
 
-        # Build effective_window: which horizons were nullified, and why.
-        narrowed_due_to: list[dict] = []
-        suppressed_horizons: list[str] = []
-        for h, breaks in horizon_breaks.items():
-            if breaks:
-                suppressed_horizons.append(h)
-                for curr in breaks:
-                    f = next((x for x in all_flags if x["curr_fy"] == curr), None)
-                    if f is not None:
-                        narrowed_due_to.append({
-                            "prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
-                            "line": f["line"], "severity": f["severity"],
-                            "horizon": h,
-                        })
+        # Aggregate suppression view: which (metric, horizon) cells got nulled.
+        suppressed_cells = sorted({
+            (d["metric_affected"], d["horizon"]) for d in narrowed_due_to
+        })
 
         return {
             "symbol": symbol,
@@ -4904,7 +4931,9 @@ class ResearchDataAPI:
             "cagrs": metrics,
             "growth_trajectory": trajectory,
             "effective_window": {
-                "suppressed_horizons": suppressed_horizons,
+                "suppressed_cells": [
+                    {"metric": m, "horizon": h} for m, h in suppressed_cells
+                ],
                 "narrowed_due_to": narrowed_due_to,
             },
         }
@@ -5956,19 +5985,23 @@ class ResearchDataAPI:
     def get_piotroski_score(self, symbol: str) -> dict:
         """Piotroski F-Score (0-9): profitability, leverage, operating efficiency.
 
-        Most criteria compare T vs T-1. If a MEDIUM+ data_quality_flag falls at
-        the curr_fy of the most-recent annual row, the (T, T-1) pair crosses a
-        bucketing break and the score is meaningless. We shift to the latest
-        unflagged consecutive pair and report the shift in `effective_window`.
+        Reclassification gate (Gemini review fix): F-score is a *current-period*
+        signal — a stale F-score on (T-1, T-2) is worse than no score at all
+        for screening purposes. So when the most-recent (T, T-1) pair crosses a
+        MEDIUM+ flag boundary, we ABSTAIN with reason='stale_due_to_reclass'
+        rather than shifting back. Caller should fall back to manual analysis or
+        cite management's comparable basis from the concall.
+
+        With longest_unflagged_window's recency anchor, the helper returns at most
+        the segment containing T0 — so this method never silently scores a
+        detached historical era.
         """
         from flowtracker.data_quality import longest_unflagged_window
 
-        # Pull more history so we have shift-back room when the latest pair is flagged.
         annuals = self.get_annual_financials(symbol, years=5)
         if len(annuals) < 2:
             return {"error": f"Need at least 2 years of data, got {len(annuals)}"}
 
-        # Narrow to the longest unflagged segment; require 2 consecutive years.
         flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
         relevant = [f for f in flags if f["curr_fy"] in {a["fiscal_year_end"] for a in annuals}]
         segment, dropped = longest_unflagged_window(annuals, relevant)
@@ -5984,10 +6017,12 @@ class ResearchDataAPI:
         }
         if len(segment) < 2:
             return {
-                "error": "All recent year-pairs cross MEDIUM+ reclassification flags; F-score abstained.",
+                "error": "F-score abstained: most-recent year-pair crosses a MEDIUM+ reclassification flag.",
+                "reason": "stale_due_to_reclass",
                 "effective_window": effective_window,
+                "fallback_hint": "Cite management's comparable basis from get_company_context(section='concall_insights', sub_section='comparable_growth_metrics') or narrate the structural break.",
             }
-        t, t1 = segment[0], segment[1]  # t = latest unflagged, t1 = prior
+        t, t1 = segment[0], segment[1]  # t = latest, t1 = prior — same bucketing era
         is_bfsi = self._is_bfsi(symbol)
 
         criteria = []

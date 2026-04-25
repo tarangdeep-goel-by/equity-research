@@ -2,19 +2,22 @@
 from __future__ import annotations
 
 from flowtracker.data_quality import (
+    BS_LINES,
     JUMP_HIGH,
     JUMP_LOW,
     JUMP_MEDIUM,
-    MIN_LINE_TO_REVENUE,
+    MIN_LINE_TO_DENOMINATOR,
+    PL_LINES,
     Flag,
     detect,
 )
 
 
-def _row(fy: str, revenue: float, **lines) -> dict:
+def _row(fy: str, revenue: float, total_assets: float | None = None, **lines) -> dict:
     """Build a synthetic annual_financials row. Unset lines default to None."""
     base = {
         "fiscal_year_end": fy, "revenue": revenue,
+        "total_assets": total_assets if total_assets is not None else revenue * 2,
         "employee_cost": None, "other_income": None, "depreciation": None,
         "interest": None, "raw_material_cost": None, "power_and_fuel": None,
         "other_mfr_exp": None, "selling_and_admin": None,
@@ -26,9 +29,10 @@ def _row(fy: str, revenue: float, **lines) -> dict:
     return base
 
 
+# ---------------------------------------------------------- Headline cases
+
 def test_hdfcbank_fy26_other_expenses_caught_at_medium():
-    """The headline HDFCBANK FY26 reclass: 290% jump on other_expenses_detail
-    while revenue grew 3.6% — should land at MEDIUM (200-500% band)."""
+    """+290% jump on other_expenses_detail with revenue +3.6% — MEDIUM band."""
     rows = {"HDFCBANK": [
         _row("2025-03-31", 336367.43, other_expenses_detail=43674.55),
         _row("2026-03-31", 348615.15, other_expenses_detail=170225.32),
@@ -36,10 +40,8 @@ def test_hdfcbank_fy26_other_expenses_caught_at_medium():
     flags = detect(rows, min_severity="LOW")
     assert len(flags) == 1
     f = flags[0]
-    assert f.symbol == "HDFCBANK"
     assert f.line == "other_expenses_detail"
     assert f.severity == "MEDIUM"
-    assert f.flag_type == "RECLASS"
     assert 280 < f.jump_pct < 300
 
 
@@ -54,7 +56,6 @@ def test_infy_fy26_caught_at_high():
 
 
 def test_sign_flip_is_high_unconditionally():
-    """Both sides material, polarity reverses — HIGH regardless of jump magnitude."""
     rows = {"X": [
         _row("2024-03-31", 1000.0, other_expenses_detail=50.0),
         _row("2025-03-31", 1000.0, other_expenses_detail=-60.0),
@@ -65,43 +66,75 @@ def test_sign_flip_is_high_unconditionally():
     assert sf[0].severity == "HIGH"
 
 
-def test_revenue_growth_above_threshold_blocks_flag():
-    """If revenue grew >30% the line jump may be real growth, not reclass."""
+# ---------------------------------------------------------- P&L revenue control
+
+def test_pl_revenue_control_blocks_flag():
+    """P&L line jump suppressed when revenue swung > threshold (real growth)."""
     rows = {"X": [
-        _row("2024-03-31", 100.0, other_expenses_detail=10.0),
-        _row("2025-03-31", 200.0, other_expenses_detail=50.0),  # +400% but rev +100%
+        _row("2024-03-31", 100.0, employee_cost=10.0),
+        _row("2025-03-31", 200.0, employee_cost=50.0),  # +400% but rev +100%
     ]}
     assert detect(rows, threshold_revenue=0.30, min_severity="LOW") == []
 
 
-def test_immaterial_line_skipped():
-    """Line < 1% of revenue on both sides is skipped even with huge jump."""
-    rev = 100000.0
-    floor = rev * MIN_LINE_TO_REVENUE  # 1000
+def test_bs_revenue_control_does_NOT_block(monkeypatch):
+    """BS line jumps must NOT be suppressed by revenue swings — M&A drives both
+    revenue jump and BS reshuffle, so revenue gate would mask real reclasses.
+    Gemini review fix #4."""
     rows = {"X": [
-        _row("2024-03-31", rev, employee_cost=floor * 0.5),       # 500
-        _row("2025-03-31", rev, employee_cost=floor * 0.5 * 10),  # 5000 — but still < floor
+        # Revenue doubles AND borrowings 5x — should still flag the BS jump.
+        _row("2024-03-31", 100.0, total_assets=500.0, borrowings=20.0),
+        _row("2025-03-31", 200.0, total_assets=600.0, borrowings=120.0),
     ]}
-    # Both values < 1% of revenue (500 and 5000 vs 100000 → 0.5% and 5%).
-    # max(500, 5000)=5000 = 5% > 1% → should NOT be skipped. Verify it fires.
-    flags = detect(rows, min_severity="LOW")
-    assert len(flags) >= 1
+    flags = detect(rows, threshold_revenue=0.30, min_severity="LOW")
+    assert any(f.line == "borrowings" for f in flags)
 
-    # Now both genuinely below 1%
+
+def test_bs_uses_total_assets_for_materiality():
+    """BS items measured vs total_assets, not revenue. Bank-like ratios where
+    borrowings >> revenue must still pass materiality.
+    Gemini review fix #4 — denominator mismatch.
+
+    Both sides under 1% of total_assets must skip even with huge jumps.
+    """
+    rows = {"X": [
+        # Revenue 100 Cr, total_assets 100,000 Cr. Borrowings 50 / 500 Cr —
+        # both <1% of total_assets, so skipped despite 900% jump.
+        _row("2024-03-31", 100.0, total_assets=100000.0, borrowings=50.0),
+        _row("2025-03-31", 100.0, total_assets=100000.0, borrowings=500.0),
+    ]}
+    flags = detect(rows, min_severity="LOW")
+    assert all(f.line != "borrowings" for f in flags)
+
+    # If we used revenue (100 Cr) as denominator, borrowings would be 50%/500% —
+    # easily passing materiality. Confirm BS items are NOT using revenue.
+    # Sanity: a meaningful BS jump (5% of total_assets) does fire.
     rows2 = {"Y": [
-        _row("2024-03-31", rev, employee_cost=200.0),   # 0.2%
+        _row("2024-03-31", 100.0, total_assets=100000.0, borrowings=2000.0),
+        _row("2025-03-31", 100.0, total_assets=100000.0, borrowings=10000.0),
+    ]}
+    flags2 = detect(rows2, min_severity="LOW")
+    assert any(f.line == "borrowings" for f in flags2)
+
+
+# ---------------------------------------------------------- Materiality / noise
+
+def test_immaterial_line_skipped():
+    """Line < 1% of denominator on both sides is skipped even with huge jump."""
+    rev = 100000.0
+    rows = {"Y": [
+        _row("2024-03-31", rev, employee_cost=200.0),   # 0.2% of revenue
         _row("2025-03-31", rev, employee_cost=900.0),   # 0.9%
     ]}
-    assert detect(rows2, min_severity="LOW") == []
+    assert detect(rows, min_severity="LOW") == []
 
 
 def test_severity_thresholds():
-    """LOW = 100-200%, MEDIUM = 200-500%, HIGH = >500%."""
     rev = 1000.0
     base = 100.0
     cases = [
-        (base * (1 + JUMP_LOW * 0.5), None),      # +50% — below LOW
-        (base * (1 + JUMP_LOW + 0.1), "LOW"),     # ~+110%
+        (base * (1 + JUMP_LOW * 0.5), None),
+        (base * (1 + JUMP_LOW + 0.1), "LOW"),
         (base * (1 + JUMP_MEDIUM + 0.1), "MEDIUM"),
         (base * (1 + JUMP_HIGH + 0.1), "HIGH"),
     ]
@@ -119,7 +152,6 @@ def test_severity_thresholds():
 
 
 def test_min_severity_filter():
-    """min_severity='HIGH' excludes MEDIUM and LOW flags."""
     rows = {"X": [
         _row("2024-03-31", 1000.0, employee_cost=100.0),
         _row("2025-03-31", 1000.0, employee_cost=350.0),  # +250% MEDIUM
@@ -130,13 +162,11 @@ def test_min_severity_filter():
 
 
 def test_single_year_history_not_flagged():
-    """Symbols with one row produce no flags (no pair to compare)."""
     rows = {"X": [_row("2025-03-31", 1000.0, employee_cost=100.0)]}
     assert detect(rows, min_severity="LOW") == []
 
 
 def test_null_values_skipped():
-    """If either side of a line is None, the line is skipped (not all flags)."""
     rows = {"X": [
         _row("2024-03-31", 1000.0, employee_cost=None, borrowings=100.0),
         _row("2025-03-31", 1000.0, employee_cost=500.0, borrowings=400.0),
@@ -146,8 +176,34 @@ def test_null_values_skipped():
     assert any(f.line == "borrowings" for f in flags)
 
 
+# ---------------------------------------------------------- Sign-flip cleanup
+
+def test_reserves_no_longer_in_sign_flip_set():
+    """reserves can legitimately flip due to accumulated deficit. Gemini fix.
+    Magnitude should still flag if it crosses a threshold, but not as SIGN_FLIP."""
+    from flowtracker.data_quality import SIGN_FLIP_LINES
+    assert "reserves" not in SIGN_FLIP_LINES
+
+
+def test_other_income_no_longer_in_sign_flip_set():
+    """other_income flips on MTM swings — not always a reclass. Gemini fix."""
+    from flowtracker.data_quality import SIGN_FLIP_LINES
+    assert "other_income" not in SIGN_FLIP_LINES
+
+
+# ---------------------------------------------------------- Group membership
+
+def test_pl_bs_disjoint_partition():
+    """TREND_LINES = PL_LINES + BS_LINES, no overlap."""
+    assert set(PL_LINES) & set(BS_LINES) == set()
+    # Sanity: a few key lines land in the right group
+    assert "depreciation" in PL_LINES
+    assert "borrowings" in BS_LINES
+    assert "investments" in BS_LINES
+    assert "other_expenses_detail" in PL_LINES
+
+
 def test_flag_dataclass_shape():
-    """Flag exposes the fields downstream callers expect."""
     f = Flag("X", "2024-03-31", "2025-03-31", "borrowings",
              100.0, 500.0, 400.0, 5.0, "RECLASS", "MEDIUM")
     assert f.symbol == "X"
