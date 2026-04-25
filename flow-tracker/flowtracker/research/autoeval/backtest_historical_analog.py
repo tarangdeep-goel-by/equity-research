@@ -34,11 +34,12 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import statistics
 import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -53,6 +54,18 @@ TAIL_THINNER_PASS_THRESHOLD = 0.15
 BACKTEST_RESULTS_TSV = Path(__file__).parent / "backtest_results_analog.tsv"
 
 
+def backtest_out_dir(as_of_date: str, symbol: str) -> Path:
+    """Per-(as_of, symbol) override dir for analog backtest briefings.
+
+    Lives under ``~/.local/share/flowtracker/`` (not ``~/vault/``) so live
+    research thesis runs and the backtest harness can never collide on
+    ``~/vault/stocks/<symbol>/briefings/historical_analog.json``."""
+    return (
+        Path.home() / ".local" / "share" / "flowtracker" / "backtest"
+        / as_of_date / symbol.upper()
+    )
+
+
 @dataclass
 class BacktestSample:
     symbol: str
@@ -65,6 +78,12 @@ class BacktestSample:
     base_hit: bool | None = None
     downside_hit: bool | None = None
     error: str | None = None
+    # Cohort audit columns (B2): snapshot at score time so quartile drift
+    # is auditable later without re-running the agent.
+    cohort_n: int = 0
+    cohort_p25_12m: float | None = None
+    cohort_p75_12m: float | None = None
+    relaxation_level: int | None = None
 
 
 def load_mature_analog_points(cutoff_age_days: int = 450) -> list[dict]:
@@ -105,17 +124,32 @@ def stratified_sample(
 
     target_per_bucket = max(1, n // 3)
     sample: list[dict] = []
+    # O(n) dedup keyed by (symbol, as_of_date) — the previous `row not in sample`
+    # was O(n²) and dict-comparison-heavy; this scales to N=200+ in <1s and
+    # also catches dup keys within a single bucket (same row referenced twice).
+    sample_keys: set[tuple[str, str]] = set()
     for lbl, bucket in by_label.items():
         rng.shuffle(bucket)
-        sample.extend(bucket[:target_per_bucket])
+        added = 0
+        for row in bucket:
+            if added >= target_per_bucket:
+                break
+            k = (row["symbol"], row["as_of_date"])
+            if k in sample_keys:
+                continue
+            sample.append(row)
+            sample_keys.add(k)
+            added += 1
 
     # Top-up with a proportional tail from whichever buckets had extras
     rng.shuffle(population)
     for row in population:
         if len(sample) >= n:
             break
-        if row not in sample:
+        k = (row["symbol"], row["as_of_date"])
+        if k not in sample_keys:
             sample.append(row)
+            sample_keys.add(k)
     return sample[:n]
 
 
@@ -139,6 +173,10 @@ def run_analog_agent_as_of(symbol: str, as_of_date: str) -> tuple[float, bool]:
     start = time.monotonic()
     env = os.environ.copy()
     env["FLOWTRACK_AS_OF"] = as_of_date
+    # B2: redirect briefing writes to a backtest-only dir so the live vault
+    # path ~/vault/stocks/<symbol>/briefings/historical_analog.json is never
+    # overwritten by a backdated run. briefing.save_envelope reads this var.
+    env["FLOWTRACK_BACKTEST_OUT_DIR"] = str(backtest_out_dir(as_of_date, symbol))
     proc = subprocess.run(
         [
             "uv", "run", "flowtrack", "research", "run", "historical_analog",
@@ -149,8 +187,21 @@ def run_analog_agent_as_of(symbol: str, as_of_date: str) -> tuple[float, bool]:
     return time.monotonic() - start, proc.returncode == 0
 
 
-def load_briefing(symbol: str) -> dict | None:
-    path = Path.home() / "vault" / "stocks" / symbol / "briefings" / "historical_analog.json"
+def load_briefing(symbol: str, as_of_date: str | None = None) -> dict | None:
+    """Load the historical_analog briefing JSON for ``symbol``.
+
+    When ``as_of_date`` is given, reads from the backtest override dir
+    (``~/.local/share/flowtracker/backtest/<as_of>/<symbol>/historical_analog.json``)
+    so backtest scoring never reads a live-vault briefing. When omitted,
+    falls back to the legacy symbol-vault path (back-compat for callers
+    that haven't been migrated yet)."""
+    if as_of_date:
+        path = backtest_out_dir(as_of_date, symbol) / "historical_analog.json"
+    else:
+        path = (
+            Path.home() / "vault" / "stocks" / symbol / "briefings"
+            / "historical_analog.json"
+        )
     if not path.exists():
         return None
     try:
@@ -193,12 +244,25 @@ def score_sample(sample_meta: dict, briefing: dict) -> BacktestSample:
     quartile = realized_quartile_within_cohort(
         sample_meta["return_12m_pct"], cohort_12m,
     )
+    # Snapshot cohort stats for audit (B2). statistics.quantiles needs n>=2;
+    # guard so a singleton cohort doesn't crash scoring.
+    p25 = p75 = None
+    if len(cohort_12m) >= 2:
+        q = statistics.quantiles(cohort_12m, n=4)  # 3-tuple: p25, p50, p75
+        p25, p75 = q[0], q[2]
+    raw_relax = briefing.get("relaxation_level")
+    relax = int(raw_relax) if isinstance(raw_relax, (int, float)) else None
+
     bs = BacktestSample(
         symbol=sample_meta["symbol"],
         as_of_date=sample_meta["as_of_date"],
         realized_12m_pct=sample_meta["return_12m_pct"],
         realized_quartile=quartile,
         directional_call=dict(directional),
+        cohort_n=len(cohort_12m),
+        cohort_p25_12m=p25,
+        cohort_p75_12m=p75,
+        relaxation_level=relax,
     )
     if not quartile:
         bs.error = "No cohort 12m returns to compute quartile"
@@ -265,15 +329,22 @@ def append_backtest_tsv(samples: list[BacktestSample], calibration: dict) -> Non
             f.write(
                 "timestamp\tsymbol\tas_of_date\trealized_12m_pct\trealized_quartile\t"
                 "upside_call\tbase_call\tdownside_call\t"
-                "upside_hit\tbase_hit\tdownside_hit\terror\n"
+                "upside_hit\tbase_hit\tdownside_hit\t"
+                "cohort_n\tcohort_p25_12m\tcohort_p75_12m\trelaxation_level\t"
+                "error\n"
             )
-        ts = datetime.utcnow().isoformat()
+        ts = datetime.now(timezone.utc).isoformat()
         for s in samples:
             dc = s.directional_call
+            p25 = "" if s.cohort_p25_12m is None else f"{s.cohort_p25_12m:.4f}"
+            p75 = "" if s.cohort_p75_12m is None else f"{s.cohort_p75_12m:.4f}"
+            relax = "" if s.relaxation_level is None else str(s.relaxation_level)
             f.write(
                 f"{ts}\t{s.symbol}\t{s.as_of_date}\t{s.realized_12m_pct}\t{s.realized_quartile}\t"
                 f"{dc.get('upside', '')}\t{dc.get('base', '')}\t{dc.get('downside', '')}\t"
-                f"{s.upside_hit}\t{s.base_hit}\t{s.downside_hit}\t{s.error or ''}\n"
+                f"{s.upside_hit}\t{s.base_hit}\t{s.downside_hit}\t"
+                f"{s.cohort_n}\t{p25}\t{p75}\t{relax}\t"
+                f"{s.error or ''}\n"
             )
         f.write(f"# CALIBRATION SUMMARY ({ts})\n")
         for key, stats in calibration.items():
@@ -317,12 +388,21 @@ def main() -> None:
                 results.append(bs)
                 continue
 
-        briefing = load_briefing(symbol)
+        briefing = load_briefing(symbol, as_of)
         if not briefing:
+            expected_path = backtest_out_dir(as_of, symbol) / "historical_analog.json"
+            if args.skip_run:
+                err = (
+                    f"No briefing at {expected_path}. "
+                    f"Did you run without --skip-run first?"
+                )
+            else:
+                err = f"No briefing produced at {expected_path}"
+            print(f"  ERROR: {err}")
             bs = BacktestSample(
                 symbol=symbol, as_of_date=as_of,
                 realized_12m_pct=meta["return_12m_pct"],
-                realized_quartile=0, directional_call={}, error="No briefing produced",
+                realized_quartile=0, directional_call={}, error=err,
             )
             results.append(bs)
             continue
