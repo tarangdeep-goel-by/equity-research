@@ -675,6 +675,7 @@ async def _extract_single_ar(
     model: str,
     sections: tuple[str, ...],
     industry: str | None = None,
+    force: bool = False,
 ) -> dict:
     """Extract one AR PDF → structured JSON with per-section payloads.
 
@@ -682,7 +683,9 @@ async def _extract_single_ar(
       - Each section wrapped in try/except; a crash on one section doesn't
         abort the whole AR.
       - JSON written to disk after EVERY section completes (success or
-        failure). On re-run, already-complete sections are skipped.
+        failure). On re-run, already-complete sections are skipped — unless
+        `force=True`, in which case the cached JSON is ignored and every
+        section is re-extracted.
       - Overall extraction_status is 'partial' when any section errored,
         'complete' when all succeeded.
     """
@@ -705,8 +708,11 @@ async def _extract_single_ar(
     out_path = vault_base / symbol / "fundamentals" / f"annual_report_{fy_label}.json"
 
     # Load existing partial JSON — preserves completed sections from prior runs.
+    # When `force=True`, skip the load so every section is re-extracted (used
+    # when the heading_toc heuristic has been updated and stale cached
+    # `section_not_found_or_empty` entries need to be invalidated).
     existing: dict = {}
-    if out_path.exists():
+    if out_path.exists() and not force:
         try:
             existing = json.loads(out_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
@@ -906,8 +912,18 @@ async def extract_annual_reports(
     model: str = "claude-sonnet-4-6",
     full: bool = False,
     industry: str | None = None,
+    force: bool = True,
 ) -> dict:
-    """Extract the last N ARs for a symbol + cross-year narrative. Save per-year JSONs."""
+    """Extract the last N ARs for a symbol + cross-year narrative. Save per-year JSONs.
+
+    Always invalidates the per-year JSON cache by default (`force=True`),
+    since this entry point is invoked by the CLI's `--force` flag and by
+    callers that explicitly want a clean re-run. Passing `force=False`
+    falls back to incremental behaviour identical to
+    `ensure_annual_report_data`. Force is required after heading_toc
+    heuristic changes when prior runs cached `section_not_found_or_empty`
+    for sections the new heuristic now locates correctly.
+    """
     import time as _time
     t0 = _time.time()
     symbol = symbol.upper()
@@ -920,13 +936,14 @@ async def extract_annual_reports(
         )
 
     sections = DEFAULT_SECTIONS + (FULL_ONLY_SECTIONS if full else ())
-    logger.info("[ar] %s: extracting %d year(s) — sections=%s", symbol, len(pdfs), list(sections))
+    logger.info("[ar] %s: extracting %d year(s) — sections=%s force=%s",
+                symbol, len(pdfs), list(sections), force)
 
     sem = asyncio.Semaphore(MAX_CONCURRENT_AR_EXTRACTIONS)
 
     async def _with_sem(pdf: Path) -> dict:
         async with sem:
-            return await _extract_single_ar(pdf, symbol, model, sections, industry)
+            return await _extract_single_ar(pdf, symbol, model, sections, industry, force=force)
 
     year_results = list(await asyncio.gather(*[_with_sem(p) for p in pdfs]))
 

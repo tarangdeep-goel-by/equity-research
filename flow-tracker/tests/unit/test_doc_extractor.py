@@ -410,6 +410,218 @@ def test_auditor_report_anchored_on_report_on_audit_heading():
     assert "CONSOLIDATED BALANCE SHEET" not in text
 
 
+def test_auditor_report_matches_plural_possessive_apostrophe():
+    """SBIN FY25 layout: PSU bank with joint statutory auditors uses
+    "Independent Auditors' Report" (plural-possessive — apostrophe AFTER
+    the s). The original `auditor'?s?` regex matched only `Auditor` /
+    `Auditors` / `Auditor's` (apostrophe BEFORE s) and missed `Auditors'`.
+    The fixed `auditor'?s?'?` regex matches all four forms.
+    """
+    md = (
+        "## DIRECTORS' REPORT\n\n"
+        + ("dr body " * 50) + "\n\n"
+        # SBIN's IAR opener is plural-possessive.
+        "## Independent Auditors' Report\n\n"
+        "## Report on Audit of the Standalone Financial Statements of State Bank of India\n\n"
+        "## Opinion\n\n"
+        "We have audited the accompanying standalone financial statements...\n\n"
+        + ("opinion body " * 100) + "\n\n"
+        "## Basis for Opinion\n\n"
+        + ("basis body " * 50) + "\n\n"
+        "## Key Audit Matters\n\n"
+        + ("KAM provisioning for advances " * 100) + "\n\n"
+        + ("KAM IT systems " * 100) + "\n\n"
+        # Banking-layout end anchor — schedules block opens here.
+        "## STANDALONE FINANCIALS\n\n"
+        + ("schedules body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "auditor_report" in idx, "auditor_report must be detected for SBIN-style plural-possessive"
+    aud = idx["auditor_report"]
+    assert aud["size_chars"] > 5_000, (
+        f"Expected IAR body >5KB, got {aud['size_chars']} — matched={aud.get('matched_heading')!r}"
+    )
+    text = slice_section(md, idx, "auditor_report")
+    assert "Key Audit Matters" in text
+    assert "Basis for Opinion" in text
+    assert "We have audited" in text
+    # Must NOT extend past the STANDALONE FINANCIALS schedules-block anchor.
+    assert "schedules body" not in text
+
+
+def test_auditor_report_substantive_score_breaks_tie_with_annexure_running_header():
+    """SBIN FY25 'Annexure list of subsidiaries' running-header bug:
+    PSU bank ARs repeat 'Independent Auditors' Report' as a page-running
+    header on EVERY page including subsidiary-list annexure pages. With
+    plural-possessive matching enabled, every running-header instance
+    becomes a candidate. The largest-section-wins heuristic then picks
+    the annexure-list slice (huge body of subsidiary-table rows, zero
+    Opinion / KAM content).
+
+    Fix: tie-break with `_iar_substantive_score` — count IAR-substance
+    markers ('Basis for Opinion', 'Key Audit Matters', 'we have audited',
+    etc.) in the first ~6KB of each candidate slice. Annexure-list slices
+    score 0; real IAR slices score 3+.
+    """
+    md = (
+        # Real IAR opener — short slice (12K) but full of substance markers.
+        "## Independent Auditors' Report\n\n"
+        "## Report on Audit of the Standalone Financial Statements\n\n"
+        "## Opinion\n\n"
+        "1. We have audited the accompanying standalone financial statements...\n\n"
+        "In our opinion, the standalone financial statements give a true and fair view...\n\n"
+        + ("opinion body line " * 50) + "\n\n"
+        "## Basis for Opinion\n\n"
+        + ("basis body " * 50) + "\n\n"
+        "## Key Audit Matters\n\n"
+        + ("KAM 1 advances " * 50) + "\n\n"
+        + ("KAM 2 IT " * 50) + "\n\n"
+        "## STANDALONE FINANCIALS\n\n"
+        + ("schedule data " * 200) + "\n\n"
+        # Page-running-header repeat — same heading text but the body that
+        # follows is just a subsidiary-list table, no Opinion / KAM markers.
+        # Without substantive scoring, this 30K slice would beat the 5K real one.
+        "## Independent Auditors' Report\n\n"
+        "## Annexure: List of subsidiaries consolidated as at March 31, 2025\n\n"
+        + ("subsidiary co name " * 1500) + "\n\n"
+        "## CONSOLIDATED BALANCE SHEET\n\n"
+        + ("bs body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "auditor_report" in idx
+    aud = idx["auditor_report"]
+    text = slice_section(md, idx, "auditor_report")
+    # Substantive scoring must pick the real IAR slice, NOT the bigger Annexure slice.
+    assert "Key Audit Matters" in text, (
+        f"Expected real IAR (with KAMs) to win, got annexure slice — matched={aud.get('matched_heading')!r}"
+    )
+    assert "Basis for Opinion" in text
+    # Subsidiary list must NOT be in the chosen slice.
+    assert "subsidiary co name" not in text
+
+
+def test_auditor_report_excludes_independent_practitioner_assurance_report():
+    """HDFCLIFE FY25 layout: insurer's separate BRSR-only filing has
+    "Independent Practitioner's Reasonable Assurance Report on Identified
+    Sustainability Information" — an ESG sustainability assurance report
+    issued by the auditor firm but NOT the statutory IAR. It must NOT be
+    picked as the auditor_report section start, because the resulting
+    slice would (a) confuse the LLM with sustainability-assurance prose
+    and (b) extract a fake "Opinion" that is about ESG, not financials.
+    """
+    md = (
+        "## DIRECTORS' REPORT\n\n"
+        + ("dr body " * 50) + "\n\n"
+        # HDFCLIFE FY25's only audit-shaped heading is the ESG assurance
+        # report. There is NO statutory IAR in this filing (it was a
+        # separate BRSR-only submission to BSE).
+        "## Independent Practitioner's Reasonable Assurance Report on Identified Sustainability Information in HDFC Life Insurance Company Limited\n\n"
+        "## TO, The Board of Directors, HDFC Life Insurance Company Limited\n\n"
+        + ("assurance body " * 100) + "\n\n"
+        "## Identified Sustainability Information\n\n"
+        + ("ESG metric data " * 50) + "\n\n"
+        "## Opinion\n\n"
+        + ("ESG opinion body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    # auditor_report must be ABSENT — the ESG assurance report is not the IAR.
+    if "auditor_report" in idx:
+        matched = idx["auditor_report"].get("matched_heading", "").lower()
+        assert "practitioner" not in matched, (
+            f"ESG sustainability assurance must not be picked as auditor_report; "
+            f"got matched_heading={matched!r}"
+        )
+
+
+def test_auditor_report_ends_at_plural_statement_of_cash_flows():
+    """HINDUNILVR FY25 layout: end anchor uses plural 'Statement of Cash
+    Flows' (Ind AS / consolidated layout) — the older `cash\\s+flow\\s+statement`
+    regex required singular 'Cash Flow Statement'. The IAR slice must end
+    cleanly at the plural anchor.
+    """
+    md = (
+        "## Independent Auditor's Report\n\n"
+        "## REPORT ON THE AUDIT OF THE STANDALONE FINANCIAL STATEMENTS Opinion\n\n"
+        "We have audited the accompanying standalone financial statements...\n\n"
+        + ("opinion body " * 50) + "\n\n"
+        "## Basis for Opinion\n\n"
+        + ("basis body " * 30) + "\n\n"
+        "## Key Audit Matters\n\n"
+        + ("KAM body " * 100) + "\n\n"
+        "## Standalone Statement of Cash Flows\n\n"
+        + ("cf body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "auditor_report" in idx
+    text = slice_section(md, idx, "auditor_report")
+    assert "Key Audit Matters" in text
+    # Must end at the plural Cash Flows anchor — cf body must not leak in.
+    assert "cf body" not in text
+
+
+def test_auditor_report_ends_at_bank_standalone_financials_block():
+    """SBIN FY25 layout: Indian-bank ARs use 'STANDALONE FINANCIALS' /
+    'CONSOLIDATED FINANCIALS' / 'Schedule N' as the financial-statements
+    block divider rather than the standard 'Balance Sheet' / 'P&L' headings.
+    The IAR slice must end at the FINANCIALS divider, not run into the
+    schedules pages (which would dilute the LLM's KAM-extraction signal).
+    """
+    md = (
+        "## Independent Auditors' Report\n\n"
+        "## REPORT ON AUDIT OF THE STANDALONE FINANCIAL STATEMENTS OF STATE BANK OF INDIA\n\n"
+        "## Opinion\n\n"
+        "We have audited...\n\n"
+        + ("opinion body " * 30) + "\n\n"
+        "## Basis for Opinion\n\n"
+        + ("basis " * 20) + "\n\n"
+        "## Key Audit Matters\n\n"
+        + ("KAM " * 200) + "\n\n"
+        "## STANDALONE FINANCIALS\n\n"
+        "## SCHEDULE 1 - CAPITAL\n\n"
+        + ("schedule capital data " * 50) + "\n\n"
+        "## SCHEDULE 2 - RESERVES & SURPLUS\n\n"
+        + ("schedule reserves data " * 50) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "auditor_report" in idx
+    text = slice_section(md, idx, "auditor_report")
+    assert "Key Audit Matters" in text
+    # IAR must end at the bank-layout STANDALONE FINANCIALS divider.
+    assert "schedule capital data" not in text
+    assert "schedule reserves data" not in text
+
+
+def test_auditor_report_excludes_quoted_letter_annexure():
+    """SBIN FY25 has 'Annexure 'A' to the Independent Auditors' Report'
+    — the letter is wrapped in straight quotes. The original
+    `[a-z0-9]+` token didn't match `'A'` (with quote chars), letting the
+    Annexure heading slip through as a candidate IAR start. The fix
+    accepts optional surrounding quote chars (', ") around the letter.
+    """
+    md = (
+        "## DIRECTORS' REPORT\n\n"
+        + ("dr " * 50) + "\n\n"
+        # Only the quoted-letter Annexure is detected as audit-related.
+        "## Annexure 'A' to the Independent Auditors' Report\n\n"
+        + ("annexure body " * 100) + "\n\n"
+        "## STANDALONE PROFIT AND LOSS ACCOUNT\n\n"
+        + ("pnl body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    if "auditor_report" in idx:
+        matched = idx["auditor_report"].get("matched_heading", "").lower()
+        assert "annexure" not in matched, (
+            f"Quoted-letter Annexure must not be picked as auditor_report start; "
+            f"got matched_heading={matched!r}"
+        )
+
+
 def test_section_not_present_is_absent_from_index():
     md = "# Just a cover\n\nNothing else here.\n"
     headings = _scan_headings(md)
