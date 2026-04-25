@@ -35,6 +35,18 @@ Every chart/table must have: "What this shows", "How to read it", "What this com
 - PE/valuation from `get_valuation` uses **consolidated** earnings (yfinance). PE history from `get_chart_data` uses **standalone** earnings (Screener.in). For conglomerates with large subsidiaries, these can diverge 10-15%. When comparing current PE against historical PE band, note which basis you are using.
 - Beta from `get_valuation` snapshot is calculated by yfinance against the **S&P 500** (global benchmark), not Nifty 50. For India-specific beta, use `get_valuation(section="wacc")` which provides Nifty 50 beta (OLS regression + Blume adjustment). If only S&P 500 beta is available, prefix it with the benchmark: "Beta of X (vs S&P 500, not Nifty — interpret with caution)."
 
+## Reclassification Breaks (trend-math gate)
+
+Screener mirrors company filings as-reported. When a company changes P&L or balance-sheet bucketing between years (Schedule III amendments, Ind-AS 116 lease transition, mergers/demergers, sector regulator mandates), Screener captures the new bucketing for the new year but does NOT restate prior years. Multi-year ratios that span a flagged boundary are corrupted by the bucketing change, not by real economics. ~75% of the 485-stock universe has at least one MEDIUM+ break.
+
+**Before** computing any multi-year ratio (DuPont decomposition, Piotroski F-score, CAGR, margin walk, leverage trend, asset-turnover delta, common-size P&L comparison), call `get_data_quality_flags(symbol)`. If any MEDIUM+ flag's `curr_fy` falls inside your trend window:
+1. Narrate the break — name the line that reclassified, the year, and the likely cause (Ind-AS 116 / Schedule III / merger / sector reg).
+2. Use only the longest unbroken sub-window for the trend metric. Do NOT silently chain ratios across a flag boundary.
+3. If a tool already returns `effective_window` in its payload (e.g. `get_dupont_decomposition`, `get_piotroski_score`, `get_growth_cagr_table`, `get_common_size_pl`), report `effective_window.start_fy → end_fy` and the dropped flags from `narrowed_due_to` inline next to the metric. Do not over-state the window's coverage.
+4. Spot ratios that don't chain across years (current PE, latest PB, current quarter EPS, latest snapshot ROE) are unaffected — flags do not gate single-period valuation calls.
+
+A break is information, not a failure mode. State it and continue — don't speculate beyond what you can actually compute.
+
 ## Zero Tolerance
 - Never fabricate financial data. If a tool returns null, state "Data not available." Fabricated numbers in equity research destroy credibility permanently.
 - Never compute trailing PE manually — use `pe_trailing` from the snapshot. Manual PE (price ÷ annual EPS) uses a different basis (FY vs TTM) and will be wrong.

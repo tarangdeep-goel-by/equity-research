@@ -4672,10 +4672,26 @@ class ResearchDataAPI:
         """Pre-computed CAGR table: 1Y/3Y/5Y/10Y for Revenue, EBITDA, NI, EPS, FCF.
 
         Pre-computed so agents don't calculate CAGRs themselves.
+
+        Each horizon's start↔end pair is checked against MEDIUM+ data_quality_flags;
+        any horizon that spans a flag boundary returns null and the dropped flag
+        is reported in `effective_window.narrowed_due_to`. Spot ratios that don't
+        chain across years (latest values) are unaffected.
         """
         annual = self.get_annual_financials(symbol, years=11)
         if len(annual) < 2:
             return {"error": "Need at least 2 years of financials"}
+
+        # Flags whose curr_fy falls anywhere in the loaded history. A horizon
+        # that starts at-or-before the flag's prior_fy and ends at-or-after the
+        # flag's curr_fy spans the break.
+        all_flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
+        flag_curr_fys = {f["curr_fy"] for f in all_flags
+                         if f["curr_fy"] in {r["fiscal_year_end"] for r in annual}}
+
+        def _spans_flag(latest_fy: str, oldest_fy: str) -> list[str]:
+            """Return curr_fys of flags between (oldest, latest] inclusive of latest."""
+            return [c for c in flag_curr_fys if oldest_fy < c <= latest_fy]
 
         def _cagr(latest_val: float, oldest_val: float, years: int) -> float | None:
             if oldest_val and oldest_val > 0 and latest_val and latest_val > 0 and years > 0:
@@ -4724,6 +4740,13 @@ class ResearchDataAPI:
             metric_defs.insert(1, ("ebitda", lambda d, _: _ebitda(d)))
             metric_defs.append(("fcf", lambda d, prev: _fcf(d, prev)))
 
+        # Per-horizon flag check — once per horizon, reused across metrics.
+        latest_fy = annual[0]["fiscal_year_end"]
+        horizon_breaks: dict[str, list[str]] = {}  # "1y" -> [flag curr_fys]
+        for label, idx in (("1y", 1), ("3y", 3), ("5y", 5), ("10y", 10)):
+            if idx < len(annual):
+                horizon_breaks[label] = _spans_flag(latest_fy, annual[idx]["fiscal_year_end"])
+
         metrics = {}
         for label, extract in metric_defs:
             values = []
@@ -4732,13 +4755,13 @@ class ResearchDataAPI:
                 values.append(extract(d, prev))
 
             row = {}
-            if len(values) >= 2 and values[0] and values[1]:
+            if len(values) >= 2 and values[0] and values[1] and not horizon_breaks.get("1y"):
                 row["1y"] = _yoy(values[0], values[1])
-            if len(values) >= 4 and values[0] and values[3]:
+            if len(values) >= 4 and values[0] and values[3] and not horizon_breaks.get("3y"):
                 row["3y"] = _cagr(values[0], values[3], 3)
-            if len(values) >= 6 and values[0] and values[5]:
+            if len(values) >= 6 and values[0] and values[5] and not horizon_breaks.get("5y"):
                 row["5y"] = _cagr(values[0], values[5], 5)
-            if len(values) >= 11 and values[0] and values[10]:
+            if len(values) >= 11 and values[0] and values[10] and not horizon_breaks.get("10y"):
                 row["10y"] = _cagr(values[0], values[10], 10)
 
             row["latest"] = round(values[0], 2) if values[0] else None
@@ -4757,11 +4780,30 @@ class ResearchDataAPI:
         else:
             trajectory = "unknown"
 
+        # Build effective_window: which horizons were nullified, and why.
+        narrowed_due_to: list[dict] = []
+        suppressed_horizons: list[str] = []
+        for h, breaks in horizon_breaks.items():
+            if breaks:
+                suppressed_horizons.append(h)
+                for curr in breaks:
+                    f = next((x for x in all_flags if x["curr_fy"] == curr), None)
+                    if f is not None:
+                        narrowed_due_to.append({
+                            "prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                            "line": f["line"], "severity": f["severity"],
+                            "horizon": h,
+                        })
+
         return {
             "symbol": symbol,
             "years_available": n,
             "cagrs": metrics,
             "growth_trajectory": trajectory,
+            "effective_window": {
+                "suppressed_horizons": suppressed_horizons,
+                "narrowed_due_to": narrowed_due_to,
+            },
         }
 
     # --- Auto-Detected Risk Flags ---
@@ -5809,12 +5851,40 @@ class ResearchDataAPI:
         })
 
     def get_piotroski_score(self, symbol: str) -> dict:
-        """Piotroski F-Score (0-9): profitability, leverage, operating efficiency."""
-        annuals = self.get_annual_financials(symbol, years=2)
+        """Piotroski F-Score (0-9): profitability, leverage, operating efficiency.
+
+        Most criteria compare T vs T-1. If a MEDIUM+ data_quality_flag falls at
+        the curr_fy of the most-recent annual row, the (T, T-1) pair crosses a
+        bucketing break and the score is meaningless. We shift to the latest
+        unflagged consecutive pair and report the shift in `effective_window`.
+        """
+        from flowtracker.data_quality import longest_unflagged_window
+
+        # Pull more history so we have shift-back room when the latest pair is flagged.
+        annuals = self.get_annual_financials(symbol, years=5)
         if len(annuals) < 2:
             return {"error": f"Need at least 2 years of data, got {len(annuals)}"}
 
-        t, t1 = annuals[0], annuals[1]  # t = latest, t1 = prior year
+        # Narrow to the longest unflagged segment; require 2 consecutive years.
+        flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
+        relevant = [f for f in flags if f["curr_fy"] in {a["fiscal_year_end"] for a in annuals}]
+        segment, dropped = longest_unflagged_window(annuals, relevant)
+        effective_window = {
+            "start_fy": segment[1]["fiscal_year_end"] if len(segment) >= 2 else None,
+            "end_fy": segment[0]["fiscal_year_end"] if segment else None,
+            "n_years": len(segment),
+            "narrowed_due_to": [
+                {"prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                 "line": f["line"], "severity": f["severity"]}
+                for f in dropped
+            ],
+        }
+        if len(segment) < 2:
+            return {
+                "error": "All recent year-pairs cross MEDIUM+ reclassification flags; F-score abstained.",
+                "effective_window": effective_window,
+            }
+        t, t1 = segment[0], segment[1]  # t = latest unflagged, t1 = prior
         is_bfsi = self._is_bfsi(symbol)
 
         criteria = []
@@ -5949,6 +6019,7 @@ class ResearchDataAPI:
             "max_score": max_score,
             "criteria": criteria,
             "signal": signal,
+            "effective_window": effective_window,
         })
 
     def get_beneish_score(self, symbol: str) -> dict:
@@ -6622,10 +6693,33 @@ class ResearchDataAPI:
         return {"years": years_data, "phase": phase}
 
     def get_common_size_pl(self, symbol: str) -> dict:
-        """Common size P&L — all items as % of revenue (or Total Income for BFSI)."""
+        """Common size P&L — all items as % of revenue (or Total Income for BFSI).
+
+        Margin walks ("OPM expanded 200bps over 3yr") are the canonical use case.
+        If MEDIUM+ data_quality_flags overlap the requested 10yr window, the result
+        is narrowed to the longest unbroken segment so the walk doesn't span a
+        bucketing change. The dropped boundary is reported in `effective_window`.
+        """
+        from flowtracker.data_quality import longest_unflagged_window
+
         annual = self.get_annual_financials(symbol, years=10)
         if not annual:
             return {"error": "No annual financial data"}
+
+        # Narrow to longest unflagged segment.
+        flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
+        relevant = [f for f in flags if f["curr_fy"] in {a["fiscal_year_end"] for a in annual}]
+        annual, dropped = longest_unflagged_window(annual, relevant)
+        effective_window = {
+            "start_fy": annual[-1]["fiscal_year_end"] if annual else None,
+            "end_fy": annual[0]["fiscal_year_end"] if annual else None,
+            "n_years": len(annual),
+            "narrowed_due_to": [
+                {"prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                 "line": f["line"], "severity": f["severity"]}
+                for f in dropped
+            ],
+        }
 
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
 
@@ -6696,6 +6790,7 @@ class ResearchDataAPI:
             "is_bfsi": is_bfsi,
             "biggest_cost": biggest_cost,
             "fastest_growing_cost": fastest_growing,
+            "effective_window": effective_window,
         }
 
     # --- Consensus Estimates (Batch 2A) ---
