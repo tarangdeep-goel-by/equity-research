@@ -856,23 +856,27 @@ class ResearchDataAPI:
         # miss the prior month for any symbol whose AMFI name does not
         # contain the NSE ticker substring (HDFCBANK, TCS, SUNPHARMA, VEDL,
         # etc.), tagging every scheme as `new_entry` with prev_count=0.
+        # Match on union of ISINs ∪ stock_names so an exited-scheme row that
+        # historically carried a different ISIN (rare but seen in the wild)
+        # still surfaces, while ISIN-matched rows handle the common case
+        # where AMFI's stock_name does not contain the NSE ticker substring.
         isins = {r.isin for r in current if getattr(r, "isin", None)}
         stock_names = {r.stock_name for r in current if getattr(r, "stock_name", None)}
+        clauses: list[str] = []
+        params: list = []
         if isins:
-            placeholders = ",".join("?" * len(isins))
+            clauses.append(f"isin IN ({','.join('?' * len(isins))})")
+            params.extend(isins)
+        if stock_names:
+            clauses.append(f"stock_name IN ({','.join('?' * len(stock_names))})")
+            params.extend(stock_names)
+        if clauses:
+            params.append(prev_month)
             prev_rows = self._store._conn.execute(
                 f"SELECT * FROM mf_scheme_holdings "
-                f"WHERE isin IN ({placeholders}) AND month = ? "
+                f"WHERE ({' OR '.join(clauses)}) AND month = ? "
                 f"ORDER BY market_value_cr DESC",
-                (*isins, prev_month),
-            ).fetchall()
-        elif stock_names:
-            placeholders = ",".join("?" * len(stock_names))
-            prev_rows = self._store._conn.execute(
-                f"SELECT * FROM mf_scheme_holdings "
-                f"WHERE stock_name IN ({placeholders}) AND month = ? "
-                f"ORDER BY market_value_cr DESC",
-                (*stock_names, prev_month),
+                params,
             ).fetchall()
         else:
             prev_rows = []
@@ -1045,19 +1049,20 @@ class ResearchDataAPI:
                 for r in current
                 if (r.stock_name if hasattr(r, "stock_name") else r.get("stock_name"))
             }
+            clauses: list[str] = []
+            params: list = []
             if isins:
-                placeholders = ",".join("?" * len(isins))
+                clauses.append(f"isin IN ({','.join('?' * len(isins))})")
+                params.extend(isins)
+            if stock_names:
+                clauses.append(f"stock_name IN ({','.join('?' * len(stock_names))})")
+                params.extend(stock_names)
+            if clauses:
+                params.append(prev_month)
                 prev_rows = self._store._conn.execute(
                     f"SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
-                    f"WHERE isin IN ({placeholders}) AND month = ?",
-                    (*isins, prev_month),
-                ).fetchone()
-            elif stock_names:
-                placeholders = ",".join("?" * len(stock_names))
-                prev_rows = self._store._conn.execute(
-                    f"SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
-                    f"WHERE stock_name IN ({placeholders}) AND month = ?",
-                    (*stock_names, prev_month),
+                    f"WHERE ({' OR '.join(clauses)}) AND month = ?",
+                    params,
                 ).fetchone()
             else:
                 prev_rows = None
