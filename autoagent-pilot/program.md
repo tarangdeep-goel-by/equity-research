@@ -10,15 +10,15 @@ reports on its own.
 ## Directive
 
 Improve the business agent's L1-L4 prompt stack to maximize passed benchmark
-stocks, where `pass = grade_numeric >= 90` (A- or above) from the Gemini grader.
-A- is the `target_grade_numeric` set in `eval_matrix.yaml` — the actual
-institutional-quality bar.
+stocks, where `pass = grade_numeric >= 91` (A- with margin) from the Gemini grader.
+A- numeric is 90 per the grade scale; the pilot uses 91 as the practical bar
+so borderline stocks don't count as pass on Gemini's ±1-point variance noise.
 
 The business agent receives a stock ticker, walks a fixed tool surface, and
 must produce an institutional-quality business briefing. Evaluation is done
 by the Gemini autoeval grader against 8 parameters (analytical depth, logical
 consistency, completeness, actionability, sector framework, data sourcing,
-tool-use discipline, cost efficiency). Pass = `grade_numeric >= 90` (A-).
+tool-use discipline, cost efficiency). Pass = `grade_numeric >= 91` (A- with margin).
 
 Do NOT change the business agent's model, tool list, or any non-prompt code
 unless the human explicitly changes that constraint.

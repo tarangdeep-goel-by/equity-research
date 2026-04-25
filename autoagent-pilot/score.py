@@ -17,7 +17,10 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-PASS_THRESHOLD = 90  # A- — matches eval_matrix.yaml target_grade_numeric
+PASS_THRESHOLD = 91  # A- with margin — strictly above the A- floor (90).
+                     # eval_matrix.yaml's target is 90, but pilot uses 91 as
+                     # practical threshold so borderline stocks don't count
+                     # as pass on Gemini variance ±1 noise.
 MAX_GRADE = 97       # A+
 
 # eval-pipeline.sh hard-codes FT_DIR to the main repo path, so autoeval writes
