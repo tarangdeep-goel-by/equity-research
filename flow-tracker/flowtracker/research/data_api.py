@@ -848,13 +848,34 @@ class ResearchDataAPI:
         y, m = int(curr_month[:4]), int(curr_month[5:7])
         prev_month = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
 
-        # Build lookup by scheme for previous month
-        prev_rows = self._store._conn.execute(
-            "SELECT * FROM mf_scheme_holdings "
-            "WHERE UPPER(stock_name) LIKE ? AND month = ? "
-            "ORDER BY market_value_cr DESC",
-            (f"%{symbol}%", prev_month),
-        ).fetchall()
+        # Build lookup by scheme for previous month.
+        # Match prev rows on the SAME stock_name/isin set the current month
+        # produced — `get_mf_stock_holdings(symbol)` resolves NSE symbols
+        # (e.g. HDFCBANK) to AMFI stock_names (e.g. "HDFC Bank Ltd.") via
+        # index_constituents. Reusing `f"%{symbol}%"` here would silently
+        # miss the prior month for any symbol whose AMFI name does not
+        # contain the NSE ticker substring (HDFCBANK, TCS, SUNPHARMA, VEDL,
+        # etc.), tagging every scheme as `new_entry` with prev_count=0.
+        isins = {r.isin for r in current if getattr(r, "isin", None)}
+        stock_names = {r.stock_name for r in current if getattr(r, "stock_name", None)}
+        if isins:
+            placeholders = ",".join("?" * len(isins))
+            prev_rows = self._store._conn.execute(
+                f"SELECT * FROM mf_scheme_holdings "
+                f"WHERE isin IN ({placeholders}) AND month = ? "
+                f"ORDER BY market_value_cr DESC",
+                (*isins, prev_month),
+            ).fetchall()
+        elif stock_names:
+            placeholders = ",".join("?" * len(stock_names))
+            prev_rows = self._store._conn.execute(
+                f"SELECT * FROM mf_scheme_holdings "
+                f"WHERE stock_name IN ({placeholders}) AND month = ? "
+                f"ORDER BY market_value_cr DESC",
+                (*stock_names, prev_month),
+            ).fetchall()
+        else:
+            prev_rows = []
         prev_by_scheme = {r["scheme_name"]: r for r in prev_rows}
 
         changes = []
@@ -1009,11 +1030,37 @@ class ResearchDataAPI:
         if curr_month:
             y, m = int(curr_month[:4]), int(curr_month[5:7])
             prev_month = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
-            prev_rows = self._store._conn.execute(
-                "SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
-                "WHERE UPPER(stock_name) LIKE ? AND month = ?",
-                (f"%{symbol}%", prev_month),
-            ).fetchone()
+            # Match prev-month on the resolved isin/stock_name from `current`
+            # (not `f"%{symbol}%"`) — see get_mf_holding_changes for rationale.
+            # Using the LIKE on the raw NSE ticker silently returned 0 for
+            # HDFCBANK / TCS / SUNPHARMA / VEDL whose AMFI stock_names don't
+            # contain the ticker substring.
+            isins = {
+                (r.isin if hasattr(r, "isin") else r.get("isin"))
+                for r in current
+                if (r.isin if hasattr(r, "isin") else r.get("isin"))
+            }
+            stock_names = {
+                (r.stock_name if hasattr(r, "stock_name") else r.get("stock_name"))
+                for r in current
+                if (r.stock_name if hasattr(r, "stock_name") else r.get("stock_name"))
+            }
+            if isins:
+                placeholders = ",".join("?" * len(isins))
+                prev_rows = self._store._conn.execute(
+                    f"SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
+                    f"WHERE isin IN ({placeholders}) AND month = ?",
+                    (*isins, prev_month),
+                ).fetchone()
+            elif stock_names:
+                placeholders = ",".join("?" * len(stock_names))
+                prev_rows = self._store._conn.execute(
+                    f"SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
+                    f"WHERE stock_name IN ({placeholders}) AND month = ?",
+                    (*stock_names, prev_month),
+                ).fetchone()
+            else:
+                prev_rows = None
             prev_count = prev_rows[0] if prev_rows else 0
 
         scheme_count = len(schemes)
@@ -1172,7 +1219,7 @@ class ResearchDataAPI:
             {"key": "quarterly_cash_flow",     "size": "small", "purpose": "8Q CF (empty for banks + many NSE listed)"},
             {"key": "expense_breakdown",       "size": "med",   "purpose": "Line items (R&D, employee, material, other) — drill for R&D / pharma / 'Other Cost' decomposition"},
             {"key": "growth_rates",            "size": "small", "purpose": "TTM revenue/PAT growth %"},
-            {"key": "capital_allocation",      "size": "small", "purpose": "5Y dividend, buyback, capex, net-debt trajectory"},
+            {"key": "capital_allocation",      "size": "small", "purpose": "5Y dividend, buyback, capex, net-debt trajectory; FCF = CFO - capex (per_year_fcf + cumulative.fcf)"},
             {"key": "rate_sensitivity",        "size": "small", "purpose": "BFSI only — asset-liability repricing sensitivity"},
             {"key": "cagr_table",              "size": "small", "purpose": "Pre-computed 1/3/5/10Y CAGRs (Revenue, EBITDA, NI, EPS, FCF) + trajectory class"},
             {"key": "cost_structure",          "size": "med",   "purpose": "Material/employee/other as % of revenue — explains margin moves"},
@@ -2092,11 +2139,32 @@ class ResearchDataAPI:
         individual DII/LIC holdings are 3-5% and would otherwise crowd the
         entire top_n): reserve up to min(5, #FII_holders) slots for FII, then
         fill remaining slots globally by latest_pct desc.
+
+        Aggregate-FII fallback: when Screener's per-name FII feed surfaces
+        zero named foreign holders (TCS pattern — every individual FII is
+        below the 1% disclosure threshold) but the BSE shareholding pattern
+        reports a non-zero aggregate FII stake, we emit a single synthetic
+        row of holder_type='FII' named 'Aggregate FII (no individuals
+        disclosed at >=1%)' carrying the aggregate FII percentage. This
+        prevents the agent from concluding the stock has zero foreign
+        ownership when the aggregate disagrees. Only fires when classification
+        is None or 'foreign_institutions' and #FII_named == 0.
         """
         rows = self._store.get_shareholder_details(symbol, classification)
         pivoted = self._pivot_shareholder_rows(rows)
         if min_latest_pct is not None and min_latest_pct > 0:
             pivoted = [h for h in pivoted if (h.get("latest_pct") or 0) >= min_latest_pct]
+
+        # Aggregate-FII fallback (TCS pattern). Only emit when caller hasn't
+        # filtered to a non-FII classification, and when no named FII rows
+        # cleared the disclosure threshold.
+        if classification in (None, "foreign_institutions"):
+            has_named_fii = any(h.get("holder_type") == "FII" for h in pivoted)
+            if not has_named_fii:
+                synthetic = self._synthetic_aggregate_fii_row(symbol)
+                if synthetic is not None:
+                    pivoted.append(synthetic)
+
         pivoted.sort(key=lambda h: h.get("latest_pct") or 0.0, reverse=True)
         if top_n is None or len(pivoted) <= top_n:
             return pivoted
@@ -2182,6 +2250,54 @@ class ResearchDataAPI:
             entry["latest_pct"] = qtrs[latest_q]
             result.append(entry)
         return result
+
+    def _synthetic_aggregate_fii_row(self, symbol: str) -> dict | None:
+        """Build a placeholder FII row from BSE aggregate when no named FIIs disclosed.
+
+        Some symbols (TCS pattern) have a non-trivial aggregate FII stake
+        (e.g., 10.37%) but no individual foreign holder above the 1% disclosure
+        threshold, so Screener's `/investors/foreign_institutions/` endpoint
+        returns an empty list. Without this fallback, agents would conclude
+        the stock has zero foreign ownership — directly contradicting the
+        aggregate. We synthesize ONE row carrying the aggregate so the FII
+        bucket isn't silently dropped from the report.
+
+        Returns None when:
+          * shareholding table has no rows for this symbol, OR
+          * latest aggregate FII percentage is None / <= 0
+        """
+        sym = symbol.upper()
+        try:
+            row = self._store._conn.execute(
+                "SELECT quarter_end, percentage FROM shareholding "
+                "WHERE symbol = ? AND category = 'FII' "
+                "ORDER BY quarter_end DESC LIMIT 1",
+                (sym,),
+            ).fetchone()
+        except Exception:
+            return None
+        if not row:
+            return None
+        pct = row["percentage"] if hasattr(row, "keys") else row[1]
+        if pct is None or pct <= 0:
+            return None
+        quarter_end = row["quarter_end"] if hasattr(row, "keys") else row[0]
+        # Convert "2025-12-31" -> "Dec 2025" to match the per-name quarter format.
+        try:
+            from datetime import datetime as _dt
+            qtr_label = _dt.strptime(quarter_end, "%Y-%m-%d").strftime("%b %Y")
+        except Exception:
+            qtr_label = quarter_end or ""
+        return {
+            "name": "Aggregate FII (no individuals disclosed at >=1%)",
+            "classification": "foreign_institutions",
+            "holder_type": "FII",
+            "latest_pct": float(pct),
+            "latest_quarter": qtr_label,
+            "quarters": {qtr_label: float(pct)},
+            "is_aggregate": True,
+            "source": "shareholding_pattern_aggregate",
+        }
 
     # ------------------------------------------------------------------
     # E7 — ADR / GDR outstanding (stub)
@@ -6198,6 +6314,18 @@ class ResearchDataAPI:
         - Cash as % of market cap
         - Payout ratio trend
         - Cash yield (dividends / market cap)
+
+        FCF formula (canonical, also used by get_fcf_yield):
+            capex_t = (NetBlock_t - NetBlock_{t-1})
+                    + (CWIP_t   - CWIP_{t-1})
+                    + Depreciation_t        # PP&E additions, derived from BS deltas
+            FCF_t   = CFO_t - capex_t
+
+        Both per-year FCF (`per_year_fcf`) and the cumulative figure
+        (`cumulative.fcf`) are returned explicitly so agents do not have to
+        re-derive FCF from `cumulative.cfo - cumulative.net_capex` (which
+        could otherwise drift from `get_fcf_yield` / `get_cash_flow`-derived
+        FCF and cause definitional inconsistency in the report).
         """
         annual = self.get_annual_financials(symbol, years=years + 1)
         if len(annual) < 2:
@@ -6229,9 +6357,12 @@ class ResearchDataAPI:
                 "payout_ratio_pct": payout_ratio,
             })
 
-        # Capex: delta_Net_Block + delta_CWIP + Depreciation
+        # Capex: delta_Net_Block + delta_CWIP + Depreciation. Same formula
+        # used in get_fcf_yield — keep them in lockstep so FCF figures
+        # reconcile between capital_allocation and fcf_yield endpoints.
         total_gross_capex = 0
         total_divestments = 0
+        per_year_fcf: list[dict] = []
         for i, d in enumerate(data):
             if i + 1 < len(annual):  # need previous year for delta
                 prev = annual[i + 1]  # data is sorted most recent first
@@ -6245,7 +6376,18 @@ class ResearchDataAPI:
                     total_gross_capex += net_capex
                 else:
                     total_divestments += abs(net_capex)
+                cfo_y = d.get("cfo", 0) or 0
+                fcf_y = cfo_y - net_capex
+                per_year_fcf.append({
+                    "fiscal_year": d.get("fiscal_year_end", ""),
+                    "cfo": round(cfo_y, 2),
+                    "capex": round(net_capex, 2),
+                    "fcf": round(fcf_y, 2),
+                })
         total_capex = total_gross_capex - total_divestments
+        # Cumulative FCF: sum of per-year (CFO - capex) — only across years
+        # for which a previous-year row exists (i.e., capex computable).
+        total_fcf = sum(y["fcf"] for y in per_year_fcf)
 
         # Cash position (cash_and_bank + investments for companies holding cash in MFs/FDs)
         latest = data[0]
@@ -6271,16 +6413,20 @@ class ResearchDataAPI:
         result = {
             "symbol": symbol,
             "years_analyzed": len(data),
+            "fcf_formula": "FCF = CFO - capex; capex = delta(NetBlock) + delta(CWIP) + Depreciation",
             "cumulative": {
                 "cfo": round(total_cfo, 2),
                 "gross_capex": round(total_gross_capex, 2),
                 "divestments": round(total_divestments, 2),
                 "net_capex": round(total_capex, 2),
+                "fcf": round(total_fcf, 2),
                 "dividends": round(total_dividends, 2),
                 "residual_cash_acquisitions": round(residual, 2),
                 "capex_pct_of_cfo": round(total_gross_capex / total_cfo * 100, 1) if total_cfo > 0 else None,
                 "dividends_pct_of_cfo": round(total_dividends / total_cfo * 100, 1) if total_cfo > 0 else None,
+                "fcf_pct_of_cfo": round(total_fcf / total_cfo * 100, 1) if total_cfo > 0 else None,
             },
+            "per_year_fcf": per_year_fcf,
             "cash_position": {
                 "cash_and_bank": round(cash_bank, 2),
                 "investments": round(investments, 2),
