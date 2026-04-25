@@ -916,13 +916,17 @@ get_macro_anchor = tool(
     "'budget_speech' (Union Budget Speech, annual Feb), "
     "'budget_at_a_glance' (Union Budget receipts + expenditure summary), "
     "'rbi_mpr' (RBI Monetary Policy Report, biannual Apr/Oct), "
+    "'rbi_mpc_statement' (RBI MPC bi-monthly resolution — latest rate decision + FY projections), "
     "'rbi_ar_assessment' (RBI Annual Report — Ch 1: Assessment & Outlook), "
     "'rbi_ar_economic' (RBI Annual Report — Ch 2: Economic Review, GDP/inflation/real sector), "
-    "'rbi_ar_monetary' (RBI Annual Report — Ch 3: Monetary Policy Operations, liquidity/rates). "
+    "'rbi_ar_monetary' (RBI Annual Report — Ch 3: Monetary Policy Operations, liquidity/rates), "
+    "'irdai_annual_report' (IRDAI Annual Report — insurance-sector regulator's annual review). "
     "First call WITHOUT section returns a compact TOC (available headings + metadata). "
-    "Second call WITH section='<heading substring>' returns that section's markdown content "
-    "(case-insensitive substring match on heading text). "
-    "If a doc_type is unavailable (e.g., fetch failed), the tool returns status='unavailable' with a fallback hint.",
+    "Second call WITH section='<heading substring>' returns that section's markdown content. "
+    "Heading match is fuzzy: case-insensitive, tolerant of section-prefix numbering "
+    "('I.2', '3.'), em/en-dashes, trailing punctuation, and word-order swaps. If no heading "
+    "matches, falls back to a body-text anchor (slice anchored on the first body occurrence "
+    "of the query). If a doc_type is unavailable, returns status='unavailable' with fallback hint.",
     {"doc_type": str, "section": str},
     annotations=READ_ONLY,
 )
@@ -2031,20 +2035,31 @@ async def get_stock_news(args):
     "calculate",
     "Financial calculator — use for ALL math, never compute in your head. Returns numeric result + plain calculation string for citation. Output is pure numeric — no currency symbols, no unit labels. Field name indicates unit (e.g. value_cr means crores, pe is PE ratio, growth_pct is percent). Wrap numbers in your own prose units in the report.\n"
     "Arguments a and b are strings; pass numeric values as numeric strings (e.g. '1063.55', '892459574').\n"
+    "\nUNIT CONTRACT (read this first — agent errors here are the #1 cause of fair-value mistakes):\n"
+    "  • Monetary aggregates → CRORES (₹1 Cr = 10M = 1e7). Field names ending `_cr` mean crores.\n"
+    "  • Per-share values (price, EPS, BVPS, fair_value) → RUPEES.\n"
+    "  • Share counts (shares, shares_outstanding) → RAW INTEGER COUNT, not lakhs, not crores.\n"
+    "    NESTLEIND has 964,157,160 shares (~96 crore / ~9,641 lakh shares). Pass `964157160`.\n"
+    "    Source: `get_company_snapshot()['shares_outstanding']` or `get_valuation(section='snapshot')['shares_outstanding']` — both return raw count.\n"
+    "    DO NOT pass `shares_outstanding_lakh` (that field is human-readable, divided by 1e5). DO NOT pass shares in crores (divided by 1e7).\n"
+    "    A listed Indian company has at least ~1 lakh (1e5) shares; if your `b` is < 100,000 the tool will REJECT with a unit-error message — read that error carefully.\n"
     "\nNAMED OPERATIONS (preferred — enforce Indian unit conversion) — pass operation + a + b:\n"
-    "  'shares_to_value_cr'     a=shares (raw count), b=price -> value_cr (in crores)\n"
-    "  'per_share_to_total_cr'  a=per_share_value, b=shares (raw count) -> total_cr\n"
-    "  'total_cr_to_per_share'  a=total_cr, b=shares (raw count) -> per_share\n"
-    "  'pe_from_price_eps'      a=price, b=eps -> pe (ratio)\n"
-    "  'eps_from_pat_shares'    a=pat_cr, b=shares (raw count) -> eps\n"
-    "  'fair_value'             a=pe_multiple, b=eps -> fair_value (per share)\n"
+    "  'shares_to_value_cr'     a=shares (RAW count, e.g. 964157160), b=price (₹) -> value_cr (in crores)\n"
+    "  'per_share_to_total_cr'  a=per_share_value (₹), b=shares (RAW count) -> total_cr (in crores)\n"
+    "  'total_cr_to_per_share'  a=total_cr (in crores), b=shares (RAW count) -> per_share (in ₹)\n"
+    "  'pe_from_price_eps'      a=price (₹), b=eps (₹) -> pe (ratio)\n"
+    "  'eps_from_pat_shares'    a=pat_cr (in crores), b=shares (RAW count) -> eps (in ₹)\n"
+    "  'fair_value'             a=pe_multiple, b=eps (₹) -> fair_value (per share, in ₹)\n"
     "  'growth_rate'            a=old, b=new -> growth_pct (percent; single-period)\n"
     "  'cagr'                   a=start, b=end, years=<N> -> cagr_pct (compound annual growth rate; use 'years' kwarg OR pass years as third positional via inputs_as_of='years:5')\n"
-    "  'mcap_cr'                a=price, b=shares (raw count) -> mcap_cr (in crores)\n"
-    "  'margin_of_safety'       a=fair_value, b=current_price -> mos_pct (percent)\n"
+    "  'mcap_cr'                a=price (₹), b=shares (RAW count) -> mcap_cr (in crores)\n"
+    "  'margin_of_safety'       a=fair_value (₹), b=current_price (₹) -> mos_pct (percent)\n"
     "  'annualize_quarterly'    a=quarterly_value -> annualized (x4); leave b='0'\n"
     "  'pct_of'                 a=part, b=whole -> pct (percent)\n"
     "  'ratio'                  a=numerator, b=denominator -> ratio\n"
+    "\nWORKED EXAMPLE (NESTLEIND target price): blended fair-value of ₹36,780 Cr ÷ 964,157,160 shares → ₹381.49 per share.\n"
+    "  calculate(operation='total_cr_to_per_share', a='36780', b='964157160') → {per_share: 381.49}\n"
+    "Counter-example (BANKBARODA bug to avoid): passing b='51713.62' (lakhs of shares) → tool REJECTS as unit error. Pass raw count instead (`51713 lakh × 1e5 = 5,171,300,000`).\n"
     "\nEXPRESSION FALLBACK — for arbitrary arithmetic use operation='expr':\n"
     "  'expr'                   a='<arithmetic string>' (e.g. '(74 - 47.67) / 2'), b='0' (ignored)\n"
     "  Only numbers and + - * / ( ) are permitted in the expression.\n"
@@ -2101,6 +2116,41 @@ async def calculate(args):
             return _with_dedup(
                 "calculate",
                 {"content": [{"type": "text", "text": json.dumps({"error": hint}, default=str)}]},
+                args,
+            )
+
+    # Defensive unit check — share counts must be RAW integer counts, not lakhs/crores.
+    # A listed Indian company has at least ~1 lakh (1e5) shares; values below that
+    # almost certainly mean the agent passed lakhs (e.g. 51,713) or crores (e.g. 96)
+    # by mistake. Reject loudly with a corrective message rather than silently
+    # producing a 100x or 1e7x wrong result. Skip for divide-by-zero (b=0 already
+    # handled gracefully) and skip when raw input was empty/None (back-compat).
+    _MIN_SHARES = 1e5  # 1 lakh — minimum plausible listed-company share count
+    _SHARE_OPS_B = {
+        "shares_to_value_cr": "a",         # a=shares
+        "per_share_to_total_cr": "b",
+        "total_cr_to_per_share": "b",
+        "eps_from_pat_shares": "b",
+        "mcap_cr": "b",
+    }
+    if op in _SHARE_OPS_B:
+        share_arg_name = _SHARE_OPS_B[op]
+        share_val = a if share_arg_name == "a" else b
+        share_raw = raw_a if share_arg_name == "a" else raw_b
+        # Only reject if a positive but implausibly-low value was actually passed
+        # (skip 0 — divide-by-zero paths handle that — and skip None/empty for back-compat).
+        if share_raw not in (None, "") and 0 < share_val < _MIN_SHARES:
+            unit_err = (
+                f"UNIT_ERROR ({op}): argument '{share_arg_name}'={share_val} is implausibly low for a "
+                f"listed Indian company's share count. Pass RAW share count (e.g. 964157160 for NESTLEIND), "
+                f"NOT lakhs of shares (e.g. 9641) and NOT crores of shares (e.g. 96). "
+                f"If your data source returned `shares_outstanding_lakh`, multiply by 1e5 to get raw count. "
+                f"If you meant ~{share_val:.0f} lakh shares, pass {share_val * 1e5:.0f}; "
+                f"if ~{share_val:.0f} crore shares, pass {share_val * 1e7:.0f}."
+            )
+            return _with_dedup(
+                "calculate",
+                {"content": [{"type": "text", "text": json.dumps({"error": unit_err}, default=str)}]},
                 args,
             )
 
