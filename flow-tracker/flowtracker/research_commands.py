@@ -1191,3 +1191,32 @@ def autoeval(
     sys.argv = ["evaluate"] + args_list
     from flowtracker.research.autoeval.evaluate import main as eval_main
     eval_main()
+
+
+@app.command("autoeval-macro")
+def autoeval_macro(
+    dates: Annotated[str, typer.Option("--dates", help="Comma-separated as-of dates (override matrix; default = all dates in eval_matrix_macro.yaml)")] = "",
+    skip_run: Annotated[bool, typer.Option("--skip-run", help="Grade existing macro reports without re-running the agent")] = False,
+    note: Annotated[str, typer.Option("--note", help="Free-form note threaded into the eval_history archive (e.g. 'baseline', 'post-prompt-fix-3')")] = "",
+) -> None:
+    """Run macro autoeval — Gemini grading loop for the macro regime agent.
+
+    Flat date matrix (no sector × stock). Each as-of date runs the macro agent
+    backdated via FLOWTRACK_AS_OF, then grades the report with the macro
+    rubric (anchor exhaustion, trajectory check, FACT/VIEW, India transmission,
+    stale policy). Results land in results_macro.tsv next to results.tsv.
+
+    Examples:
+        flowtrack research autoeval-macro                              # all matrix dates
+        flowtrack research autoeval-macro --dates 2025-11-01           # one date
+        flowtrack research autoeval-macro --skip-run --note baseline   # grade only
+    """
+    from argparse import Namespace
+    from flowtracker.research.autoeval import evaluate_macro
+
+    args_ns = Namespace(
+        dates=dates or None,
+        skip_run=skip_run,
+        note=note or "",
+    )
+    asyncio.run(evaluate_macro.async_main(args_ns))

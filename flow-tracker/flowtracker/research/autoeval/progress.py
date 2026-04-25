@@ -32,6 +32,38 @@ def load_results() -> list[dict]:
         return list(reader)
 
 
+def load_macro_results() -> list[dict]:
+    """Load results_macro.tsv into list of dicts (empty if file absent)."""
+    tsv_path = Path(__file__).parent / "results_macro.tsv"
+    if not tsv_path.exists():
+        return []
+    with open(tsv_path) as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        return list(reader)
+
+
+def macro_block(rows: list[dict], limit: int = 10) -> None:
+    """Render last N macro evals (sorted by as_of_date, newest last)."""
+    if not rows:
+        return
+    sorted_rows = sorted(rows, key=lambda r: r.get("as_of_date", ""))[-limit:]
+    print(f"\nMacro autoeval — last {len(sorted_rows)} dates")
+    passing = 0
+    for r in sorted_rows:
+        as_of = r.get("as_of_date", "?")
+        grade = r.get("grade", "?")
+        try:
+            numeric = int(r.get("grade_numeric", "0"))
+        except ValueError:
+            numeric = 0
+        is_pass = numeric >= TARGET_NUMERIC
+        if is_pass:
+            passing += 1
+        status = "PASS" if is_pass else "FAIL"
+        print(f"  {as_of:12s}  {grade:3s} ({numeric:2d})  {status}")
+    print(f"passing: {passing}/{len(sorted_rows)}")
+
+
 def grade_matrix(rows: list[dict]) -> None:
     """Print sector × agent grade matrix (latest grade per cell)."""
     # Build latest grade per (sector, agent)
@@ -145,6 +177,8 @@ def main() -> None:
 
     if args.sector:
         sector_timeline(rows, args.sector)
+
+    macro_block(load_macro_results())
 
 
 if __name__ == "__main__":

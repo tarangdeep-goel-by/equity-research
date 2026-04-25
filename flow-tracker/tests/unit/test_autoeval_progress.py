@@ -388,3 +388,132 @@ class TestMain:
         progress.main()
         out = capsys.readouterr().out
         assert "Timeline: bfsi" in out
+
+
+# ---------------------------------------------------------------------------
+# Macro block
+# ---------------------------------------------------------------------------
+
+
+MACRO_TSV_HEADER = (
+    "timestamp\tnote\tas_of_date\tgrade\tgrade_numeric"
+    "\tprompt_fixes\tissues\tsummary\n"
+)
+
+
+def _make_macro_row(
+    *,
+    timestamp: str = "2026-04-22T10:00:00Z",
+    note: str = "baseline",
+    as_of_date: str = "2025-11-01",
+    grade: str = "A-",
+    grade_numeric: str = "90",
+    prompt_fixes: str = "0",
+    issues: str = "1",
+    summary: str = "Solid regime read",
+) -> str:
+    return "\t".join([
+        timestamp, note, as_of_date, grade, grade_numeric,
+        prompt_fixes, issues, summary,
+    ]) + "\n"
+
+
+def _write_macro_results(tmp_path: Path, rows: list[str]) -> Path:
+    tsv_path = tmp_path / "results_macro.tsv"
+    tsv_path.write_text(MACRO_TSV_HEADER + "".join(rows))
+    return tsv_path
+
+
+class TestMacroBlock:
+    """macro_block() and load_macro_results() — Part 3 PR-A2 additions."""
+
+    def test_load_macro_results_missing_returns_empty(self, tmp_path, monkeypatch):
+        _point_progress_at(tmp_path, monkeypatch)
+        assert progress.load_macro_results() == []
+
+    def test_load_macro_results_parses_tsv(self, tmp_path, monkeypatch):
+        _write_macro_results(tmp_path, [
+            _make_macro_row(as_of_date="2025-11-01", grade="A-", grade_numeric="90"),
+            _make_macro_row(as_of_date="2025-12-15", grade="A", grade_numeric="93"),
+        ])
+        _point_progress_at(tmp_path, monkeypatch)
+        rows = progress.load_macro_results()
+        assert len(rows) == 2
+        assert rows[0]["as_of_date"] == "2025-11-01"
+        assert rows[1]["grade"] == "A"
+
+    def test_macro_block_empty_renders_nothing(self, capsys):
+        progress.macro_block([])
+        out = capsys.readouterr().out
+        assert out == ""
+        assert "Macro autoeval" not in out
+
+    def test_macro_block_renders_rows_and_passing_count(self, capsys):
+        rows = [
+            {"as_of_date": "2025-11-01", "grade": "A-", "grade_numeric": "90"},
+            {"as_of_date": "2025-12-15", "grade": "A", "grade_numeric": "93"},
+            {"as_of_date": "2026-02-01", "grade": "B+", "grade_numeric": "85"},
+        ]
+        progress.macro_block(rows)
+        out = capsys.readouterr().out
+        assert "Macro autoeval" in out
+        assert "2025-11-01" in out
+        assert "2025-12-15" in out
+        assert "PASS" in out
+        assert "FAIL" in out
+        assert "passing: 2/3" in out
+
+    def test_macro_block_sorted_oldest_to_newest(self, capsys):
+        """Rows render sorted by as_of_date so newest is at the bottom."""
+        rows = [
+            {"as_of_date": "2026-02-01", "grade": "A", "grade_numeric": "93"},
+            {"as_of_date": "2025-11-01", "grade": "A-", "grade_numeric": "90"},
+            {"as_of_date": "2025-12-15", "grade": "A", "grade_numeric": "92"},
+        ]
+        progress.macro_block(rows)
+        out = capsys.readouterr().out
+        nov_pos = out.index("2025-11-01")
+        dec_pos = out.index("2025-12-15")
+        feb_pos = out.index("2026-02-01")
+        assert nov_pos < dec_pos < feb_pos
+
+    def test_macro_block_respects_limit(self, capsys):
+        rows = [
+            {"as_of_date": f"2025-11-{i:02d}", "grade": "A", "grade_numeric": "93"}
+            for i in range(1, 16)
+        ]
+        progress.macro_block(rows, limit=3)
+        out = capsys.readouterr().out
+        assert "last 3 dates" in out
+        # Only the 3 most recent (2025-11-13/14/15) should appear
+        assert "2025-11-15" in out
+        assert "2025-11-01" not in out
+
+    def test_macro_block_invalid_numeric_treated_as_fail(self, capsys):
+        rows = [{"as_of_date": "2025-11-01", "grade": "ERR",
+                 "grade_numeric": "bogus"}]
+        progress.macro_block(rows)
+        out = capsys.readouterr().out
+        assert "FAIL" in out
+
+    def test_main_skips_macro_block_when_tsv_absent(self, tmp_path, monkeypatch, capsys):
+        """When results_macro.tsv is missing, main() emits no Macro section."""
+        _write_results(tmp_path, [_make_row()])
+        _point_progress_at(tmp_path, monkeypatch)
+        monkeypatch.setattr(sys, "argv", ["progress.py"])
+        progress.main()
+        out = capsys.readouterr().out
+        assert "Macro autoeval" not in out
+
+    def test_main_renders_macro_block_when_tsv_present(self, tmp_path, monkeypatch, capsys):
+        """When results_macro.tsv exists, main() appends the Macro block."""
+        _write_results(tmp_path, [_make_row()])
+        _write_macro_results(tmp_path, [
+            _make_macro_row(as_of_date="2025-11-01", grade="A-", grade_numeric="90"),
+        ])
+        _point_progress_at(tmp_path, monkeypatch)
+        monkeypatch.setattr(sys, "argv", ["progress.py"])
+        progress.main()
+        out = capsys.readouterr().out
+        assert "Macro autoeval" in out
+        assert "2025-11-01" in out
