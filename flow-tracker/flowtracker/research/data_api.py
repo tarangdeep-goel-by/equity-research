@@ -7729,3 +7729,304 @@ class ResearchDataAPI:
                 unique.append(article)
 
         return unique
+
+    # --- F&O Positioning (Sprint 3) ---
+
+    def _fno_front_expiry(self, symbol: str, trade_date: str, instrument: str = "FUTSTK") -> str | None:
+        """Front (nearest non-expired) expiry for symbol+instrument on trade_date."""
+        row = self._store._conn.execute(
+            "SELECT MIN(expiry_date) AS e FROM fno_contracts "
+            "WHERE symbol = ? AND instrument = ? AND trade_date = ? "
+            "  AND expiry_date >= trade_date",
+            (symbol.upper(), instrument, trade_date),
+        ).fetchone()
+        return row["e"] if row and row["e"] else None
+
+    def _fno_latest_trade_date(self, symbol: str) -> str | None:
+        row = self._store._conn.execute(
+            "SELECT MAX(trade_date) AS d FROM fno_contracts WHERE symbol = ?",
+            (symbol.upper(),),
+        ).fetchone()
+        return row["d"] if row and row["d"] else None
+
+    def get_fno_positioning(self, symbol: str) -> dict | None:
+        """Composite F&O positioning snapshot. Returns None for non-F&O symbols."""
+        from datetime import date as _date
+
+        symbol = symbol.upper()
+        if symbol not in self._store.get_fno_eligible_stocks():
+            return None
+
+        as_of_iso = self._fno_latest_trade_date(symbol)
+        empty = {
+            "fno_eligible": True, "as_of_date": as_of_iso,
+            "futures_positioning": {}, "options_positioning": {},
+            "fii_derivative_stance": {},
+            "data_freshness": {"last_trade_date": as_of_iso, "days_since_update": None},
+        }
+        if not as_of_iso:
+            return empty
+        as_of = _date.fromisoformat(as_of_iso)
+
+        # Futures positioning
+        history = self._store.get_fno_oi_history(symbol, days=90)
+        latest = history[-1] if history else None
+        current_oi = latest.get("open_interest") if latest else None
+        oi_pct = self._store.get_oi_percentile(symbol, as_of, lookback_days=90)
+
+        def _pct_chg(c, b):
+            return None if (c is None or not b) else (c - b) / b * 100
+
+        oi_trend_20d = "flat"
+        if len(history) >= 21 and current_oi is not None:
+            chg = _pct_chg(current_oi, history[-21].get("open_interest"))
+            if chg is not None:
+                oi_trend_20d = "building" if chg > 10 else "unwinding" if chg < -10 else "flat"
+
+        oi_change_5d_pct = None
+        if len(history) >= 6 and current_oi is not None:
+            v = _pct_chg(current_oi, history[-6].get("open_interest"))
+            oi_change_5d_pct = round(v, 2) if v is not None else None
+
+        basis = self._store.get_basis(symbol, as_of)
+        basis_pct = basis["basis_pct"] if basis else None
+        basis_label = None
+        if basis_pct is not None:
+            basis_label = ("flat" if abs(basis_pct) < 0.05 else
+                           "contango" if basis_pct > 0 else "backwardation")
+
+        futures_positioning = {
+            "current_oi": current_oi,
+            "oi_percentile_90d": round(oi_pct, 2) if oi_pct is not None else None,
+            "oi_trend_20d": oi_trend_20d,
+            "basis_pct": round(basis_pct, 4) if basis_pct is not None else None,
+            "basis_label": basis_label,
+            "oi_change_5d_pct": oi_change_5d_pct,
+        }
+
+        # Options positioning
+        pcr = self._store.get_pcr(symbol, as_of)
+        pcr_oi = pcr["pcr_oi"] if pcr else None
+        pcr_oi_label = None
+        if pcr_oi is not None:
+            pcr_oi_label = "low" if pcr_oi < 0.7 else "neutral" if pcr_oi <= 1.0 else "high"
+
+        max_pain_strike = atm_iv = None
+        opt_expiry = self._fno_front_expiry(symbol, as_of_iso, instrument="OPTSTK")
+        if opt_expiry:
+            conn = self._store._conn
+            pain = conn.execute(
+                "SELECT strike, SUM(open_interest) AS c FROM fno_contracts "
+                "WHERE symbol=? AND trade_date=? AND instrument='OPTSTK' "
+                "  AND expiry_date=? AND option_type IN ('CE','PE') AND strike!=-1 "
+                "GROUP BY strike ORDER BY c DESC LIMIT 1",
+                (symbol, as_of_iso, opt_expiry),
+            ).fetchone()
+            if pain and pain["strike"] is not None:
+                max_pain_strike = float(pain["strike"])
+            spot_row = conn.execute(
+                "SELECT close FROM daily_stock_data WHERE symbol=? AND date=?",
+                (symbol, as_of_iso),
+            ).fetchone()
+            if spot_row and spot_row["close"]:
+                atm = conn.execute(
+                    "SELECT implied_volatility FROM fno_contracts "
+                    "WHERE symbol=? AND trade_date=? AND instrument='OPTSTK' "
+                    "  AND expiry_date=? AND option_type='CE' "
+                    "  AND implied_volatility IS NOT NULL AND strike!=-1 "
+                    "ORDER BY ABS(strike-?) ASC LIMIT 1",
+                    (symbol, as_of_iso, opt_expiry, float(spot_row["close"])),
+                ).fetchone()
+                if atm and atm["implied_volatility"] is not None:
+                    atm_iv = float(atm["implied_volatility"])
+
+        options_positioning = {
+            "pcr_oi": round(pcr_oi, 4) if pcr_oi is not None else None,
+            "pcr_oi_label": pcr_oi_label,
+            "max_pain_strike": max_pain_strike,
+            "atm_iv": atm_iv,
+        }
+
+        # FII derivative stance (market-wide)
+        fii_latest = self._store.get_fii_derivative_positioning(as_of, days=1)
+        idx_pct = stk_pct = None
+        if fii_latest and fii_latest.get("by_category"):
+            cats = fii_latest["by_category"]
+            idx_pct = (cats.get("idx_fut") or {}).get("net_long_pct")
+            stk_pct = (cats.get("stk_fut") or {}).get("net_long_pct")
+
+        idx_trend = "flat"
+        flow = self.get_fii_derivative_flow(days=10)
+        idx_series = [r["index_fut_net_long_pct"] for r in flow
+                      if r.get("index_fut_net_long_pct") is not None]
+        if len(idx_series) >= 6:
+            delta = idx_series[0] - idx_series[5]  # newest first
+            idx_trend = "rising" if delta > 2 else "falling" if delta < -2 else "flat"
+
+        return {
+            "fno_eligible": True,
+            "as_of_date": as_of_iso,
+            "futures_positioning": futures_positioning,
+            "options_positioning": options_positioning,
+            "fii_derivative_stance": {
+                "index_fut_net_long_pct": round(idx_pct, 2) if idx_pct is not None else None,
+                "index_fut_net_long_trend": idx_trend,
+                "stock_fut_net_long_pct": round(stk_pct, 2) if stk_pct is not None else None,
+            },
+            "data_freshness": {
+                "last_trade_date": as_of_iso,
+                "days_since_update": (_date.today() - as_of).days,
+            },
+        }
+
+    def get_oi_history(self, symbol: str, days: int = 90) -> list[dict]:
+        """Daily OI + close + volume for front-month futures (passthrough)."""
+        symbol = symbol.upper()
+        if symbol not in self._store.get_fno_eligible_stocks():
+            return []
+        return self._store.get_fno_oi_history(symbol, days=days)
+
+    def get_option_chain_concentration(self, symbol: str) -> dict | None:
+        """Strike-wise CE/PE OI concentration for the front expiry."""
+        symbol = symbol.upper()
+        if symbol not in self._store.get_fno_eligible_stocks():
+            return None
+        as_of_iso = self._fno_latest_trade_date(symbol)
+        if not as_of_iso:
+            return None
+        opt_expiry = self._fno_front_expiry(symbol, as_of_iso, instrument="OPTSTK")
+        if not opt_expiry:
+            return None
+
+        conn = self._store._conn
+        sql = ("SELECT strike, open_interest FROM fno_contracts "
+               "WHERE symbol=? AND trade_date=? AND instrument='OPTSTK' "
+               "  AND expiry_date=? AND option_type=? AND strike!=-1")
+        ce_rows = conn.execute(sql, (symbol, as_of_iso, opt_expiry, "CE")).fetchall()
+        pe_rows = conn.execute(sql, (symbol, as_of_iso, opt_expiry, "PE")).fetchall()
+        if not ce_rows and not pe_rows:
+            return None
+
+        total_ce_oi = sum(int(r["open_interest"] or 0) for r in ce_rows)
+        total_pe_oi = sum(int(r["open_interest"] or 0) for r in pe_rows)
+
+        def _top(rows, total):
+            if not rows:
+                return None
+            top = max(rows, key=lambda r: int(r["open_interest"] or 0))
+            oi = int(top["open_interest"] or 0)
+            return {
+                "strike": float(top["strike"]),
+                "oi": oi,
+                "pct_of_total_ce": round(oi / total * 100, 2) if total > 0 else None,
+            }
+
+        combined: dict[float, int] = {}
+        for r in list(ce_rows) + list(pe_rows):
+            k = float(r["strike"])
+            combined[k] = combined.get(k, 0) + int(r["open_interest"] or 0)
+        max_pain = max(combined, key=combined.get) if combined else None
+
+        return {
+            "expiry_date": opt_expiry,
+            "call_oi_concentration": _top(ce_rows, total_ce_oi),
+            "put_oi_concentration": _top(pe_rows, total_pe_oi),
+            "max_pain_strike": max_pain,
+            "total_ce_oi": total_ce_oi,
+            "total_pe_oi": total_pe_oi,
+        }
+
+    def get_fii_derivative_flow(self, days: int = 30) -> list[dict]:
+        """Market-wide FII derivative positioning, newest-first list. Empty if no data."""
+        rows = self._store._conn.execute(
+            "SELECT trade_date, instrument_category, "
+            "       SUM(long_oi) AS long_oi, SUM(short_oi) AS short_oi "
+            "FROM fno_participant_oi WHERE participant='FII' "
+            "  AND trade_date >= date('now', ? || ' days') "
+            "GROUP BY trade_date, instrument_category ORDER BY trade_date DESC",
+            (f"-{days}",),
+        ).fetchall()
+        if not rows:
+            return []
+
+        by_date: dict[str, dict] = {}
+        for r in rows:
+            d = r["trade_date"]
+            entry = by_date.setdefault(d, {
+                "trade_date": d,
+                "index_fut_long_oi": 0, "index_fut_short_oi": 0,
+                "index_fut_net_long_pct": None,
+                "index_opt_ce_oi": 0, "index_opt_pe_oi": 0,
+                "stock_fut_long_oi": 0, "stock_fut_short_oi": 0,
+                "stock_fut_net_long_pct": None,
+            })
+            cat = r["instrument_category"]
+            long_oi, short_oi = int(r["long_oi"] or 0), int(r["short_oi"] or 0)
+            if cat == "idx_fut":
+                entry["index_fut_long_oi"], entry["index_fut_short_oi"] = long_oi, short_oi
+            elif cat == "idx_opt_ce":
+                entry["index_opt_ce_oi"] = long_oi + short_oi
+            elif cat == "idx_opt_pe":
+                entry["index_opt_pe_oi"] = long_oi + short_oi
+            elif cat == "stk_fut":
+                entry["stock_fut_long_oi"], entry["stock_fut_short_oi"] = long_oi, short_oi
+
+        for e in by_date.values():
+            it = e["index_fut_long_oi"] + e["index_fut_short_oi"]
+            if it > 0:
+                e["index_fut_net_long_pct"] = round(e["index_fut_long_oi"] / it * 100, 2)
+            st = e["stock_fut_long_oi"] + e["stock_fut_short_oi"]
+            if st > 0:
+                e["stock_fut_net_long_pct"] = round(e["stock_fut_long_oi"] / st * 100, 2)
+
+        return sorted(by_date.values(), key=lambda r: r["trade_date"], reverse=True)
+
+    def get_futures_basis(self, symbol: str, days: int = 30) -> list[dict]:
+        """Spot-futures basis trajectory over N trading days (newest first)."""
+        from datetime import date as _date
+
+        symbol = symbol.upper()
+        if symbol not in self._store.get_fno_eligible_stocks():
+            return []
+
+        rows = self._store._conn.execute(
+            "SELECT f.trade_date, f.expiry_date, f.close AS futures_close "
+            "FROM fno_contracts f INNER JOIN ("
+            "  SELECT trade_date, MIN(expiry_date) AS front_expiry "
+            "  FROM fno_contracts "
+            "  WHERE symbol=? AND instrument='FUTSTK' AND expiry_date >= trade_date "
+            "    AND trade_date >= date('now', ? || ' days') "
+            "  GROUP BY trade_date"
+            ") m ON f.trade_date=m.trade_date AND f.expiry_date=m.front_expiry "
+            "WHERE f.symbol=? AND f.instrument='FUTSTK' "
+            "ORDER BY f.trade_date DESC",
+            (symbol, f"-{days}", symbol),
+        ).fetchall()
+        if not rows:
+            return []
+
+        out: list[dict] = []
+        for r in rows:
+            td, fut_close, expiry_iso = r["trade_date"], r["futures_close"], r["expiry_date"]
+            spot_row = self._store._conn.execute(
+                "SELECT close FROM daily_stock_data WHERE symbol=? AND date=?",
+                (symbol, td),
+            ).fetchone()
+            if not spot_row or spot_row["close"] is None or fut_close is None:
+                continue
+            spot = float(spot_row["close"])
+            if spot == 0:
+                continue
+            try:
+                dte = (_date.fromisoformat(expiry_iso) - _date.fromisoformat(td)).days
+            except Exception:
+                dte = None
+            out.append({
+                "trade_date": td,
+                "spot_close": spot,
+                "futures_close": float(fut_close),
+                "basis_pct": round((float(fut_close) - spot) / spot * 100, 4),
+                "days_to_expiry": dte,
+                "expiry_date": expiry_iso,
+            })
+        return out
