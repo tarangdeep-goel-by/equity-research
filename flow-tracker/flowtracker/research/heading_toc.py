@@ -18,9 +18,22 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import Counter
 from typing import Iterable
 
 logger = logging.getLogger(__name__)
+
+
+# HTML-entity normalization for heading match. Docling sometimes emits the
+# literal entity `&amp;` instead of `&` in headings (ICICIBANK FY25, VEDL FY25
+# - "MANAGEMENT DISCUSSION &amp; ANALYSIS"). Aliases below use bare `&`, so
+# we pre-normalize heading text before matching. Body text is unaffected.
+_HTML_AMP_RE = re.compile(r"&amp;", re.IGNORECASE)
+
+
+def _norm_html_entities(text: str) -> str:
+    """Convert &amp; -> & for matching only. Cheap, safe, idempotent."""
+    return _HTML_AMP_RE.sub("&", text)
 
 
 # Canonical AR sections + alias regexes.
@@ -28,19 +41,39 @@ logger = logging.getLogger(__name__)
 # before "Financial Statements"). Aliases use case-insensitive whole-word matching.
 AR_SECTIONS: dict[str, list[str]] = {
     "chairman_letter": [
-        r"chairman'?s?\s+(letter|message|statement)",
-        r"letter\s+from\s+the\s+chairman",
-        r"chairperson'?s?\s+(letter|message)",
+        r"chairman'?s?\s+(letter|message|statement|speech|address|communique|note|remarks)",
+        r"chairperson'?s?\s+(letter|message|speech|address|communique|note|remarks)",
+        r"letter\s+from\s+the\s+(chairman|chairperson)",
+        # SUNPHARMA FY25: "Chairman and Managing Director's Message" — joint
+        # title where the chairman is also the MD. The trailing possessive
+        # belongs to "Director's", not "Chairman's", so the simple alias
+        # above misses it.
+        r"chairman\s+(and|&)\s+(managing\s+director|md|ceo|co-?chair(man|person)?)'?s?\s+(letter|message|statement|speech|address|communique|note|remarks)",
+        # ICICIBANK FY25 / DRREDDY FY25 / VEDL FY25 / many integrated-reporting
+        # ARs use "Message from the Chairman" rather than "Chairman's Message".
+        r"message\s+from\s+(the\s+)?(chairman|chairperson|founders?|chair\b|co-?chair(man|person)?)",
+        r"message\s+from\s+(the\s+)?chair(man|person)?\s*(and|&)\s*(co-?chair(man|person)?|md|managing\s+director|ceo)",
+        # POLICYBZR FY25 — startup integrated-reports use founder-letter
+        # in lieu of a chairman letter. Treat as the canonical opener.
+        r"message\s+from\s+(the\s+)?founders?",
+        r"from\s+the\s+(chairman'?s?|chairperson'?s?|founder'?s?)\s+desk",
     ],
     "ceo_letter": [
-        r"(ceo|managing\s+director|md)'?s?\s+(letter|message|statement|review)",
+        r"(ceo|managing\s+director|md)'?s?\s+(letter|message|statement|review|speech|address|communique|remarks|speak)",
         r"letter\s+from\s+the\s+(ceo|managing\s+director|md)",
+        r"message\s+from\s+(the\s+)?(ceo|managing\s+director|md\b)",
+        r"\bceo\s+speak\b",
     ],
     "mdna": [
         r"management'?s?\s+discussion\s+(and|&)\s+analysis",
         r"\bmd\s*&\s*a\b",
         r"\bmd&a\b",
         r"discussion\s+and\s+analysis\s+report",
+        # ICICIBANK FY25 banking layout interleaves "OPERATING RESULTS DATA"
+        # under MD&A as a parallel sub-heading. Add operating-results variants.
+        r"operating\s+results?\s+(review|data|analysis)",
+        r"business\s+performance\s+review",
+        r"management'?s?\s+discussion\s+of\s+performance",
     ],
     "directors_report": [
         r"directors'?\s+report",
@@ -111,7 +144,204 @@ AR_SECTIONS: dict[str, list[str]] = {
         r"\besop\b\s+disclosure",
         r"share[\s-]?based\s+payments?\s+disclosure",
     ],
+    # Pharma-specific section — Wave 4-5 P2 addition 2026-04-25 to surface
+    # USFDA inspection outcomes, warning-letter status, ANDA pipeline, and
+    # Drug Master File disclosures. Pharma ARs put this under varied headings
+    # ("Regulatory Compliance" — SUNPHARMA / "FDA Inspections" — DRREDDY /
+    # standalone sub-section under MD&A in smaller caps). Distinct from
+    # `risk_management` which catches generic operational + financial risk;
+    # this is specifically the USFDA/EMA disclosure pharma agents need.
+    "usfda_compliance": [
+        r"(us\s*)?fda\s+inspections?",
+        r"regulatory\s+compliance(\s+update|\s+status)?",
+        r"quality\s+compliance(\s+update|\s+status)?",
+        r"drug\s+master\s+files?",
+        r"\banda\s+(filings?|approvals?|pipeline)",
+        r"u\.?s\.?\s+fda(\s+update|\s+status)?",
+    ],
+    # Five/Ten/Decade-of financial highlights table — Schedule III mandates
+    # restating prior years when bucketing changes, so the table is internally
+    # consistent (canonical restated trend source — see
+    # plans/screener-data-discontinuity.md, Strategy 2). Headings vary widely
+    # across companies; cover variants observed in HDFCBANK, INFY, TCS,
+    # HINDUNILVR, SUNPHARMA, NESTLEIND, ICICIBANK, SBIN cohort.
+    "five_year_summary": [
+        r"(five|5)\s*[-–]?\s*year\s+(financial\s+)?(highlights?|track\s+record|performance|snapshot)",
+        r"(ten|10)\s*[-–]?\s*year\s+(financial\s+)?(highlights?|track\s+record|performance|snapshot)",
+        r"decade\s+of\s+(highlights?|performance|growth)",
+        r"long[\s-]term\s+track\s+record",
+        r"performance\s+trend\s+[-–]\s+\d+\s+years?",
+        r"key\s+financial\s+indicators?\s*[:\-–]\s*last\s+\d+\s+years?",
+        r"key\s+performance\s+indicators?\s*[-–:]?\s*\d+\s+years?",
+        r"financial\s+highlights\s+[-–:]\s+(last\s+)?\d+\s+years?",
+    ],
 }
+
+
+# Headings that look like they match `corporate_governance` but are actually
+# ESG / sustainability-flavoured governance content, NOT the SEBI-mandated
+# Corporate Governance Report. Picking these would route ESG governance prose
+# (whistleblower channels, ESG-policy summaries) into the CG agent instead of
+# the actual board / committees / audit-committee / nomination-remuneration
+# disclosure.
+#
+# ICICIBANK FY25: only "ESG REPORT | 2024-25" matched the bare
+# `governance\s+report` alias because the real CORPORATE GOVERNANCE heading
+# was followed by a running-header `BOARD'S REPORT` that cut its slice to
+# 615 chars and lost the largest-section-wins race against the 439-char ESG
+# report (which had no other CG candidates to compete with). The exclude
+# rule below removes ESG-governance candidates from the candidate pool.
+_CG_EXCLUDE_RE = re.compile(
+    r"environmental[,\s]+social\b"
+    r"|\besg\b"
+    r"|sustainability\s+report"
+    # NYSE corporate-governance compliance certificate (DRREDDY FY25 ADR
+    # filing) — describes how the company complies with NYSE CG vs SEBI CG.
+    # Useful context but NOT the SEBI Corporate Governance Report.
+    r"|\bnyse\b.*corporate\s+governance"
+    r"|compliance\s+report\s+on\s+the\s+nyse"
+    # "Compliance, Ethics, and Corporate governance:" colon-style preamble in
+    # DRREDDY FY25 strategic-review section — extends 269K into the directors
+    # report and downstream financial statements. Not the CG report itself.
+    r"|^compliance,\s+ethics,?\s+and\s+corporate\s+governance",
+    re.IGNORECASE,
+)
+
+
+# Headings that mark the end of mdna / corporate_governance sections. Mirrors
+# `_AUDITOR_END_RE`: both sections (like the IAR) contain dozens of L2
+# sub-headings (Industry Overview, Operating Performance, Risks, Outlook for
+# MD&A; Audit Committee, Nomination & Remuneration, CSR for CG). The default
+# same-or-higher-level end heuristic over-cuts the section to its first
+# sub-heading. Instead, end at the next financial-statement anchor or a
+# non-self canonical-section heading — whichever comes first.
+_MDNA_CG_END_RE = re.compile(
+    r"^(\s*)("
+    r"(consolidated|standalone)?\s*balance\s+sheet"
+    r"|(consolidated|standalone)?\s*statement\s+of\s+(the\s+)?profit\s+(and|&)\s+loss"
+    r"|(consolidated|standalone)?\s*profit\s+(and|&)\s+loss\s+(account|statement)"
+    r"|(consolidated|standalone)?\s*statement\s+of\s+cash\s+flows?"
+    r"|(consolidated|standalone)?\s*cash\s+flow\s+statement"
+    r"|(standalone|consolidated)\s+financials?\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+# End-anchors for chairman_letter / ceo_letter sections — when the letter is
+# embedded in an integrated-reporting layout, the next big-section divider is
+# typically another personalized letter (CFO message, founders message, CEO
+# of subsidiary), or an integrated-report section header (Performance Review,
+# Strategic Review, Approach to Reporting, Board of Directors). Without this
+# the chairman_letter slice can run 100K+ into Governance content (DRREDDY
+# FY25 problem).
+_LETTER_END_RE = re.compile(
+    r"^(\s*)("
+    r"message\s+from\s+(the\s+)?cfo"
+    r"|cfo'?s?\s+(message|letter|statement|review|note)"
+    r"|message\s+from\s+(the\s+)?coo"
+    r"|board\s+of\s+directors\b"
+    r"|management\s+council\b"
+    r"|approach\s+to\s+reporting"
+    r"|(our\s+)?strategic\s+review\b"
+    r"|(our\s+)?performance\s+review\b"
+    r"|key\s+performance\s+indicators\b"
+    r"|(our\s+)?value\s+creation\s+model\b"
+    r"|stakeholder\s+engagement\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+# CG-substance markers — phrases the real CG section contains but tangential
+# governance-flavoured candidates (ESG governance, board-of-directors photo
+# captions, NYSE-compliance certificates) do not. Used to break ties when
+# multiple `corporate_governance` candidates exist.
+#
+# DRREDDY FY25 ranks "Compliance, Ethics, and Corporate governance:" (270K of
+# adjacent CSR + HR content) as the largest candidate — but the real CG section
+# is a 58K block headed "CORPORATE GOVERNANCE REPORT" containing the audit
+# committee, NRC, risk management committee, and director DINs. Substance
+# scoring promotes the right candidate even when its size loses the largest
+# heuristic.
+_CG_SUBSTANCE_RE = re.compile(
+    r"\b("
+    r"audit\s+committee"
+    r"|nomination\s+(and|&)\s+remuneration\s+committee"
+    r"|stakeholders?\s+relationship\s+committee"
+    r"|risk\s+management\s+committee"
+    r"|csr\s+committee"
+    r"|board\s+evaluation"
+    r"|independent\s+director"
+    r"|composition\s+of\s+the\s+board"
+    r"|familiarisation\s+programme"
+    r"|whistle\s*blower"
+    r"|related\s+party\s+transaction"
+    r")\b",
+    re.IGNORECASE,
+)
+_CG_SUBSTANCE_WINDOW = 30_000
+
+
+# MD&A-substance markers — phrases real MD&A bodies contain but a TOC entry
+# or running-header repeat does not. Distinguishes the substantive 30K MDA
+# from a 200-char forward-reference heading.
+_MDNA_SUBSTANCE_RE = re.compile(
+    r"\b("
+    r"industry\s+overview"
+    r"|industry\s+structure"
+    r"|opportunities\s+and\s+threats"
+    r"|business\s+performance"
+    r"|operating\s+performance"
+    r"|operational\s+performance"
+    r"|outlook"
+    r"|risks?\s+and\s+concerns?"
+    r"|internal\s+control\s+systems?"
+    r"|material\s+developments?\s+in\s+human\s+resource"
+    r"|key\s+financial\s+ratios?"
+    r"|economic\s+overview"
+    r"|segment\s+(performance|results?|review)"
+    r")\b",
+    re.IGNORECASE,
+)
+_MDNA_SUBSTANCE_WINDOW = 30_000
+
+
+# Chairman / CEO letter substance markers — phrases that distinguish a real
+# chairman speech / CEO message from a TOC entry, glossary, or investor-
+# relations admin section (e.g. "Chairman Communique" in VEDL FY25 is the
+# IR-correspondence label, not the actual speech). Real letters open with
+# "Dear Shareholders" / "Dear Stakeholders", reference the FY, narrate the
+# year ahead / behind, and close with the signatory.
+_CHAIRMAN_SUBSTANCE_RE = re.compile(
+    r"\b("
+    r"dear\s+(shareholder|stakeholder|investor|member)"
+    r"|the\s+year\s+(under\s+review|ahead|gone\s+by)"
+    r"|i\s+am\s+(pleased|delighted|honoured)"
+    r"|looking\s+ahead"
+    r"|during\s+the\s+(year|fiscal|financial\s+year)"
+    r"|yours\s+(sincerely|faithfully|truly)"
+    r"|on\s+behalf\s+of\s+the\s+(board|management)"
+    r"|fy\s*20\d{2}"
+    r"|fy\s*\d{2}"
+    r")\b",
+    re.IGNORECASE,
+)
+_CHAIRMAN_SUBSTANCE_WINDOW = 12_000
+
+
+def _running_header_set(headings: list[dict], threshold: int = 5) -> set[str]:
+    """Return the set of normalized heading texts that appear `threshold`+
+    times in the heading list — these are page-running headers (e.g. ICICIBANK
+    FY25 has BOARD'S REPORT 48x as a page header). When computing section-end
+    boundaries we must skip these so a single repeated header doesn't truncate
+    the real section to a few hundred chars.
+
+    Normalization: lowercase + html-entity normalize + collapse whitespace.
+    """
+    norm = lambda s: re.sub(r"\s+", " ", _norm_html_entities(s).strip().lower())
+    counter = Counter(norm(h["text"]) for h in headings)
+    return {text for text, count in counter.items() if count >= threshold}
 
 
 # Headings that look like they match `auditor_report` but are actually
@@ -206,12 +436,20 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
         for canonical, patterns in AR_SECTIONS.items()
     }
 
+    # Detect repeated page running-headers (e.g. ICICIBANK FY25's 48x
+    # "BOARD'S REPORT" page header). These pollute end-detection: the next
+    # heading after the real CG section is a running-header repeat that
+    # matches the directors_report alias and prematurely truncates the slice.
+    running_headers = _running_header_set(headings)
+
     # Collect ALL candidate matches per canonical (multiple per name allowed).
     candidates: dict[str, list[dict]] = {}
     matched_heading_ids: set[int] = set()  # heading char_offsets we've matched, to count unmapped
 
     for h in headings:
-        text = h["text"]
+        # Normalize HTML entities (&amp; -> &) so headings like
+        # "MANAGEMENT DISCUSSION &amp; ANALYSIS" still match the bare-`&` aliases.
+        text = _norm_html_entities(h["text"])
         for canonical, regexes in compiled.items():
             if any(rx.search(text) for rx in regexes):
                 # Exclude Annexure A / B / etc. sub-sections of the IAR from
@@ -219,6 +457,11 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
                 # sub-sections (CARO / Internal Financial Controls report),
                 # not the main IAR body.
                 if canonical == "auditor_report" and _AUDITOR_EXCLUDE_RE.search(text):
+                    matched_heading_ids.add(h["char_offset"])
+                    break
+                # Exclude ESG / sustainability "governance report" headings
+                # from being picked as the corporate_governance start.
+                if canonical == "corporate_governance" and _CG_EXCLUDE_RE.search(text):
                     matched_heading_ids.add(h["char_offset"])
                     break
                 candidates.setdefault(canonical, []).append(h)
@@ -237,7 +480,10 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
     for canonical, hits in candidates.items():
         scored = []
         for h in hits:
-            end = _find_section_end(md, headings, h, canonical=canonical, all_compiled=compiled)
+            end = _find_section_end(
+                md, headings, h, canonical=canonical, all_compiled=compiled,
+                running_headers=running_headers,
+            )
             scored.append((end - h["char_offset"], h, end))
         if canonical == "auditor_report":
             # IAR-specific scoring: prefer candidates whose body looks like
@@ -249,6 +495,40 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
             # (zero KAMs, zero Opinion) over the 12.7K real IAR slice.
             scored.sort(
                 key=lambda t: (_iar_substantive_score(md, t[1]["char_offset"], t[2]), t[0]),
+                reverse=True,
+            )
+        elif canonical == "corporate_governance":
+            # CG-specific tie-break: prefer candidates whose body contains
+            # the SEBI-mandated CG markers (Audit Committee, NRC, RMC, CSR,
+            # board evaluation, independent directors, DIN listings).
+            # DRREDDY FY25 problem: a 270K "Compliance, Ethics, and Corporate
+            # governance:" candidate would beat the real 58K CG report; the
+            # substantive score promotes the real one.
+            scored.sort(
+                key=lambda t: (_cg_substantive_score(md, t[1]["char_offset"], t[2]), t[0]),
+                reverse=True,
+            )
+        elif canonical == "mdna":
+            # MD&A-specific tie-break: prefer candidates whose body actually
+            # contains MD&A subject matter (Industry Overview, Operating
+            # Performance, Outlook, Segment Performance) over forward-reference
+            # blurbs and TOC entries. POLICYBZR FY25 has the real 27K MD&A
+            # block first; substantive scoring + largest-wins both pick it.
+            scored.sort(
+                key=lambda t: (_mdna_substantive_score(md, t[1]["char_offset"], t[2]), t[0]),
+                reverse=True,
+            )
+        elif canonical in ("chairman_letter", "ceo_letter"):
+            # Chairman/CEO-specific tie-break: prefer candidates whose body
+            # contains real letter prose (Dear Shareholders, the year under
+            # review, signatory clauses) over IR-correspondence sections
+            # labelled "Chairman Communique" (VEDL FY25) or glossary/TOC
+            # entries that happen to share keywords.
+            scored.sort(
+                key=lambda t: (
+                    _chairman_substantive_score(md, t[1]["char_offset"], t[2]),
+                    t[0],
+                ),
                 reverse=True,
             )
         else:
@@ -425,31 +705,80 @@ def _iar_substantive_score(md: str, char_start: int, char_end: int) -> int:
     return len(set(m.group(1).lower() for m in _IAR_SUBSTANCE_RE.finditer(window)))
 
 
+def _cg_substantive_score(md: str, char_start: int, char_end: int) -> int:
+    """Distinct CG-substance markers within the first 30KB of the slice.
+
+    Real Corporate Governance Report sections contain 4-7 of: Audit Committee,
+    Nomination & Remuneration, Stakeholders Relationship, Risk Management
+    Committee, CSR Committee, Board Evaluation, Independent Director,
+    Composition of the Board, Familiarisation Programme, Whistle Blower,
+    Related Party Transaction. Tangential candidates (ESG-governance prose,
+    NYSE compliance certificate, photo captions) hit 0-1.
+    """
+    window_end = min(char_start + _CG_SUBSTANCE_WINDOW, char_end)
+    window = md[char_start:window_end]
+    return len(set(m.group(1).lower() for m in _CG_SUBSTANCE_RE.finditer(window)))
+
+
+def _mdna_substantive_score(md: str, char_start: int, char_end: int) -> int:
+    """Distinct MD&A-substance markers within the first 30KB of the slice.
+
+    Real MD&A bodies contain 3+ of: Industry Overview / Structure, Operating
+    Performance, Outlook, Risks and Concerns, Internal Control Systems, Key
+    Financial Ratios, Segment Performance. TOC entries and forward-reference
+    blurbs hit 0.
+    """
+    window_end = min(char_start + _MDNA_SUBSTANCE_WINDOW, char_end)
+    window = md[char_start:window_end]
+    return len(set(m.group(1).lower() for m in _MDNA_SUBSTANCE_RE.finditer(window)))
+
+
+def _chairman_substantive_score(md: str, char_start: int, char_end: int) -> int:
+    """Distinct chairman-letter substance markers within the first 12KB.
+
+    Real chairman / CEO letters contain 2-4 of: 'Dear Shareholders',
+    'the year under review', 'I am pleased', 'looking ahead', 'during the
+    year', 'yours sincerely', signatory clauses. IR-correspondence sections
+    labelled 'Chairman Communique' (VEDL FY25) hit 0.
+    """
+    window_end = min(char_start + _CHAIRMAN_SUBSTANCE_WINDOW, char_end)
+    window = md[char_start:window_end]
+    return len(set(m.group(1).lower() for m in _CHAIRMAN_SUBSTANCE_RE.finditer(window)))
+
+
 def _find_section_end(
     md: str,
     headings: list[dict],
     h: dict,
     canonical: str | None = None,
     all_compiled: dict[str, list[re.Pattern]] | None = None,
+    running_headers: set[str] | None = None,
 ) -> int:
     """Return char offset where this section ends.
 
     Default: start of next same-or-higher-level heading (works for most
     sections that nest sub-headings cleanly under their own opener).
 
-    Special case for `auditor_report`: the IAR opener is L2 in most ARs
-    but the IAR body itself fans out into many L2 sub-headings (Opinion,
-    Basis for Opinion, Key Audit Matters, Other Information, …) so the
-    default rule over-cuts the section to the first sub-heading. Instead,
-    end at the first downstream heading that EITHER:
+    Special cases for `auditor_report`, `mdna`, `corporate_governance`:
+    these sections each contain many L2 sub-headings of their own (the IAR
+    has Opinion / KAMs; MD&A has Industry Overview / Outlook; CG has Audit
+    Committee / NRC) so the default rule over-cuts to the first sub-heading.
+    Instead, end at the first downstream heading that EITHER:
       - matches a financial-statements anchor (Balance Sheet, P&L, Cash
-        Flow, Statement of Changes in Equity) — this is what follows the
-        IAR in every Indian AR, OR
-      - matches a DIFFERENT canonical section (BRSR, Corporate Governance,
-        etc.) — for layouts where the IAR is followed by another report.
+        Flow, Statement of Changes in Equity) — what typically follows
+        these reports, OR
+      - matches a DIFFERENT canonical section (skipping running-header
+        repeats — ICICIBANK FY25 has BOARD'S REPORT 48x as a page running
+        header which would otherwise truncate CG to 615 chars).
     Falls back to default behaviour if neither anchor is found.
     """
     h_idx = headings.index(h)
+    running_headers = running_headers or set()
+
+    def _is_running_header(text: str) -> bool:
+        norm = re.sub(r"\s+", " ", _norm_html_entities(text).strip().lower())
+        return norm in running_headers
+
     if canonical == "auditor_report":
         for fwd in headings[h_idx + 1:]:
             text = fwd["text"]
@@ -465,6 +794,31 @@ def _find_section_end(
                         if other == "auditor_report":
                             continue
                         return fwd["char_offset"]
+        return len(md)
+
+    if canonical in ("mdna", "corporate_governance", "chairman_letter", "ceo_letter"):
+        is_letter = canonical in ("chairman_letter", "ceo_letter")
+        for fwd in headings[h_idx + 1:]:
+            text = _norm_html_entities(fwd["text"])
+            if _MDNA_CG_END_RE.search(text):
+                return fwd["char_offset"]
+            if is_letter and _LETTER_END_RE.search(text):
+                return fwd["char_offset"]
+            if all_compiled is not None:
+                hit = None
+                for other, other_rxs in all_compiled.items():
+                    if other == canonical:
+                        continue
+                    if any(rx.search(text) for rx in other_rxs):
+                        hit = other
+                        break
+                if hit is not None:
+                    # Skip page-running-header repeats (ICICIBANK BOARD'S
+                    # REPORT 48x). A single repeat would otherwise prematurely
+                    # truncate the section.
+                    if _is_running_header(fwd["text"]):
+                        continue
+                    return fwd["char_offset"]
         return len(md)
 
     end = len(md)

@@ -1562,16 +1562,22 @@ def _get_ownership_section(api, symbol, section, args):
     elif section == "mf_conviction":
         return api.get_mf_conviction(symbol)
     elif section == "adr_gdr":
-        # E7: ADR/GDR outstanding. Returns stubbed structure today; live
-        # numbers will flow once AR share-capital note extraction is wired.
+        # Wave 5 P2: live XBRL CustodianOrDRHolder + manual-seed table.
         return api.get_adr_gdr(symbol)
+    elif section == "public_breakdown":
+        # Wave 5 P2: Retail / HNI / Bodies Corporate / NRI sub-cats inside
+        # the Public bucket, plus FPI Cat-I/II inside the FII bucket.
+        return api.get_public_breakdown(symbol, args.get("quarters", 4))
+    elif section == "esop":
+        # Wave 5 P2: ESOP pool size + per-plan detail from AR Schedule III.
+        return api.get_esop_summary(symbol, args.get("fiscal_years", 5))
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_ownership",
-    "Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | 'adr_gdr'. shareholder_detail returns top-20 named holders (pivoted per-holder, >=1% latest quarter) with holder_type in {FII, DII, Promoter, Public}. adr_gdr surfaces ADR/GDR outstanding (stubbed today — returns listed_on + nullable counts for known US/UK-listed Indian names; pending AR extraction wiring). Heavy sections are capped (mf_holdings top 30 by value + tail summary) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter).",
+    "Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries, public-breakdown brief (retail/HNI/bodies-corporate/NRI), and ESOP brief — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | 'adr_gdr' | 'public_breakdown' | 'esop'. shareholder_detail returns top-20 named holders (pivoted per-holder, >=1% latest quarter) with holder_type in {FII, DII, Promoter, Public}. adr_gdr surfaces ADR/GDR outstanding live from XBRL CustodianOrDRHolder context (definitive — no scraping needed) with manual-seed override + AR-notes fallback. public_breakdown drills into the Public bucket with retail/HNI/bodies-corporate/NRI sub-cats, FPI Cat-I/II breakdown, and ADR/GDR-attributable foreign holding (Wave 5 P2). esop returns ESOP pool size + per-plan detail from AR Schedule III disclosure (critical for new-economy dilution analysis). Heavy sections are capped (mf_holdings top 30 by value + tail summary) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter), fiscal_years (default 5, for esop).",
     {"symbol": str, "section": str},
     annotations=READ_ONLY,
 )
@@ -1607,6 +1613,8 @@ async def get_ownership(args):
                     "promoter_pledge": api.get_promoter_pledge(symbol),
                     "mf_conviction": api.get_mf_conviction(symbol),
                     "adr_gdr": api.get_adr_gdr(symbol),
+                    "public_breakdown": api.get_public_breakdown(symbol, args.get("quarters", 4)),
+                    "esop": api.get_esop_summary(symbol, args.get("fiscal_years", 5)),
                 }
             else:
                 data = _get_ownership_section(api, symbol, section, args)

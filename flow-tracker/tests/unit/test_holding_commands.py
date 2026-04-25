@@ -120,9 +120,12 @@ class TestFetchCommand:
         monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
 
         client_inner = MagicMock()
-        client_inner.fetch_latest_quarters.return_value = (
+        # Wave 5 P2: holding_commands.fetch now uses fetch_latest_quarters_full
+        # (3-tuple — records, pledges, breakdowns).
+        client_inner.fetch_latest_quarters_full.return_value = (
             _sample_records("SBIN"),
             _sample_pledges("SBIN"),
+            [],  # no breakdowns in this fixture
         )
         with patch(
             "flowtracker.holding_commands.NSEHoldingClient",
@@ -131,7 +134,7 @@ class TestFetchCommand:
             result = runner.invoke(app, ["holding", "fetch", "--symbol", "sbin", "--quarters", "4"])
 
         assert result.exit_code == 0, result.output
-        client_inner.fetch_latest_quarters.assert_called_once_with("SBIN", 4)
+        client_inner.fetch_latest_quarters_full.assert_called_once_with("SBIN", 4)
 
         # The records should have been persisted via store.upsert_shareholding.
         with FlowStore(db_path=tmp_db) as s:
@@ -148,9 +151,9 @@ class TestFetchCommand:
             s.add_to_watchlist("HDFCBANK")
 
         client_inner = MagicMock()
-        client_inner.fetch_latest_quarters.side_effect = [
-            (_sample_records("RELIANCE"), []),
-            (_sample_records("HDFCBANK"), []),
+        client_inner.fetch_latest_quarters_full.side_effect = [
+            (_sample_records("RELIANCE"), [], []),
+            (_sample_records("HDFCBANK"), [], []),
         ]
         with patch(
             "flowtracker.holding_commands.NSEHoldingClient",
@@ -159,7 +162,7 @@ class TestFetchCommand:
             result = runner.invoke(app, ["holding", "fetch"])
 
         assert result.exit_code == 0, result.output
-        called_syms = [c.args[0] for c in client_inner.fetch_latest_quarters.call_args_list]
+        called_syms = [c.args[0] for c in client_inner.fetch_latest_quarters_full.call_args_list]
         assert set(called_syms) == {"RELIANCE", "HDFCBANK"}
 
     def test_fetch_empty_watchlist_exits_1(self, tmp_db: Path, store: FlowStore, monkeypatch):
@@ -174,7 +177,7 @@ class TestFetchCommand:
         monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
 
         client_inner = MagicMock()
-        client_inner.fetch_latest_quarters.side_effect = NSEHoldingError("boom")
+        client_inner.fetch_latest_quarters_full.side_effect = NSEHoldingError("boom")
         with patch(
             "flowtracker.holding_commands.NSEHoldingClient",
             return_value=_cm_mock(client_inner),
@@ -189,7 +192,7 @@ class TestFetchCommand:
         monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
 
         client_inner = MagicMock()
-        client_inner.fetch_latest_quarters.return_value = ([], [])
+        client_inner.fetch_latest_quarters_full.return_value = ([], [], [])
         with patch(
             "flowtracker.holding_commands.NSEHoldingClient",
             return_value=_cm_mock(client_inner),
