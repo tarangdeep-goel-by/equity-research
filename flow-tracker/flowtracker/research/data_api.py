@@ -848,13 +848,38 @@ class ResearchDataAPI:
         y, m = int(curr_month[:4]), int(curr_month[5:7])
         prev_month = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
 
-        # Build lookup by scheme for previous month
-        prev_rows = self._store._conn.execute(
-            "SELECT * FROM mf_scheme_holdings "
-            "WHERE UPPER(stock_name) LIKE ? AND month = ? "
-            "ORDER BY market_value_cr DESC",
-            (f"%{symbol}%", prev_month),
-        ).fetchall()
+        # Build lookup by scheme for previous month.
+        # Match prev rows on the SAME stock_name/isin set the current month
+        # produced — `get_mf_stock_holdings(symbol)` resolves NSE symbols
+        # (e.g. HDFCBANK) to AMFI stock_names (e.g. "HDFC Bank Ltd.") via
+        # index_constituents. Reusing `f"%{symbol}%"` here would silently
+        # miss the prior month for any symbol whose AMFI name does not
+        # contain the NSE ticker substring (HDFCBANK, TCS, SUNPHARMA, VEDL,
+        # etc.), tagging every scheme as `new_entry` with prev_count=0.
+        # Match on union of ISINs ∪ stock_names so an exited-scheme row that
+        # historically carried a different ISIN (rare but seen in the wild)
+        # still surfaces, while ISIN-matched rows handle the common case
+        # where AMFI's stock_name does not contain the NSE ticker substring.
+        isins = {r.isin for r in current if getattr(r, "isin", None)}
+        stock_names = {r.stock_name for r in current if getattr(r, "stock_name", None)}
+        clauses: list[str] = []
+        params: list = []
+        if isins:
+            clauses.append(f"isin IN ({','.join('?' * len(isins))})")
+            params.extend(isins)
+        if stock_names:
+            clauses.append(f"stock_name IN ({','.join('?' * len(stock_names))})")
+            params.extend(stock_names)
+        if clauses:
+            params.append(prev_month)
+            prev_rows = self._store._conn.execute(
+                f"SELECT * FROM mf_scheme_holdings "
+                f"WHERE ({' OR '.join(clauses)}) AND month = ? "
+                f"ORDER BY market_value_cr DESC",
+                params,
+            ).fetchall()
+        else:
+            prev_rows = []
         prev_by_scheme = {r["scheme_name"]: r for r in prev_rows}
 
         changes = []
@@ -1009,11 +1034,38 @@ class ResearchDataAPI:
         if curr_month:
             y, m = int(curr_month[:4]), int(curr_month[5:7])
             prev_month = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
-            prev_rows = self._store._conn.execute(
-                "SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
-                "WHERE UPPER(stock_name) LIKE ? AND month = ?",
-                (f"%{symbol}%", prev_month),
-            ).fetchone()
+            # Match prev-month on the resolved isin/stock_name from `current`
+            # (not `f"%{symbol}%"`) — see get_mf_holding_changes for rationale.
+            # Using the LIKE on the raw NSE ticker silently returned 0 for
+            # HDFCBANK / TCS / SUNPHARMA / VEDL whose AMFI stock_names don't
+            # contain the ticker substring.
+            isins = {
+                (r.isin if hasattr(r, "isin") else r.get("isin"))
+                for r in current
+                if (r.isin if hasattr(r, "isin") else r.get("isin"))
+            }
+            stock_names = {
+                (r.stock_name if hasattr(r, "stock_name") else r.get("stock_name"))
+                for r in current
+                if (r.stock_name if hasattr(r, "stock_name") else r.get("stock_name"))
+            }
+            clauses: list[str] = []
+            params: list = []
+            if isins:
+                clauses.append(f"isin IN ({','.join('?' * len(isins))})")
+                params.extend(isins)
+            if stock_names:
+                clauses.append(f"stock_name IN ({','.join('?' * len(stock_names))})")
+                params.extend(stock_names)
+            if clauses:
+                params.append(prev_month)
+                prev_rows = self._store._conn.execute(
+                    f"SELECT COUNT(DISTINCT scheme_name) as cnt FROM mf_scheme_holdings "
+                    f"WHERE ({' OR '.join(clauses)}) AND month = ?",
+                    params,
+                ).fetchone()
+            else:
+                prev_rows = None
             prev_count = prev_rows[0] if prev_rows else 0
 
         scheme_count = len(schemes)
@@ -1172,7 +1224,7 @@ class ResearchDataAPI:
             {"key": "quarterly_cash_flow",     "size": "small", "purpose": "8Q CF (empty for banks + many NSE listed)"},
             {"key": "expense_breakdown",       "size": "med",   "purpose": "Line items (R&D, employee, material, other) — drill for R&D / pharma / 'Other Cost' decomposition"},
             {"key": "growth_rates",            "size": "small", "purpose": "TTM revenue/PAT growth %"},
-            {"key": "capital_allocation",      "size": "small", "purpose": "5Y dividend, buyback, capex, net-debt trajectory"},
+            {"key": "capital_allocation",      "size": "small", "purpose": "5Y dividend, buyback, capex, net-debt trajectory; FCF = CFO - capex (per_year_fcf + cumulative.fcf)"},
             {"key": "rate_sensitivity",        "size": "small", "purpose": "BFSI only — asset-liability repricing sensitivity"},
             {"key": "cagr_table",              "size": "small", "purpose": "Pre-computed 1/3/5/10Y CAGRs (Revenue, EBITDA, NI, EPS, FCF) + trajectory class"},
             {"key": "cost_structure",          "size": "med",   "purpose": "Material/employee/other as % of revenue — explains margin moves"},
@@ -1769,13 +1821,33 @@ class ResearchDataAPI:
     # --- Macro Context ---
 
     def get_macro_snapshot(self) -> dict:
-        """Current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec."""
-        row = self._store._conn.execute(
-            "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 1"
-        ).fetchone()
-        if row:
-            return _clean(dict(row))
-        return {}
+        """Current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec.
+
+        Coalesces field-by-field across the most recent 7 rows so that a
+        partially-populated today-row (e.g. only USD/INR fetched mid-day)
+        falls forward to the most recent prior value for any null field.
+        The top-level ``date`` is the latest row's date; per-field
+        ``<field>_as_of`` records the source date when it differs.
+        """
+        rows = self._store._conn.execute(
+            "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 7"
+        ).fetchall()
+        if not rows:
+            return {}
+        latest_date = rows[0]["date"]
+        result: dict = {"date": latest_date}
+        keys = set(rows[0].keys())
+        for field in ("india_vix", "usd_inr", "brent_crude", "gsec_10y"):
+            if field not in keys:
+                continue
+            for row in rows:
+                v = row[field]
+                if v is not None:
+                    result[field] = v
+                    if row["date"] != latest_date:
+                        result[f"{field}_as_of"] = row["date"]
+                    break
+        return _clean(result)
 
     def get_fii_dii_streak(self) -> dict:
         """Current FII/DII buying/selling streak."""
@@ -1792,7 +1864,12 @@ class ResearchDataAPI:
         return _clean([r.model_dump() for r in rows])
 
     def get_commodity_snapshot(self) -> dict:
-        """Current commodity prices with 1M/3M/1Y changes."""
+        """Current commodity prices with 1M/3M/1Y changes.
+
+        Includes gold, silver (USD + INR variants from commodity_prices) and
+        Brent crude (sourced from macro_daily.brent_crude). Brent carries
+        forward across the most recent rows when the latest row is null.
+        """
         result = {}
         for commodity in ("GOLD", "GOLD_INR", "SILVER", "SILVER_INR"):
             prices = self._store.get_commodity_prices(commodity, days=400)
@@ -1820,7 +1897,33 @@ class ResearchDataAPI:
                 "change_1y_pct": _change(252),
             }
 
-        return result if result else {"available": False, "reason": "No commodity data"}
+        # Brent crude from macro_daily — surface as a commodity entry.
+        # Use only non-null brent_crude rows so 1M/3M/1Y deltas are computed
+        # against actual prices, and the latest entry carries forward when
+        # today's row is partial.
+        brent_rows = self._store._conn.execute(
+            "SELECT date, brent_crude FROM macro_daily "
+            "WHERE brent_crude IS NOT NULL ORDER BY date ASC"
+        ).fetchall()
+        brent_data = [(r["date"], r["brent_crude"]) for r in brent_rows]
+        if brent_data:
+            latest_brent = brent_data[-1][1]
+
+            def _brent_change(days_ago: int, _data=brent_data, _latest=latest_brent) -> float | None:
+                target_idx = max(0, len(_data) - days_ago)
+                if target_idx < len(_data) and _data[target_idx][1]:
+                    return round((_latest - _data[target_idx][1]) / _data[target_idx][1] * 100, 1)
+                return None
+
+            result["brent"] = {
+                "price": latest_brent,
+                "date": brent_data[-1][0],
+                "change_1m_pct": _brent_change(22),
+                "change_3m_pct": _brent_change(66),
+                "change_1y_pct": _brent_change(252),
+            }
+
+        return _clean(result) if result else {"available": False, "reason": "No commodity data"}
 
     # --- Filings ---
 
@@ -1987,22 +2090,92 @@ class ResearchDataAPI:
 
         Invoked when Yahoo peers are empty or sector-mismatched. Keeps the
         same return schema so agents don't need to special-case the path.
+
+        Two enrichment fixes vs. the prior implementation:
+
+        (1) When a Screener peer's `company_snapshot` is missing or has
+            empty market_cap_cr (common for small-cap peers Screener
+            recommends but we don't track), fall back to the peer_comparison
+            row's own `market_cap` field. Without this, conglomerate peers
+            uniformly returned mcap=0 and looked like microcaps.
+
+        (2) Filter the peer set to the subject's industry where possible.
+            Screener's peer recommendation API is itself sector-noisy for
+            conglomerates (HINDUNILVR's recommended peers include a sugar
+            mill and a chemicals company; VEDL's include specialty
+            chemicals). We keep peers whose industry matches the subject,
+            and surface a `peer_quality_warning` when we drop the count
+            below 2.
         """
         screener_rows = self._store.get_peers(symbol) or []
-        peer_symbols = [r["peer_symbol"] for r in screener_rows if r.get("peer_symbol")]
+        screener_by_sym = {
+            r["peer_symbol"]: r for r in screener_rows if r.get("peer_symbol")
+        }
+        peer_symbols = list(screener_by_sym.keys())
         peer_snapshots = (
             self._store.get_company_snapshots(peer_symbols) if peer_symbols else []
         )
-        for snap in peer_snapshots:
+        snap_by_sym = {s["symbol"]: dict(s) for s in peer_snapshots}
+
+        # Enrich every Screener peer — even those without a company_snapshot
+        # row — using the peer_comparison row as the data source of last
+        # resort. Subject's own row is excluded (already in `subject`).
+        enriched: list[dict] = []
+        for sym in peer_symbols:
+            if sym == symbol:
+                continue
+            screener = screener_by_sym.get(sym, {})
+            snap = snap_by_sym.get(sym, {"symbol": sym})
+            # Backfill mcap from peer_comparison.market_cap when snapshot is
+            # missing or zero. Screener stores market_cap in Cr already.
+            if not snap.get("market_cap_cr") and screener.get("market_cap"):
+                snap["market_cap_cr"] = screener["market_cap"]
+            # Backfill name + PE + ROCE from screener row when snapshot is
+            # entirely synthetic.
+            if not snap.get("name") and screener.get("peer_name"):
+                snap["name"] = screener["peer_name"]
+            if not snap.get("pe_trailing") and screener.get("pe"):
+                snap["pe_trailing"] = screener["pe"]
             snap["screener_fallback"] = True
             snap["yahoo_score"] = None
-        return {
+            enriched.append(snap)
+
+        # Industry filter: keep peers whose industry matches the subject's.
+        # Skip the filter when subject industry is unknown (can't validate).
+        subject_industry = (subject.get("industry") or "").strip().lower()
+        warnings: list[str] = []
+        if subject_industry and enriched:
+            matched = [
+                p for p in enriched
+                if (p.get("industry") or "").strip().lower() == subject_industry
+            ]
+            if len(matched) >= 2:
+                # Drop sector-mismatched peers if we still have ≥2 left
+                dropped = len(enriched) - len(matched)
+                if dropped > 0:
+                    warnings.append(
+                        f"Filtered out {dropped} sector-mismatched peer(s) "
+                        f"from Screener recommendation"
+                    )
+                enriched = matched
+            else:
+                # Not enough sector-matched peers — keep all but warn
+                warnings.append(
+                    "Screener peer set is sector-noisy and "
+                    "subject industry is underrepresented; treat peer "
+                    "comparisons with caution"
+                )
+
+        result: dict = {
             "subject": _clean(subject),
-            "peers": _clean(peer_snapshots),
-            "peer_count": len(peer_snapshots),
+            "peers": _clean(enriched),
+            "peer_count": len(enriched),
             "source": "screener_fallback",
             "fallback_reason": reason,
         }
+        if warnings:
+            result["peer_quality_warning"] = warnings
+        return result
 
     def get_screener_peers(self, symbol: str) -> list[dict]:
         """Screener.in-recommended peers from peer_comparison table.
@@ -2041,11 +2214,32 @@ class ResearchDataAPI:
         individual DII/LIC holdings are 3-5% and would otherwise crowd the
         entire top_n): reserve up to min(5, #FII_holders) slots for FII, then
         fill remaining slots globally by latest_pct desc.
+
+        Aggregate-FII fallback: when Screener's per-name FII feed surfaces
+        zero named foreign holders (TCS pattern — every individual FII is
+        below the 1% disclosure threshold) but the BSE shareholding pattern
+        reports a non-zero aggregate FII stake, we emit a single synthetic
+        row of holder_type='FII' named 'Aggregate FII (no individuals
+        disclosed at >=1%)' carrying the aggregate FII percentage. This
+        prevents the agent from concluding the stock has zero foreign
+        ownership when the aggregate disagrees. Only fires when classification
+        is None or 'foreign_institutions' and #FII_named == 0.
         """
         rows = self._store.get_shareholder_details(symbol, classification)
         pivoted = self._pivot_shareholder_rows(rows)
         if min_latest_pct is not None and min_latest_pct > 0:
             pivoted = [h for h in pivoted if (h.get("latest_pct") or 0) >= min_latest_pct]
+
+        # Aggregate-FII fallback (TCS pattern). Only emit when caller hasn't
+        # filtered to a non-FII classification, and when no named FII rows
+        # cleared the disclosure threshold.
+        if classification in (None, "foreign_institutions"):
+            has_named_fii = any(h.get("holder_type") == "FII" for h in pivoted)
+            if not has_named_fii:
+                synthetic = self._synthetic_aggregate_fii_row(symbol)
+                if synthetic is not None:
+                    pivoted.append(synthetic)
+
         pivoted.sort(key=lambda h: h.get("latest_pct") or 0.0, reverse=True)
         if top_n is None or len(pivoted) <= top_n:
             return pivoted
@@ -2131,6 +2325,54 @@ class ResearchDataAPI:
             entry["latest_pct"] = qtrs[latest_q]
             result.append(entry)
         return result
+
+    def _synthetic_aggregate_fii_row(self, symbol: str) -> dict | None:
+        """Build a placeholder FII row from BSE aggregate when no named FIIs disclosed.
+
+        Some symbols (TCS pattern) have a non-trivial aggregate FII stake
+        (e.g., 10.37%) but no individual foreign holder above the 1% disclosure
+        threshold, so Screener's `/investors/foreign_institutions/` endpoint
+        returns an empty list. Without this fallback, agents would conclude
+        the stock has zero foreign ownership — directly contradicting the
+        aggregate. We synthesize ONE row carrying the aggregate so the FII
+        bucket isn't silently dropped from the report.
+
+        Returns None when:
+          * shareholding table has no rows for this symbol, OR
+          * latest aggregate FII percentage is None / <= 0
+        """
+        sym = symbol.upper()
+        try:
+            row = self._store._conn.execute(
+                "SELECT quarter_end, percentage FROM shareholding "
+                "WHERE symbol = ? AND category = 'FII' "
+                "ORDER BY quarter_end DESC LIMIT 1",
+                (sym,),
+            ).fetchone()
+        except Exception:
+            return None
+        if not row:
+            return None
+        pct = row["percentage"] if hasattr(row, "keys") else row[1]
+        if pct is None or pct <= 0:
+            return None
+        quarter_end = row["quarter_end"] if hasattr(row, "keys") else row[0]
+        # Convert "2025-12-31" -> "Dec 2025" to match the per-name quarter format.
+        try:
+            from datetime import datetime as _dt
+            qtr_label = _dt.strptime(quarter_end, "%Y-%m-%d").strftime("%b %Y")
+        except Exception:
+            qtr_label = quarter_end or ""
+        return {
+            "name": "Aggregate FII (no individuals disclosed at >=1%)",
+            "classification": "foreign_institutions",
+            "holder_type": "FII",
+            "latest_pct": float(pct),
+            "latest_quarter": qtr_label,
+            "quarters": {qtr_label: float(pct)},
+            "is_aggregate": True,
+            "source": "shareholding_pattern_aggregate",
+        }
 
     # ------------------------------------------------------------------
     # E7 — ADR / GDR outstanding (stub)
@@ -2558,11 +2800,106 @@ class ResearchDataAPI:
         rows = self._store.get_fmp_dcf_history(symbol, limit=10)
         return _clean([r.model_dump() for r in rows])
 
+    def get_fno_metrics(self, symbol: str) -> dict | None:
+        """F&O derivatives metrics for the latest trading day with data.
+
+        Returns aggregate open interest by instrument leg, put-call ratio
+        (PCR), and rollover percentage (next-expiry OI share of the
+        current+next pair, computed only when ≥2 future expiries exist).
+
+        None when no F&O contracts are on file for the symbol.
+        """
+        conn = self._store._conn
+        row = conn.execute(
+            "SELECT MAX(trade_date) AS max_date FROM fno_contracts WHERE symbol = ?",
+            (symbol,),
+        ).fetchone()
+        if not row or not row["max_date"]:
+            return None
+        latest = row["max_date"]
+
+        aggs = conn.execute(
+            """
+            SELECT instrument, option_type,
+                   SUM(open_interest) AS total_oi,
+                   SUM(change_in_oi)  AS oi_change
+            FROM fno_contracts
+            WHERE symbol = ? AND trade_date = ?
+            GROUP BY instrument, option_type
+            """,
+            (symbol, latest),
+        ).fetchall()
+        if not aggs:
+            return None
+
+        futures_oi = futures_oi_change = 0
+        call_oi = call_oi_change = 0
+        put_oi = put_oi_change = 0
+        for a in aggs:
+            instr = a["instrument"]
+            opt = a["option_type"]
+            oi = a["total_oi"] or 0
+            chg = a["oi_change"] or 0
+            if instr in ("FUTSTK", "FUTIDX"):
+                futures_oi += oi
+                futures_oi_change += chg
+            elif instr in ("OPTSTK", "OPTIDX") and opt == "CE":
+                call_oi += oi
+                call_oi_change += chg
+            elif instr in ("OPTSTK", "OPTIDX") and opt == "PE":
+                put_oi += oi
+                put_oi_change += chg
+
+        pcr = round(put_oi / call_oi, 3) if call_oi > 0 else None
+
+        # Rollover %: share of next-month future OI in the (current + next) pair.
+        # Convention: as expiry approaches, rollover trend = next/(curr+next).
+        expiries = conn.execute(
+            """
+            SELECT expiry_date, SUM(open_interest) AS oi
+            FROM fno_contracts
+            WHERE symbol = ? AND trade_date = ?
+              AND instrument IN ('FUTSTK', 'FUTIDX')
+            GROUP BY expiry_date
+            ORDER BY expiry_date ASC
+            """,
+            (symbol, latest),
+        ).fetchall()
+        rollover_pct = None
+        if len(expiries) >= 2:
+            cur_oi = expiries[0]["oi"] or 0
+            nxt_oi = expiries[1]["oi"] or 0
+            if (cur_oi + nxt_oi) > 0:
+                rollover_pct = round(nxt_oi / (cur_oi + nxt_oi) * 100, 1)
+
+        return {
+            "date": latest,
+            "futures_oi": futures_oi,
+            "futures_oi_change": futures_oi_change,
+            "call_oi": call_oi,
+            "call_oi_change": call_oi_change,
+            "put_oi": put_oi,
+            "put_oi_change": put_oi_change,
+            "pcr": pcr,
+            "rollover_pct": rollover_pct,
+            "total_oi": futures_oi + call_oi + put_oi,
+        }
+
     def get_technical_indicators(self, symbol: str) -> list[dict]:
-        """Latest RSI, MACD, SMA-50, SMA-200, ADX. FMP primary, yfinance fallback."""
+        """Latest RSI, MACD, SMA-50, SMA-200, ADX (FMP primary, yfinance fallback).
+
+        Augments the indicator row with F&O fields (PCR, futures/call/put OI,
+        rollover %) when F&O contracts exist for the symbol — required for
+        F&O-listed stocks per the technical-agent prompt.
+        """
+        fno = self.get_fno_metrics(symbol)
+
         rows = self._store.get_fmp_technical_indicators(symbol)
         if rows:
-            return _clean([r.model_dump() for r in rows])
+            out = [r.model_dump() for r in rows]
+            if fno and out:
+                out[0] = {**out[0], "fno": fno}
+            return _clean(out)
 
         # Fallback: compute basic technicals from daily_stock_data (bhavcopy).
         # Use adj_close — SMA-50/SMA-200/RSI-14 over 200 days are directly
@@ -2617,6 +2954,9 @@ class ResearchDataAPI:
             else:
                 result["sma_cross"] = "golden_cross"
                 result["sma_cross_note"] = "SMA50 above SMA200 — bullish trend signal (golden cross)"
+
+        if fno:
+            result["fno"] = fno
 
         return [result] if result else []
 
@@ -6049,6 +6389,18 @@ class ResearchDataAPI:
         - Cash as % of market cap
         - Payout ratio trend
         - Cash yield (dividends / market cap)
+
+        FCF formula (canonical, also used by get_fcf_yield):
+            capex_t = (NetBlock_t - NetBlock_{t-1})
+                    + (CWIP_t   - CWIP_{t-1})
+                    + Depreciation_t        # PP&E additions, derived from BS deltas
+            FCF_t   = CFO_t - capex_t
+
+        Both per-year FCF (`per_year_fcf`) and the cumulative figure
+        (`cumulative.fcf`) are returned explicitly so agents do not have to
+        re-derive FCF from `cumulative.cfo - cumulative.net_capex` (which
+        could otherwise drift from `get_fcf_yield` / `get_cash_flow`-derived
+        FCF and cause definitional inconsistency in the report).
         """
         annual = self.get_annual_financials(symbol, years=years + 1)
         if len(annual) < 2:
@@ -6080,9 +6432,12 @@ class ResearchDataAPI:
                 "payout_ratio_pct": payout_ratio,
             })
 
-        # Capex: delta_Net_Block + delta_CWIP + Depreciation
+        # Capex: delta_Net_Block + delta_CWIP + Depreciation. Same formula
+        # used in get_fcf_yield — keep them in lockstep so FCF figures
+        # reconcile between capital_allocation and fcf_yield endpoints.
         total_gross_capex = 0
         total_divestments = 0
+        per_year_fcf: list[dict] = []
         for i, d in enumerate(data):
             if i + 1 < len(annual):  # need previous year for delta
                 prev = annual[i + 1]  # data is sorted most recent first
@@ -6096,7 +6451,18 @@ class ResearchDataAPI:
                     total_gross_capex += net_capex
                 else:
                     total_divestments += abs(net_capex)
+                cfo_y = d.get("cfo", 0) or 0
+                fcf_y = cfo_y - net_capex
+                per_year_fcf.append({
+                    "fiscal_year": d.get("fiscal_year_end", ""),
+                    "cfo": round(cfo_y, 2),
+                    "capex": round(net_capex, 2),
+                    "fcf": round(fcf_y, 2),
+                })
         total_capex = total_gross_capex - total_divestments
+        # Cumulative FCF: sum of per-year (CFO - capex) — only across years
+        # for which a previous-year row exists (i.e., capex computable).
+        total_fcf = sum(y["fcf"] for y in per_year_fcf)
 
         # Cash position (cash_and_bank + investments for companies holding cash in MFs/FDs)
         latest = data[0]
@@ -6122,16 +6488,20 @@ class ResearchDataAPI:
         result = {
             "symbol": symbol,
             "years_analyzed": len(data),
+            "fcf_formula": "FCF = CFO - capex; capex = delta(NetBlock) + delta(CWIP) + Depreciation",
             "cumulative": {
                 "cfo": round(total_cfo, 2),
                 "gross_capex": round(total_gross_capex, 2),
                 "divestments": round(total_divestments, 2),
                 "net_capex": round(total_capex, 2),
+                "fcf": round(total_fcf, 2),
                 "dividends": round(total_dividends, 2),
                 "residual_cash_acquisitions": round(residual, 2),
                 "capex_pct_of_cfo": round(total_gross_capex / total_cfo * 100, 1) if total_cfo > 0 else None,
                 "dividends_pct_of_cfo": round(total_dividends / total_cfo * 100, 1) if total_cfo > 0 else None,
+                "fcf_pct_of_cfo": round(total_fcf / total_cfo * 100, 1) if total_cfo > 0 else None,
             },
+            "per_year_fcf": per_year_fcf,
             "cash_position": {
                 "cash_and_bank": round(cash_bank, 2),
                 "investments": round(investments, 2),

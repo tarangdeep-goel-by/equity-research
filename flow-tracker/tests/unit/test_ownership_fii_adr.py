@@ -183,6 +183,96 @@ def test_shareholder_detail_sorted_by_latest_pct(api_with_fii):
     )
 
 
+def test_aggregate_fii_synthetic_row_when_no_individuals_disclosed(
+    tmp_db, monkeypatch
+):
+    """TCS pattern: aggregate FII = 10.37% but no named FII >= 1% threshold.
+
+    Pre-fix, get_shareholder_detail returned ZERO FII rows for TCS even
+    though shareholding (BSE pattern) shows 10.37% aggregate FII. Agents
+    would then incorrectly conclude TCS has no foreign ownership.
+
+    Fix: when no FII row clears the disclosure threshold AND aggregate FII
+    in the shareholding table is non-zero, synthesize one placeholder row
+    of holder_type='FII' with the aggregate %.
+    """
+    monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+    store = FlowStore(db_path=tmp_db)
+
+    # Seed only DII + Promoter named holders (mimics TCS Screener feed).
+    store.upsert_shareholder_details(
+        "TCS_T",
+        {
+            "promoters": [
+                {"name": "Tata Sons Private Limited",
+                 "values": {"Sep 2025": "71.74"}, "url": ""},
+            ],
+            "domestic_institutions": [
+                {"name": "LIC of India",
+                 "values": {"Sep 2025": "5.02"}, "url": ""},
+            ],
+            # No foreign_institutions entries — simulates Screener returning
+            # an empty FII list because each individual FII is below 1%.
+        },
+    )
+
+    # Seed BSE aggregate shareholding with FII = 10.37% for the latest quarter.
+    conn = store._conn
+    for cat, pct in [
+        ("Promoter", 71.77),
+        ("FII", 10.37),
+        ("DII", 12.87),
+        ("Public", 4.99),
+    ]:
+        conn.execute(
+            "INSERT INTO shareholding (symbol, quarter_end, category, percentage) "
+            "VALUES (?, ?, ?, ?)",
+            ("TCS_T", "2025-12-31", cat, pct),
+        )
+    conn.commit()
+    store.close()
+
+    api = ResearchDataAPI()
+    try:
+        rows = api.get_shareholder_detail("TCS_T")
+        fii_rows = [r for r in rows if r.get("holder_type") == "FII"]
+        assert len(fii_rows) == 1, (
+            "Expected exactly one synthetic FII aggregate row when no "
+            f"named FIIs are disclosed; got {len(fii_rows)}: "
+            f"{[r['name'] for r in fii_rows]}"
+        )
+        agg = fii_rows[0]
+        assert agg.get("is_aggregate") is True
+        assert agg.get("latest_pct") == pytest.approx(10.37, abs=0.01)
+        assert "no individuals" in agg["name"].lower()
+        # Must show up in the latest-quarter format ("Dec 2025"), not raw
+        # ISO date — keeps the schema consistent with named holders.
+        assert agg.get("latest_quarter") == "Dec 2025"
+    finally:
+        api.close()
+
+
+def test_aggregate_fii_fallback_skipped_when_named_fii_present(api_with_fii):
+    """When named FIIs already cleared the threshold, do NOT synthesize.
+
+    BHARTI_T has 2 named FIIs above 1% — the synthetic row would be noise.
+    """
+    rows = api_with_fii.get_shareholder_detail("BHARTI_T")
+    aggregates = [r for r in rows if r.get("is_aggregate")]
+    assert aggregates == [], (
+        f"Synthetic aggregate row should NOT appear when named FIIs are "
+        f"disclosed; got {[r['name'] for r in aggregates]}"
+    )
+
+
+def test_aggregate_fii_fallback_skipped_when_no_aggregate_data(api_empty):
+    """Symbol with no shareholding rows + no FII names returns empty list,
+    not a synthetic row built from None.
+    """
+    rows = api_empty.get_shareholder_detail("UNKNOWN_T")
+    assert rows == [], f"Expected empty list, got {rows}"
+
+
 # ---------------------------------------------------------------------------
 # E7 — ADR/GDR sub-section
 # ---------------------------------------------------------------------------

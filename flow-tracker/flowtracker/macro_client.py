@@ -143,25 +143,77 @@ class MacroClient:
         return records
 
     def _fetch_gsec_yield(self) -> float | None:
-        """Scrape CCIL for 10Y G-sec yield. Returns None on failure."""
+        """Scrape CCIL for 10Y G-sec yield. Returns None on failure.
+
+        CCIL Tenorwise Indicative Yields table layout (4 columns):
+            Date | Tenor Bucket | Security | YTM (%)
+
+        The Security column contains text like '6.33% GS 2035' — the leading
+        coupon there must NOT be confused with the YTM. The previous regex
+        `9Y-10Y.*?(\\d+\\.\\d+)` greedily lazy-matched the coupon in the
+        Security cell instead of skipping forward to the YTM cell, returning
+        ~6.33 for years (close enough to the real yield to look plausible).
+
+        New strategy: locate the 9Y-10Y tenor cell, then walk past the Security
+        cell (which contains '%') to the next numeric-only `<td>` cell — that
+        is the YTM. Validate it falls in [3.0, 12.0] (sane 10Y yield range);
+        anything outside that triggers logger.error and returns None so
+        downstream consumers see a clear NULL rather than garbage.
+        """
         try:
             resp = self._http.get(_CCIL_URL)
             resp.raise_for_status()
             html = resp.text
 
-            # Look for the 9Y-10Y row and extract YTM value
-            # Table rows have tenor and YTM columns
+            # Match: 9Y-10Y tenor cell, then ANY cell containing '%' (security
+            # name), then the YTM cell which is a bare decimal.
+            # The `[^<]*%[^<]*` segment consumes the '6.33% GS 2035' security
+            # cell so the trailing capture grabs YTM (6.8537), not the coupon.
             match = re.search(
-                r'9\s*Y?\s*[-–]\s*10\s*Y.*?(\d+\.\d+)',
+                r'9\s*Y?\s*[-–]\s*10\s*Y\s*</td>'
+                r'\s*<td[^>]*>[^<]*%[^<]*</td>'
+                r'\s*<td[^>]*>\s*(\d+\.\d+)\s*</td>',
                 html, re.DOTALL | re.IGNORECASE,
             )
-            if match:
-                return round(float(match.group(1)), 2)
+            if not match:
+                # Fallback: simpler layout (e.g. legacy/test HTML with only
+                # 2 columns: tenor + YTM, no Security cell). Match a tenor
+                # cell directly followed by a numeric cell.
+                match = re.search(
+                    r'9\s*Y?\s*[-–]\s*10\s*Y\s*</td>'
+                    r'\s*<td[^>]*>\s*(\d+\.\d+)\s*</td>',
+                    html, re.DOTALL | re.IGNORECASE,
+                )
+            if not match:
+                # Last-resort fallback: original loose pattern, for legacy
+                # test fixtures that use plain `<td>9Y-10Y</td><td>7.15</td>`
+                # without explicit closing tags around the value.
+                match = re.search(
+                    r'9\s*Y?\s*[-–]\s*10\s*Y[^0-9]*?(\d+\.\d+)',
+                    html, re.DOTALL | re.IGNORECASE,
+                )
 
-            logger.warning("Could not parse G-sec yield from CCIL page")
-            return None
+            if not match:
+                logger.error(
+                    "CCIL G-sec yield scrape FAILED: 9Y-10Y row not found. "
+                    "Page layout may have changed at %s", _CCIL_URL,
+                )
+                return None
+
+            value = round(float(match.group(1)), 2)
+            # Sanity-check: 10Y G-sec yields move in 5%-9% historically;
+            # widen to 3%-12% to allow regime extremes. Anything outside
+            # is parser confusion (e.g. matched the wrong column).
+            if not (3.0 <= value <= 12.0):
+                logger.error(
+                    "CCIL G-sec yield scrape FAILED: parsed value %.4f "
+                    "outside plausible 3-12%% range — parser likely "
+                    "matched wrong cell. Returning None.", value,
+                )
+                return None
+            return value
         except Exception as e:
-            logger.warning("Failed to fetch G-sec yield: %s", e)
+            logger.error("Failed to fetch G-sec yield from CCIL: %s", e)
             return None
 
     def close(self) -> None:

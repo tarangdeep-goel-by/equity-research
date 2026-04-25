@@ -259,6 +259,45 @@ class TestEarningHistoryFallback:
         # zero-surprise
         assert surprises[1].surprise_pct == 0.0
 
+    def test_earning_history_quarter_as_index(self):
+        """Real yfinance returns quarter as DatetimeIndex named 'quarter', NOT a column.
+
+        Regression test for universal `quarter_end=''` bug: row.get('quarter') returns
+        nothing because quarter is the DataFrame index, not a column.
+        """
+        import pandas as pd  # noqa: WPS433
+
+        mock_ticker = MagicMock()
+        type(mock_ticker).quarterly_earnings = property(
+            lambda self: (_ for _ in ()).throw(AttributeError("no qe"))
+        )
+        # Mirror real yfinance: DatetimeIndex named "quarter", no quarter column
+        eh = pd.DataFrame(
+            {
+                "epsActual": [10.6828, 12.1805, 30.2163],
+                "epsEstimate": [9.91103, 10.82174, 51.08],
+                "epsDifference": [0.77, 1.36, -20.86],
+                "surprisePercent": [0.0779, 0.1256, -0.4085],
+            },
+            index=pd.DatetimeIndex(
+                ["2025-03-31", "2025-06-30", "2025-12-31"], name="quarter"
+            ),
+        )
+        mock_ticker.get_earnings_history.return_value = eh
+
+        with patch("flowtracker.estimates_client.yf.Ticker", return_value=mock_ticker):
+            client = EstimatesClient()
+            surprises = client.fetch_surprises("HINDUNILVR")
+
+        assert len(surprises) == 3
+        # quarter_end MUST be populated as YYYY-MM-DD (the quarter the EPS represents)
+        assert surprises[0].quarter_end == "2025-03-31"
+        assert surprises[1].quarter_end == "2025-06-30"
+        assert surprises[2].quarter_end == "2025-12-31"
+        # quarter_end never empty/None for any row (universal invariant)
+        for s in surprises:
+            assert s.quarter_end, f"quarter_end empty for {s!r}"
+
     def test_earning_history_handles_zero_estimate(self):
         """estimate == 0 → division branch skipped, surprise_pct stays None."""
         mock_ticker = MagicMock()

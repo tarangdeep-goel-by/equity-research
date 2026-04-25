@@ -210,6 +210,70 @@ class TestMacroSnapshot:
         assert "india_vix" in data
         assert "usd_inr" in data
 
+    def test_carries_forward_partial_today_row(self, tmp_db, monkeypatch):
+        """Today's row has only usd_inr; vix/brent/gsec must carry forward
+        from yesterday's complete row, while top-level ``date`` stays today.
+        """
+        from flowtracker.macro_models import MacroSnapshot
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        store = FlowStore(db_path=tmp_db)
+        store.upsert_macro_snapshots([
+            MacroSnapshot(
+                date="2026-04-24",
+                india_vix=19.71,
+                usd_inr=94.11,
+                brent_crude=99.78,
+                gsec_10y=6.40,
+            ),
+            MacroSnapshot(
+                date="2026-04-25",
+                india_vix=None,
+                usd_inr=94.22,
+                brent_crude=None,
+                gsec_10y=None,
+            ),
+        ])
+        store.close()
+
+        api = ResearchDataAPI()
+        try:
+            data = api.get_macro_snapshot()
+        finally:
+            api.close()
+
+        # Top-level date is today's date (latest row).
+        assert data["date"] == "2026-04-25"
+        # usd_inr from today's row.
+        assert data["usd_inr"] == 94.22
+        # Other fields carried forward from 2026-04-24.
+        assert data["india_vix"] == 19.71
+        assert data["brent_crude"] == 99.78
+        assert data["gsec_10y"] == 6.40
+        # ``<field>_as_of`` records the source date when it differs.
+        assert data["india_vix_as_of"] == "2026-04-24"
+        assert data["brent_crude_as_of"] == "2026-04-24"
+        assert data["gsec_10y_as_of"] == "2026-04-24"
+        # No as_of marker for today-sourced field.
+        assert "usd_inr_as_of" not in data
+
+
+class TestCommoditySnapshot:
+    def test_includes_brent(self, api: ResearchDataAPI):
+        """Brent crude (from macro_daily.brent_crude) must be exposed
+        alongside gold/silver with the same delta shape.
+        """
+        data = api.get_commodity_snapshot()
+        assert isinstance(data, dict)
+        assert "brent" in data
+        brent = data["brent"]
+        assert "price" in brent
+        assert "date" in brent
+        assert "change_1m_pct" in brent
+        assert "change_3m_pct" in brent
+        assert "change_1y_pct" in brent
+        assert isinstance(brent["price"], (int, float))
+
 
 class TestFiiDiiStreak:
     def test_returns_dict_with_fii_dii_keys(self, api: ResearchDataAPI):
@@ -254,6 +318,65 @@ class TestTechnicalIndicators:
         assert isinstance(data, list)
         assert len(data) > 0
         assert "indicator" in data[0]
+
+
+class TestFnoMetrics:
+    """get_fno_metrics aggregates fno_contracts into PCR + rollover + OI legs."""
+
+    def _seed(self, store, symbol: str, trade_date: str = "2026-04-24") -> None:
+        from flowtracker.fno_models import FnoContract
+        from datetime import date
+
+        td = date.fromisoformat(trade_date)
+        cur_exp = date.fromisoformat("2026-04-30")
+        nxt_exp = date.fromisoformat("2026-05-28")
+
+        rows: list[FnoContract] = [
+            # Two future expiries: current 100 OI, next 50 OI → rollover = 50/(100+50) = 33.3%
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="FUTSTK",
+                expiry_date=cur_exp, open_interest=100, change_in_oi=10,
+            ),
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="FUTSTK",
+                expiry_date=nxt_exp, open_interest=50, change_in_oi=5,
+            ),
+            # Calls 200, Puts 100 → PCR = 0.5
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="OPTSTK",
+                expiry_date=cur_exp, strike=500.0, option_type="CE",
+                open_interest=200, change_in_oi=-20,
+            ),
+            FnoContract(
+                trade_date=td, symbol=symbol, instrument="OPTSTK",
+                expiry_date=cur_exp, strike=500.0, option_type="PE",
+                open_interest=100, change_in_oi=15,
+            ),
+        ]
+        store.upsert_fno_contracts(rows)
+
+    def test_returns_none_when_no_fno_data(self, api: ResearchDataAPI):
+        assert api.get_fno_metrics("UNKNOWNSYM") is None
+
+    def test_pcr_and_rollover_aggregation(self, api: ResearchDataAPI):
+        self._seed(api._store, "FNOTEST")
+        m = api.get_fno_metrics("FNOTEST")
+        assert m is not None
+        assert m["futures_oi"] == 150
+        assert m["call_oi"] == 200
+        assert m["put_oi"] == 100
+        assert m["pcr"] == 0.5
+        # Rollover %: next/(curr+next) = 50/150 = 33.3%
+        assert m["rollover_pct"] == 33.3
+
+    def test_technical_indicators_includes_fno_when_present(
+        self, api: ResearchDataAPI,
+    ):
+        self._seed(api._store, "SBIN")
+        rows = api.get_technical_indicators("SBIN")
+        assert rows
+        assert "fno" in rows[0]
+        assert rows[0]["fno"]["pcr"] == 0.5
 
 
 class TestDupontDecomposition:

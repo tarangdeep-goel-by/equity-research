@@ -53,9 +53,28 @@ AR_SECTIONS: dict[str, list[str]] = {
         r"enterprise\s+risk\s+management",
     ],
     "auditor_report": [
-        r"independent\s+auditor'?s?\s+report",
-        r"auditor'?s?\s+report",
-        r"report\s+of\s+the\s+(independent\s+)?auditor",
+        # Canonical IAR opener variants. Order matters only inside
+        # `_AUDITOR_EXCLUDE_RE` (below) which subtracts Annexure-A headings
+        # from the candidate set.
+        # `auditor'?s?'?` matches all four possessive variants:
+        #   - `Auditor` (no possessive)            — apostrophe and s both absent
+        #   - `Auditor's` (singular possessive)    — apostrophe BEFORE s
+        #   - `Auditors` (no possessive plural)    — s without apostrophe
+        #   - `Auditors'` (plural possessive)      — apostrophe AFTER s
+        # The earlier `auditor'?s?` regex missed `Auditors'` (plural-possessive,
+        # used by joint-statutory-auditor layouts like SBIN FY25). The
+        # alternate fix `auditors?'?` would have missed `Auditor's`. The
+        # symmetrical form below covers all four.
+        r"independent\s+auditor'?s?'?\s+report",
+        r"auditor'?s?'?\s+report",
+        r"report\s+of\s+the\s+(independent\s+)?auditor'?s?'?",
+        # Indian banks / NBFCs / large issuers: Docling often emits the
+        # IAR body without an explicit "Independent Auditor's Report"
+        # heading; the actual section opener is "Report on Audit of the
+        # [Standalone|Consolidated] Financial Statements" (HDFCBANK FY25,
+        # SBIN FY25, etc.). The trailing entity name (e.g. "OF STATE BANK
+        # OF INDIA") is fine — `re.search` matches anywhere in the heading.
+        r"report\s+on\s+(the\s+)?audit\s+of\s+the\s+(standalone|consolidated)\s+financial\s+statements",
     ],
     "corporate_governance": [
         r"corporate\s+governance(\s+report)?",
@@ -93,6 +112,64 @@ AR_SECTIONS: dict[str, list[str]] = {
         r"share[\s-]?based\s+payments?\s+disclosure",
     ],
 }
+
+
+# Headings that look like they match `auditor_report` but are actually
+# *sub-sections* of the IAR (CARO / Internal Financial Controls report)
+# OR an unrelated assurance report (BRSR sustainability assurance).
+# These must NOT be picked as the section start — the real IAR body lives
+# elsewhere and a sub-section heading would yield a tiny header-only slice
+# (HDFCBANK FY25: 239 chars instead of ~40KB).
+#
+# Patterns:
+#   1. "Annexure [A|'A'|1|...] to/of (the) (Independent) Auditor['s|s'] Report"
+#      — CARO 2020 / Internal Financial Controls reports. Letter token now
+#      accepts quoted variants like 'A' (SBIN FY25 heading).
+#   2. "Independent Practitioner's Reasonable Assurance Report ..." —
+#      ESG / BRSR sustainability assurance issued by the auditor firm but
+#      NOT the statutory IAR. HDFCLIFE FY25 BRSR-only filing has this as
+#      the only audit-shaped heading; mistaking it for the IAR would route
+#      a sustainability-assurance opinion into auditor_report.
+#   3. "Independent Auditor's Report on the Internal Financial Controls" —
+#      the IFC sub-report which sometimes appears as a separate top-level
+#      heading rather than as "Annexure X" (HINDUNILVR FY25).
+_AUDITOR_EXCLUDE_RE = re.compile(
+    r"annexure\s+['\"]?[a-z0-9]+['\"]?\s+(to|of)\s+(the\s+)?(independent\s+)?auditor'?s?'?"
+    r"|independent\s+practitioner",
+    re.IGNORECASE,
+)
+
+# Headings that mark the end of the auditor_report section. The IAR body
+# is normally followed by the audited financial statements (Balance Sheet,
+# Profit and Loss, Cash Flow). The IAR itself contains many L2 sub-headings
+# (Opinion, Basis for Opinion, Key Audit Matters, …) so the default
+# same-or-higher-level end heuristic over-cuts the section. For
+# `auditor_report` we instead end at the next financial-statements anchor
+# or the next OTHER canonical-section heading, whichever comes first.
+#
+# Layout extensions covered:
+#   - "Statement of Cash Flow(s)" — both singular and plural (HINDUNILVR
+#     FY25 uses the plural form).
+#   - "STANDALONE FINANCIALS" / "CONSOLIDATED FINANCIALS" — Indian-bank
+#     section divider that introduces the financial schedules block (SBIN
+#     FY25). Without this, the IAR slice spans into the schedules pages.
+#   - "Schedule N - <name>" / standalone "Schedules" — banking-layout
+#     numbered schedule headings that come right after the IAR (SBIN FY25).
+#   - "<Bank Name> Schedules forming part of …" — caption that introduces
+#     the schedules block in some bank layouts.
+_AUDITOR_END_RE = re.compile(
+    r"^(\s*)("
+    r"(consolidated|standalone)?\s*balance\s+sheet"
+    r"|(consolidated|standalone)?\s*statement\s+of\s+(the\s+)?profit\s+(and|&)\s+loss"
+    r"|(consolidated|standalone)?\s*profit\s+(and|&)\s+loss\s+(account|statement)"
+    r"|(consolidated|standalone)?\s*statement\s+of\s+cash\s+flows?"
+    r"|(consolidated|standalone)?\s*cash\s+flow\s+statement"
+    r"|statement\s+of\s+changes\s+in\s+equity"
+    r"|(standalone|consolidated)\s+financials?\b"
+    r"|schedule\s+\d+"
+    r")",
+    re.IGNORECASE,
+)
 
 
 # Minimum size for a heading-based section match to be trusted without fallback.
@@ -137,6 +214,13 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
         text = h["text"]
         for canonical, regexes in compiled.items():
             if any(rx.search(text) for rx in regexes):
+                # Exclude Annexure A / B / etc. sub-sections of the IAR from
+                # being picked as the auditor_report section start — they're
+                # sub-sections (CARO / Internal Financial Controls report),
+                # not the main IAR body.
+                if canonical == "auditor_report" and _AUDITOR_EXCLUDE_RE.search(text):
+                    matched_heading_ids.add(h["char_offset"])
+                    break
                 candidates.setdefault(canonical, []).append(h)
                 matched_heading_ids.add(h["char_offset"])
                 break  # one canonical per heading
@@ -153,10 +237,23 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
     for canonical, hits in candidates.items():
         scored = []
         for h in hits:
-            end = _find_section_end(md, headings, h)
+            end = _find_section_end(md, headings, h, canonical=canonical, all_compiled=compiled)
             scored.append((end - h["char_offset"], h, end))
-        # Largest section wins (real header has more content than a forward reference).
-        scored.sort(key=lambda t: t[0], reverse=True)
+        if canonical == "auditor_report":
+            # IAR-specific scoring: prefer candidates whose body looks like
+            # the real IAR (contains Opinion + Basis for Opinion + Key Audit
+            # Matters within the first ~3KB) over candidates whose body is
+            # an Annexure list of subsidiaries / running-header repeat.
+            # Without this rule, SBIN FY25 picks a 88K "Independent Auditors'
+            # Report" → "Annexure A: List of entities consolidated" slice
+            # (zero KAMs, zero Opinion) over the 12.7K real IAR slice.
+            scored.sort(
+                key=lambda t: (_iar_substantive_score(md, t[1]["char_offset"], t[2]), t[0]),
+                reverse=True,
+            )
+        else:
+            # Largest section wins (real header has more content than a forward reference).
+            scored.sort(key=lambda t: t[0], reverse=True)
         size, h, end = scored[0]
         entry = {
             "char_start": h["char_offset"],
@@ -290,10 +387,87 @@ def _body_text_fallback(
     return best
 
 
-def _find_section_end(md: str, headings: list[dict], h: dict) -> int:
-    """Return char offset where this section ends — start of next same-or-higher-level heading."""
-    end = len(md)
+# IAR-substance markers — phrases the real IAR body contains within its
+# first few KB but an Annexure-list / running-header-repeat slice does not.
+# Used by `_iar_substantive_score` to demote candidates whose body is an
+# Annexure list of subsidiaries (SBIN FY25 problem case).
+_IAR_SUBSTANCE_RE = re.compile(
+    r"\b("
+    r"basis\s+for\s+opinion"
+    r"|key\s+audit\s+matter"
+    r"|emphasis\s+of\s+matter"
+    r"|going\s+concern"
+    r"|in\s+our\s+opinion"
+    r"|we\s+have\s+audited"
+    r"|true\s+and\s+fair\s+view"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Window size for the substance check — first ~6 KB of the candidate slice.
+# Large enough that a real IAR's "Basis for Opinion" / "Key Audit Matters"
+# headings fall inside (they're typically within 2-4 KB of the start), but
+# small enough that the score won't be inflated by stray late-section matches.
+_IAR_SUBSTANCE_WINDOW = 6_000
+
+
+def _iar_substantive_score(md: str, char_start: int, char_end: int) -> int:
+    """Return a coarse score of how IAR-substantive a candidate slice is.
+
+    Counts distinct substance markers in the first 6KB of the slice. Real
+    IAR bodies hit 3-5 markers (Opinion / Basis for Opinion / KAMs / true
+    and fair view); Annexure-list slices hit 0. Used to break ties when
+    multiple "Independent Auditor['s|s'] Report" headings exist (running-
+    header pollution + actual IAR header).
+    """
+    window_end = min(char_start + _IAR_SUBSTANCE_WINDOW, char_end)
+    window = md[char_start:window_end]
+    return len(set(m.group(1).lower() for m in _IAR_SUBSTANCE_RE.finditer(window)))
+
+
+def _find_section_end(
+    md: str,
+    headings: list[dict],
+    h: dict,
+    canonical: str | None = None,
+    all_compiled: dict[str, list[re.Pattern]] | None = None,
+) -> int:
+    """Return char offset where this section ends.
+
+    Default: start of next same-or-higher-level heading (works for most
+    sections that nest sub-headings cleanly under their own opener).
+
+    Special case for `auditor_report`: the IAR opener is L2 in most ARs
+    but the IAR body itself fans out into many L2 sub-headings (Opinion,
+    Basis for Opinion, Key Audit Matters, Other Information, …) so the
+    default rule over-cuts the section to the first sub-heading. Instead,
+    end at the first downstream heading that EITHER:
+      - matches a financial-statements anchor (Balance Sheet, P&L, Cash
+        Flow, Statement of Changes in Equity) — this is what follows the
+        IAR in every Indian AR, OR
+      - matches a DIFFERENT canonical section (BRSR, Corporate Governance,
+        etc.) — for layouts where the IAR is followed by another report.
+    Falls back to default behaviour if neither anchor is found.
+    """
     h_idx = headings.index(h)
+    if canonical == "auditor_report":
+        for fwd in headings[h_idx + 1:]:
+            text = fwd["text"]
+            if _AUDITOR_END_RE.search(text):
+                return fwd["char_offset"]
+            if all_compiled is not None:
+                for other, other_rxs in all_compiled.items():
+                    if other == canonical:
+                        continue
+                    if any(rx.search(text) for rx in other_rxs):
+                        # Skip Annexure-A-style sub-headings — they're not
+                        # "other sections", they're part of the IAR.
+                        if other == "auditor_report":
+                            continue
+                        return fwd["char_offset"]
+        return len(md)
+
+    end = len(md)
     for fwd in headings[h_idx + 1:]:
         if fwd["level"] <= h["level"]:
             end = fwd["char_offset"]

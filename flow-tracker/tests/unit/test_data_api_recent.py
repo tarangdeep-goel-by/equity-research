@@ -496,6 +496,67 @@ class TestCapitalAllocation:
         result = api.get_capital_allocation("NONEXIST")
         assert "error" in result
 
+    def test_fcf_formula_explicit_and_reconciles_with_fcf_yield(
+        self, tmp_db, monkeypatch
+    ):
+        """FCF = CFO - capex must be explicitly returned in capital_allocation,
+        and the latest-year value must reconcile exactly with get_fcf_yield's
+        FCF — same formula, same answer.
+
+        Regression: pre-fix `capital_allocation` exposed only `cfo` and
+        `net_capex`, forcing agents to recompute FCF. The recomputed value
+        could drift from `get_fcf_yield` (which uses the same balance-sheet-
+        delta capex formula) when the agent picked a different capex source
+        (e.g. yfinance quarterly capex), yielding two FCF figures in one
+        report — caught by the NYKAA Gemini grader.
+        """
+        from flowtracker.fund_models import AnnualFinancials
+        from flowtracker.store import FlowStore
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        store = FlowStore(db_path=tmp_db)
+        # Two consecutive years — minimal data for capex delta + FCF.
+        # Net block growth + depreciation define capex; cfo is given directly.
+        rows = [
+            AnnualFinancials(
+                symbol="NYKA_T", fiscal_year_end="2025-03-31",
+                revenue=8000.0, net_income=80.0,
+                cfo=466.63, cfi=-205.43,
+                net_block=834.82, cwip=36.74, depreciation=266.40,
+                dividend_amount=0.0,
+            ),
+            AnnualFinancials(
+                symbol="NYKA_T", fiscal_year_end="2024-03-31",
+                revenue=7000.0, net_income=10.0,
+                cfo=0.25, cfi=-10.11,
+                net_block=668.16, cwip=29.78, depreciation=224.23,
+                dividend_amount=0.0,
+            ),
+        ]
+        for r in rows:
+            store.upsert_annual_financials([r])
+        store.close()
+
+        api = ResearchDataAPI()
+        try:
+            ca = api.get_capital_allocation("NYKA_T", years=5)
+            assert "fcf_formula" in ca, "capital_allocation must document FCF formula"
+            assert "fcf" in ca["cumulative"], "cumulative.fcf must be present"
+            assert "per_year_fcf" in ca, "per_year_fcf must be present"
+            assert len(ca["per_year_fcf"]) >= 1
+            # capex_2025 = (834.82 - 668.16) + (36.74 - 29.78) + 266.40 = 440.02
+            # fcf_2025 = 466.63 - 440.02 = 26.61
+            latest = ca["per_year_fcf"][0]
+            assert latest["fiscal_year"] == "2025-03-31"
+            assert latest["capex"] == pytest.approx(440.02, abs=0.05)
+            assert latest["fcf"] == pytest.approx(26.61, abs=0.05)
+            # Cumulative FCF == sum of per-year FCFs
+            assert ca["cumulative"]["fcf"] == pytest.approx(
+                sum(y["fcf"] for y in ca["per_year_fcf"]), abs=0.05
+            )
+        finally:
+            api.close()
+
 
 # ---------------------------------------------------------------------------
 # Capex cycle
@@ -1653,6 +1714,56 @@ class TestMFHoldingChanges:
                 assert r["change_type"] in (
                     "increased", "decreased", "unchanged", "new_entry", "exited",
                 )
+
+    def test_prev_month_matches_when_symbol_not_in_stock_name(self, api):
+        """Regression: NSE ticker (e.g. SBIN) is not a substring of the AMFI
+        stock_name ("State Bank of India"). The prev-month diff query
+        previously used `LIKE '%{symbol}%'` and silently returned 0 prior
+        holdings, causing every scheme to be flagged as `new_entry` (the
+        HDFCBANK / TCS / SUNPHARMA / VEDL pipeline-artifact bug).
+
+        The seed fixture puts SBI Bluechip Fund in BOTH 2026-01 and 2026-02
+        for SBIN (qty 4.5M -> 5M), so it MUST classify as `increased`, not
+        `new_entry`. If the prev-month lookup is broken, this test fails.
+        """
+        result = api.get_mf_holding_changes("SBIN")
+        rows = [r for r in result if not r.get("_is_tail_summary")]
+        # The bug: every scheme tagged 'new_entry'.
+        types = {r["change_type"] for r in rows}
+        assert "new_entry" not in types or len(types) > 1, (
+            f"All schemes flagged as new_entry — prev-month lookup broken. "
+            f"Rows: {[(r['scheme_name'], r['change_type']) for r in rows]}"
+        )
+        # SBI Bluechip Fund holds SBIN in both 2026-01 and 2026-02 (qty up)
+        # so it must be classified as 'increased'.
+        bluechip = next(
+            (r for r in rows if r["scheme_name"] == "SBI Bluechip Fund"),
+            None,
+        )
+        assert bluechip is not None, "SBI Bluechip Fund missing from results"
+        assert bluechip["change_type"] == "increased", (
+            f"SBI Bluechip Fund prev-qty should be matched (4.5M -> 5M), "
+            f"got change_type={bluechip['change_type']}, "
+            f"prev_quantity={bluechip.get('prev_quantity')}"
+        )
+        assert bluechip.get("prev_quantity") == 4500000
+
+
+class TestMFConvictionPrevMonth:
+    def test_prev_month_schemes_nonzero_when_symbol_not_in_stock_name(self, api):
+        """Regression: get_mf_conviction's prev_month_schemes used the same
+        broken `LIKE '%{symbol}%'` query, returning 0 for HDFCBANK/TCS/etc.
+        and producing scheme_change == schemes_holding (a fake "all new"
+        signal). With the seed fixture (SBI Bluechip in both months),
+        prev_month_schemes for SBIN must be >= 1.
+        """
+        result = api.get_mf_conviction("SBIN")
+        assert result.get("available") is True
+        assert result.get("prev_month_schemes", 0) >= 1, (
+            f"prev_month_schemes should be >= 1 (SBI Bluechip Fund holds "
+            f"SBIN in 2026-01), got {result.get('prev_month_schemes')}. "
+            f"Symbol-vs-stock_name resolution likely broken."
+        )
 
 
 # ---------------------------------------------------------------------------
