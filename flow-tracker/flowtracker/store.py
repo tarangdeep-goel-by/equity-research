@@ -1185,7 +1185,17 @@ class FlowStore:
         self._conn.commit()
 
     def _migrate_historical_states(self) -> None:
-        """Add Part 1.5 columns (listed_days, is_backfilled) to historical_states."""
+        """Add evolved columns to historical_states.
+
+        - Part 1.5: ``listed_days``, ``is_backfilled``.
+        - PR-12 (issue #4): ``industry_as_of_date`` + ``industry_source`` so
+          consumers can tell whether the ``industry`` field reflects a true
+          historical classification (``"historical"``) or a current-fallback
+          proxy (``"current_fallback"``). Re-classified tickers (e.g. SBIN)
+          previously had cohorts compared against today's industry rather
+          than the industry at the row's quarter — the source flag exposes
+          that drift instead of pretending it isn't there.
+        """
         existing = {
             row[1] for row in
             self._conn.execute("PRAGMA table_info(historical_states)").fetchall()
@@ -1193,6 +1203,8 @@ class FlowStore:
         for col_name, col_type in [
             ("listed_days", "INTEGER"),
             ("is_backfilled", "INTEGER NOT NULL DEFAULT 0"),
+            ("industry_as_of_date", "TEXT"),
+            ("industry_source", "TEXT"),
         ]:
             if col_name not in existing:
                 self._conn.execute(

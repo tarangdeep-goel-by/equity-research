@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from datetime import date, timedelta
@@ -65,6 +66,7 @@ def upsert_feature_row(store: FlowStore, symbol: str, qtr: str, vec: dict) -> No
         "price_vs_sma200", "delivery_pct_6m", "rsi_14",
         "industry", "mcap_bucket",
         "listed_days", "is_backfilled",
+        "industry_as_of_date", "industry_source",
     )
     values = tuple(vec.get(c) if c not in ("symbol", "quarter_end") else None for c in cols)
     values = (symbol, qtr) + values[2:]
@@ -97,9 +99,20 @@ def upsert_returns_row(store: FlowStore, symbol: str, qtr: str, rets: dict) -> N
     )
 
 
-def materialize(store: FlowStore, only_symbol: str | None, years: int) -> dict:
+def materialize(
+    store: FlowStore, only_symbol: str | None, years: int,
+    as_of: date | None = None,
+) -> dict:
+    """Materialize feature + return rows up through ``as_of`` (default: today).
+
+    Passing ``as_of`` ensures the quarter-end walk halts at the backtest
+    horizon AND that ``compute_feature_vector`` / ``compute_forward_returns``
+    don't peek beyond it. Without this, ``FLOWTRACK_AS_OF=2024-12-31``
+    correctly anchored agent prompts (PR #80) but materialization still
+    contaminated the cohort with wall-clock data.
+    """
     symbols = target_symbols(store, only_symbol)
-    qtrs = quarter_ends(years)
+    qtrs = quarter_ends(years, end_date=as_of)
     print(
         f"Materializing {len(symbols)} symbols × {len(qtrs)} quarter-ends = "
         f"~{len(symbols) * len(qtrs):,} feature rows", flush=True,
@@ -148,15 +161,36 @@ def materialize(store: FlowStore, only_symbol: str | None, years: int) -> dict:
     }
 
 
+def _resolve_as_of(cli_value: str | None) -> date:
+    """Resolve the materialization horizon: CLI flag > env var > today.
+
+    Surfaces a clear ``ValueError`` for malformed inputs from either source
+    rather than silently falling back, so a typo in a backtest doesn't
+    quietly run against wall-clock.
+    """
+    if cli_value:
+        return date.fromisoformat(cli_value)
+    env_val = os.environ.get("FLOWTRACK_AS_OF")
+    if env_val:
+        return date.fromisoformat(env_val)
+    return date.today()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--symbol", help="Run for one symbol")
     parser.add_argument("--years", type=int, default=10, help="Years of history (default 10)")
+    parser.add_argument(
+        "--as-of", dest="as_of", default=None,
+        help="ISO date YYYY-MM-DD; falls back to FLOWTRACK_AS_OF env var, then today.",
+    )
     args = parser.parse_args()
+
+    as_of = _resolve_as_of(args.as_of)
 
     store = FlowStore()
     try:
-        stats = materialize(store, args.symbol, args.years)
+        stats = materialize(store, args.symbol, args.years, as_of=as_of)
         print(
             f"\n✓ Done in {stats['elapsed_sec']:.1f}s: "
             f"{stats['symbols']} symbols, {stats['feature_rows']:,} feature rows, "

@@ -499,6 +499,8 @@
       'fii_delta_2q',
       'fii_pct',
       'industry',
+      'industry_as_of_date',
+      'industry_source',
       'is_backfilled',
       'listed_days',
       'mcap_bucket',

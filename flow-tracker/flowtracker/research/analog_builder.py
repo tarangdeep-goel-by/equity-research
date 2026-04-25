@@ -212,15 +212,45 @@ def _delivery_pct_6m(store: FlowStore, symbol: str, as_of: str) -> float | None:
     return round(row["avg_dp"], 2) if row and row["avg_dp"] is not None else None
 
 
-def _industry(store: FlowStore, symbol: str) -> str | None:
-    """Current industry from index_constituents. Point-in-time industry
-    history isn't tracked; current is a reasonable proxy."""
+def _industry_with_source(
+    store: FlowStore, symbol: str, as_of_date: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Industry classification + provenance flag for ``symbol`` at ``as_of_date``.
+
+    Returns a ``(industry, source)`` tuple where ``source`` is one of:
+      - ``"current_fallback"`` — current industry from ``index_constituents`` used
+        because no point-in-time history is available. The norm today.
+      - ``"historical"`` — sourced from a true historical classification (e.g.
+        Screener archive); reserved for when that backfill lands.
+
+    ``as_of_date`` is currently a placeholder (the fallback returns the present
+    industry regardless), but kept in the signature so callers can pass the
+    quarter end and so a future historical lookup is a one-line swap inside
+    this function. Returns ``(None, None)`` when the symbol isn't in
+    ``index_constituents`` at all.
+    """
     row = store._conn.execute(
         "SELECT industry FROM index_constituents "
         "WHERE symbol = ? AND industry IS NOT NULL LIMIT 1",
         (symbol.upper(),),
     ).fetchone()
-    return row["industry"] if row else None
+    if not row:
+        return None, None
+    # TODO(historical-industry-backfill): when a Screener-archive backfill of
+    # per-quarter industry exists, query it here and return source="historical".
+    _ = as_of_date  # parameter reserved for future point-in-time lookup
+    return row["industry"], "current_fallback"
+
+
+def _industry(store: FlowStore, symbol: str) -> str | None:
+    """Backward-compat wrapper: returns just the industry string.
+
+    Prefer ``_industry_with_source`` in new code so the source flag is
+    propagated to callers (and ultimately to the ``industry_source`` column
+    on ``historical_states``).
+    """
+    industry, _ = _industry_with_source(store, symbol, None)
+    return industry
 
 
 def _mcap_bucket(store: FlowStore, symbol: str, as_of: str) -> str | None:
@@ -322,6 +352,8 @@ def compute_feature_vector(store: FlowStore, symbol: str, as_of_date: str) -> di
         and roce_3yr_delta is not None
     )
 
+    industry, industry_source = _industry_with_source(store, symbol, as_of_date)
+
     return {
         "pe_trailing": _pe_trailing_at(store, symbol, as_of_date),
         "pe_percentile_10y": _pe_percentile(store, symbol, as_of_date),
@@ -338,10 +370,18 @@ def compute_feature_vector(store: FlowStore, symbol: str, as_of_date: str) -> di
         "price_vs_sma200": _price_vs_sma200(store, symbol, as_of_date),
         "delivery_pct_6m": _delivery_pct_6m(store, symbol, as_of_date),
         "rsi_14": _rsi_14(store, symbol, as_of_date),
-        "industry": _industry(store, symbol),
+        "industry": industry,
         "mcap_bucket": _mcap_bucket(store, symbol, as_of_date),
         "listed_days": listed_days,
         "is_backfilled": is_backfilled,
+        # Industry provenance (issue #4): when source is "current_fallback", the
+        # industry value is today's classification used as a proxy for the
+        # quarter — re-classified tickers (e.g. SBIN) cohort against current
+        # rather than historical industry. industry_as_of_date stores the
+        # quarter so consumers know "this is the industry as understood at
+        # this row's quarter, even if it's actually current".
+        "industry_as_of_date": as_of_date if industry is not None else None,
+        "industry_source": industry_source,
     }
 
 
@@ -359,11 +399,25 @@ def _price_at_or_before(store: FlowStore, symbol: str, target_date: str) -> floa
     return row["px"] if row else None
 
 
-def _price_at_or_after(store: FlowStore, symbol: str, target_date: str) -> float | None:
+def _price_at_or_after(
+    store: FlowStore, symbol: str, target_date: str, max_gap_days: int = 30,
+) -> float | None:
+    """First adj_close at or after ``target_date``, capped at ``+max_gap_days``.
+
+    The cap matters for backtests under ``FLOWTRACK_AS_OF``: without an upper
+    bound a ticker with a multi-month trading halt around the horizon date
+    would silently pull in a price arbitrarily far in the future, producing
+    a "12m forward return" computed against, say, 18-month-out data. 30 days
+    comfortably absorbs weekends, settlement holidays, and brief halts; longer
+    gaps surface as ``None`` (honest "no realized return at this horizon").
+    """
+    upper = (
+        date.fromisoformat(target_date) + timedelta(days=max_gap_days)
+    ).isoformat()
     row = store._conn.execute(
         "SELECT COALESCE(adj_close, close) AS px FROM daily_stock_data "
-        "WHERE symbol = ? AND date >= ? ORDER BY date ASC LIMIT 1",
-        (symbol.upper(), target_date),
+        "WHERE symbol = ? AND date >= ? AND date <= ? ORDER BY date ASC LIMIT 1",
+        (symbol.upper(), target_date, upper),
     ).fetchone()
     return row["px"] if row else None
 
