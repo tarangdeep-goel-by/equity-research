@@ -299,3 +299,85 @@ class TestValuationBandPEFromCharts:
         assert band.current_val == pytest.approx(45.0)
         assert band.max_val == pytest.approx(45.0)  # bug fix: snapshot now in the set
         assert band.current_val <= band.max_val  # invariant
+
+
+# ---------------------------------------------------------------------------
+# valuation_band — PB band reads from screener_charts (chart_type='pbv')
+# ---------------------------------------------------------------------------
+
+
+def _seed_screener_charts_pbv(store: FlowStore, symbol: str, n_days: int,
+                              start_pb: float = 1.5, step: float = 0.005) -> None:
+    """Seed screener_charts with chart_type='pbv' rows going back n_days from today."""
+    today = date.today()
+    for i in range(n_days):
+        d = (today - timedelta(days=n_days - 1 - i)).isoformat()
+        pb = start_pb + i * step
+        store._conn.execute(
+            "INSERT INTO screener_charts (symbol, chart_type, metric, date, value) "
+            "VALUES (?, 'pbv', 'Price to book value', ?, ?) "
+            "ON CONFLICT(symbol, chart_type, metric, date) DO UPDATE SET value=excluded.value",
+            (symbol.upper(), d, pb),
+        )
+    store._conn.commit()
+
+
+class TestValuationBandPBFromCharts:
+    """PB band must prefer screener_charts (deep history) like PE does — banks
+    don't trade on PE, so PB band is the primary BFSI valuation signal."""
+
+    def test_pb_band_uses_screener_charts_when_available(self, store: FlowStore):
+        """pb_ratio band reads many years of pbv charts vs the ~28 days in
+        valuation_snapshot since the daily cron started."""
+        _seed_screener_charts_pbv(store, "HDFCBANK", n_days=300, start_pb=1.5, step=0.005)
+
+        band = store.get_valuation_band("HDFCBANK", "pb_ratio", days=365)
+        assert band is not None
+        assert band.num_observations == 300
+        assert band.metric == "pb_ratio"
+        assert band.min_val == pytest.approx(1.5)
+        # max = 1.5 + 299 * 0.005 = 2.995
+        assert band.max_val == pytest.approx(2.995, abs=0.01)
+        assert band.period_start < band.period_end
+
+    def test_pb_alias_resolves_to_pb_ratio(self, store: FlowStore):
+        """The fallback prompt at prompts.py:736 uses metric='pb'. Accept it as
+        an alias for pb_ratio so agents don't get empty results."""
+        _seed_screener_charts_pbv(store, "ICICIBANK", n_days=100, start_pb=2.0, step=0.01)
+
+        band = store.get_valuation_band("ICICIBANK", "pb", days=365)
+        assert band is not None
+        assert band.metric in ("pb", "pb_ratio")
+        assert band.num_observations == 100
+        assert band.min_val == pytest.approx(2.0)
+
+    def test_pb_band_falls_back_to_valuation_snapshot_when_no_charts(
+        self, store: FlowStore
+    ):
+        """If screener_charts has no 'pbv' rows, behavior is unchanged
+        (read from valuation_snapshot.pb_ratio)."""
+        today = date.today()
+        for i in range(8):
+            d = (today - timedelta(days=7 - i)).isoformat()
+            store.upsert_valuation_snapshot(
+                make_valuation_snapshot(symbol="SBIN", dt=d, pe=8.0))
+        band = store.get_valuation_band("SBIN", "pb_ratio", days=30)
+        assert band is not None
+        # factories default pb_ratio = 1.8
+        assert band.num_observations == 8
+        assert band.min_val == pytest.approx(1.8)
+
+    def test_pb_band_pe_charts_unrelated(self, store: FlowStore):
+        """Seeding pe charts must not affect pb_ratio band — different chart_type."""
+        _seed_screener_charts_pe(store, "INFY", n_days=300, start_pe=20.0, step=0.1)
+        today = date.today()
+        for i in range(7):
+            d = (today - timedelta(days=6 - i)).isoformat()
+            store.upsert_valuation_snapshot(
+                make_valuation_snapshot(symbol="INFY", dt=d, pe=25.0))
+
+        band = store.get_valuation_band("INFY", "pb_ratio", days=30)
+        assert band is not None
+        # Falls through to valuation_snapshot — factories pb_ratio = 1.8
+        assert band.num_observations == 7
+        assert band.min_val == pytest.approx(1.8)

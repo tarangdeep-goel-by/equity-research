@@ -8,7 +8,14 @@ import pandas as pd
 import pytest
 from freezegun import freeze_time
 
-from flowtracker.fund_client import FundClient, YFinanceError, _safe_get, _div100, nse_symbol
+from flowtracker.fund_client import (
+    FundClient,
+    YFinanceError,
+    _div100,
+    _ev_ebitda_currency_safe,
+    _safe_get,
+    nse_symbol,
+)
 from flowtracker.fund_models import AnnualEPS, ValuationSnapshot
 
 
@@ -141,6 +148,101 @@ class TestComputeHistoricalPE:
         result = client.compute_historical_pe("SBIN", eps_list, weekly_prices=prices)
         assert result[0].pe_trailing == 10.0  # 500/50
         assert result[1].pe_trailing == 15.0  # 900/60
+
+
+class TestEvEbitdaCurrencySafe:
+    """Currency-safe EV/EBITDA: detects ADR-denominated EBITDA (USD) against
+    INR-denominated EV and recomputes; otherwise passes raw value through.
+
+    Background: yfinance reports ``enterpriseValue`` in display ``currency``
+    (INR for ``.NS`` stocks) but ``ebitda`` in ``financialCurrency`` — which
+    is USD for Indian companies that file ADRs in USD (INFY, HCLTECH, WIT).
+    The raw ``enterpriseToEbitda`` field then computes INR-EV / USD-EBITDA,
+    inflating EV/EBITDA by ~84x (INFY=994x in production).
+    """
+
+    def test_same_currency_sane_value_passthrough(self):
+        info = {
+            "currency": "INR",
+            "financialCurrency": "INR",
+            "enterpriseToEbitda": 11.5,
+        }
+        assert _ev_ebitda_currency_safe(info) == 11.5
+
+    def test_same_currency_absurd_value_dropped(self):
+        """Same-currency but EV/EBITDA > 100 is data junk → drop."""
+        info = {
+            "currency": "INR",
+            "financialCurrency": "INR",
+            "enterpriseToEbitda": 250.0,
+        }
+        assert _ev_ebitda_currency_safe(info) is None
+
+    def test_cross_currency_recomputes_with_fx(self, monkeypatch):
+        """USD financialCurrency on INR-listed stock: recompute via stored FX."""
+        from flowtracker.macro_models import MacroSnapshot
+
+        info = {
+            "currency": "INR",
+            "financialCurrency": "USD",
+            "enterpriseValue": 4_669_912_907_776,  # INR (INFY-like)
+            "ebitda": 4_428_000_256,  # USD
+            "enterpriseToEbitda": 1054.6,  # raw yfinance — wrong
+        }
+
+        # Patch FlowStore.get_macro_latest to return a known FX rate.
+        class _FakeStore:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+            def get_macro_latest(self):
+                return MacroSnapshot(date="2026-04-25", usd_inr=84.0)
+
+        monkeypatch.setattr(
+            "flowtracker.fund_client.FlowStore",
+            lambda: _FakeStore(),
+            raising=False,
+        )
+        # Re-import path: helper imports FlowStore inline.
+        import flowtracker.store as _store_mod
+        monkeypatch.setattr(_store_mod, "FlowStore", lambda: _FakeStore())
+
+        ratio = _ev_ebitda_currency_safe(info)
+        # 4_669_912_907_776 / (4_428_000_256 * 84) = ~12.55
+        assert ratio is not None
+        assert 10 < ratio < 15
+
+    def test_cross_currency_no_fx_drops_absurd(self, monkeypatch):
+        """No FX rate available + raw is absurd → drop rather than publish junk."""
+        info = {
+            "currency": "INR",
+            "financialCurrency": "USD",
+            "enterpriseValue": 4_669_912_907_776,
+            "ebitda": 4_428_000_256,
+            "enterpriseToEbitda": 1054.6,
+        }
+
+        class _NoMacroStore:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+            def get_macro_latest(self):
+                return None
+
+        import flowtracker.store as _store_mod
+        monkeypatch.setattr(_store_mod, "FlowStore", lambda: _NoMacroStore())
+
+        assert _ev_ebitda_currency_safe(info) is None
+
+    def test_missing_currency_fields_passthrough(self):
+        """No currency metadata at all → trust raw if sane."""
+        info = {"enterpriseToEbitda": 22.5}
+        assert _ev_ebitda_currency_safe(info) == 22.5
+
+    def test_none_input_returns_none(self):
+        assert _ev_ebitda_currency_safe({}) is None
 
 
 class TestFetchValuationSnapshot:

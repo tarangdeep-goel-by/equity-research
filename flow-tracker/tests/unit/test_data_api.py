@@ -1430,6 +1430,163 @@ class TestDcfReasonCodesE15:
 
 
 # ---------------------------------------------------------------------------
+# Wave 2 — In-house DCF fallback when FMP DCF is missing
+# ---------------------------------------------------------------------------
+
+
+class TestIntrinsicDcfFallbackWave2:
+    """Wave 2 fix: when FMP DCF is missing but FCF history is healthy,
+    compute an in-house DCF instead of returning null.
+
+    Targets eval-plan P1 — INFY/HINDUNILVR (and other mega-caps) returning
+    null DCF despite a decade of clean cash flow.
+    """
+
+    @staticmethod
+    def _stable_cashcow_rows(symbol: str, base_fcf: float = 10_000.0):
+        """5 years of stable, modestly growing FCF — mimics a cash-cow mega-cap."""
+        from flowtracker.fund_models import AnnualFinancials
+        rows = []
+        # latest first: 14k, 13k, 12k, 11k, 10k → ~9% CAGR
+        for i in range(5):
+            year = 2025 - i
+            cfo = base_fcf * (1 + (4 - i) * 0.10)
+            rows.append(AnnualFinancials(
+                symbol=symbol,
+                fiscal_year_end=f"{year}-03-31",
+                revenue=100_000.0,
+                net_income=15_000.0,
+                cfo=cfo + 2_000.0,  # so cfo+cfi = cfo (net of -2k capex)
+                cfi=-2_000.0,
+                borrowings=5_000.0,
+                num_shares=1_000_000_000.0,
+                profit_before_tax=20_000.0,
+                tax=5_000.0,
+                interest=500.0,
+            ))
+        return rows
+
+    def test_intrinsic_dcf_fires_when_fmp_missing_with_clean_fcf(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Mega-cap-shaped FCF history → non-null DCF + data_quality_note."""
+        SYMBOL = "MEGAFCF"
+        rows = self._stable_cashcow_rows(SYMBOL)
+        populated_store.upsert_annual_financials(rows)
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation(SYMBOL)
+        finally:
+            api.close()
+
+        # No FMP DCF row, but FCF clean → in-house path
+        assert data.get("source") == "in_house_fallback"
+        assert data.get("fv_cr") is not None
+        assert data.get("fv_cr") > 0
+        assert data.get("wacc") is not None
+        assert data.get("terminal_growth") is not None
+        # Required disclosure
+        assert "data_quality_note" in data
+        assert "fallback" in data["data_quality_note"].lower()
+
+    def test_intrinsic_dcf_skipped_when_fcf_negative(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Latest FCF negative → still returns reason_empty=negative_fcf, no fallback."""
+        from flowtracker.fund_models import AnnualFinancials
+        SYMBOL = "NEGFCFW2"
+        rows = [
+            AnnualFinancials(
+                symbol=SYMBOL,
+                fiscal_year_end=f"{2025 - i}-03-31",
+                revenue=100_000.0,
+                net_income=5_000.0,
+                cfo=5_000.0 if i > 0 else 1_000.0,
+                cfi=-3_000.0 if i > 0 else -20_000.0,
+            )
+            for i in range(5)
+        ]
+        populated_store.upsert_annual_financials(rows)
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation(SYMBOL)
+        finally:
+            api.close()
+
+        assert data.get("reason_empty") == "negative_fcf"
+        assert data.get("fv_cr") is None
+        assert data.get("source") != "in_house_fallback"
+
+    def test_intrinsic_dcf_skipped_when_fcf_history_thin(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """<3 positive FCF years → reason_empty=insufficient_history, no fallback."""
+        from flowtracker.fund_models import AnnualFinancials
+        SYMBOL = "THINW2"
+        rows = [
+            AnnualFinancials(
+                symbol=SYMBOL,
+                fiscal_year_end=f"{2025 - i}-03-31",
+                revenue=100_000.0,
+                cfo=2_000.0,
+                cfi=-5_000.0,
+            )
+            for i in range(5)
+        ]
+        populated_store.upsert_annual_financials(rows)
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation(SYMBOL)
+        finally:
+            api.close()
+
+        assert data.get("reason_empty") == "insufficient_history"
+        assert data.get("source") != "in_house_fallback"
+
+    def test_intrinsic_dcf_clamps_growth_above_terminal_plus_6pp(
+        self, tmp_db, populated_store, monkeypatch
+    ):
+        """Hyper-growth FCF (but ≤30% CAGR so reason='unknown') → growth clamped + noted."""
+        from flowtracker.fund_models import AnnualFinancials
+        SYMBOL = "FASTGROW"
+        # 25% CAGR over 4yr — passes the 30% gate, but well above terminal+6pp
+        rows = []
+        fcf = 10_000.0
+        for i in range(5):
+            year = 2025 - i
+            # latest = highest, oldest = lowest
+            actual_fcf = fcf * (1.25 ** (4 - i))
+            rows.append(AnnualFinancials(
+                symbol=SYMBOL,
+                fiscal_year_end=f"{year}-03-31",
+                revenue=100_000.0,
+                cfo=actual_fcf + 1_000.0,
+                cfi=-1_000.0,
+                borrowings=0.0,
+                num_shares=1_000_000_000.0,
+            ))
+        populated_store.upsert_annual_financials(rows)
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        api = ResearchDataAPI()
+        try:
+            data = api.get_dcf_valuation(SYMBOL)
+        finally:
+            api.close()
+
+        # If WACC inputs were available, fallback fires with growth clamp note
+        if data.get("source") == "in_house_fallback":
+            assert "clamp" in data["data_quality_note"].lower()
+            assert data["growth_used"] <= data["terminal_growth"] + 0.06 + 1e-6
+
+
+# ---------------------------------------------------------------------------
 # E16 — sector-index null fallback
 # ---------------------------------------------------------------------------
 

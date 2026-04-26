@@ -2205,6 +2205,114 @@ class TestCalculateTool:
         data = _parse(result)
         assert "error" in data
 
+    # --- Defensive unit checks: share counts must be raw integer counts ---
+
+    @pytest.mark.asyncio
+    async def test_total_cr_to_per_share_rejects_lakhs_input(self):
+        """BANKBARODA bug: agent passed 51,713.62 (lakhs of shares) instead of raw count.
+
+        The tool must reject implausibly-low share counts loud enough that
+        the agent reads the error and self-corrects.
+        """
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "total_cr_to_per_share", "a": "100000", "b": "51713.62"}
+        )
+        data = _parse(result)
+        assert "error" in data
+        assert "UNIT_ERROR" in data["error"]
+        assert "total_cr_to_per_share" in data["error"]
+        assert "RAW share count" in data["error"]
+        # Must reference the actually-passed value so the agent sees what went wrong
+        assert "51713" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_total_cr_to_per_share_happy_path_nestleind(self):
+        """Realistic NESTLEIND inputs → ~₹381 per share."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "total_cr_to_per_share", "a": "36780", "b": "964157160"}
+        )
+        data = _parse(result)
+        assert "error" not in data
+        # ₹36,780 Cr / 964M shares = ₹381.49 per share
+        assert data["per_share"] == pytest.approx(381.49, rel=0.01)
+
+    @pytest.mark.asyncio
+    async def test_per_share_to_total_cr_rejects_low_shares(self):
+        """`per_share_to_total_cr` shares is on `b` — must also reject lakhs."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "per_share_to_total_cr", "a": "10", "b": "9641"}
+        )
+        data = _parse(result)
+        assert "error" in data
+        assert "UNIT_ERROR" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_shares_to_value_cr_rejects_low_shares_on_a(self):
+        """`shares_to_value_cr` has shares on `a` — defensive check fires on `a`."""
+        from flowtracker.research.tools import calculate
+
+        # 96 crore shares (passed as if it were raw count) — clearly wrong
+        result = await calculate.handler(
+            {"operation": "shares_to_value_cr", "a": "96", "b": "2400"}
+        )
+        data = _parse(result)
+        assert "error" in data
+        assert "UNIT_ERROR" in data["error"]
+        assert "'a'=96" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_eps_from_pat_shares_rejects_low_shares(self):
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "eps_from_pat_shares", "a": "1000", "b": "100"}
+        )
+        data = _parse(result)
+        assert "error" in data
+        assert "UNIT_ERROR" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_mcap_cr_rejects_low_shares(self):
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "mcap_cr", "a": "2400", "b": "96"}
+        )
+        data = _parse(result)
+        assert "error" in data
+        assert "UNIT_ERROR" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_unit_check_does_not_fire_for_zero_shares(self):
+        """b=0 must still go through divide-by-zero handling, not unit-error path."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "total_cr_to_per_share", "a": "100", "b": "0"}
+        )
+        data = _parse(result)
+        # No unit error — divide-by-zero path returns per_share=0 cleanly
+        assert "error" not in data
+        assert data["per_share"] == 0
+
+    @pytest.mark.asyncio
+    async def test_unit_check_does_not_fire_for_unrelated_ops(self):
+        """`pct_of`, `ratio`, `growth_rate` etc. don't take shares — small `b` is fine."""
+        from flowtracker.research.tools import calculate
+
+        result = await calculate.handler(
+            {"operation": "pct_of", "a": "25", "b": "100"}
+        )
+        data = _parse(result)
+        assert "error" not in data
+        assert data["pct"] == 25.0
+
 
 # ---------------------------------------------------------------------------
 # Dedup cache — same call twice returns stub on 2nd invocation

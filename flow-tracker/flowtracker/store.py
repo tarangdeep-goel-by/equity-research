@@ -2217,16 +2217,42 @@ class FlowStore:
         ).fetchall()
         return [(r["date"], r["value"]) for r in rows]
 
+    def _pb_series_from_charts(self, symbol: str, days: int) -> list[tuple[str, float]]:
+        """Return [(date, pb_value), ...] from screener_charts for chart_type='pbv'.
+
+        Mirrors `_pe_series_from_charts` for the PB band. Banks don't trade on PE,
+        so PB band is the primary BFSI valuation signal — but valuation_snapshot
+        has shallow history. screener_charts holds the deep PBV series Screener
+        exposes via `?type=pbv`.
+
+        Returns empty list if no rows found (caller falls back to valuation_snapshot).
+        """
+        rows = self._conn.execute(
+            "SELECT date, value FROM screener_charts "
+            "WHERE symbol = ? AND chart_type = 'pbv' AND metric = 'Price to book value' "
+            "AND date >= date('now', ? || ' days') AND value IS NOT NULL "
+            "ORDER BY date ASC",
+            (symbol.upper(), f"-{days}"),
+        ).fetchall()
+        return [(r["date"], r["value"]) for r in rows]
+
     def get_valuation_band(self, symbol: str, metric: str, days: int = 1095) -> ValuationBand | None:
         """Compute min/max/median/percentile for a valuation metric over N days.
 
         metric must be a column name in valuation_snapshot (e.g., 'pe_trailing', 'ev_ebitda', 'pb_ratio').
 
-        For metric='pe_trailing', reads from screener_charts (chart_type='pe') first —
+        For metric='pe_trailing' and 'pb_ratio', reads from screener_charts (chart_type='pe' / 'pbv') first —
         that table has deep history (2005+ for mature stocks), while valuation_snapshot
         only has ~28 days since the daily cron was started recently. Falls back to
         valuation_snapshot if no chart data is available.
+
+        Aliases: 'pb' resolves to 'pb_ratio' (matches the prompt-doc convention at
+        prompts.py:736 — `get_valuation(band, metric='pb')`).
         """
+        # Aliases — keep the resolved name as the canonical metric for SQL/output.
+        metric_aliases = {"pb": "pb_ratio", "pe": "pe_trailing"}
+        metric = metric_aliases.get(metric, metric)
+
         # Validate metric name to prevent SQL injection
         valid_metrics = {
             "pe_trailing", "pe_forward", "pb_ratio", "ev_ebitda", "ev_revenue",
@@ -2290,6 +2316,56 @@ class FlowStore:
                     period_end=period_end,
                 )
             # else: no chart data — fall through to valuation_snapshot path below
+
+        # Same charts-first treatment for PB (banks don't trade on PE — PB band is
+        # the primary BFSI valuation signal). Mirrors the PE path above.
+        if metric == "pb_ratio":
+            series = self._pb_series_from_charts(symbol, days)
+            if series:
+                chart_latest_date, chart_latest_val = series[-1]
+                period_start = series[0][0]
+                period_end = chart_latest_date
+                current_val = chart_latest_val
+                values = [v for _, v in series]
+
+                # Splice in a newer valuation_snapshot.pb_ratio if the daily cron
+                # produced a fresher row than the weekly chart refresh.
+                snap_latest = self._conn.execute(
+                    "SELECT pb_ratio, date FROM valuation_snapshot "
+                    "WHERE symbol = ? AND pb_ratio IS NOT NULL "
+                    "ORDER BY date DESC LIMIT 1",
+                    (symbol.upper(),),
+                ).fetchone()
+                if snap_latest is not None and snap_latest["date"] > chart_latest_date:
+                    values.append(snap_latest["pb_ratio"])
+                    current_val = snap_latest["pb_ratio"]
+                    period_end = snap_latest["date"]
+
+                values_sorted = sorted(values)
+                n = len(values_sorted)
+                min_val = values_sorted[0]
+                max_val = values_sorted[-1]
+                median_val = (
+                    values_sorted[n // 2]
+                    if n % 2 == 1
+                    else (values_sorted[n // 2 - 1] + values_sorted[n // 2]) / 2
+                )
+                below = sum(1 for v in values_sorted if v < current_val)
+                percentile = (below / n) * 100
+
+                return ValuationBand(
+                    symbol=symbol.upper(),
+                    metric=metric,
+                    min_val=min_val,
+                    max_val=max_val,
+                    median_val=median_val,
+                    current_val=current_val,
+                    percentile=percentile,
+                    num_observations=n,
+                    period_start=period_start,
+                    period_end=period_end,
+                )
+            # else: no pbv chart data — fall through to valuation_snapshot path below
 
         rows = self._conn.execute(
             f"SELECT {metric}, date FROM valuation_snapshot "

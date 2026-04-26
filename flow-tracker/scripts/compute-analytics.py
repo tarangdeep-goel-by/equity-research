@@ -303,7 +303,12 @@ def compute_stock(api, engine, symbol: str, index_cache: dict | None, skip_perf:
             row["wacc"] = wacc_data["wacc"]
         if "ke" in wacc_data:
             row["ke"] = wacc_data["ke"]
-        cod = wacc_data.get("cost_of_debt", {})
+        # cost_of_debt is explicitly None for BFSI/insurance (build_wacc_params
+        # skips CoD for those sectors). Default-via-`get` with a fallback only
+        # fires for missing keys; an explicit None still returns None and
+        # blowing up here used to clear beta_blume / beta_raw / beta_r_squared
+        # for every banking & insurance stock (HDFCLIFE, SBIN, HDFCBANK, etc.).
+        cod = wacc_data.get("cost_of_debt") or {}
         if cod.get("kd_pretax"):
             row["kd_pretax"] = cod["kd_pretax"]
         beta = wacc_data.get("beta", {})

@@ -48,6 +48,81 @@ def _to_pct(val: float | None) -> float | None:
     return val * 100 if val is not None else None
 
 
+def _ev_ebitda_currency_safe(info: dict[str, Any]) -> float | None:
+    """Currency-safe EV/EBITDA from yfinance ``info``.
+
+    yfinance reports ``enterpriseValue`` in the display ``currency`` (INR for
+    ``.NS`` listings) but ``ebitda`` in the company's ``financialCurrency``
+    (USD for ADR-listed Indian IT stocks like INFY, HCLTECH, WIT — they file
+    ADRs in USD, so Yahoo serves their EBITDA in USD millions). The
+    ``enterpriseToEbitda`` field is the raw INR-EV / USD-EBITDA ratio, which
+    inflates EV/EBITDA by ~84x for those names (INFY=994, HCLTECH=1192).
+
+    Detection: ``financialCurrency != currency`` and both are populated.
+    Fix: pull ``usd_inr`` from macro_snapshot, compute
+    ``ev / (ebitda * usd_inr)`` to get sane INR-INR ratio. If macro is
+    unavailable, fall back to a sanity check — if yfinance's
+    ``enterpriseToEbitda`` is in [0, 100], trust it; otherwise return None
+    rather than letting a 1000x value reach the agent.
+    """
+    raw = info.get("enterpriseToEbitda")
+    fin_ccy = info.get("financialCurrency")
+    disp_ccy = info.get("currency")
+
+    # Happy path: same currency, value is sane → trust yfinance.
+    if not fin_ccy or not disp_ccy or fin_ccy == disp_ccy:
+        if raw is not None and 0 < raw < 100:
+            return raw
+        # Same-currency but absurd → drop it.
+        if raw is not None and (raw <= 0 or raw >= 100):
+            return None
+        return raw
+
+    # Cross-currency case (e.g. INFY: financialCurrency=USD, currency=INR).
+    ev = info.get("enterpriseValue")
+    ebitda = info.get("ebitda")
+    if ev is None or ebitda is None or ebitda == 0:
+        # Can't recompute; only return raw if it's at least sane.
+        if raw is not None and 0 < raw < 100:
+            return raw
+        return None
+
+    # Pull live FX rate from macro_snapshot.
+    try:
+        from flowtracker.store import FlowStore
+        with FlowStore() as _s:
+            macro = _s.get_macro_latest()
+            fx = macro.usd_inr if macro and macro.usd_inr else None
+    except Exception:
+        fx = None
+
+    if fx is None or fx <= 0:
+        # No FX rate; refuse to publish a wrong number.
+        if raw is not None and 0 < raw < 100:
+            return raw
+        return None
+
+    # Convert EBITDA from financial currency to display currency.
+    if fin_ccy == "USD" and disp_ccy == "INR":
+        ebitda_inr = ebitda * fx
+    elif fin_ccy == "INR" and disp_ccy == "USD":
+        ebitda_inr = ebitda / fx
+    else:
+        # Some other cross-currency combo; bail.
+        if raw is not None and 0 < raw < 100:
+            return raw
+        return None
+
+    if ebitda_inr == 0:
+        return None
+    ratio = ev / ebitda_inr
+    # Sanity-clamp: EV/EBITDA in [-50, 200] is plausible (negative for
+    # loss-making, very-high for high-growth); anything outside is data junk.
+    if ratio < -50 or ratio > 200:
+        return None
+    return round(ratio, 3)
+
+
 class FundClient:
     """yfinance client for fundamentals data."""
 
@@ -96,7 +171,7 @@ class FundClient:
             pe_trailing=info.get("trailingPE"),
             pe_forward=info.get("forwardPE"),
             pb_ratio=info.get("priceToBook"),
-            ev_ebitda=info.get("enterpriseToEbitda"),
+            ev_ebitda=_ev_ebitda_currency_safe(info),
             dividend_yield=info.get("dividendYield"),
             roe=_to_pct(info.get("returnOnEquity")),
             roa=_to_pct(info.get("returnOnAssets")),
@@ -214,7 +289,7 @@ class FundClient:
             pe_trailing=info.get("trailingPE"),
             pe_forward=info.get("forwardPE"),
             pb_ratio=info.get("priceToBook"),
-            ev_ebitda=info.get("enterpriseToEbitda"),
+            ev_ebitda=_ev_ebitda_currency_safe(info),
             ev_revenue=info.get("enterpriseToRevenue"),
             ps_ratio=info.get("priceToSalesTrailing12Months"),
             peg_ratio=peg,

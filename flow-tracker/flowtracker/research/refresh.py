@@ -249,9 +249,11 @@ def refresh_for_research(
                 else:
                     _skip("screener_ids", "could not extract from HTML")
 
-                # Chart API (PE + price)
+                # Chart API (PE + price + PBV)
+                # PBV included so banks/BFSI get deep PB band history — banks don't
+                # trade on PE so PB band is the primary BFSI valuation signal.
                 if company_id:
-                    for chart_type in ("pe", "price"):
+                    for chart_type in ("pe", "price", "pbv"):
                         try:
                             data = sc.fetch_chart_data_by_type(company_id, chart_type)
                             datasets = data.get("datasets", [])

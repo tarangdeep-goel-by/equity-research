@@ -3001,10 +3001,23 @@ class ResearchDataAPI:
         ('insufficient_history' | 'negative_fcf' | 'growth_above_limits' |
         'unknown') instead of returning an empty dict, so agents can show
         the user *why* DCF was skipped.
+
+        Wave 2 fallback: when FMP DCF is missing but the symbol has clean
+        FCF history (reason would be 'unknown'), compute an in-house
+        intrinsic DCF from CFO+CFI using the dynamic WACC. Adds a
+        `data_quality_note` so agents know the value is a degraded fallback,
+        not the FMP-sourced number.
         """
         dcf = self._store.get_fmp_dcf_latest(symbol)
         if not dcf or not dcf.dcf or dcf.dcf <= 0:
             reason = self._classify_dcf_empty_reason(symbol)
+            # Fallback: clean FCF history but FMP just lacks coverage. Run an
+            # in-house DCF so mega-caps with stable FCF (INFY, HINDUNILVR, TCS,
+            # etc.) don't return a null fair value.
+            if reason == "unknown":
+                intrinsic = self._compute_intrinsic_dcf(symbol)
+                if intrinsic is not None:
+                    return intrinsic
             return {
                 "fv_cr": None,
                 "reason_empty": reason,
@@ -3066,6 +3079,184 @@ class ResearchDataAPI:
                     pass
 
         return "unknown"
+
+    def _compute_intrinsic_dcf(self, symbol: str) -> dict | None:
+        """Wave 2 fallback: in-house intrinsic DCF when FMP coverage is missing.
+
+        Used only when ``_classify_dcf_empty_reason`` returns 'unknown' — i.e.
+        FCF history is clean (≥3 positive years out of 5, latest positive,
+        5Y CAGR ≤30%) but the FMP-sourced DCF endpoint has no row.
+
+        Methodology:
+          - FCF base = median of last 5 years' (cfo + cfi). Median guards
+            against single-year working-capital swings (e.g. HINDUNILVR FY25
+            asset-disposal inflow). For stable cash-cow mega-caps this is
+            close to the latest actual.
+          - Growth: blend of 3Y FCF CAGR (50%) and historical revenue growth
+            proxy (50%, via base of 8%), capped at terminal_growth + 6%
+            and floored at terminal_growth.
+          - 5-year explicit projection + Gordon-growth terminal value.
+          - Discount rate = dynamic WACC (from get_wacc_params).
+          - WACC must exceed terminal growth by ≥1pp (else clamp terminal).
+
+        Returns ``None`` when WACC inputs are missing or the math degenerates;
+        the caller falls through to the standard reason-code response.
+        """
+        annual = self._store.get_annual_financials(symbol, limit=5)
+        if not annual or len(annual) < 3:
+            return None
+
+        # FCF history (latest first). Same proxy as _classify_dcf_empty_reason.
+        fcfs: list[float] = []
+        for a in annual:
+            cfo = getattr(a, "cfo", None)
+            cfi = getattr(a, "cfi", None)
+            if cfo is not None and cfi is not None:
+                fcfs.append(cfo + cfi)
+            elif getattr(a, "free_cash_flow", None) is not None:
+                fcfs.append(a.free_cash_flow)
+        if len(fcfs) < 3:
+            return None
+
+        positive = [v for v in fcfs if v and v > 0]
+        if len(positive) < 3:
+            return None
+
+        # Median of positives — robust to one-off swings.
+        import statistics
+        fcf_base = statistics.median(positive)
+        if fcf_base <= 0:
+            return None
+
+        # WACC inputs
+        try:
+            wacc_data = self.get_wacc_params(symbol)
+        except Exception:
+            return None
+        wacc = wacc_data.get("wacc")
+        terminal_g = wacc_data.get("terminal_growth")
+        if not wacc or not terminal_g:
+            return None
+
+        notes: list[str] = []
+
+        # Clamp terminal growth to (wacc - 1pp) when too close — keeps
+        # Gordon-growth denominator sensible for low-beta mega-caps.
+        min_spread = 0.01
+        if wacc - terminal_g < min_spread:
+            clamped_g = max(0.0, wacc - min_spread)
+            notes.append(
+                f"Terminal growth clamped from {terminal_g:.2%} to {clamped_g:.2%} "
+                f"so WACC ({wacc:.2%}) exceeds it by ≥1pp."
+            )
+            terminal_g = clamped_g
+
+        # Growth assumption: 3Y FCF CAGR, blended toward 8% baseline,
+        # bounded by [terminal_g, terminal_g + 6pp].
+        growth = 0.08
+        if len(positive) >= 3:
+            try:
+                # CAGR over min(3, available-1) years using positive FCFs
+                # ordered latest→oldest within the positive list. Use raw
+                # `fcfs` ends so we honour actual chronology when latest is
+                # positive (already verified upstream).
+                latest_fcf = fcfs[0]
+                older_idx = min(3, len(fcfs) - 1)
+                older_fcf = fcfs[older_idx]
+                if (
+                    latest_fcf and latest_fcf > 0
+                    and older_fcf and older_fcf > 0
+                    and older_idx > 0
+                ):
+                    cagr = (latest_fcf / older_fcf) ** (1 / older_idx) - 1
+                    growth = 0.5 * cagr + 0.5 * 0.08
+            except (ValueError, ZeroDivisionError):
+                pass
+        growth_floor = terminal_g
+        growth_cap = terminal_g + 0.06
+        original_growth = growth
+        growth = max(growth_floor, min(growth_cap, growth))
+        if abs(growth - original_growth) > 1e-6:
+            notes.append(
+                f"Projected FCF growth clamped from {original_growth:.2%} to "
+                f"{growth:.2%} (must be in [terminal_g, terminal_g + 6pp])."
+            )
+
+        # 5-year explicit projection + terminal value, all in crores.
+        try:
+            ev_cr = 0.0
+            fcf_t = fcf_base
+            for t in range(1, 6):
+                fcf_t = fcf_t * (1 + growth)
+                ev_cr += fcf_t / ((1 + wacc) ** t)
+            terminal_fcf = fcf_t * (1 + terminal_g)
+            terminal_value = terminal_fcf / (wacc - terminal_g)
+            ev_cr += terminal_value / ((1 + wacc) ** 5)
+        except (ZeroDivisionError, OverflowError):
+            return None
+
+        # Equity value = EV - net debt (use latest annual)
+        latest = annual[0]
+        borrowings = getattr(latest, "borrowings", 0) or 0
+        cash = (
+            getattr(latest, "cash", None)
+            or getattr(latest, "investments", None)
+            or 0
+        )
+        equity_cr = ev_cr - borrowings + cash
+
+        # Per-share fair value (rupees). Prefer valuation_snapshot.shares_outstanding
+        # since annual_financials.num_shares can be missing (e.g. INFY).
+        shares = None
+        snap_rows = self._store.get_valuation_history(symbol, days=14)
+        if snap_rows:
+            shares = (
+                getattr(snap_rows[-1], "shares_outstanding", None)
+                or getattr(snap_rows[-1], "float_shares", None)
+            )
+        if not shares:
+            shares = getattr(latest, "num_shares", None)
+        fair_value_per_share = None
+        if shares and shares > 0:
+            # equity_cr in crores → ×1e7 for absolute rupees → ÷ shares
+            fair_value_per_share = round(equity_cr * 1e7 / shares, 2)
+
+        current_price = snap_rows[-1].price if snap_rows else None
+        margin_of_safety_pct = None
+        if (
+            fair_value_per_share is not None
+            and current_price
+            and fair_value_per_share > 0
+        ):
+            margin_of_safety_pct = round(
+                (fair_value_per_share - current_price) / fair_value_per_share * 100, 2
+            )
+
+        notes.append(
+            "DCF computed in-house from CFO+CFI history (FMP DCF endpoint had "
+            "no row). 5Y explicit + Gordon terminal, discounted at dynamic WACC. "
+            "Treat as degraded fallback — cross-check against PE band and consensus."
+        )
+
+        return {
+            "symbol": symbol,
+            "date": (
+                snap_rows[-1].date
+                if snap_rows
+                else getattr(latest, "fiscal_year_end", None)
+            ),
+            "dcf": fair_value_per_share,
+            "stock_price": current_price,
+            "fv_cr": round(equity_cr, 2),
+            "ev_cr": round(ev_cr, 2),
+            "fcf_base_cr": round(fcf_base, 2),
+            "growth_used": round(growth, 4),
+            "wacc": round(wacc, 4),
+            "terminal_growth": round(terminal_g, 4),
+            "margin_of_safety_pct": margin_of_safety_pct,
+            "source": "in_house_fallback",
+            "data_quality_note": " ".join(notes),
+        }
 
     def get_dcf_history(self, symbol: str, days: int = 365) -> list[dict]:
         """Historical DCF trajectory."""

@@ -90,8 +90,9 @@ Tools pre-compute values with correct Indian unit conversions (crores, lakhs, ru
 - `pe_trailing` from the snapshot is the single source of truth for current PE — it's TTM, which differs from price ÷ annual EPS (FY basis). All agents must use the same PE for cross-report consistency.
 - `eps_ttm` from the snapshot is the TTM EPS derived from `pe_trailing`. Use this, don't reverse-engineer your own.
 - Sector medians from `get_peer_sector(section='benchmarks')` are statistically computed across the full peer set. Computing your own median from a partial peer list gives different numbers.
-- **Unit rule:** All monetary aggregates in tools are in **crores**. Per-share values are in **rupees**. Share counts are **raw integers** (use `shares_outstanding_lakh` for human-readable format). ₹1 Cr = ₹1,00,00,000 = ₹10 million.
+- **Unit rule:** All monetary aggregates in tools are in **crores**. Per-share values are in **rupees**. Share counts are **raw integers** (use `shares_outstanding_lakh` for human-readable display only — never as a `calculate` input). ₹1 Cr = ₹1,00,00,000 = ₹10 million.
 - For any derived value not in tool output, use the `calculate` tool — it handles Indian unit conversions (shares→crores, per-share→total, EPS from PAT, PE, growth rates, CAGR, margin of safety) and returns the full calculation string. Example: `calculate(operation="shares_to_value_cr", a=3139121, b=4081)` → `₹1,281.08 Cr`.
+- **Calculate-tool share-count contract (READ THIS — frequent agent error):** When any `calculate` op takes shares as an argument (`shares_to_value_cr`, `per_share_to_total_cr`, `total_cr_to_per_share`, `eps_from_pat_shares`, `mcap_cr`), pass the **RAW integer share count** — e.g. `964157160` for NESTLEIND, NOT `9641` (lakhs) and NOT `96` (crores). Source: `get_valuation(section='snapshot')['shares_outstanding']` or `get_company_snapshot()['shares_outstanding']` — both already raw count. Do NOT pass `shares_outstanding_lakh`. The tool now rejects implausibly-low share counts (< 1 lakh) with a `UNIT_ERROR` — if you see that, you passed lakhs/crores instead of raw count; multiply by 1e5 (lakhs→raw) or 1e7 (crores→raw) and retry.
 
 ## Explain the WHY, Not Just the WHAT
 When you identify a trend (margin compressing, valuation falling, ownership shifting), explain the likely cause — observation without explanation is incomplete. Connect data trends to known business events (management changes, regulatory actions, macro shifts, competitive dynamics). "NIM compressed from 4.5% to 4.25%" is observation. "NIM compressed because deposit competition intensified after fintechs offered 7% savings rates, eroding the bank's CASA advantage" is analysis.
@@ -800,7 +801,7 @@ End with a JSON code block:
 
 ## Valuation iter3 — Per-Share Chain, Tool Registry, Auto-SOTP as Seed (new)
 
-**Per-share derivation chain.** Every "target price" MUST have a visible per-share chain: `blended_fv_cr → /shares_outstanding → per_share_target`. Use `calculate(operation='total_cr_to_per_share', a=<blended_cr>, b=<shares_in_lakh>)` — do NOT compute per-share via in-prose division. The calc output must appear in your Tool Audit and its exact number must match the per-share figure in prose.
+**Per-share derivation chain.** Every "target price" MUST have a visible per-share chain: `blended_fv_cr → /shares_outstanding → per_share_target`. Use `calculate(operation='total_cr_to_per_share', a=<blended_cr>, b=<shares_outstanding (RAW count, e.g. 964157160 for NESTLEIND)>)` — do NOT compute per-share via in-prose division. **Pass `b` as the raw integer share count from `get_valuation(section='snapshot')['shares_outstanding']`, NOT the human-readable `shares_outstanding_lakh` field (that's divided by 1e5) and NOT shares-in-crores.** The calculate tool now rejects implausibly-low share counts (< 1 lakh) with a UNIT_ERROR — read that error and re-pass the raw count. The calc output must appear in your Tool Audit and its exact number must match the per-share figure in prose.
 
 **Tool-registry re-reminder.** Valid sections for frequently-misused tools:
 - `get_quality_scores`: `bfsi | metals | telecom | default` (no other sections exist). For cashflow quality use `get_fundamentals(section='cash_flow_quality')` — that is a DIFFERENT tool.
@@ -1304,9 +1305,11 @@ MACRO_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
    | `budget_speech` | Sectoral allocations affecting the industry (PLI, capex, subsidies, tax changes), major announcements moving the company's end-markets |
    | `budget_at_a_glance` | Total capex, fiscal deficit, gross borrowing, major receipts/expenditure shifts vs prior year |
    | `rbi_mpr` | Rate stance + rationale, inflation outlook, external environment, commodity-prices section |
+   | `rbi_mpc_statement` | The MOST RECENT RBI MPC bi-monthly resolution — current policy rate decision, FY GDP/inflation projections by quarter, and stance change rationale. This is the canonical "what RBI just said" source — supersedes older MPR/AR statements when a fresh MPC has dropped |
    | `rbi_ar_assessment` | RBI's own forward outlook + key risk assessment |
    | `rbi_ar_economic` | Real-sector review, GDP composition, inflation trajectory |
    | `rbi_ar_monetary` | Liquidity operations, credit cycle stance |
+   | `irdai_annual_report` | Insurance-sector regulator's annual review — life/non-life premium growth, insurance penetration, solvency, investments, industry outlook. MANDATORY for life insurance / general insurance / insurance-broker stocks (HDFCLIFE, SBILIFE, ICICIPRULI, POLICYBZR, etc.); skip-with-null-finding for non-insurance stocks |
 
    d. **Null-finding rule (prevents citation theatre):** If a mandatory anchor has no material content on your topic — e.g. Economic Survey's industry chapter has nothing on cryogenic equipment — write one sentence stating that explicitly and cite the section you checked. Example: `"No cryogenic-specific content in ES 2024-25 Industry chapter — general capital-goods capex themes only (source: economic_survey, 'Industry')."` Silent skipping of a mandated anchor reads as work-not-done; a clean null-finding is information.
 
