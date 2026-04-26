@@ -123,6 +123,40 @@ def _ev_ebitda_currency_safe(info: dict[str, Any]) -> float | None:
     return round(ratio, 3)
 
 
+# Candidate row labels in yfinance income_stmt for Net Premium Earned. Indian
+# life insurers (HDFCLIFE, SBILIFE, ICICIPRULI, LICI) currently expose only
+# "Total Revenue" / "Operating Revenue" — both are Schedule III revenue (which
+# bundles MTM on policyholder funds and is NOT the clean underwriting top
+# line). The fallback list below covers labels yfinance does use for some
+# global insurers and would adopt if Indian coverage improved. See the audit
+# at the head of this commit. When none of these rows exist in the frame, the
+# returned value is None and the swap layer in
+# ResearchDataAPI._apply_insurance_headline falls back to revenue with a
+# data_quality_note.
+_PREMIUM_EARNED_ROWS: tuple[str, ...] = (
+    "Net Premiums Earned",
+    "Total Premiums Earned",
+    "Premiums Earned",
+    "Premium Earned",
+    "Net Premium Earned",
+    "Premium Income Net",
+    "Net Premium Income",
+)
+
+
+def _extract_premium_earned(df: Any, col: Any) -> float | None:
+    """Probe an income-statement DataFrame for a Net-Premium-Earned-style row.
+
+    Returns the raw rupee value (yfinance native units) or None if no
+    candidate row is present. Caller is responsible for unit conversion.
+    """
+    for label in _PREMIUM_EARNED_ROWS:
+        val = _safe_get(df, label, col)
+        if val is not None:
+            return val
+    return None
+
+
 class FundClient:
     """yfinance client for fundamentals data."""
 
@@ -188,7 +222,16 @@ class FundClient:
     # -- Stored (fetched -> persisted) --
 
     def fetch_quarterly_results(self, symbol: str) -> list[QuarterlyResult]:
-        """Fetch quarterly income data from yfinance (~5 quarters)."""
+        """Fetch quarterly income data from yfinance (~5 quarters).
+
+        For insurers, also probes for Net Premium Earned via
+        `_extract_premium_earned`. yfinance's revenue rows for Indian life
+        insurers (TotalRevenue / OperatingRevenue) are Schedule III revenue
+        which bundles MTM on policyholder funds — not the underwriting top
+        line. ``net_premium_earned`` stays None when no premium-style row is
+        exposed; the read-side swap layer
+        (`ResearchDataAPI._apply_insurance_headline`) handles the fallback.
+        """
         ticker = self._ticker(symbol)
         df = ticker.get_income_stmt(freq="quarterly")
         if df is None or df.empty:
@@ -204,6 +247,10 @@ class FundClient:
             ebitda = _safe_get(df, "EBITDA", col)
             eps = _safe_get(df, "BasicEPS", col)
             eps_diluted = _safe_get(df, "DilutedEPS", col)
+            # Insurance only — None for non-insurers (no such row in their
+            # frames). yfinance doesn't currently expose this for Indian life
+            # insurers either; included for forward compatibility.
+            net_premium_earned = _extract_premium_earned(df, col)
 
             operating_margin = None
             if operating_income is not None and revenue and revenue != 0:
@@ -225,8 +272,40 @@ class FundClient:
                 eps_diluted=eps_diluted,
                 operating_margin=operating_margin,
                 net_margin=net_margin,
+                net_premium_earned=net_premium_earned,
             ))
         return results
+
+    def fetch_annual_net_premium_earned(self, symbol: str) -> dict[str, float]:
+        """Probe yfinance annual income_stmt for Net Premium Earned, year-by-year.
+
+        Returns ``{fiscal_year_end: net_premium_earned_in_crores}``. Empty when
+        no premium-style row is present (the case today for HDFCLIFE, SBILIFE,
+        ICICIPRULI, LICI — yfinance only exposes TotalRevenue / OperatingRevenue
+        for these tickers, both of which are Schedule III "Revenue from
+        operations" mixed with MTM on policyholder investment funds).
+
+        Forward-compatible with future yfinance schema changes that surface
+        Net Premium Earned via any of the labels in `_PREMIUM_EARNED_ROWS`.
+
+        Values are converted to crores (yfinance returns raw rupees).
+        """
+        try:
+            ticker = self._ticker(symbol)
+            df = ticker.income_stmt
+        except Exception:
+            return {}
+        if df is None or df.empty:
+            return {}
+        out: dict[str, float] = {}
+        for col in df.columns:
+            fy_end = col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col)
+            raw = _extract_premium_earned(df, col)
+            if raw is not None:
+                cr = _to_cr(raw)
+                if cr is not None:
+                    out[fy_end] = cr
+        return out
 
     def _latest_cash_flow(self, symbol: str) -> tuple[float | None, float | None]:
         """Fall back to annual cash flow statement when ``info`` fields are empty.

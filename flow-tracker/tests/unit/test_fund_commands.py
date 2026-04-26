@@ -86,6 +86,10 @@ def _make_fund_client_mock(
     else:
         client.fetch_valuation_snapshot.return_value = snapshot or _make_valuation_snapshot()
     client.compute_historical_pe.return_value = historical_pe or []
+    # Insurance-only enrichment hook — default no-op so the backfill code path
+    # (which calls this for every symbol) returns an empty dict instead of a
+    # live MagicMock that would propagate into the Pydantic model.
+    client.fetch_annual_net_premium_earned.return_value = {}
     return client
 
 

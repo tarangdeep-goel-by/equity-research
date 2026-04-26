@@ -149,6 +149,66 @@ class TestInsuranceHeadlineRevenue:
         assert len(rows) > 0
         assert "data_quality_note" in rows[0]
 
+    def test_persisted_net_premium_earned_drives_headline(
+        self, api: ResearchDataAPI, populated_store
+    ):
+        """End-to-end: persist net_premium_earned via upsert, read via API,
+        confirm the swap layer picks it up — no client-side injection.
+
+        This is the wiring test that proves the column is actually plumbed:
+        Pydantic model -> upsert SQL -> SELECT -> get_annual_financials ->
+        _apply_insurance_headline.
+        """
+        from flowtracker.fund_models import AnnualFinancials, QuarterlyResult
+
+        self._set_industry(populated_store, "SBIN", "Life Insurance")
+        # Write a row with net_premium_earned populated. Use a fresh
+        # fiscal_year_end so we don't collide with the populated_store row.
+        af = AnnualFinancials(
+            symbol="SBIN",
+            fiscal_year_end="2099-03-31",
+            revenue=10_000.0,           # MTM-mixed top line (wild)
+            net_premium_earned=6_500.0, # clean underwriting top line
+            net_income=1_200.0,
+        )
+        populated_store.upsert_annual_financials([af])
+
+        rows = api.get_annual_financials("SBIN", years=20)
+        target = next((r for r in rows if r["fiscal_year_end"] == "2099-03-31"), None)
+        assert target is not None, "test row was not retrieved"
+        assert target["net_premium_earned"] == 6_500.0
+        assert target["headline_revenue"] == 6_500.0
+        assert target["headline_metric"] == "net_premium_earned"
+        assert "Net Premium Earned" in target["notes"]
+        # Original revenue preserved (additive transform).
+        assert target["revenue"] == 10_000.0
+        # The fallback note should NOT be present when we have real data.
+        assert "data_quality_note" not in target
+
+    def test_persisted_quarterly_net_premium_earned_drives_headline(
+        self, api: ResearchDataAPI, populated_store
+    ):
+        """Same wiring test for quarterly_results."""
+        from flowtracker.fund_models import QuarterlyResult
+
+        self._set_industry(populated_store, "SBIN", "Life Insurance")
+        qr = QuarterlyResult(
+            symbol="SBIN",
+            quarter_end="2099-12-31",
+            revenue=2_500.0,
+            net_premium_earned=1_700.0,
+            net_income=300.0,
+        )
+        populated_store.upsert_quarterly_results([qr])
+
+        rows = api.get_quarterly_results("SBIN", quarters=20)
+        target = next((r for r in rows if r["quarter_end"] == "2099-12-31"), None)
+        assert target is not None
+        assert target["net_premium_earned"] == 1_700.0
+        assert target["headline_revenue"] == 1_700.0
+        assert target["headline_metric"] == "net_premium_earned"
+        assert "data_quality_note" not in target
+
 
 class TestScreenerRatios:
     def test_returns_list_of_dicts(self, api: ResearchDataAPI):

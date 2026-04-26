@@ -18,6 +18,7 @@ import logging
 import re
 from datetime import date
 from pathlib import Path
+from typing import NamedTuple
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -34,6 +35,149 @@ logger = logging.getLogger(__name__)
 
 _VAULT_BASE = Path.home() / "vault" / "stocks"
 MAX_CONCURRENT_DECK_EXTRACTIONS = 3
+
+# --- Deck classifier thresholds (mirrors filing_client._looks_like_real_deck) ---
+#
+# PR #104 added `_looks_like_real_deck` in filing_client.py to gate downloads,
+# but the pre-#104 vault still has cover-letter PDFs on disk that bypass that
+# check. The deck_extractor classifier below re-applies the same pdfium-based
+# logic so re-extraction prunes stale cover letters consistently. Markdown
+# heuristics alone (heading count, char length) are fragile for image-heavy
+# decks where Docling produces sparse text — Nestlé India FY24-Q2 / FY24-Q3 /
+# FY25-Q3 are 1-page Reg 30 cover letters that the previous markdown-only
+# rule caught coincidentally; a glossy infographic deck of 30+ pages with low
+# Docling text density would have been falsely rejected by the same rule.
+_DECK_HARD_REJECT_PAGES = 3            # < 3 pages → never a real deck
+_DECK_FIRST3_TEXT_THRESHOLD = 2500     # cover letters front-load <2.5k chars
+_DECK_LOW_CONFIDENCE_PAGES = 10        # 3-9 pages w/o disclosure → low-confidence
+# Disclosure markers — same set as filing_client._DECK_BODY_DISCLOSURE_MARKERS,
+# duplicated here to keep the module self-contained for testability.
+_DECK_DISCLOSURE_MARKERS = (
+    "dial-in",
+    "dial in",
+    "analyst / investor meet",
+    "analyst/investor meet",
+    "disclosure under regulation 30",
+    "sebi (listing obligations",
+    "conference call dial",
+    # Nestlé-style intimation cover letter wording — points the reader at the
+    # *real* deck on the company website, contains no deck content itself.
+    "regulation 30 of sebi",
+    "regulation 30 of the sebi",
+    "audio/ video recording",
+    "audio-video recording",
+    "audio/video recording",
+)
+
+
+class _DeckClassification(NamedTuple):
+    is_deck: bool
+    confidence: str  # 'high' | 'low'
+    reason: str
+    pages: int
+    first3_chars: int
+    has_disclosure_marker: bool
+
+
+def _classify_deck_pdf(pdf_path: Path, markdown: str, headings_count: int) -> _DeckClassification:
+    """Decide whether a downloaded ``investor_deck.pdf`` is a real deck.
+
+    Combines pdfium-based page/text signals with the Docling markdown signals.
+    Page count is the primary discriminator — cover letters are 1-3 pages,
+    real decks are 10-50 pages. Disclosure-marker phrases catch the rare
+    multi-page Reg 30 letter. The Docling markdown signals (heading count,
+    total chars) are used only as a secondary guard for the ambiguous
+    middle band (3-9 pages, no disclosure markers): an image-heavy real
+    deck typically still produces 2KB+ of markdown across all pages even
+    when the first three are mostly title slides.
+
+    Falls back to acceptance on any pdfium failure — the original markdown
+    heuristic ran post-Docling so callers never had a way to short-circuit;
+    we mirror that fail-open behaviour to avoid losing real decks on
+    transient pypdfium2 errors.
+    """
+    pages = 0
+    first3 = ""
+    pdfium_ok = False
+    try:
+        import pypdfium2 as pdfium  # type: ignore[import-untyped]
+        try:
+            doc = pdfium.PdfDocument(str(pdf_path))
+        except Exception:
+            doc = None
+        if doc is not None:
+            try:
+                pages = len(doc)
+                first3 = "".join(
+                    doc[i].get_textpage().get_text_range()
+                    for i in range(min(3, pages))
+                )
+                pdfium_ok = True
+            finally:
+                doc.close()
+    except ImportError:
+        # No pypdfium2 — fall through to markdown-only decision below.
+        pass
+
+    has_disclosure = any(m in first3.lower() for m in _DECK_DISCLOSURE_MARKERS) if first3 else False
+
+    if pdfium_ok:
+        # Hard reject: too few pages to be a deck, period.
+        if pages < _DECK_HARD_REJECT_PAGES:
+            return _DeckClassification(
+                False, "high",
+                f"pdf has only {pages} page(s) — never a real deck",
+                pages, len(first3), has_disclosure,
+            )
+        # Hard reject: short PDF with disclosure markers AND sparse first-3
+        # text — the canonical Reg 30 cover-letter signature.
+        if (
+            pages < _DECK_LOW_CONFIDENCE_PAGES
+            and has_disclosure
+            and len(first3.strip()) < _DECK_FIRST3_TEXT_THRESHOLD
+        ):
+            return _DeckClassification(
+                False, "high",
+                f"pages={pages} + disclosure markers + first3_chars={len(first3.strip())} "
+                f"matches Reg 30 cover-letter signature",
+                pages, len(first3), has_disclosure,
+            )
+        # Real deck if it has decent length OR the markdown extractor produced
+        # enough structure to work with. Image-heavy decks can be very short
+        # on extractable text but still 30+ pages — accept those as
+        # low-confidence so downstream knows the markdown may be sparse.
+        markdown_rich = headings_count >= 3 and len(markdown) >= 2000
+        if pages >= _DECK_LOW_CONFIDENCE_PAGES or markdown_rich:
+            confidence = "high" if (pages >= _DECK_LOW_CONFIDENCE_PAGES and markdown_rich) else "low"
+            return _DeckClassification(
+                True, confidence,
+                f"pages={pages}, headings={headings_count}, md_chars={len(markdown)}",
+                pages, len(first3), has_disclosure,
+            )
+        # 3-9 pages, no clear disclosure markers, sparse markdown → reject as
+        # ambiguous-but-likely-not-deck. Real short decks (e.g. AGM teaser)
+        # tend to still have headings/charts that Docling captures.
+        return _DeckClassification(
+            False, "high",
+            f"pages={pages} but headings={headings_count} and md_chars={len(markdown)} "
+            f"too sparse for a real deck",
+            pages, len(first3), has_disclosure,
+        )
+
+    # pdfium unavailable / parse failure — fall back to the original
+    # markdown-only heuristic so we don't lose real decks on transient
+    # errors. This matches `_looks_like_real_*` accept-on-error semantics.
+    if headings_count < 3 or len(markdown) < 2000:
+        return _DeckClassification(
+            False, "low",
+            "pdfium unavailable; markdown sparse (headings<3 or chars<2000)",
+            0, 0, False,
+        )
+    return _DeckClassification(
+        True, "low",
+        "pdfium unavailable; markdown looks rich enough",
+        0, 0, False,
+    )
 
 # --- Sector-specific extraction hint ---
 
@@ -310,19 +454,48 @@ async def _extract_single_deck(
     cache_dir = pdf_path.parent
     extraction = extract_to_markdown(pdf_path, cache_dir)
 
-    # Guard against misclassified "decks" (corporate notices, 1-2 page letters)
-    if len(extraction.headings) < 3 or len(extraction.markdown) < 2000:
+    # Classifier — see _classify_deck_pdf for the rule. Combines pdfium page
+    # count + first-3-page text + disclosure markers with the Docling markdown
+    # signals so image-heavy real decks (low text density, high page count)
+    # don't get falsely rejected, while Reg 30 cover letters are caught
+    # consistently regardless of which surface (filing_client at download
+    # time, or the extractor at re-classify time) sees them first.
+    classification = _classify_deck_pdf(
+        pdf_path,
+        markdown=extraction.markdown,
+        headings_count=len(extraction.headings),
+    )
+    if not classification.is_deck:
         logger.warning(
-            "[deck] %s %s: sparse document (%d headings, %d chars) — marking not_a_deck",
-            symbol, quarter_label, len(extraction.headings), len(extraction.markdown),
+            "[deck] %s %s: classifier rejected (%s) — pages=%d, first3_chars=%d, "
+            "headings=%d, md_chars=%d, disclosure_marker=%s",
+            symbol, quarter_label, classification.reason,
+            classification.pages, classification.first3_chars,
+            len(extraction.headings), len(extraction.markdown),
+            classification.has_disclosure_marker,
         )
         return {
             "fy_quarter": quarter_label,
             "extraction_status": "not_a_deck",
-            "extraction_error": "Fewer than 3 headings or <2KB content — likely a corporate notice, not a deck",
+            "extraction_error": classification.reason,
+            "pages": classification.pages,
+            "first3_chars": classification.first3_chars,
             "headings_detected": len(extraction.headings),
             "chars": len(extraction.markdown),
+            "has_disclosure_marker": classification.has_disclosure_marker,
         }
+
+    data_quality_note: str | None = None
+    if classification.confidence == "low":
+        data_quality_note = (
+            f"Low-confidence classification: {classification.reason}. "
+            "Docling-extracted markdown may be sparse (image-heavy deck); "
+            "extracted fields may under-represent slide content."
+        )
+        logger.info(
+            "[deck] %s %s: low-confidence accept — %s",
+            symbol, quarter_label, classification.reason,
+        )
 
     user_prompt = (
         f"Company: {symbol}\nQuarter: {quarter_label}\n"
@@ -351,6 +524,9 @@ async def _extract_single_deck(
         data["_elapsed_s"] = round(_time.time() - t0, 1)
         data["_docling_cached"] = extraction.from_cache
         data["_docling_degraded"] = extraction.degraded
+        data["_classifier_confidence"] = classification.confidence
+        if data_quality_note:
+            data["data_quality_note"] = data_quality_note
         return data
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning("[deck] %s %s: JSON parse failed: %s", symbol, quarter_label, e)

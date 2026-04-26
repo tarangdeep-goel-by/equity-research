@@ -23,6 +23,10 @@ class QuarterlyResult(BaseModel):
     interest: float | None = None
     profit_before_tax: float | None = None
     tax_pct: float | None = None
+    # Insurers only — Net Premium Earned (₹ Cr). Stays None for non-insurers
+    # and for insurers whose source feed doesn't expose the line. See
+    # ResearchDataAPI._apply_insurance_headline for the read-side swap rule.
+    net_premium_earned: float | None = None
 
 
 class ScreenerRatios(BaseModel):
@@ -126,6 +130,10 @@ class AnnualFinancials(BaseModel):
 
     # P&L
     revenue: float | None = None
+    # Insurers only — Net Premium Earned (₹ Cr). Stays None for non-insurers
+    # and for insurers whose source feed doesn't expose the line. See
+    # ResearchDataAPI._apply_insurance_headline for the read-side swap rule.
+    net_premium_earned: float | None = None
     employee_cost: float | None = None
     raw_material_cost: float | None = None
     power_and_fuel: float | None = None
