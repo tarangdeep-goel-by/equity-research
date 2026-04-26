@@ -1796,10 +1796,25 @@ class TestDupontStrategy2:
 
     def test_full_window_uses_ar_when_screener_narrowed(self, s2_api):
         """Screener has a MEDIUM flag at FY26 → without AR, DuPont narrows
-        to [FY26]. With AR fully covering FY26-FY24, AR primary path
-        returns multi-year DuPont with no narrowing."""
-        # Screener has 5 years and a MEDIUM flag at top
-        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        to [FY26]. With AR fully covering FY26-FY24 AND aggregate-bridging
+        (Gemini #7) restoring the older Screener years to the segment,
+        the result is hybrid: AR for FY26/FY25/FY24 + Screener-bridged for
+        FY23/FY22. Bridging is invisible to the AR-covered years.
+
+        The test fixture's expense components on the flagged boundary are
+        all None, so `total_expenses` falls back to a sum of zeros — both
+        sides land at 0 cr, and `compute_aggregate_bridge` returns None
+        (parent missing on either side). Build the pair so the parent IS
+        bridge-able by populating total_expenses directly.
+        """
+        # Screener has 5 years; expenses populated so the parent aggregate
+        # exists on both sides of the flagged boundary.
+        annuals = [_annual_full(f"202{i}-03-31",
+                                total_expenses=80000.0,
+                                other_expenses_detail=20000.0)
+                   for i in (6, 5, 4, 3, 2)]
+        # Make FY26 total_expenses YoY +10% (within tolerance vs revenue +0%)
+        annuals[0].total_expenses = 88000.0
         s2_api._store.upsert_annual_financials(annuals)
         s2_api._store.upsert_data_quality_flags([
             _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
@@ -1809,17 +1824,30 @@ class TestDupontStrategy2:
         self._seed_ar(s2_api, "X", ["2026-03-31", "2025-03-31", "2024-03-31"])
 
         result = s2_api.get_dupont_decomposition("X")
-        assert result["data_source"] == "ar_five_year_summary"
-        assert result["source"] == "ar_five_year_summary"
+        # AR + bridged Screener → mixed.
+        assert result["data_source"] == "mixed"
+        assert result["source"] == "mixed"
         years_in_result = [r["fiscal_year_end"] for r in result["years"]]
+        # AR-covered years still present.
         assert "2026-03-31" in years_in_result
         assert "2025-03-31" in years_in_result
         assert "2024-03-31" in years_in_result
+        # Older Screener years now recovered via bridging.
+        assert "2023-03-31" in years_in_result
+        assert "2022-03-31" in years_in_result
         ew = result["effective_window"]
-        # AR primary path → narrowed_due_to is empty (restated series).
+        # Bridged path → narrowed_due_to is empty, bridged_years populated.
         assert ew["narrowed_due_to"] == []
-        # Per-row source tag.
-        assert all(y["source"] == "ar_five_year_summary" for y in result["years"])
+        assert "2026-03-31" in ew["bridged_years"]
+        # AR-covered rows tagged ar_five_year_summary; Screener-bridged
+        # rows tagged screener_annual_bridged.
+        sources = {y["fiscal_year_end"]: y["source"] for y in result["years"]}
+        assert sources["2026-03-31"] == "ar_five_year_summary"
+        assert sources["2024-03-31"] == "ar_five_year_summary"
+        # FY23 / FY22 fall back to Screener — not in bridged_years (the
+        # boundary flag is at FY26), so they're plain screener_annual.
+        assert sources["2023-03-31"] == "screener_annual"
+        assert result.get("bridged_via_aggregate") is True
 
     def test_screener_path_when_no_ar_rows(self, s2_api):
         """Without AR rows the legacy Screener path runs unchanged."""
@@ -1836,8 +1864,17 @@ class TestDupontStrategy2:
         the rest of the (narrowed) window. Since AR fully covers
         Screener's narrowed segment ([FY26] alone is in AR), this collapses
         to pure-AR — confirms Strategy 2 dominance over a narrowed
-        Screener segment."""
-        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        Screener segment.
+
+        We blow out total_expenses on the FY26 boundary so aggregate
+        bridging (Gemini #7) does NOT apply — the parent isn't conserved,
+        so Screener stays narrowed and AR fully covers it.
+        """
+        annuals = [_annual_full(f"202{i}-03-31",
+                                total_expenses=80000.0)
+                   for i in (6, 5, 4, 3, 2)]
+        # FY26 total_expenses doubles → not bridge-able.
+        annuals[0].total_expenses = 160000.0
         s2_api._store.upsert_annual_financials(annuals)
         s2_api._store.upsert_data_quality_flags([
             _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
@@ -1894,8 +1931,16 @@ class TestPiotroskiStrategy2:
 
     def test_abstains_when_ar_lacks_required_fields(self, s2_api):
         """AR rows present but missing borrowings → fall through to legacy
-        Screener path, which abstains because of the flag."""
-        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        Screener path, which abstains because of the flag.
+
+        Blow out total_expenses on the FY26 boundary so aggregate bridging
+        (Gemini #7) does NOT salvage the Screener pair — only the legacy
+        abstain path remains.
+        """
+        annuals = [_annual_full(f"202{i}-03-31",
+                                total_expenses=80000.0)
+                   for i in (6, 5, 4, 3, 2)]
+        annuals[0].total_expenses = 200000.0  # +150% vs revenue 0% — not bridge-able
         s2_api._store.upsert_annual_financials(annuals)
         s2_api._store.upsert_data_quality_flags([
             _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
@@ -2009,11 +2054,20 @@ class TestCommonSizeStrategy2:
         assert result["ar_confirmed_years"] == []
 
     def test_mixed_when_ar_confirms_narrowed_segment(self, s2_api):
-        """Screener narrowed to [FY26] AND AR has FY26 → mixed annotation."""
+        """Screener narrowed to [FY26] AND AR has FY26 → mixed annotation.
+
+        Set total_expenses jump high enough to fall outside the bridging
+        tolerance so the legacy narrow-then-AR-confirm path runs (Gemini #7
+        bridging would otherwise restore the full window and route to
+        `screener_annual_bridged`).
+        """
         rows = [_annual_full(f"202{i}-03-31",
                              profit_before_tax=12000.0,
-                             employee_cost=10000.0)
+                             employee_cost=10000.0,
+                             total_expenses=80000.0)
                 for i in (6, 5, 4, 3, 2)]
+        # FY26 total_expenses doubles — way outside bridging tolerance.
+        rows[0].total_expenses = 200000.0
         s2_api._store.upsert_annual_financials(rows)
         s2_api._store.upsert_data_quality_flags([
             _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
@@ -2030,14 +2084,19 @@ class TestCommonSizeStrategy2:
 
 # ---- Annotation contract: every response carries data_source -------------
 
+# Allowed data_source values now include `screener_annual_bridged`
+# (Gemini review item #7 — aggregate bridging).
+_ALLOWED_DATA_SOURCES = (
+    "ar_five_year_summary", "screener_annual", "screener_annual_bridged", "mixed",
+)
+
+
 class TestDataSourceAnnotationContract:
     def test_dupont_carries_data_source(self, s2_api):
         annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4)]
         s2_api._store.upsert_annual_financials(annuals)
         result = s2_api.get_dupont_decomposition("X")
-        assert result["data_source"] in (
-            "ar_five_year_summary", "screener_annual", "mixed",
-        )
+        assert result["data_source"] in _ALLOWED_DATA_SOURCES
 
     def test_piotroski_carries_data_source(self, s2_api):
         annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4)]
@@ -2045,17 +2104,13 @@ class TestDataSourceAnnotationContract:
         result = s2_api.get_piotroski_score("X")
         # Either a successful score with data_source, or an abstain dict
         # with data_source — both must include the field.
-        assert result.get("data_source") in (
-            "ar_five_year_summary", "screener_annual", "mixed",
-        )
+        assert result.get("data_source") in _ALLOWED_DATA_SOURCES
 
     def test_cagr_carries_data_source(self, s2_api):
         annuals = [_annual_full(f"20{i:02d}-03-31") for i in (26, 25, 24, 23)]
         s2_api._store.upsert_annual_financials(annuals)
         result = s2_api.get_growth_cagr_table("X")
-        assert result["data_source"] in (
-            "ar_five_year_summary", "screener_annual", "mixed",
-        )
+        assert result["data_source"] in _ALLOWED_DATA_SOURCES
 
     def test_common_size_carries_data_source(self, s2_api):
         annuals = [_annual_full(f"202{i}-03-31",
@@ -2064,6 +2119,320 @@ class TestDataSourceAnnotationContract:
                    for i in (6, 5, 4)]
         s2_api._store.upsert_annual_financials(annuals)
         result = s2_api.get_common_size_pl("X")
-        assert result["data_source"] in (
-            "ar_five_year_summary", "screener_annual", "mixed",
-        )
+        assert result["data_source"] in _ALLOWED_DATA_SOURCES
+
+
+# ---------------------------------------------------------------------------
+# Aggregate-bridging consumer wiring (Gemini review item #7)
+# ---------------------------------------------------------------------------
+# Strategy 1 narrows the window when a per-component flag (e.g.
+# other_expenses_detail) fires, even though the parent aggregate
+# (total_expenses) is conserved within tolerance. Bridging restores the
+# full window for ratio-level consumers (DuPont, F-score, common-size, CAGR).
+
+
+def _annual_bridged(fy: str, *, total_expenses: float,
+                    revenue: float = 100000.0, **kw) -> AnnualFinancials:
+    """AnnualFinancials with explicit total_expenses for bridging tests."""
+    return _annual_full(fy, revenue=revenue, total_expenses=total_expenses, **kw)
+
+
+class TestDupontBridging:
+    """DuPont: when all dropped flags have aggregate_bridge.conserved=true,
+    use the full window with `data_source='screener_annual_bridged'` and
+    `bridged_via_aggregate=true`."""
+
+    def test_hdfcbank_style_bridges_full_window(self, s2_api):
+        """Mirrors HDFCBANK FY26: revenue +3.6%, total_expenses +11.2%
+        (within 10pp tolerance band) → bridge restores window."""
+        # Revenue 100K → 103.6K (+3.6%); total_expenses 80K → 88.96K (+11.2%).
+        annuals = [
+            _annual_bridged("2022-03-31", revenue=90000.0, total_expenses=72000.0),
+            _annual_bridged("2023-03-31", revenue=94500.0, total_expenses=75600.0),
+            _annual_bridged("2024-03-31", revenue=99225.0, total_expenses=79380.0),
+            _annual_bridged("2025-03-31", revenue=100000.0, total_expenses=80000.0),
+            _annual_bridged("2026-03-31", revenue=103600.0, total_expenses=88960.0),
+        ]
+        s2_api._store.upsert_annual_financials(annuals)
+        # Flag at FY26 with revenue change matching the actual 3.6%.
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "other_expenses_detail",
+                 100.0, 400.0, 300.0, 3.6, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_dupont_decomposition("X")
+        assert result["data_source"] == "screener_annual_bridged"
+        assert result.get("bridged_via_aggregate") is True
+        # Full 5-year window restored.
+        assert len(result["years"]) == 5
+        ew = result["effective_window"]
+        assert ew["narrowed_due_to"] == []
+        assert "2026-03-31" in ew["bridged_years"]
+        # The bridged year is tagged screener_annual_bridged at the row level.
+        sources = {y["fiscal_year_end"]: y["source"] for y in result["years"]}
+        assert sources["2026-03-31"] == "screener_annual_bridged"
+        # Older years tagged plain screener_annual.
+        assert sources["2024-03-31"] == "screener_annual"
+
+    def test_infy_style_does_not_bridge(self, s2_api):
+        """INFY FY26 mirror: revenue +9.6% but total_expenses +20.7% — gap
+        11pp > 10pp tolerance → bridge fails, narrowing preserved."""
+        annuals = [
+            _annual_bridged(f"202{i}-03-31",
+                            revenue=100000.0, total_expenses=80000.0)
+            for i in (2, 3, 4, 5, 6)
+        ]
+        annuals[-1].revenue = 109600.0  # +9.6%
+        annuals[-1].total_expenses = 96560.0  # +20.7%
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "other_expenses_detail",
+                 100.0, 3000.0, 2900.0, 9.6, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_dupont_decomposition("X")
+        # Not bridged → standard narrowing.
+        assert result["data_source"] == "screener_annual"
+        assert result.get("bridged_via_aggregate") is False
+        ew = result["effective_window"]
+        assert ew["narrowed_due_to"] != []  # narrowing still occurred
+
+    def test_strategy2_dominates_bridging(self, s2_api):
+        """When AR has the bridged year, AR wins — bridge annotation is
+        per-row but data_source is 'mixed' or 'ar_five_year_summary',
+        not 'screener_annual_bridged'."""
+        annuals = [
+            _annual_bridged(f"202{i}-03-31",
+                            revenue=100000.0, total_expenses=80000.0)
+            for i in (2, 3, 4, 5, 6)
+        ]
+        annuals[-1].total_expenses = 88000.0  # bridge-able
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "other_expenses_detail",
+                 100.0, 400.0, 300.0, 3.6, "RECLASS", "MEDIUM"),
+        ])
+        # AR covers ALL 5 years → AR wins, no bridging mention at top level.
+        rows = [
+            FiveYearHighlight(
+                fy_end=f"202{i}-03-31", revenue=20000.0 + j * 1000,
+                pat=4000.0 + j * 200, total_assets=200000.0 + j * 5000,
+                net_worth=80000.0 + j * 2000, source_ar_fy="FY26",
+                raw_unit="crore",
+            )
+            for j, i in enumerate([6, 5, 4, 3, 2])
+        ]
+        s2_api._store.upsert_five_year_summary("X", rows)
+        result = s2_api.get_dupont_decomposition("X")
+        # AR fully covers segment → pure AR.
+        assert result["data_source"] == "ar_five_year_summary"
+        # AR-primary path — no bridge annotation at the top level.
+        assert "bridged_years" not in result["effective_window"]
+
+
+class TestPiotroskiBridging:
+    """F-score: when (T, T-1) pair flag is bridge-conserved AND no AR pair
+    available, compute the score with bridged annotation instead of
+    abstaining."""
+
+    def test_bridges_when_pair_aggregate_conserved(self, s2_api):
+        annuals = [
+            _annual_bridged("2025-03-31", revenue=100000.0, total_expenses=80000.0,
+                            net_income=10000.0, total_assets=200000.0,
+                            cfo=12000.0, borrowings=30000.0,
+                            operating_profit=15000.0,
+                            equity_capital=50000.0, num_shares=100000000,
+                            depreciation=3000.0, raw_material_cost=40000.0,
+                            interest=2000.0),
+            _annual_bridged("2026-03-31", revenue=103600.0, total_expenses=88960.0,
+                            net_income=11000.0, total_assets=210000.0,
+                            cfo=13000.0, borrowings=29000.0,
+                            operating_profit=15500.0,
+                            equity_capital=50000.0, num_shares=100000000,
+                            depreciation=3100.0, raw_material_cost=41000.0,
+                            interest=2100.0),
+        ]
+        # Need 5 years for the helper to find segment[0]; pad with prior years.
+        more = [_annual_bridged(f"202{i}-03-31", revenue=90000.0, total_expenses=72000.0,
+                                net_income=9000.0, total_assets=190000.0,
+                                cfo=11000.0, borrowings=31000.0,
+                                operating_profit=14000.0,
+                                equity_capital=50000.0, num_shares=100000000,
+                                depreciation=3000.0, raw_material_cost=39000.0,
+                                interest=2000.0)
+                for i in (2, 3, 4)]
+        s2_api._store.upsert_annual_financials(more + annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "other_expenses_detail",
+                 100.0, 400.0, 300.0, 3.6, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_piotroski_score("X")
+        # Did NOT abstain — bridged.
+        assert "error" not in result
+        assert result["data_source"] == "screener_annual_bridged"
+        assert result.get("bridged_via_aggregate") is True
+        ew = result["effective_window"]
+        assert ew["narrowed_due_to"] == []
+        assert "2026-03-31" in ew["bridged_years"]
+        assert "score" in result
+
+    def test_does_not_bridge_when_aggregate_blew_out(self, s2_api):
+        """INFY-style: aggregate not conserved → still abstains."""
+        annuals = [
+            _annual_bridged("2025-03-31", revenue=100000.0, total_expenses=80000.0,
+                            net_income=10000.0, total_assets=200000.0,
+                            cfo=12000.0, borrowings=30000.0,
+                            operating_profit=15000.0, num_shares=100000000),
+            _annual_bridged("2026-03-31", revenue=109600.0, total_expenses=96560.0,
+                            net_income=11000.0, total_assets=210000.0,
+                            cfo=13000.0, borrowings=29000.0,
+                            operating_profit=15500.0, num_shares=100000000),
+        ]
+        more = [_annual_bridged(f"202{i}-03-31", revenue=90000.0, total_expenses=72000.0,
+                                net_income=9000.0, total_assets=190000.0,
+                                cfo=11000.0, borrowings=31000.0,
+                                operating_profit=14000.0, num_shares=100000000)
+                for i in (2, 3, 4)]
+        s2_api._store.upsert_annual_financials(more + annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "other_expenses_detail",
+                 100.0, 3000.0, 2900.0, 9.6, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_piotroski_score("X")
+        assert result.get("reason") == "stale_due_to_reclass"
+        assert result.get("data_source") == "screener_annual"
+
+
+class TestCommonSizeBridging:
+    def test_bridges_when_conserved(self, s2_api):
+        """All flags bridge-conserved → full window restored, data_source
+        becomes screener_annual_bridged."""
+        annuals = [
+            _annual_bridged(f"202{i}-03-31",
+                            revenue=100000.0, total_expenses=80000.0,
+                            employee_cost=20000.0,
+                            other_expenses_detail=10000.0,
+                            profit_before_tax=12000.0,
+                            interest=2000.0)
+            for i in (2, 3, 4, 5, 6)
+        ]
+        annuals[-1].total_expenses = 88000.0  # +10% bridge-able
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "other_expenses_detail",
+                 100.0, 400.0, 300.0, 3.6, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_common_size_pl("X")
+        assert result["data_source"] == "screener_annual_bridged"
+        assert result.get("bridged_via_aggregate") is True
+        assert len(result["years"]) == 5
+
+    def test_bs_flag_does_not_bridge_common_size(self, s2_api):
+        """Common-size is a P&L ratio — only total_expenses parent counts.
+        A BS-only flag (borrowings) gets an aggregate_bridge against
+        total_assets, but common-size requires `parent='total_expenses'`,
+        so it does NOT bridge — falls back to legacy narrowing."""
+        annuals = [
+            _annual_bridged(f"202{i}-03-31",
+                            revenue=100000.0, total_expenses=80000.0,
+                            employee_cost=20000.0,
+                            other_expenses_detail=10000.0,
+                            profit_before_tax=12000.0,
+                            interest=2000.0,
+                            total_assets=200000.0,
+                            borrowings=30000.0)
+            for i in (2, 3, 4, 5, 6)
+        ]
+        annuals[-1].total_assets = 215000.0  # +7.5% TA — within BS tolerance
+        annuals[-1].borrowings = 100000.0  # huge borrowings jump
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "borrowings",
+                 30000.0, 100000.0, 233.0, 0.0, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_common_size_pl("X")
+        # The borrowings flag IS bridge-conserved (BS via total_assets), but
+        # common-size only bridges P&L parent → falls back to narrowing.
+        assert result["data_source"] in ("screener_annual", "mixed")
+        assert result.get("bridged_via_aggregate") is False
+
+
+class TestCagrBridging:
+    def test_per_cell_survives_when_dependency_flag_bridges(self, s2_api):
+        """EBITDA depends on depreciation — when depreciation flag is
+        bridge-conserved, the EBITDA cell survives with
+        `screener_annual_bridged` source."""
+        annuals = [
+            _annual_full(f"20{i:02d}-03-31",
+                         operating_profit=20000.0, depreciation=3000.0,
+                         total_expenses=80000.0, revenue=100000.0)
+            for i in (26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16)
+        ]
+        # FY26 depreciation flag — bridgeable: total_expenses +5% within band.
+        annuals[0].total_expenses = 84000.0
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "depreciation",
+                 3000.0, 5000.0, 66.7, 0.0, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_growth_cagr_table("X")
+        # EBITDA 1y depends on depreciation; flag bridged → cell present.
+        ebitda_row = result["cagrs"].get("ebitda", {})
+        assert ebitda_row.get("1y") is not None
+        spc = result["source_per_cell"]
+        assert spc.get("ebitda.1y") == "screener_annual_bridged"
+        ew = result["effective_window"]
+        assert {"metric": "ebitda", "horizon": "1y"} in ew["bridged_cells"]
+        assert result.get("bridged_via_aggregate") is True
+
+    def test_per_cell_suppressed_when_dependency_flag_not_bridge_conserved(self, s2_api):
+        annuals = [
+            _annual_full(f"20{i:02d}-03-31",
+                         operating_profit=20000.0, depreciation=3000.0,
+                         total_expenses=80000.0, revenue=100000.0)
+            for i in (26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16)
+        ]
+        # Total_expenses doubles → not bridgeable.
+        annuals[0].total_expenses = 160000.0
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "depreciation",
+                 3000.0, 5000.0, 66.7, 0.0, "RECLASS", "MEDIUM"),
+        ])
+        result = s2_api.get_growth_cagr_table("X")
+        # EBITDA 1y suppressed (legacy behaviour).
+        ebitda_row = result["cagrs"].get("ebitda", {})
+        assert ebitda_row.get("1y") is None
+        spc = result["source_per_cell"]
+        assert "ebitda.1y" not in spc
+        ew = result["effective_window"]
+        assert {"metric": "ebitda", "horizon": "1y"} in ew["suppressed_cells"]
+
+
+class TestGetDataQualityFlagsAttachesBridge:
+    """The API-level get_data_quality_flags MUST enrich each flag with
+    aggregate_bridge — that's the single contract change that lets
+    consumers downstream make the bridge decision."""
+
+    def test_flags_carry_bridge_field(self, s2_api):
+        annuals = [
+            _annual_bridged(f"202{i}-03-31",
+                            revenue=100000.0, total_expenses=80000.0)
+            for i in (5, 6)
+        ]
+        annuals[-1].total_expenses = 88000.0
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            Flag("X", "2025-03-31", "2026-03-31", "other_expenses_detail",
+                 100.0, 400.0, 300.0, 3.6, "RECLASS", "MEDIUM"),
+        ])
+        flags = s2_api.get_data_quality_flags("X", min_severity="MEDIUM")
+        assert len(flags) == 1
+        f = flags[0]
+        assert "aggregate_bridge" in f
+        assert f["aggregate_bridge"] is not None
+        assert f["aggregate_bridge"]["parent"] == "total_expenses"
+        assert f["aggregate_bridge"]["conserved"] is True
+
+    def test_empty_flag_list_returns_empty(self, s2_api):
+        # No flags persisted; method must return [] not crash on empty rows.
+        flags = s2_api.get_data_quality_flags("NOSUCH", min_severity="MEDIUM")
+        assert flags == []

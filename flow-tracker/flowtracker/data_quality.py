@@ -69,6 +69,60 @@ JUMP_LOW = 1.0       # 100%-200%
 
 SEVERITY_RANK = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
 
+# Aggregate-bridging tolerances (Gemini review item #7).
+#
+# When a per-component flag fires (e.g. other_expenses_detail +290%) we ALSO
+# check whether the parent aggregate (total_expenses for P&L, total_assets for
+# BS) is conserved across the same year boundary. If the parent grows roughly
+# in line with the business, the per-component break is a pure reshuffle from
+# a *ratio* perspective — DuPont's cost / revenue computed off the SAME
+# total_expenses both years still produces a true cost-to-income walk.
+#
+# P&L tolerance: total_expenses YoY change is allowed to be within
+# ``revenue YoY ± BRIDGE_TOLERANCE_PL_OVER_REVENUE_GROWTH`` (additive band).
+# 10pp is wider than the 5pp default the spec floats — chosen because banks
+# (HDFCBANK FY26: revenue +3.6%, total_expenses +11.2%, gap 7.6pp post-merger
+# from depreciation/amortisation step-ups) and any company in a capex / IT
+# investment cycle routinely run cost growth a few points above revenue
+# without a real reclass. 10pp catches the HDFCBANK case while still rejecting
+# INFY FY26 (other_expenses_detail +3129% — total_expenses also explodes,
+# trivially outside any reasonable band).
+BRIDGE_TOLERANCE_PL_OVER_REVENUE_GROWTH = 0.10
+
+# BS tolerance: |total_assets YoY change| ≤ 15%. Asset growth above 15% YoY
+# in a single year is unusual outside M&A — and M&A IS the reshuffle pattern
+# we want to flag, not bridge across. 15% accommodates organic balance-sheet
+# growth in fast-growing private banks / NBFCs without admitting merger
+# years.
+BRIDGE_TOLERANCE_BS_ABS = 0.15
+
+# Map per-component lines → which parent aggregate they roll up into. Used
+# by `compute_aggregate_bridge` to decide which aggregate to compare.
+PL_PARENT = "total_expenses"
+BS_PARENT = "total_assets"
+
+# P&L sub-components whose conservation we measure against `total_expenses`.
+# Excludes `total_expenses` itself (it IS the parent) and `operating_profit`
+# (a derived aggregate, not a component) and `other_income` (above-the-line
+# revenue addition, not a cost bucket).
+PL_EXPENSE_COMPONENTS: tuple[str, ...] = (
+    "employee_cost", "raw_material_cost", "power_and_fuel", "other_mfr_exp",
+    "selling_and_admin", "other_expenses_detail", "depreciation", "interest",
+)
+
+# Map flag.line → parent aggregate name. P&L sub-components bridge to
+# total_expenses; BS sub-components bridge to total_assets. Lines not in
+# this map (e.g. operating_profit, other_income, total_expenses itself,
+# total_assets itself) are NOT bridge-able — `compute_aggregate_bridge`
+# returns None for them so the legacy behaviour holds.
+BRIDGE_PARENT_BY_LINE: dict[str, str] = {
+    **{line: PL_PARENT for line in PL_EXPENSE_COMPONENTS},
+    "borrowings": BS_PARENT,
+    "other_liabilities": BS_PARENT,
+    "reserves": BS_PARENT,
+    "investments": BS_PARENT,
+}
+
 
 def longest_unflagged_window(
     annuals_desc: list, flags: list[dict]
@@ -262,3 +316,138 @@ def detect(
                     severity=severity,
                 ))
     return flags
+
+
+# ---------------------------------------------------------------------------
+# Aggregate-level bridging (Gemini review item #7)
+# ---------------------------------------------------------------------------
+
+
+def _expense_sum(row: dict) -> float | None:
+    """Sum of P&L expense sub-components on a row, treating None as 0.
+
+    Returns None only when ALL sub-components are missing (no signal).
+    Used as fallback when the row's stored `total_expenses` is absent.
+    """
+    parts = [row.get(line) for line in PL_EXPENSE_COMPONENTS]
+    if all(p is None for p in parts):
+        return None
+    return sum((p or 0.0) for p in parts)
+
+
+def _aggregate_value(row: dict, parent: str) -> float | None:
+    """Return the parent aggregate value for `row`. Prefers stored value,
+    falls back to summing sub-components for `total_expenses` (BS parent
+    `total_assets` is always stored — no fallback)."""
+    stored = row.get(parent)
+    if stored is not None:
+        return stored
+    if parent == PL_PARENT:
+        return _expense_sum(row)
+    return None
+
+
+def compute_aggregate_bridge(
+    flag: dict,
+    prior_row: dict | None,
+    curr_row: dict | None,
+    *,
+    sibling_flagged_lines: set[str] | None = None,
+) -> dict | None:
+    """Decide whether a per-component flag is bridge-able by the parent
+    aggregate's YoY conservation.
+
+    Args:
+        flag: a flag dict (must have `line`, `rev_change_pct`).
+        prior_row, curr_row: the two annual_financials rows the flag spans.
+        sibling_flagged_lines: per-symbol set of `parent` lines that are
+            ALSO flagged elsewhere (e.g. `total_expenses` itself flagged
+            in another row). When the parent aggregate is itself flagged,
+            we never bridge — that's a real reshuffle, not a recategorisation.
+
+    Returns:
+        dict with keys {parent, parent_yoy_pct, conserved, tolerance_used}
+        or None when:
+          - flag.line has no defined parent (e.g. operating_profit)
+          - either prior_row or curr_row is missing
+          - parent aggregate cannot be computed on either side
+        These cases preserve legacy behaviour (no bridging applied).
+    """
+    line = flag.get("line")
+    parent = BRIDGE_PARENT_BY_LINE.get(line)
+    if parent is None or prior_row is None or curr_row is None:
+        return None
+
+    p_val = _aggregate_value(prior_row, parent)
+    c_val = _aggregate_value(curr_row, parent)
+    if p_val is None or c_val is None or abs(p_val) < MIN_MAGNITUDE_CR:
+        return None
+
+    parent_yoy = (c_val - p_val) / abs(p_val)
+
+    # Edge case: parent aggregate is itself flagged in another row → never
+    # bridge across what is itself a real structural break.
+    if sibling_flagged_lines and parent in sibling_flagged_lines:
+        return {
+            "parent": parent,
+            "parent_yoy_pct": round(parent_yoy * 100, 2),
+            "conserved": False,
+            "tolerance_used": None,
+            "reason": f"parent {parent} also flagged",
+        }
+
+    if parent == PL_PARENT:
+        # P&L: total_expenses growth must be within revenue growth ± tolerance.
+        rev_change_pct = flag.get("rev_change_pct", 0.0) or 0.0
+        rev_change = rev_change_pct / 100.0
+        gap = parent_yoy - rev_change  # positive = expenses grew faster than revenue
+        conserved = abs(gap) <= BRIDGE_TOLERANCE_PL_OVER_REVENUE_GROWTH
+        tolerance = BRIDGE_TOLERANCE_PL_OVER_REVENUE_GROWTH
+    else:
+        # BS: |total_assets YoY| ≤ tolerance (absolute).
+        conserved = abs(parent_yoy) <= BRIDGE_TOLERANCE_BS_ABS
+        tolerance = BRIDGE_TOLERANCE_BS_ABS
+
+    return {
+        "parent": parent,
+        "parent_yoy_pct": round(parent_yoy * 100, 2),
+        "conserved": bool(conserved),
+        "tolerance_used": tolerance,
+    }
+
+
+def attach_aggregate_bridges(
+    flag_dicts: list[dict],
+    rows_by_fy: dict[str, dict],
+) -> list[dict]:
+    """Enrich flag dicts with `aggregate_bridge` field in-place-equivalent.
+
+    Args:
+        flag_dicts: list of flag dicts as returned by
+            `FlowStore.get_data_quality_flags(symbol)`.
+        rows_by_fy: annual_financials rows for the same symbol, keyed by
+            `fiscal_year_end`. Each row should expose the same column dict
+            shape used by the detector (`total_expenses`, `total_assets`,
+            and the PL_EXPENSE_COMPONENTS keys).
+
+    Returns:
+        new list with each flag carrying `aggregate_bridge: dict | None`.
+        Original dicts are not mutated.
+    """
+    # Sibling parents: which parent aggregates are themselves flagged anywhere.
+    parent_lines = {PL_PARENT, BS_PARENT}
+    sibling_parents = {
+        f["line"] for f in flag_dicts if f.get("line") in parent_lines
+    }
+
+    enriched: list[dict] = []
+    for f in flag_dicts:
+        prior_row = rows_by_fy.get(f.get("prior_fy"))
+        curr_row = rows_by_fy.get(f.get("curr_fy"))
+        bridge = compute_aggregate_bridge(
+            f, prior_row, curr_row, sibling_flagged_lines=sibling_parents,
+        )
+        new_f = dict(f)
+        new_f["aggregate_bridge"] = bridge
+        enriched.append(new_f)
+    return enriched
