@@ -1685,3 +1685,385 @@ class TestSectorIndexFallbackE16:
 class TestSotpSubsidiaryFreshnessE10:
     def test_recently_listed_subsidiary_flagged(self):
         pass
+
+
+# ---------------------------------------------------------------------------
+# Strategy 2 — ar_five_year_summary consumer wiring
+# ---------------------------------------------------------------------------
+# get_five_year_summary is the public surface; the four trend methods
+# (DuPont, F-score, CAGR, common-size) consume it. These tests exercise the
+# wiring against a fresh tmp_db so the AR rows are deterministic.
+
+from flowtracker.data_quality import Flag  # noqa: E402
+from flowtracker.fund_models import AnnualFinancials  # noqa: E402
+from flowtracker.research.five_year_parser import FiveYearHighlight  # noqa: E402
+
+
+def _ar_row(fy_end: str, *, revenue: float, pat: float, total_assets: float,
+            net_worth: float, cfo: float = 1500.0, capex: float = 800.0,
+            operating_profit: float = 1800.0, borrowings: float = 5000.0,
+            eps: float = 12.0, num_shares: float = 1000.0,
+            source_ar_fy: str = "FY25") -> FiveYearHighlight:
+    """Synthetic AR row for Strategy 2 wiring tests."""
+    return FiveYearHighlight(
+        fy_end=fy_end, revenue=revenue, operating_profit=operating_profit,
+        pat=pat, eps=eps, net_worth=net_worth, total_assets=total_assets,
+        borrowings=borrowings, cfo=cfo, capex=capex,
+        dividend_per_share=2.5, num_shares=num_shares,
+        source_ar_fy=source_ar_fy, raw_unit="crore",
+    )
+
+
+def _annual_full(fy: str, *, revenue: float = 100000.0, net_income: float = 10000.0,
+                 total_assets: float = 200000.0, equity: float = 50000.0,
+                 cfo: float = 12000.0, borrowings: float = 30000.0,
+                 operating_profit: float = 15000.0, eps: float = 10.0,
+                 num_shares: float = 1000.0,
+                 raw_material_cost: float = 40000.0,
+                 interest: float = 2000.0,
+                 depreciation: float = 3000.0,
+                 **extras) -> AnnualFinancials:
+    fields = dict(
+        symbol="X", fiscal_year_end=fy, revenue=revenue, net_income=net_income,
+        total_assets=total_assets, equity_capital=equity, reserves=0.0,
+        cfo=cfo, borrowings=borrowings, operating_profit=operating_profit,
+        eps=eps, num_shares=num_shares,
+        raw_material_cost=raw_material_cost, interest=interest,
+        depreciation=depreciation,
+    )
+    fields.update(extras)
+    return AnnualFinancials(**fields)
+
+
+def _flag(symbol: str, curr_fy: str, line: str, severity: str = "MEDIUM",
+          prior_fy: str | None = None) -> Flag:
+    """Build a Flag matching the data_quality_api helper."""
+    return Flag(
+        symbol=symbol, prior_fy=prior_fy or "2024-03-31", curr_fy=curr_fy,
+        line=line, prior_val=100.0, curr_val=400.0, jump_pct=300.0,
+        revenue_change_pct=5.0, flag_type="RECLASS", severity=severity,
+    )
+
+
+@pytest.fixture
+def s2_api(tmp_db, monkeypatch) -> ResearchDataAPI:
+    """Fresh tmp_db ResearchDataAPI for Strategy 2 wiring tests."""
+    monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+    a = ResearchDataAPI()
+    yield a
+    a.close()
+
+
+# ---- get_five_year_summary surface --------------------------------------
+
+class TestGetFiveYearSummarySurface:
+    def test_returns_rows_when_persisted(self, s2_api: ResearchDataAPI):
+        rows = [
+            _ar_row("2026-03-31", revenue=20000.0, pat=4000.0,
+                    total_assets=200000.0, net_worth=80000.0),
+            _ar_row("2025-03-31", revenue=18000.0, pat=3500.0,
+                    total_assets=180000.0, net_worth=72000.0),
+        ]
+        s2_api._store.upsert_five_year_summary("HDFCBANK", rows)
+        out = s2_api.get_five_year_summary("HDFCBANK")
+        assert isinstance(out, list)
+        assert len(out) == 2
+        # Sorted DESC by fy_end
+        assert out[0]["fy_end"] == "2026-03-31"
+        assert out[1]["fy_end"] == "2025-03-31"
+        # Pass-through of all columns
+        assert out[0]["revenue"] == 20000.0
+        assert out[0]["pat"] == 4000.0
+        assert out[0]["source_ar_fy"] == "FY25"
+        assert out[0]["raw_unit"] == "crore"
+
+    def test_returns_empty_for_unknown_symbol(self, s2_api: ResearchDataAPI):
+        assert s2_api.get_five_year_summary("NOT_A_REAL_STOCK") == []
+
+
+# ---- DuPont — Strategy 2 ------------------------------------------------
+
+class TestDupontStrategy2:
+    def _seed_ar(self, api, symbol: str, fys: list[str]) -> None:
+        # Build a clean restated 5-year AR series.
+        rows = [
+            _ar_row(fy, revenue=20000.0 + i * 1000, pat=4000.0 + i * 200,
+                    total_assets=200000.0 + i * 5000,
+                    net_worth=80000.0 + i * 2000)
+            for i, fy in enumerate(fys)
+        ]
+        api._store.upsert_five_year_summary(symbol, rows)
+
+    def test_full_window_uses_ar_when_screener_narrowed(self, s2_api):
+        """Screener has a MEDIUM flag at FY26 → without AR, DuPont narrows
+        to [FY26]. With AR fully covering FY26-FY24, AR primary path
+        returns multi-year DuPont with no narrowing."""
+        # Screener has 5 years and a MEDIUM flag at top
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
+                  prior_fy="2025-03-31"),
+        ])
+        # AR has 3 most-recent years
+        self._seed_ar(s2_api, "X", ["2026-03-31", "2025-03-31", "2024-03-31"])
+
+        result = s2_api.get_dupont_decomposition("X")
+        assert result["data_source"] == "ar_five_year_summary"
+        assert result["source"] == "ar_five_year_summary"
+        years_in_result = [r["fiscal_year_end"] for r in result["years"]]
+        assert "2026-03-31" in years_in_result
+        assert "2025-03-31" in years_in_result
+        assert "2024-03-31" in years_in_result
+        ew = result["effective_window"]
+        # AR primary path → narrowed_due_to is empty (restated series).
+        assert ew["narrowed_due_to"] == []
+        # Per-row source tag.
+        assert all(y["source"] == "ar_five_year_summary" for y in result["years"])
+
+    def test_screener_path_when_no_ar_rows(self, s2_api):
+        """Without AR rows the legacy Screener path runs unchanged."""
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        s2_api._store.upsert_annual_financials(annuals)
+        result = s2_api.get_dupont_decomposition("X")
+        assert result["data_source"] == "screener_annual"
+        assert result["source"] == "screener"
+        assert len(result["years"]) == 5
+
+    def test_hybrid_when_ar_covers_only_recent_years(self, s2_api):
+        """AR has 3 most-recent years, Screener has 5 years and is narrowed
+        to 1 year (FY26). Hybrid: AR for the 3 AR years, Screener fills
+        the rest of the (narrowed) window. Since AR fully covers
+        Screener's narrowed segment ([FY26] alone is in AR), this collapses
+        to pure-AR — confirms Strategy 2 dominance over a narrowed
+        Screener segment."""
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
+                  prior_fy="2025-03-31"),
+        ])
+        # AR covers FY26 only — minimal coverage
+        self._seed_ar(s2_api, "X", ["2026-03-31"])
+        result = s2_api.get_dupont_decomposition("X")
+        # Single AR year covers Screener's narrowed [FY26] → pure AR path.
+        assert result["data_source"] == "ar_five_year_summary"
+        assert result["effective_window"]["narrowed_due_to"] == []
+
+
+# ---- F-Score — Strategy 2 -----------------------------------------------
+
+class TestPiotroskiStrategy2:
+    def test_uses_ar_pair_when_screener_pair_flagged(self, s2_api):
+        """Screener (T, T-1) flagged → without AR, F-score abstains. With
+        AR T and T-1 both populated, F-score computes from AR and
+        annotates data_source='ar_five_year_summary'."""
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
+                  prior_fy="2025-03-31"),
+        ])
+        rows = [
+            _ar_row("2026-03-31", revenue=20000.0, pat=4000.0,
+                    total_assets=200000.0, net_worth=80000.0,
+                    cfo=5000.0, borrowings=30000.0,
+                    operating_profit=6000.0, num_shares=1000.0),
+            _ar_row("2025-03-31", revenue=18000.0, pat=3500.0,
+                    total_assets=180000.0, net_worth=72000.0,
+                    cfo=4500.0, borrowings=32000.0,
+                    operating_profit=5500.0, num_shares=1000.0),
+        ]
+        s2_api._store.upsert_five_year_summary("X", rows)
+        result = s2_api.get_piotroski_score("X")
+        # No abstain — AR-restated pair is internally consistent.
+        assert "error" not in result, f"unexpected abstain: {result}"
+        assert result["data_source"] == "ar_five_year_summary"
+        assert "score" in result
+        assert isinstance(result["score"], int)
+        ew = result["effective_window"]
+        assert ew["narrowed_due_to"] == []
+
+    def test_falls_back_to_screener_path_when_ar_missing(self, s2_api):
+        """No AR rows → legacy Screener path runs."""
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4)]
+        s2_api._store.upsert_annual_financials(annuals)
+        result = s2_api.get_piotroski_score("X")
+        assert result.get("data_source") == "screener_annual"
+        assert "score" in result
+
+    def test_abstains_when_ar_lacks_required_fields(self, s2_api):
+        """AR rows present but missing borrowings → fall through to legacy
+        Screener path, which abstains because of the flag."""
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+        s2_api._store.upsert_annual_financials(annuals)
+        s2_api._store.upsert_data_quality_flags([
+            _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
+                  prior_fy="2025-03-31"),
+        ])
+        # AR rows missing `borrowings`
+        rows = [
+            FiveYearHighlight(
+                fy_end="2026-03-31", revenue=20000.0, pat=4000.0,
+                total_assets=200000.0, net_worth=80000.0,
+                cfo=5000.0, operating_profit=6000.0,
+                source_ar_fy="FY26", raw_unit="crore",
+                # borrowings intentionally None
+            ),
+            FiveYearHighlight(
+                fy_end="2025-03-31", revenue=18000.0, pat=3500.0,
+                total_assets=180000.0, net_worth=72000.0,
+                cfo=4500.0, operating_profit=5500.0,
+                source_ar_fy="FY26", raw_unit="crore",
+            ),
+        ]
+        s2_api._store.upsert_five_year_summary("X", rows)
+        result = s2_api.get_piotroski_score("X")
+        # Falls through to Screener, which abstains on the flag.
+        assert result.get("reason") == "stale_due_to_reclass"
+        assert result.get("data_source") == "screener_annual"
+
+
+# ---- CAGR — Strategy 2 --------------------------------------------------
+
+class TestCagrTableStrategy2:
+    def test_revenue_ni_eps_from_ar_when_endpoints_available(self, s2_api):
+        """AR has FY26 and FY24 rows → 1y / 3y revenue, NI, EPS CAGRs come
+        from the restated series. data_source becomes 'ar_five_year_summary'
+        when every populated cell came from AR."""
+        annuals = [_annual_full(f"20{i:02d}-03-31") for i in (26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16)]
+        s2_api._store.upsert_annual_financials(annuals)
+        # AR covers the most recent 5 years — supplies endpoints for 1y / 3y / 5y.
+        rows = [
+            _ar_row(fy, revenue=20000.0 + i * 1000, pat=4000.0 + i * 200,
+                    total_assets=200000.0 + i * 5000,
+                    net_worth=80000.0 + i * 2000,
+                    eps=12.0 + i, cfo=5000.0 + i * 100, capex=2000.0 + i * 50)
+            for i, fy in enumerate([
+                "2026-03-31", "2025-03-31", "2024-03-31", "2023-03-31", "2022-03-31",
+            ])
+        ]
+        s2_api._store.upsert_five_year_summary("X", rows)
+        result = s2_api.get_growth_cagr_table("X")
+        # data_source — at least one cell from AR
+        assert result["data_source"] in ("ar_five_year_summary", "mixed")
+        # Per-cell source tracking
+        spc = result["source_per_cell"]
+        # Revenue 1y / 3y / 5y endpoints all in AR → AR-sourced
+        assert spc.get("revenue.1y") == "ar_five_year_summary"
+        assert spc.get("revenue.3y") == "ar_five_year_summary"
+        # 10y endpoint (FY16) not in AR → Screener-sourced
+        assert spc.get("revenue.10y") == "screener_annual"
+        assert result["data_source"] == "mixed"
+
+    def test_falls_back_to_screener_when_no_ar(self, s2_api):
+        """No AR rows → legacy Screener path; data_source='screener_annual'."""
+        annuals = [_annual_full(f"20{i:02d}-03-31") for i in (26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16)]
+        s2_api._store.upsert_annual_financials(annuals)
+        result = s2_api.get_growth_cagr_table("X")
+        assert result["data_source"] == "screener_annual"
+
+    def test_ar_cells_not_suppressed_by_screener_flags(self, s2_api):
+        """AR-sourced cells must NOT be suppressed by Screener reclass flags
+        — that's the whole point of Strategy 2: AR is restated."""
+        annuals = [_annual_full(f"20{i:02d}-03-31",
+                                operating_profit=20000.0, depreciation=3000.0)
+                   for i in (26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16)]
+        s2_api._store.upsert_annual_financials(annuals)
+        # Flag depreciation at FY26 — would normally suppress EBITDA + FCF
+        s2_api._store.upsert_data_quality_flags([
+            _flag("X", "2026-03-31", "depreciation", "MEDIUM",
+                  prior_fy="2025-03-31"),
+        ])
+        # AR provides revenue / pat / cfo / capex (FCF) for endpoints
+        rows = [
+            _ar_row(fy, revenue=20000.0 + i * 1000, pat=4000.0 + i * 200,
+                    total_assets=200000.0 + i * 5000,
+                    net_worth=80000.0 + i * 2000,
+                    cfo=5000.0 + i * 100, capex=2000.0 + i * 50)
+            for i, fy in enumerate([
+                "2026-03-31", "2025-03-31", "2024-03-31",
+            ])
+        ]
+        s2_api._store.upsert_five_year_summary("X", rows)
+        result = s2_api.get_growth_cagr_table("X")
+        # FCF 1y from AR — not suppressed even though depreciation flagged.
+        assert result["source_per_cell"].get("fcf.1y") == "ar_five_year_summary"
+        assert result["cagrs"]["fcf"].get("1y") is not None
+
+
+# ---- Common-size — Strategy 2 -------------------------------------------
+
+class TestCommonSizeStrategy2:
+    def test_data_source_screener_when_no_ar(self, s2_api):
+        """Without AR rows, common-size annotates data_source='screener_annual'."""
+        rows = [_annual_full(f"202{i}-03-31",
+                             profit_before_tax=12000.0,
+                             employee_cost=10000.0)
+                for i in (6, 5, 4, 3, 2)]
+        for r in rows:
+            r.profit_before_tax = 12000.0
+        s2_api._store.upsert_annual_financials(rows)
+        result = s2_api.get_common_size_pl("X")
+        assert result["data_source"] == "screener_annual"
+        assert result["ar_confirmed_years"] == []
+
+    def test_mixed_when_ar_confirms_narrowed_segment(self, s2_api):
+        """Screener narrowed to [FY26] AND AR has FY26 → mixed annotation."""
+        rows = [_annual_full(f"202{i}-03-31",
+                             profit_before_tax=12000.0,
+                             employee_cost=10000.0)
+                for i in (6, 5, 4, 3, 2)]
+        s2_api._store.upsert_annual_financials(rows)
+        s2_api._store.upsert_data_quality_flags([
+            _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
+                  prior_fy="2025-03-31"),
+        ])
+        s2_api._store.upsert_five_year_summary("X", [
+            _ar_row("2026-03-31", revenue=20000.0, pat=4000.0,
+                    total_assets=200000.0, net_worth=80000.0),
+        ])
+        result = s2_api.get_common_size_pl("X")
+        assert result["data_source"] == "mixed"
+        assert "2026-03-31" in result["ar_confirmed_years"]
+
+
+# ---- Annotation contract: every response carries data_source -------------
+
+class TestDataSourceAnnotationContract:
+    def test_dupont_carries_data_source(self, s2_api):
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4)]
+        s2_api._store.upsert_annual_financials(annuals)
+        result = s2_api.get_dupont_decomposition("X")
+        assert result["data_source"] in (
+            "ar_five_year_summary", "screener_annual", "mixed",
+        )
+
+    def test_piotroski_carries_data_source(self, s2_api):
+        annuals = [_annual_full(f"202{i}-03-31") for i in (6, 5, 4)]
+        s2_api._store.upsert_annual_financials(annuals)
+        result = s2_api.get_piotroski_score("X")
+        # Either a successful score with data_source, or an abstain dict
+        # with data_source — both must include the field.
+        assert result.get("data_source") in (
+            "ar_five_year_summary", "screener_annual", "mixed",
+        )
+
+    def test_cagr_carries_data_source(self, s2_api):
+        annuals = [_annual_full(f"20{i:02d}-03-31") for i in (26, 25, 24, 23)]
+        s2_api._store.upsert_annual_financials(annuals)
+        result = s2_api.get_growth_cagr_table("X")
+        assert result["data_source"] in (
+            "ar_five_year_summary", "screener_annual", "mixed",
+        )
+
+    def test_common_size_carries_data_source(self, s2_api):
+        annuals = [_annual_full(f"202{i}-03-31",
+                                profit_before_tax=12000.0,
+                                employee_cost=10000.0)
+                   for i in (6, 5, 4)]
+        s2_api._store.upsert_annual_financials(annuals)
+        result = s2_api.get_common_size_pl("X")
+        assert result["data_source"] in (
+            "ar_five_year_summary", "screener_annual", "mixed",
+        )
