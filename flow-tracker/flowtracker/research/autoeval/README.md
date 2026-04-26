@@ -57,6 +57,35 @@ uv run flowtrack research autoeval-macro --dates 2025-11-01
 
 **Results** — `results_macro.tsv` (next to `results.tsv`); per-run JSON archives at `eval_history/macro_<ts>.json`. The `--progress` chart shows the most recent ~10 macro grades when the TSV exists.
 
+## Analog backtest
+
+The Historical Analog agent is the only specialist whose outputs are falsifiable against realized 12m forward returns — Gemini grading is subjective, but realized returns are ground truth. The backtest harness samples mature `(symbol, as_of_date)` points (where 12m forward returns have landed), runs the agent backdated via `FLOWTRACK_AS_OF`, then scores the briefing's `directional_adjustments` against the realized return's quartile within the retrieved cohort.
+
+```bash
+# Default baseline run (N=20, seed=42, ~3hr wall-clock, ~$8 cost)
+uv run flowtrack research analog-backtest --n 20 --seed 42 --note "baseline-post-scaffolds"
+
+# Re-grade existing briefings without re-running the agent (cheap iteration)
+uv run flowtrack research analog-backtest --skip-run --note regrade-only
+
+# Smaller pilot
+uv run flowtrack research analog-backtest --n 6 --seed 1 --note pilot
+```
+
+**Calibration thresholds** — directional calls are interpreted quantitatively against the cohort's quartile distribution:
+
+| Call | Pass condition | Meaning |
+|------|----------------|---------|
+| `Thicker` (any tail) | hit rate `>= 0.35` | Realized lands in the claimed-fat tail meaningfully above the 25% random rate |
+| `Thinner` (any tail) | hit rate `>= 0.85` (i.e. realized rarely lands in the claimed-thin tail) | The thin-tail claim is observed |
+| `Unchanged` | not scored | Counted only for coverage; no calibration claim |
+
+**Output** — per-sample TSV at `backtest_results_analog.tsv` (timestamp, symbol, as_of, realized quartile, hits, cohort audit columns) plus a per-run JSON archive at `eval_history/analog_backtest_<YYYY-MM-DD_HH-MM>.json` containing run metadata (`note`, `n`, `seed`, `cutoff_days`, `started_at`, `finished_at`), every `BacktestSample`, and the calibration summary dict. Both are gitignored.
+
+**Cadence** — run monthly (or after material changes to the analog-retrieval cohort builder / directional-adjustment prompt). Compare the latest archive's calibration to the prior month's via `eval_history/analog_backtest_*.json` to track drift.
+
+**Backtest writes are sandboxed** — briefings land in `~/.local/share/flowtracker/backtest/<as_of>/<symbol>/historical_analog.json`, never in the live `~/vault/stocks/<symbol>/briefings/` path (PR-B2 plumbing via `FLOWTRACK_BACKTEST_OUT_DIR`).
+
 ## How We Used It (Session 2026-04-07)
 
 ### Step-by-step workflow

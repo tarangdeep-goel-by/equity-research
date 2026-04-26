@@ -1220,3 +1220,45 @@ def autoeval_macro(
         note=note or "",
     )
     asyncio.run(evaluate_macro.async_main(args_ns))
+
+
+@app.command("analog-backtest")
+def analog_backtest(
+    n: Annotated[int, typer.Option("--n", help="Sample size (default 20)")] = 20,
+    seed: Annotated[int, typer.Option("--seed", help="Random seed for stratified sampler (default 42)")] = 42,
+    skip_run: Annotated[bool, typer.Option("--skip-run", help="Skip agent runs; re-score using existing briefings under ~/.local/share/flowtracker/backtest/")] = False,
+    cutoff_days: Annotated[int, typer.Option("--cutoff-days", help="Min age (days) for a sample's as_of (default 450 = 12mo + buffer)")] = 450,
+    note: Annotated[str, typer.Option("--note", help="Free-form note threaded into the eval_history archive (e.g. 'baseline-post-scaffolds')")] = "",
+) -> None:
+    """Run the Historical Analog empirical backtest — calibrates directional
+    adjustments against realized 12m forward returns.
+
+    Stratified samples ``--n`` ``(symbol, as_of_date)`` points where 12m
+    forward returns are observable, runs the historical_analog agent
+    backdated via FLOWTRACK_AS_OF, then scores the briefing's
+    ``directional_adjustments`` against the realized return's quartile
+    within the retrieved cohort. Calibration thresholds:
+
+      * Thicker call passes if hit rate >= 0.35
+      * Thinner call passes if hit rate >= 0.85 (i.e. realized rarely
+        lands in the claimed-thin tail)
+
+    Archives metadata + per-sample rows + calibration summary to
+    ``autoeval/eval_history/analog_backtest_<ts>.json``. Recommended
+    cadence: monthly (~3hr wall-clock, ~$8 cost at N=20).
+
+    Examples:
+        flowtrack research analog-backtest --n 20 --seed 42 --note baseline
+        flowtrack research analog-backtest --skip-run --note regrade-only
+    """
+    from argparse import Namespace
+    from flowtracker.research.autoeval import backtest_historical_analog as bh
+
+    args_ns = Namespace(
+        n=n,
+        seed=seed,
+        skip_run=skip_run,
+        cutoff_days=cutoff_days,
+        note=note or "",
+    )
+    bh._run(args_ns)

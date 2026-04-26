@@ -1,6 +1,7 @@
 # Eval Matrix — one representative stock per sector type
 # Chosen to stress-test agent edge cases for that sector
 # IMMUTABLE — do not modify during autoeval runs
+# TODO Tier 3 synthesis eval — deferred, see plans/historical-analog-and-fo-agents.md §3.2
 
 target_grade: "A-"
 target_grade_numeric: 90

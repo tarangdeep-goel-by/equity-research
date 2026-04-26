@@ -351,6 +351,35 @@ def append_backtest_tsv(samples: list[BacktestSample], calibration: dict) -> Non
             f.write(f"# {key}\tn={stats['n']}\thit_rate={stats['hit_rate']}\tthreshold={stats['threshold']}\tpassed={stats['passed']}\n")
 
 
+EVAL_HISTORY_DIR = Path(__file__).parent / "eval_history"
+
+
+def _archive_run(
+    samples: list[BacktestSample],
+    calibration: dict,
+    args: argparse.Namespace,
+    started_at: str,
+    finished_at: str,
+) -> Path:
+    """Dump run metadata + per-sample rows + calibration summary to
+    ``eval_history/analog_backtest_<ts>.json`` (parity with macro PR-A1
+    archive shape). Gitignored; never overwritten."""
+    EVAL_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M")
+    path = EVAL_HISTORY_DIR / f"analog_backtest_{ts}.json"
+    payload = {
+        "agent": "historical_analog",
+        "kind": "backtest",
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "args": vars(args),
+        "samples": [asdict(s) for s in samples],
+        "calibration": calibration,
+    }
+    path.write_text(json.dumps(payload, indent=2, default=str))
+    return path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Historical Analog — empirical backtest")
     parser.add_argument("--n", type=int, default=20, help="Sample size (default 20)")
@@ -359,8 +388,17 @@ def main() -> None:
                         help="Skip agent runs; re-score using existing briefings")
     parser.add_argument("--cutoff-days", type=int, default=450,
                         help="Minimum age (days) for a sample's as_of (default 450 = 12mo + buffer)")
+    parser.add_argument("--note", type=str, default="",
+                        help="Free-form note threaded into the eval_history archive")
     args = parser.parse_args()
+    _run(args)
 
+
+def _run(args: argparse.Namespace) -> None:
+    """In-process entrypoint shared by the CLI and the argparse ``main()``
+    shell. Lets the Typer command in research_commands.py dispatch directly
+    without re-parsing argv (and so the archive writer can hook in)."""
+    started_at = datetime.now(timezone.utc).isoformat()
     print(f"Backtest: N={args.n} seed={args.seed} cutoff_days={args.cutoff_days}")
     population = load_mature_analog_points(args.cutoff_days)
     print(f"Population: {len(population)} mature (symbol, as_of) points")
@@ -414,6 +452,9 @@ def main() -> None:
 
     calibration = summarize_calibration(results)
     append_backtest_tsv(results, calibration)
+    finished_at = datetime.now(timezone.utc).isoformat()
+    archive_path = _archive_run(results, calibration, args, started_at, finished_at)
+    print(f"Archived: {archive_path}")
 
     print()
     print("=" * 70)

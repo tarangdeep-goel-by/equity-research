@@ -19,6 +19,12 @@ Each entry: what changed → what resulted → kept or reverted.
 
 ---
 
+### analog-backtest — Part 3 PR-B3 — KEPT
+**Date:** 2026-04-26
+**What:** CLI command + eval_history archive added.
+**Result:** baseline run held — operator triggers via `flowtrack research analog-backtest --n 20 --seed 42 --note "baseline-post-scaffolds"` post-merge.
+**Commit:** <fill on commit>
+
 ### business/* — Cycle 1 — Baseline — KEPT
 **Date:** 2026-04-07 06:44 UTC
 **Stocks:** SBIN, TCS, VEDL, ETERNAL
