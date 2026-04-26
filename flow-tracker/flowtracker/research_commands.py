@@ -914,7 +914,7 @@ def compare(
     webbrowser.open(f"file://{html_path}")
 
 
-VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro", "historical_analog"}
+VALID_AGENTS = {"business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro", "historical_analog", "fno_positioning"}
 VALID_AGENTS_WITH_EXTRAS = VALID_AGENTS | {"synthesis", "web_research"}
 
 
