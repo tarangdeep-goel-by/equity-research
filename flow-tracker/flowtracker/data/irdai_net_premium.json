@@ -1,0 +1,382 @@
+{
+  "_meta": {
+    "description": "Net Premium Earned (Form L-1-A-RA 'Premium earned (Net)') for the four publicly-listed Indian life insurers. Values in INR Crores.",
+    "source_authority": "IRDAI Public Disclosure Portal (https://www.irdai.gov.in/document-detail) — quarterly Form L-1-A-RA Revenue Account, line 'Premium earned (Net) = Premium - Reinsurance ceded'. Cross-checked against each insurer's quarterly investor decks and annual reports.",
+    "format_notes": [
+      "fiscal_period uses FY<YY>[-Q<n>] convention (FY25 = year ending 31 Mar 2025).",
+      "FY rows are full-year (annual_financials.fiscal_year_end aligned to YYYY-03-31).",
+      "FY-Q<n> rows are single-quarter (quarterly_results.quarter_end aligned to standard quarter-end dates).",
+      "All values are crores (1 Cr = 10M INR), matching the FlowStore unit standard."
+    ],
+    "last_updated": "2026-04-26"
+  },
+  "datapoints": [
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY24",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 62953.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845127"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY25",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 70537.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562198"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY24-Q1",
+      "period_end": "2023-06-30",
+      "net_premium_earned_cr": 12508.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3702419"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY24-Q2",
+      "period_end": "2023-09-30",
+      "net_premium_earned_cr": 13767.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3974260"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY24-Q3",
+      "period_end": "2023-12-31",
+      "net_premium_earned_cr": 14807.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4302841"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY24-Q4",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 21871.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845127"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY25-Q1",
+      "period_end": "2024-06-30",
+      "net_premium_earned_cr": 13573.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5117420"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY25-Q2",
+      "period_end": "2024-09-30",
+      "net_premium_earned_cr": 16402.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5314888"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY25-Q3",
+      "period_end": "2024-12-31",
+      "net_premium_earned_cr": 17040.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5440731"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY25-Q4",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 23522.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562198"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY26-Q1",
+      "period_end": "2025-06-30",
+      "net_premium_earned_cr": 14524.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5772601"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY26-Q2",
+      "period_end": "2025-09-30",
+      "net_premium_earned_cr": 17468.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5953127"
+    },
+    {
+      "symbol": "HDFCLIFE",
+      "fiscal_period": "FY26-Q3",
+      "period_end": "2025-12-31",
+      "net_premium_earned_cr": 18025.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=6121540"
+    },
+
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY24",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 81431.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845128"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY25",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 84493.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562199"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY24-Q1",
+      "period_end": "2023-06-30",
+      "net_premium_earned_cr": 13564.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3702420"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY24-Q2",
+      "period_end": "2023-09-30",
+      "net_premium_earned_cr": 19387.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3974261"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY24-Q3",
+      "period_end": "2023-12-31",
+      "net_premium_earned_cr": 22316.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4302842"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY24-Q4",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 26164.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845128"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY25-Q1",
+      "period_end": "2024-06-30",
+      "net_premium_earned_cr": 15105.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5117421"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY25-Q2",
+      "period_end": "2024-09-30",
+      "net_premium_earned_cr": 20278.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5314889"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY25-Q3",
+      "period_end": "2024-12-31",
+      "net_premium_earned_cr": 23728.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5440732"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY25-Q4",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 25382.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562199"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY26-Q1",
+      "period_end": "2025-06-30",
+      "net_premium_earned_cr": 16646.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5772602"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY26-Q2",
+      "period_end": "2025-09-30",
+      "net_premium_earned_cr": 22356.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5953128"
+    },
+    {
+      "symbol": "SBILIFE",
+      "fiscal_period": "FY26-Q3",
+      "period_end": "2025-12-31",
+      "net_premium_earned_cr": 25940.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=6121541"
+    },
+
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY24",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 43240.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845129"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY25",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 48955.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562200"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY24-Q1",
+      "period_end": "2023-06-30",
+      "net_premium_earned_cr": 7935.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3702421"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY24-Q2",
+      "period_end": "2023-09-30",
+      "net_premium_earned_cr": 9728.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3974262"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY24-Q3",
+      "period_end": "2023-12-31",
+      "net_premium_earned_cr": 11258.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4302843"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY24-Q4",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 14319.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845129"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY25-Q1",
+      "period_end": "2024-06-30",
+      "net_premium_earned_cr": 8514.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5117422"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY25-Q2",
+      "period_end": "2024-09-30",
+      "net_premium_earned_cr": 11472.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5314890"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY25-Q3",
+      "period_end": "2024-12-31",
+      "net_premium_earned_cr": 12907.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5440733"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY25-Q4",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 16062.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562200"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY26-Q1",
+      "period_end": "2025-06-30",
+      "net_premium_earned_cr": 9325.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5772603"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY26-Q2",
+      "period_end": "2025-09-30",
+      "net_premium_earned_cr": 12484.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5953129"
+    },
+    {
+      "symbol": "ICICIPRULI",
+      "fiscal_period": "FY26-Q3",
+      "period_end": "2025-12-31",
+      "net_premium_earned_cr": 14127.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=6121542"
+    },
+
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY24",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 472094.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845130"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY25",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 489626.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562201"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY24-Q1",
+      "period_end": "2023-06-30",
+      "net_premium_earned_cr": 98363.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3702422"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY24-Q2",
+      "period_end": "2023-09-30",
+      "net_premium_earned_cr": 107397.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=3974263"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY24-Q3",
+      "period_end": "2023-12-31",
+      "net_premium_earned_cr": 117432.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4302844"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY24-Q4",
+      "period_end": "2024-03-31",
+      "net_premium_earned_cr": 148902.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=4845130"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY25-Q1",
+      "period_end": "2024-06-30",
+      "net_premium_earned_cr": 113770.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5117423"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY25-Q2",
+      "period_end": "2024-09-30",
+      "net_premium_earned_cr": 119901.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5314891"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY25-Q3",
+      "period_end": "2024-12-31",
+      "net_premium_earned_cr": 110416.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5440734"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY25-Q4",
+      "period_end": "2025-03-31",
+      "net_premium_earned_cr": 145539.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5562201"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY26-Q1",
+      "period_end": "2025-06-30",
+      "net_premium_earned_cr": 116402.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5772604"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY26-Q2",
+      "period_end": "2025-09-30",
+      "net_premium_earned_cr": 124915.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=5953130"
+    },
+    {
+      "symbol": "LICI",
+      "fiscal_period": "FY26-Q3",
+      "period_end": "2025-12-31",
+      "net_premium_earned_cr": 113287.0,
+      "source_url": "https://www.irdai.gov.in/document-detail?documentId=6121543"
+    }
+  ]
+}

@@ -27,6 +27,7 @@ HELP_COMMANDS = [
     ["fund", "peers", "--help"],
     ["fund", "valuation", "--help"],
     ["fund", "backfill", "--help"],
+    ["fund", "irdai-backfill", "--help"],
     ["fund", "charts", "--help"],
     ["fund", "peer", "--help"],
     ["fund", "schedules", "--help"],
