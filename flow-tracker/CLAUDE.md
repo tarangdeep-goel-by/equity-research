@@ -245,6 +245,7 @@ Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-sou
 - `quarterly-results.sh` — Screener financials + ratios + BSE filings (20th of month)
 - `quarterly-filings.sh` — Concall + investor deck download for Nifty index stocks (25th of Feb/May/Aug/Nov 10am IST)
 - `compute-analytics.py` — Weekly analytics computation (Sunday 9pm IST)
+- `monthly-macro-eval.sh` — Macro autoeval over rolling last-3 dates from `eval_matrix_macro.yaml` (2nd & 17th of each month, 14:00 IST)
 - `setup-crons.sh` — Registers all LaunchAgent plists
 
 Ad-hoc scripts (not scheduled): `backfill_fii_dii.py`, `backfill_fundamentals.py`, `backfill_quarterly_nse.py`, `backfill-index-prices.py`, `backfill-nifty250.py`, `batch-download-filings.py`, `check-freshness.py`, `migrate-pct.py`, `migrate-units.py`.
