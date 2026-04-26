@@ -209,3 +209,206 @@ def test_flag_dataclass_shape():
     assert f.symbol == "X"
     assert f.severity == "MEDIUM"
     assert f.flag_type == "RECLASS"
+
+
+# ---------------------------------------------------------- Aggregate bridging
+# Gemini review item #7: when the parent aggregate (total_expenses for P&L,
+# total_assets for BS) is conserved within tolerance across a flagged
+# boundary, the per-component break is a pure reshuffle. Ratio-level
+# consumers (DuPont, F-score, common-size) can bridge the window.
+
+from flowtracker.data_quality import (
+    BRIDGE_TOLERANCE_BS_ABS,
+    BRIDGE_TOLERANCE_PL_OVER_REVENUE_GROWTH,
+    attach_aggregate_bridges,
+    compute_aggregate_bridge,
+)
+
+
+def _flag_dict(line: str, prior_fy: str = "2025-03-31",
+               curr_fy: str = "2026-03-31", rev_change_pct: float = 5.0,
+               severity: str = "MEDIUM") -> dict:
+    """Build a flag dict matching what FlowStore.get_data_quality_flags returns."""
+    return {
+        "symbol": "X", "prior_fy": prior_fy, "curr_fy": curr_fy,
+        "line": line, "prior_val": 100.0, "curr_val": 400.0,
+        "jump_pct": 300.0, "rev_change_pct": rev_change_pct,
+        "flag_type": "RECLASS", "severity": severity,
+    }
+
+
+class TestAggregateBridgeHDFCBANK:
+    """Real-number HDFCBANK FY26 fixture from
+    plans/screener-data-discontinuity.md."""
+
+    def test_hdfcbank_fy26_other_expenses_bridges(self):
+        """other_expenses_detail jumps +290% (43.7K → 170.2K Cr) but
+        total_expenses bridges within ~11% (186.9K → 207.8K) — well
+        inside the revenue ±10pp tolerance band given revenue +3.6%."""
+        prior = {
+            "revenue": 336367.43, "total_expenses": 186900.0,
+            "employee_cost": 34200.0, "other_expenses_detail": 43674.55,
+        }
+        curr = {
+            "revenue": 348615.15, "total_expenses": 207800.0,
+            "employee_cost": 37600.0, "other_expenses_detail": 170225.32,
+        }
+        flag = _flag_dict("other_expenses_detail", rev_change_pct=3.6)
+        bridge = compute_aggregate_bridge(flag, prior, curr)
+        assert bridge is not None
+        assert bridge["parent"] == "total_expenses"
+        assert bridge["conserved"] is True
+        assert bridge["tolerance_used"] == BRIDGE_TOLERANCE_PL_OVER_REVENUE_GROWTH
+        # parent_yoy ~11.18% — gap vs revenue +3.6% is 7.58pp (≤ 10pp).
+        assert 11 < bridge["parent_yoy_pct"] < 12
+
+    def test_hdfcbank_fy24_other_liabilities_bridges_via_bs(self):
+        """HDFCBANK FY24 BS: other_liabilities can blow up post-merger
+        without total_assets reshuffling materially. Bridge via
+        total_assets when |TA YoY| ≤ 15%."""
+        prior = {"total_assets": 2530000.0, "other_liabilities": 50000.0}
+        curr = {"total_assets": 2780000.0, "other_liabilities": 229000.0}  # ~9.9% TA growth
+        flag = _flag_dict("other_liabilities", rev_change_pct=5.0)
+        bridge = compute_aggregate_bridge(flag, prior, curr)
+        assert bridge is not None
+        assert bridge["parent"] == "total_assets"
+        assert bridge["conserved"] is True
+        assert bridge["tolerance_used"] == BRIDGE_TOLERANCE_BS_ABS
+
+    def test_bs_jump_above_tolerance_not_conserved(self):
+        """|total_assets YoY| > 15% (e.g. M&A) → BS not bridge-able."""
+        prior = {"total_assets": 1000000.0, "borrowings": 50000.0}
+        curr = {"total_assets": 1300000.0, "borrowings": 200000.0}  # +30%
+        flag = _flag_dict("borrowings")
+        bridge = compute_aggregate_bridge(flag, prior, curr)
+        assert bridge is not None
+        assert bridge["conserved"] is False
+
+
+class TestAggregateBridgeINFY:
+    """INFY FY26 fixture — cost component blew out AND so did the parent.
+    Bridging must NOT mask this — the parent itself is corrupt."""
+
+    def test_infy_fy26_other_expenses_does_not_bridge(self):
+        """other_expenses_detail +3129% → if it landed in total_expenses
+        without offsetting reductions elsewhere, total_expenses also
+        blows out far beyond revenue +9.6%. Bridge fails."""
+        prior = {
+            "revenue": 162990.0, "total_expenses": 145000.0,
+            "other_expenses_detail": 1130.0,
+        }
+        curr = {
+            "revenue": 178650.0, "total_expenses": 175000.0,
+            "other_expenses_detail": 36486.0,
+        }
+        flag = _flag_dict("other_expenses_detail", rev_change_pct=9.6)
+        bridge = compute_aggregate_bridge(flag, prior, curr)
+        assert bridge is not None
+        # parent_yoy ~20.7%, revenue +9.6% → gap 11.1pp > 10pp tolerance.
+        assert bridge["conserved"] is False
+        assert bridge["parent_yoy_pct"] > 20
+
+
+class TestAggregateBridgeEdgeCases:
+    def test_returns_none_when_parent_unknown(self):
+        """Lines with no parent (e.g. operating_profit, other_income) →
+        bridge returns None. Legacy behaviour holds."""
+        flag = _flag_dict("operating_profit")
+        prior = {"revenue": 100.0, "total_expenses": 80.0}
+        curr = {"revenue": 110.0, "total_expenses": 90.0}
+        assert compute_aggregate_bridge(flag, prior, curr) is None
+
+    def test_returns_none_when_rows_missing(self):
+        flag = _flag_dict("employee_cost")
+        assert compute_aggregate_bridge(flag, None, None) is None
+        assert compute_aggregate_bridge(flag, {"total_expenses": 100.0}, None) is None
+
+    def test_returns_none_when_parent_unavailable_either_side(self):
+        """Both rows lacking total_expenses AND all sub-components → no
+        parent computable → bridge returns None."""
+        flag = _flag_dict("employee_cost")
+        prior = {"revenue": 100.0}
+        curr = {"revenue": 110.0}
+        assert compute_aggregate_bridge(flag, prior, curr) is None
+
+    def test_falls_back_to_sum_when_total_expenses_missing(self):
+        """When total_expenses is None on one side, sum of sub-components
+        substitutes — parent is still computable."""
+        flag = _flag_dict("employee_cost", rev_change_pct=5.0)
+        prior = {
+            "revenue": 100.0, "total_expenses": None,
+            "employee_cost": 30.0, "raw_material_cost": 40.0, "depreciation": 5.0,
+        }
+        curr = {
+            "revenue": 105.0, "total_expenses": 80.0,  # 80 vs 75 prior = +6.7%
+            "employee_cost": 33.0, "raw_material_cost": 42.0, "depreciation": 5.0,
+        }
+        bridge = compute_aggregate_bridge(flag, prior, curr)
+        assert bridge is not None
+        # gap = 6.67% - 5% = 1.67% < 10% → conserved.
+        assert bridge["conserved"] is True
+
+    def test_parent_itself_flagged_short_circuits(self):
+        """If `total_expenses` is itself flagged, never bridge across —
+        that's a real reshuffle, not a recategorisation."""
+        flag = _flag_dict("employee_cost")
+        prior = {"revenue": 100.0, "total_expenses": 80.0, "employee_cost": 20.0}
+        curr = {"revenue": 105.0, "total_expenses": 84.0, "employee_cost": 25.0}
+        bridge = compute_aggregate_bridge(
+            flag, prior, curr,
+            sibling_flagged_lines={"total_expenses"},
+        )
+        assert bridge is not None
+        assert bridge["conserved"] is False
+        assert "parent" in bridge.get("reason", "")
+
+
+class TestAttachAggregateBridges:
+    def test_enriches_each_flag_with_bridge_field(self):
+        flags = [
+            _flag_dict("other_expenses_detail", rev_change_pct=3.6),
+            _flag_dict("borrowings", curr_fy="2024-03-31",
+                       prior_fy="2023-03-31"),
+        ]
+        rows_by_fy = {
+            "2025-03-31": {
+                "revenue": 336367.43, "total_expenses": 186900.0,
+                "employee_cost": 34200.0, "other_expenses_detail": 43674.55,
+            },
+            "2026-03-31": {
+                "revenue": 348615.15, "total_expenses": 207800.0,
+                "employee_cost": 37600.0, "other_expenses_detail": 170225.32,
+            },
+            "2023-03-31": {"total_assets": 2300000.0, "borrowings": 100000.0},
+            "2024-03-31": {"total_assets": 2530000.0, "borrowings": 250000.0},
+        }
+        enriched = attach_aggregate_bridges(flags, rows_by_fy)
+        assert len(enriched) == 2
+        for f in enriched:
+            assert "aggregate_bridge" in f
+            assert f["aggregate_bridge"] is not None
+            assert f["aggregate_bridge"]["conserved"] is True
+
+    def test_does_not_mutate_input(self):
+        flags = [_flag_dict("employee_cost")]
+        attach_aggregate_bridges(flags, {})
+        assert "aggregate_bridge" not in flags[0]
+
+    def test_sibling_parent_detection_disables_bridge(self):
+        """If `total_expenses` is itself in the flag list, no P&L flag
+        bridges across (any year)."""
+        flags = [
+            _flag_dict("total_expenses", curr_fy="2026-03-31"),
+            _flag_dict("employee_cost", curr_fy="2026-03-31"),
+        ]
+        rows_by_fy = {
+            "2025-03-31": {"revenue": 100.0, "total_expenses": 80.0,
+                           "employee_cost": 30.0},
+            "2026-03-31": {"revenue": 105.0, "total_expenses": 84.0,
+                           "employee_cost": 35.0},
+        }
+        enriched = attach_aggregate_bridges(flags, rows_by_fy)
+        # Both flags get an aggregate_bridge, but employee_cost's bridge
+        # is conserved=False because total_expenses is sibling-flagged.
+        ec_flag = next(f for f in enriched if f["line"] == "employee_cost")
+        assert ec_flag["aggregate_bridge"]["conserved"] is False

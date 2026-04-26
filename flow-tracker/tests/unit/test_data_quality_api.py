@@ -184,8 +184,16 @@ def _annual_for_fscore(fy: str, **extras) -> AnnualFinancials:
 
 def test_fscore_abstains_when_latest_pair_flagged(api):
     """Gemini fix #3: F-score must NOT silently shift back to (T-1, T-2) when
-    (T, T-1) crosses a flag. Stale F-score is worse than no F-score."""
-    rows = [_annual_for_fscore(f"202{i}-03-31") for i in (6, 5, 4, 3, 2)]
+    (T, T-1) crosses a flag. Stale F-score is worse than no F-score.
+
+    Total_expenses doubles on the FY26 boundary so aggregate-bridging
+    (Gemini review item #7) does NOT salvage the pair — the legacy abstain
+    path runs.
+    """
+    rows = [_annual_for_fscore(f"202{i}-03-31",
+                               total_expenses=80000.0)
+            for i in (6, 5, 4, 3, 2)]
+    rows[0].total_expenses = 200000.0  # +150% — well outside bridging tolerance
     api._store.upsert_annual_financials(rows)
     api._store.upsert_data_quality_flags([
         _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",
@@ -245,10 +253,16 @@ def test_cagr_revenue_ni_eps_unaffected_by_unrelated_reclass(api):
 
 def test_cagr_ebitda_suppressed_when_depreciation_flagged(api):
     """Depreciation IS in ebitda's dependency set → ebitda 1y/3y/5y CAGRs that
-    span the flag should be suppressed."""
+    span the flag should be suppressed.
+
+    Total_expenses blown out on FY26 → aggregate bridging (Gemini #7) does
+    NOT save the cell, legacy suppression runs.
+    """
     rows = [_annual(f"20{i:02d}-03-31",
-                    operating_profit=20000.0, depreciation=3000.0)
+                    operating_profit=20000.0, depreciation=3000.0,
+                    total_expenses=80000.0)
             for i in (26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16)]
+    rows[0].total_expenses = 200000.0  # +150% — way outside bridging band
     api._store.upsert_annual_financials(rows)
     api._store.upsert_data_quality_flags([
         _flag("X", "2026-03-31", "depreciation", "MEDIUM",
@@ -277,13 +291,20 @@ def test_cagr_unaffected_when_no_flags(api):
 # --------------------------------------------------- get_common_size_pl
 
 def test_common_size_narrows_to_recent_segment(api):
-    """Common-size with a MEDIUM flag at FY26 → recent segment is [FY26] only."""
+    """Common-size with a MEDIUM flag at FY26 → recent segment is [FY26] only.
+
+    Total_expenses doubles on the FY26 boundary → aggregate-bridging
+    (Gemini #7) does NOT apply, so the legacy narrow-to-recent-segment
+    behaviour runs.
+    """
     rows = [_annual(f"202{i}-03-31",
                     operating_profit=15000.0, raw_material_cost=40000.0,
                     interest=2000.0, depreciation=3000.0,
                     employee_cost=10000.0, other_expenses_detail=20000.0,
-                    profit_before_tax=12000.0)
+                    profit_before_tax=12000.0,
+                    total_expenses=80000.0)
             for i in (6, 5, 4, 3, 2)]
+    rows[0].total_expenses = 200000.0  # +150% — outside bridging tolerance
     api._store.upsert_annual_financials(rows)
     api._store.upsert_data_quality_flags([
         _flag("X", "2026-03-31", "other_expenses_detail", "MEDIUM",

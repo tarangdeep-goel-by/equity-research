@@ -26,6 +26,23 @@ logger = logging.getLogger(__name__)
 _SHARE_COUNT_TOLERANCE = 0.05
 
 
+def _is_bridged(flag: dict, *, required_parent: str | None = None) -> bool:
+    """Return True iff flag carries a conserved aggregate_bridge.
+
+    Used by the Strategy 1 trend consumers (DuPont, F-score, common-size,
+    CAGR) to decide whether a per-component reclass flag can be bridged
+    by the parent aggregate (Gemini review item #7). When `required_parent`
+    is set, also requires the bridge's parent to match (e.g. common-size
+    only bridges via `total_expenses`).
+    """
+    ab = flag.get("aggregate_bridge")
+    if not ab or not ab.get("conserved"):
+        return False
+    if required_parent is not None and ab.get("parent") != required_parent:
+        return False
+    return True
+
+
 def _reconcile_shares_outstanding(
     yfinance_shares: float | int | None,
     screener_shares: float | int | None,
@@ -913,10 +930,32 @@ class ResearchDataAPI:
         merger/demerger). Multi-year ratios that span a flagged boundary are
         corrupt — agents should narrow their window or narrate the break.
 
+        Each returned dict additionally carries `aggregate_bridge` (Gemini
+        review item #7): when the parent aggregate (`total_expenses` for P&L
+        sub-components, `total_assets` for BS sub-components) is conserved
+        within tolerance across the flagged boundary, ratio-level consumers
+        (DuPont, F-score, etc.) can bridge through the per-component break
+        instead of narrowing the window. See
+        `flowtracker.data_quality.compute_aggregate_bridge`. Field shape:
+        ``{"parent": str, "parent_yoy_pct": float, "conserved": bool,
+        "tolerance_used": float}`` or ``None`` when the parent aggregate
+        cannot be computed.
+
         min_severity: 'LOW' returns everything; 'MEDIUM' filters out the noisy
         100-200% band; 'HIGH' returns only sign flips and >500% jumps.
         """
-        return self._store.get_data_quality_flags(symbol, min_severity=min_severity)
+        from flowtracker.data_quality import attach_aggregate_bridges
+
+        flags = self._store.get_data_quality_flags(symbol, min_severity=min_severity)
+        if not flags:
+            return flags
+        # Build rows_by_fy for the symbol — one query, reused for every flag.
+        annuals = self._store.get_annual_financials(symbol, limit=15)
+        rows_by_fy: dict[str, dict] = {}
+        for a in annuals:
+            d = a.model_dump() if hasattr(a, "model_dump") else dict(a)
+            rows_by_fy[d["fiscal_year_end"]] = d
+        return attach_aggregate_bridges(flags, rows_by_fy)
 
     def get_five_year_summary(self, symbol: str, years: int = 11) -> list[dict]:
         """Restated 5/10-year financial highlights extracted from the AR.
@@ -949,6 +988,47 @@ class ResearchDataAPI:
         """
         rows = self._store.get_five_year_summary(symbol, limit=11)
         return {r["fy_end"]: r for r in rows}
+
+    @staticmethod
+    def _flags_all_bridge_conserved(
+        flag_dicts: list[dict], required_parent: str | None = None,
+    ) -> bool:
+        """Return True iff every flag in `flag_dicts` carries
+        `aggregate_bridge.conserved == True`.
+
+        Empty list returns True trivially (no flags to bridge — caller can
+        proceed with the full window).
+
+        Args:
+            required_parent: optionally constrain bridging to flags whose
+                parent matches (e.g. 'total_expenses' for common-size, which
+                bridges via P&L only). Flags with a different parent or no
+                bridge are treated as un-bridge-able.
+        """
+        for f in flag_dicts:
+            if not _is_bridged(f, required_parent=required_parent):
+                return False
+        return True
+
+    @staticmethod
+    def _partition_bridged(
+        flag_dicts: list[dict], required_parent: str | None = None,
+    ) -> tuple[list[dict], list[dict]]:
+        """Split flags into (bridged, non_bridged) by aggregate_bridge.conserved.
+
+        Bridged flags should NOT terminate the trend window — the parent
+        aggregate is conserved within tolerance, so the per-component break
+        doesn't corrupt ratio math. Non-bridged flags still trigger
+        narrowing (legacy Strategy 1 behaviour).
+        """
+        bridged: list[dict] = []
+        non_bridged: list[dict] = []
+        for f in flag_dicts:
+            if _is_bridged(f, required_parent=required_parent):
+                bridged.append(f)
+            else:
+                non_bridged.append(f)
+        return bridged, non_bridged
 
     def get_screener_ratios(self, symbol: str, years: int = 10) -> list[dict]:
         """Efficiency ratios: debtor days, inventory days, CCC, working capital days, ROCE%."""
@@ -4124,9 +4204,25 @@ class ResearchDataAPI:
         annuals = self._store.get_annual_financials(symbol, limit=10)
         if annuals:
             # Narrow to longest unbroken segment if flags overlap.
-            flags = self._store.get_data_quality_flags(symbol, min_severity="MEDIUM")
+            # Use the API-level helper so flags carry `aggregate_bridge` info
+            # (Gemini review item #7) — needed below to decide whether to
+            # bridge through the per-component break.
+            flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
             relevant = [f for f in flags if f["curr_fy"] in {a.fiscal_year_end for a in annuals}]
-            segment, dropped = longest_unflagged_window(annuals, relevant)
+            # Aggregate-bridging path (Gemini review item #7). Bridge-conserved
+            # flags (parent aggregate within tolerance) are pulled out of the
+            # window-narrowing input — they don't corrupt ratio math. Non-bridged
+            # flags still trigger Strategy 1 narrowing. This is per-flag, so a
+            # mix of bridge-able + real reshuffles narrows only on the real
+            # reshuffles.
+            bridged_flags, narrowing_flags = self._partition_bridged(relevant)
+            segment, dropped = longest_unflagged_window(annuals, narrowing_flags)
+            # `bridged_flags` only matter for annotation when at least one
+            # bridged year falls inside the resulting segment (i.e. it would
+            # have narrowed the window without bridging).
+            segment_fys = {a.fiscal_year_end for a in segment}
+            bridged_in_segment = [f for f in bridged_flags if f["curr_fy"] in segment_fys]
+            any_bridged = bool(bridged_in_segment)
             effective_window = {
                 "start_fy": segment[-1].fiscal_year_end if segment else None,
                 "end_fy": segment[0].fiscal_year_end if segment else None,
@@ -4137,6 +4233,17 @@ class ResearchDataAPI:
                     for f in dropped
                 ],
             }
+            if any_bridged:
+                effective_window["bridged_years"] = sorted({
+                    f["curr_fy"] for f in bridged_in_segment
+                })
+                effective_window["bridged_due_to"] = [
+                    {"prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                     "line": f["line"], "severity": f["severity"],
+                     "aggregate_bridge": f.get("aggregate_bridge")}
+                    for f in bridged_in_segment
+                ]
+            bridged_full_window = any_bridged  # alias used below in source tagging
             screener_decomp = []
             for i, a in enumerate(segment):
                 total_equity = (a.equity_capital or 0) + (a.reserves or 0)
@@ -4157,19 +4264,26 @@ class ResearchDataAPI:
                     at = a.revenue / avg_ta
                     em = avg_ta / avg_equity
                     roe = npm * at * em
+                    screener_row_source = (
+                        "screener_annual_bridged" if bridged_full_window
+                        and a.fiscal_year_end in (effective_window.get("bridged_years") or [])
+                        else "screener_annual"
+                    )
                     screener_decomp.append({
                         "fiscal_year_end": a.fiscal_year_end,
                         "net_profit_margin": round(npm, 4),
                         "asset_turnover": round(at, 4),
                         "equity_multiplier": round(em, 4),
                         "roe_dupont": round(roe, 4),
-                        "source": "screener_annual",
+                        "source": screener_row_source,
                     })
 
             # Strategy 2 decision: AR primary if every Screener-segment year
             # also exists in AR (or AR has at least 2 years of computed data —
             # the standalone restated trend is enough). Hybrid when AR covers
-            # only part of the segment.
+            # only part of the segment. AR DOMINATES bridging — if AR covers
+            # the year, no bridge annotation is added (per the resolution
+            # order in the spec).
             if ar_dupont_years:
                 ar_only_fys = {y["fiscal_year_end"] for y in ar_dupont_years}
                 screener_only = [y for y in screener_decomp if y["fiscal_year_end"] not in ar_only_fys]
@@ -4187,27 +4301,36 @@ class ResearchDataAPI:
                             "narrowed_due_to": [],
                         },
                     }, symbol)
-                # Hybrid: AR for AR-covered years, Screener-narrowed for the rest.
+                # Hybrid: AR for AR-covered years, Screener-narrowed-or-bridged
+                # for the rest. data_source remains 'mixed' (AR + Screener
+                # combined) — bridging is reflected per-row via 'source'.
                 merged = list(ar_dupont_years) + screener_only
                 merged.sort(key=lambda y: y["fiscal_year_end"], reverse=True)
                 source_per_year = {y["fiscal_year_end"]: y["source"] for y in merged}
+                ew_out = {
+                    "start_fy": merged[-1]["fiscal_year_end"],
+                    "end_fy": merged[0]["fiscal_year_end"],
+                    "n_years": len(merged),
+                    "narrowed_due_to": effective_window["narrowed_due_to"],
+                }
+                if bridged_full_window:
+                    ew_out["bridged_years"] = effective_window.get("bridged_years", [])
+                    ew_out["bridged_due_to"] = effective_window.get("bridged_due_to", [])
                 return self._attach_comparable_overlay({
                     "source": "mixed",
                     "data_source": "mixed",
                     "years": merged,
                     "source_per_year": source_per_year,
-                    "effective_window": {
-                        "start_fy": merged[-1]["fiscal_year_end"],
-                        "end_fy": merged[0]["fiscal_year_end"],
-                        "n_years": len(merged),
-                        "narrowed_due_to": effective_window["narrowed_due_to"],
-                    },
+                    "bridged_via_aggregate": bridged_full_window,
+                    "effective_window": ew_out,
                 }, symbol)
 
             if screener_decomp:
+                ds = "screener_annual_bridged" if bridged_full_window else "screener_annual"
                 return self._attach_comparable_overlay({
-                    "source": "screener",
-                    "data_source": "screener_annual",
+                    "source": "screener_bridged" if bridged_full_window else "screener",
+                    "data_source": ds,
+                    "bridged_via_aggregate": bridged_full_window,
                     "years": screener_decomp,
                     "effective_window": effective_window,
                 }, symbol)
@@ -5976,14 +6099,28 @@ class ResearchDataAPI:
         # narrowed_due_to: list of (flag, horizon, metrics_affected) — which CAGR cells
         # got nulled by which flag.
         narrowed_due_to: list[dict] = []
+        # bridged_due_to: per-cell list of (flag, horizon, metric) — cells
+        # that survived only because the flag's parent aggregate is conserved.
+        bridged_due_to: list[dict] = []
 
-        def _cell_suppressed(metric: str, horizon: str) -> tuple[bool, list[dict]]:
-            """Return (suppressed, applicable_flags) for one (metric, horizon) cell."""
+        def _cell_suppressed(metric: str, horizon: str) -> tuple[bool, list[dict], bool, list[dict]]:
+            """Return (suppressed, applicable_flags, all_bridge_conserved, bridge_flags)
+            for one (metric, horizon) cell.
+
+            `all_bridge_conserved` is True when applicable flags exist AND every
+            one carries `aggregate_bridge.conserved=True` — caller should
+            compute the cell but mark its source as bridged.
+            """
             deps = metric_deps.get(metric, set())
             if not deps:
-                return False, []
+                return False, [], False, []
             applicable = [f for f in horizon_flags.get(horizon, []) if f["line"] in deps]
-            return bool(applicable), applicable
+            if not applicable:
+                return False, [], False, []
+            all_conserved = all(
+                (f.get("aggregate_bridge") or {}).get("conserved") for f in applicable
+            )
+            return True, applicable, all_conserved, applicable if all_conserved else []
 
         # Strategy 2: AR-sourced metric extractors. Used per-cell when both
         # endpoints exist in `ar_five_year_summary`. EBITDA is intentionally
@@ -6044,8 +6181,10 @@ class ResearchDataAPI:
                 # Strategy 1 fallback — Screener with reclass-flag suppression.
                 if not values[0] or not values[idx]:
                     continue
-                suppressed, applicable_flags = _cell_suppressed(label, h_label)
-                if suppressed:
+                suppressed, applicable_flags, all_conserved, bridge_flags = _cell_suppressed(
+                    label, h_label,
+                )
+                if suppressed and not all_conserved:
                     for f in applicable_flags:
                         narrowed_due_to.append({
                             "prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
@@ -6053,8 +6192,19 @@ class ResearchDataAPI:
                             "horizon": h_label, "metric_affected": label,
                         })
                     continue  # leave cell unset
+                # Cell either had no flags OR all applicable flags bridged.
                 row[h_label] = compute(values)
-                source_per_cell[(label, h_label)] = "screener_annual"
+                if suppressed and all_conserved:
+                    source_per_cell[(label, h_label)] = "screener_annual_bridged"
+                    for f in bridge_flags:
+                        bridged_due_to.append({
+                            "prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                            "line": f["line"], "severity": f["severity"],
+                            "horizon": h_label, "metric_affected": label,
+                            "aggregate_bridge": f.get("aggregate_bridge"),
+                        })
+                else:
+                    source_per_cell[(label, h_label)] = "screener_annual"
 
             row["latest"] = round(values[0], 2) if values[0] else None
             metrics[label] = row
@@ -6077,23 +6227,31 @@ class ResearchDataAPI:
             (d["metric_affected"], d["horizon"]) for d in narrowed_due_to
         })
 
-        # Strategy 2 — derive top-level data_source from per-cell sources.
+        # Strategy 2 + bridging — derive top-level data_source from per-cell
+        # sources. Resolution order matches the spec: AR > screener_annual_bridged
+        # > screener_annual > mixed.
         sources_seen = set(source_per_cell.values())
         if sources_seen == {"ar_five_year_summary"}:
             data_source = "ar_five_year_summary"
         elif sources_seen == {"screener_annual"}:
             data_source = "screener_annual"
+        elif sources_seen == {"screener_annual_bridged"}:
+            data_source = "screener_annual_bridged"
         elif sources_seen:
             data_source = "mixed"
         else:
             data_source = "screener_annual"  # nothing computed; default
 
+        bridged_cells = sorted({
+            (d["metric_affected"], d["horizon"]) for d in bridged_due_to
+        })
         return self._attach_comparable_overlay({
             "symbol": symbol,
             "years_available": n,
             "cagrs": metrics,
             "growth_trajectory": trajectory,
             "data_source": data_source,
+            "bridged_via_aggregate": bool(bridged_due_to),
             "source_per_cell": {
                 f"{m}.{h}": s for (m, h), s in sorted(source_per_cell.items())
             },
@@ -6102,6 +6260,10 @@ class ResearchDataAPI:
                     {"metric": m, "horizon": h} for m, h in suppressed_cells
                 ],
                 "narrowed_due_to": narrowed_due_to,
+                "bridged_cells": [
+                    {"metric": m, "horizon": h} for m, h in bridged_cells
+                ],
+                "bridged_due_to": bridged_due_to,
             },
         }, symbol)
 
@@ -7179,7 +7341,10 @@ class ResearchDataAPI:
 
         flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
         relevant = [f for f in flags if f["curr_fy"] in {a["fiscal_year_end"] for a in annuals}]
-        segment, dropped = longest_unflagged_window(annuals, relevant)
+        # Per-flag aggregate bridging (Gemini #7). Bridge-conserved flags are
+        # excluded from the narrowing input — they don't break the ratio.
+        bridged_flags, narrowing_flags = self._partition_bridged(relevant)
+        segment, dropped = longest_unflagged_window(annuals, narrowing_flags)
         effective_window = {
             "start_fy": segment[1]["fiscal_year_end"] if len(segment) >= 2 else None,
             "end_fy": segment[0]["fiscal_year_end"] if segment else None,
@@ -7234,6 +7399,35 @@ class ResearchDataAPI:
                 "fallback_hint": "Cite management's comparable basis from get_company_context(section='concall_insights', sub_section='comparable_growth_metrics') or narrate the structural break.",
             }, symbol)
         t, t1 = segment[0], segment[1]  # t = latest, t1 = prior — same bucketing era
+
+        # Aggregate-bridging annotation (Gemini review item #7). The bridged
+        # (T, T-1) boundary flags were already filtered out of `narrowing_flags`
+        # so they're in `bridged_flags`. If any bridged flag lands on the
+        # (t, t1) pair, annotate `bridged_via_aggregate=True` and tag
+        # data_source as `screener_annual_bridged` instead of plain
+        # `screener_annual` — the per-component break is real but the parent
+        # aggregate bridges, so the score is computed on a comparable cost-to-
+        # income basis.
+        pair_fys = {t["fiscal_year_end"], t1["fiscal_year_end"]}
+        bridged_pair_flags = [f for f in bridged_flags if f["curr_fy"] in pair_fys]
+        if bridged_pair_flags:
+            bridged_window = {
+                **effective_window,
+                "bridged_years": sorted({f["curr_fy"] for f in bridged_pair_flags}),
+                "bridged_due_to": [
+                    {"prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                     "line": f["line"], "severity": f["severity"],
+                     "aggregate_bridge": f.get("aggregate_bridge")}
+                    for f in bridged_pair_flags
+                ],
+            }
+            result = self._compute_piotroski(
+                symbol, t, t1, bridged_window, "screener_annual_bridged",
+            )
+            if isinstance(result, dict):
+                result["bridged_via_aggregate"] = True
+            return result
+
         return self._compute_piotroski(symbol, t, t1, effective_window, "screener_annual")
 
     def _ar_row_to_fscore_dict(self, ar_row: dict, screener_row: dict) -> dict:
@@ -8111,7 +8305,17 @@ class ResearchDataAPI:
         # Narrow to longest unflagged segment.
         flags = self.get_data_quality_flags(symbol, min_severity="MEDIUM")
         relevant = [f for f in flags if f["curr_fy"] in {a["fiscal_year_end"] for a in annual}]
-        annual, dropped = longest_unflagged_window(annual, relevant)
+        # Per-flag aggregate bridging (Gemini #7). Common-size is a P&L ratio,
+        # so we only bridge via `total_expenses` (BS bridges via total_assets
+        # aren't applicable). Bridged P&L flags are pulled out of the
+        # narrowing input.
+        bridged_flags, narrowing_flags = self._partition_bridged(
+            relevant, required_parent="total_expenses",
+        )
+        annual, dropped = longest_unflagged_window(annual, narrowing_flags)
+        segment_fys = {a["fiscal_year_end"] for a in annual}
+        bridged_in_segment = [f for f in bridged_flags if f["curr_fy"] in segment_fys]
+        bridged_full_window = bool(bridged_in_segment)
         effective_window = {
             "start_fy": annual[-1]["fiscal_year_end"] if annual else None,
             "end_fy": annual[0]["fiscal_year_end"] if annual else None,
@@ -8122,6 +8326,16 @@ class ResearchDataAPI:
                 for f in dropped
             ],
         }
+        if bridged_full_window:
+            effective_window["bridged_years"] = sorted({
+                f["curr_fy"] for f in bridged_in_segment
+            })
+            effective_window["bridged_due_to"] = [
+                {"prior_fy": f["prior_fy"], "curr_fy": f["curr_fy"],
+                 "line": f["line"], "severity": f["severity"],
+                 "aggregate_bridge": f.get("aggregate_bridge")}
+                for f in bridged_in_segment
+            ]
 
         # Strategy 2 — index AR rows for cross-source confirmation.
         ar_index = self._ar_five_year_index(symbol)
@@ -8197,8 +8411,12 @@ class ResearchDataAPI:
             [y["fiscal_year"] for y in years_data if y["fiscal_year"] in ar_index],
             reverse=True,
         )
+        # data_source resolution order (matches the Strategy 2 + bridging
+        # composition spec): AR-confirmed mixed > bridged > plain Screener.
         if ar_confirmed_years and effective_window["narrowed_due_to"]:
             data_source = "mixed"
+        elif bridged_full_window:
+            data_source = "screener_annual_bridged"
         else:
             data_source = "screener_annual"
 
@@ -8208,6 +8426,7 @@ class ResearchDataAPI:
             "biggest_cost": biggest_cost,
             "fastest_growing_cost": fastest_growing,
             "data_source": data_source,
+            "bridged_via_aggregate": bridged_full_window,
             "ar_confirmed_years": ar_confirmed_years,
             "effective_window": effective_window,
         }, symbol)
