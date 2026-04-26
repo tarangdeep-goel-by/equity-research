@@ -213,6 +213,11 @@ class TestBfsiFinancialMetricsFallback:
             return {"quarters": op_quarters}
 
         api.get_concall_insights = MagicMock(side_effect=_fake_insights)
+        # Stub press-release backfill — these tests probe the financial_metrics
+        # fallback in isolation. Real vault data would otherwise leak in via
+        # the BFSI press_release backfill loop and shift expected values
+        # (e.g. SBIN GNPA from "2.1" mock to 1.73 from on-disk press release).
+        api.get_press_release_metrics = MagicMock(return_value={})
         return api
 
     def test_sector_kpis_bfsi_fallback_reads_concall(self):

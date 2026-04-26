@@ -5039,6 +5039,51 @@ class ResearchDataAPI:
         toc["_meta"] = meta
         return toc
 
+    def get_press_release_metrics(
+        self, symbol: str, period: str | None = None,
+    ) -> dict:
+        """Read the BFSI quarterly press-release extraction from the vault.
+
+        Press releases contain headline disclosure values (NIM, NPA, PCR, CRAR,
+        CET-1, LCR) that the concall often discusses qualitatively without
+        restating. This is the structured backstop for those values.
+
+        Args:
+            symbol: Stock ticker (case-insensitive).
+            period: Optional FY-quarter filter, e.g. ``"FY26-Q4"``. When None,
+                returns the full payload with all extracted quarters.
+
+        Returns:
+            ``{}`` when no extraction file exists for the symbol.
+            ``{"error": ...}`` when the extraction file is corrupt.
+            ``{"symbol": ..., "industry": ..., "quarters": {fy_q: {...}, ...}}``
+            when ``period`` is None.
+            The single quarter dict (``{"fy_quarter": ..., "metrics": {...}, ...}``)
+            when ``period`` matches.
+            ``{"error": "...", "available_quarters": [...]}`` when ``period``
+            is supplied but no record exists for it.
+        """
+        from pathlib import Path as _Path
+        symbol = symbol.upper()
+        path = _Path.home() / "vault" / "stocks" / symbol / "fundamentals" / "press_release_extraction_v1.json"
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return {"error": f"Corrupt press_release_extraction_v1.json: {exc}"}
+
+        quarters = payload.get("quarters") or {}
+        if period is None:
+            return payload
+        record = quarters.get(period)
+        if record is None:
+            return {
+                "error": f"No press release extraction for {symbol} {period}",
+                "available_quarters": sorted(quarters.keys()),
+            }
+        return record
+
     def get_sector_kpis(self, symbol: str, kpi_key: str | None = None) -> dict:
         """Extract sector-specific KPIs from concall data using canonical field names.
 
@@ -5074,11 +5119,15 @@ class ResearchDataAPI:
         # filtered path. get_concall_insights() now returns a TOC by default, so
         # we explicitly request the section we need.
         op_slice = self.get_concall_insights(symbol, section_filter="operational_metrics")
-        if isinstance(op_slice, dict) and "error" in op_slice:
+        # For BFSI, concall errors / missing quarters are recoverable as long as
+        # press_release data exists. For other sectors, the original behaviour
+        # (fail-fast on no concall) is preserved.
+        concall_error = isinstance(op_slice, dict) and "error" in op_slice
+        if concall_error and sector != "banks":
             return {"error": op_slice["error"], "sector": sector, "kpis_expected": [k["key"] for k in kpi_defs]}
 
-        quarters = op_slice.get("quarters", [])
-        if not quarters:
+        quarters = op_slice.get("quarters", []) if not concall_error else []
+        if not quarters and sector != "banks":
             return {"error": "No quarterly data in concall extraction", "sector": sector}
 
         # BFSI fallback: when structured operational_metrics is empty for a quarter,
@@ -5106,6 +5155,33 @@ class ResearchDataAPI:
                             flat.update(block)
                     if flat:
                         fin_metrics_by_quarter[q_label] = flat
+
+        # Press-release backfill (BFSI only). Banks file a quarterly press
+        # release with the headline NIM/NPA/PCR/CRAR/CET-1 — values that the
+        # concall often discusses qualitatively without restating. We load it
+        # eagerly so the per-key matching loop can fall back to it after
+        # exhausting concall sources. Industry gate is enforced inside
+        # ``get_press_release_metrics`` (returns empty dict for non-BFSI).
+        # Mapping from concall canonical keys → press-release flat field names.
+        press_release_data: dict[str, dict] = {}
+        # canonical_key -> press_release field name
+        _PR_KEY_MAP = {
+            "casa_ratio_pct": "casa_pct",
+            "gross_npa_pct": "gnpa_pct",
+            "net_npa_pct": "nnpa_pct",
+            "net_interest_margin_pct": "nim_pct",
+            "provision_coverage_ratio_pct": "pcr_pct",
+            "capital_adequacy_ratio_pct": "crar_pct",
+            "cet1_pct": "cet1_pct",
+            "liquidity_coverage_ratio_pct": "lcr_pct",
+        }
+        if sector == "banks":
+            try:
+                pr_payload = self.get_press_release_metrics(symbol)
+                if pr_payload and not pr_payload.get("error"):
+                    press_release_data = pr_payload.get("quarters", {}) or {}
+            except Exception as exc:
+                logger.debug("press release backfill skipped for %s: %s", symbol, exc)
 
         # Extract KPIs from each quarter's operational_metrics
         kpi_timeline: dict[str, list[dict]] = {k: [] for k in canonical_keys}
@@ -5184,6 +5260,22 @@ class ResearchDataAPI:
                                 matched_via = f"financial_metrics:{ck}"
                                 break
 
+                # 6. BFSI press-release backfill — banks file the headline
+                # NIM/NPA/PCR/CRAR values in a quarterly press release that the
+                # concall often discusses qualitatively without restating.
+                if value is None and press_release_data:
+                    pr_field = _PR_KEY_MAP.get(canonical_key)
+                    if pr_field:
+                        pr_quarter = press_release_data.get(quarter_label) or {}
+                        pr_metrics = pr_quarter.get("metrics") or {}
+                        pr_value = pr_metrics.get(pr_field)
+                        if pr_value is not None:
+                            value = pr_value
+                            pr_context = (pr_quarter.get("context") or {}).get(pr_field)
+                            if pr_context:
+                                context = pr_context
+                            matched_via = f"press_release:{pr_field}"
+
                 if value is not None:
                     entry = {"quarter": quarter_label, "value": value}
                     if context:
@@ -5191,6 +5283,46 @@ class ResearchDataAPI:
                     if matched_via and matched_via != "canonical":
                         entry["matched_via"] = matched_via
                     kpi_timeline[canonical_key].append(entry)
+
+        # Press-release-only quarters: add data for FY-quarters that exist in
+        # press release but not in concall (e.g. when the concall extractor
+        # hasn't been run for that quarter). Important for FY26-Q4 of stocks
+        # whose concall isn't published yet but whose Financial Results PDF is.
+        if press_release_data:
+            concall_quarters = {q.get("fy_quarter", q.get("label", "")) for q in quarters}
+            for pr_qlabel, pr_quarter in press_release_data.items():
+                if pr_qlabel in concall_quarters:
+                    continue
+                if pr_quarter.get("extraction_status") not in ("complete",):
+                    continue
+                pr_metrics = pr_quarter.get("metrics") or {}
+                for canonical_key in canonical_keys:
+                    pr_field = _PR_KEY_MAP.get(canonical_key)
+                    if not pr_field:
+                        continue
+                    pr_value = pr_metrics.get(pr_field)
+                    if pr_value is None:
+                        continue
+                    entry = {
+                        "quarter": pr_qlabel,
+                        "value": pr_value,
+                        "matched_via": f"press_release:{pr_field}",
+                    }
+                    pr_context = (pr_quarter.get("context") or {}).get(pr_field)
+                    if pr_context:
+                        entry["context"] = pr_context
+                    kpi_timeline[canonical_key].append(entry)
+            # Re-sort each timeline by FY-quarter (chronological, oldest first)
+            # so latest_value remains the last entry. Sort key mirrors
+            # concall_extractor._fy_sort_key_from_str for consistency.
+            def _fq_key(e: dict) -> tuple[int, int]:
+                fq = e.get("quarter", "FY00-Q1")
+                try:
+                    return (int(fq[2:4]), {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}.get(fq.split("-")[-1], 0))
+                except (ValueError, IndexError):
+                    return (0, 0)
+            for k in kpi_timeline:
+                kpi_timeline[k].sort(key=_fq_key)
 
         # Build result with only KPIs that have at least one value
         found_kpis = []
@@ -5235,11 +5367,22 @@ class ResearchDataAPI:
             meta_status = "partial"
         else:
             meta_status = "full"
+        # Count distinct quarters across both concall and press_release sources
+        all_quarter_labels: set = {q.get("fy_quarter", q.get("label", "")) for q in quarters}
+        all_quarter_labels.update(press_release_data.keys())
+        # Count how many KPI matches came from press_release (transparency for the agent)
+        pr_matched_kpis = [
+            k["key"] for k in found_kpis
+            if any(v.get("matched_via", "").startswith("press_release:") for v in k["values"])
+        ]
         meta = {
             "extraction_status": meta_status,
             "missing_metrics": list(missing_kpis),
             "degraded_quality": meta_status == "partial",
+            "press_release_backfilled_kpis": pr_matched_kpis,
+            "press_release_quarters_available": sorted(press_release_data.keys()),
         }
+        quarters_count = len(all_quarter_labels)
 
         # Targeted drill-down: return ONLY the requested KPI's timeline
         if kpi_key:
@@ -5250,7 +5393,7 @@ class ResearchDataAPI:
                     "sector": sector,
                     "kpi": match,
                     "trajectory": trajectories.get(kpi_key),
-                    "quarters_analyzed": len(quarters),
+                    "quarters_analyzed": quarters_count,
                     "_meta": meta,
                 }
             # Requested KPI exists in schema but has no values, or doesn't exist at all
@@ -5262,7 +5405,7 @@ class ResearchDataAPI:
                     "kpi": kpi_key,
                     "status": "schema_valid_but_unavailable",
                     "reason": f"'{kpi_key}' is a canonical {sector} KPI but no quarter reported it",
-                    "quarters_analyzed": len(quarters),
+                    "quarters_analyzed": quarters_count,
                     "_meta": meta,
                 }
             return {
@@ -5283,7 +5426,7 @@ class ResearchDataAPI:
                 "key": k["key"],
                 "label": k["label"],
                 "unit": k["unit"],
-                "coverage": f"{len(k['values'])}/{len(quarters)} quarters",
+                "coverage": f"{len(k['values'])}/{quarters_count} quarters",
                 "latest_value": latest.get("value") if isinstance(latest, dict) else latest,
             })
         return {
@@ -5293,7 +5436,7 @@ class ResearchDataAPI:
             "available_kpis": toc,
             "kpis_missing": missing_kpis,
             "coverage": f"{len(found_kpis)}/{len(kpi_defs)} canonical KPIs have values",
-            "quarters_analyzed": len(quarters),
+            "quarters_analyzed": quarters_count,
             "hint": "Call again with sub_section='<kpi_key>' for full per-quarter timeline + context. Example: sub_section='gross_npa_pct'",
             "_meta": meta,
         }

@@ -142,6 +142,7 @@ HELP_COMMANDS = [
     ["filings", "annual-reports", "--help"],
     ["filings", "open-filing", "--help"],
     ["filings", "extract", "--help"],
+    ["filings", "extract-press-release", "--help"],
 
     # portfolio
     ["portfolio", "--help"],

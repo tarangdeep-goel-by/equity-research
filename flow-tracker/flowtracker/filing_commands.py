@@ -306,6 +306,43 @@ def extract_decks_cmd(
     console.print(f"  Saved to: ~/vault/stocks/{symbol.upper()}/fundamentals/deck_extraction.json")
 
 
+@app.command(name="extract-press-release")
+def extract_press_release_cmd(
+    symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol (must be BFSI)")],
+    quarters: Annotated[int, typer.Option("--quarters", "-q", help="Number of recent quarters to extract")] = 2,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Claude model to use")] = None,
+    force: Annotated[bool, typer.Option("--force", help="Re-extract all quarters, ignoring cached JSON")] = False,
+) -> None:
+    """Extract BFSI quarterly press-release metrics (NIM, NPA, PCR, CRAR, CET-1, LCR, CASA).
+
+    Reads ``corporate_filings`` rows for the symbol's last N quarters,
+    downloads the press release / financial results PDF if missing, runs the
+    text through Claude (no OCR — text PDFs only), and persists structured
+    metrics to ``~/vault/stocks/{SYMBOL}/fundamentals/press_release_extraction_v1.json``.
+
+    Industry gate: only fires for banks/NBFCs. Skipped for non-BFSI symbols.
+    """
+    import asyncio
+
+    from flowtracker.research.press_release_extractor import ensure_press_release_data
+
+    result = asyncio.run(
+        ensure_press_release_data(
+            symbol.upper(),
+            quarters=quarters,
+            model=model or "claude-sonnet-4-6",
+            force=force,
+        )
+    )
+    if result is None:
+        console.print(f"[yellow]Skipped — {symbol.upper()} is not BFSI-eligible or has no candidate filings[/]")
+        return
+    new_count = result.get("_new_quarters_extracted", 0)
+    total = len(result.get("quarters") or {})
+    console.print(f"[green]✓[/] Press release extraction: {total} quarters total, {new_count} new for {symbol.upper()}")
+    console.print(f"  Saved to: ~/vault/stocks/{symbol.upper()}/fundamentals/press_release_extraction_v1.json")
+
+
 def _show_filing_summary(filings: list, symbol: str) -> None:
     """Show summary of fetched filings by category."""
     cats: dict[str, int] = {}

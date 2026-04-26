@@ -1181,11 +1181,28 @@ class TestSectorKPIsEdges:
         assert "error" in result
 
     def test_no_quarters_returns_error(self, api, monkeypatch, vault_home):
-        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
-        # Concall file exists with an empty quarters list
+        # Non-BFSI sectors still error on empty concall (preserved behaviour).
+        # For banks the soft-fallthrough lets press_release backfill — see
+        # test_no_quarters_bank_returns_empty_not_error below.
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Internet Content & Information")
         _write_concall(vault_home / "vault", "EMPTYQ", [])
         result = api.get_sector_kpis("EMPTYQ")
+        # No sector framework → distinct error path
         assert "error" in result
+
+    def test_no_quarters_bank_returns_empty_not_error(self, api, monkeypatch, vault_home):
+        """BFSI: empty concall + no press_release → empty KPI table (no error).
+
+        Press-release backfill makes concall optional for banks; the function
+        must degrade gracefully rather than failing the whole sector_kpis call.
+        """
+        monkeypatch.setattr(api, "_get_industry", lambda s: "Public Sector Bank")
+        _write_concall(vault_home / "vault", "EMPTYBANK", [])
+        result = api.get_sector_kpis("EMPTYBANK")
+        # No error; instead an empty TOC.
+        assert "error" not in result
+        assert result["available_kpis"] == []
+        assert result["_meta"]["extraction_status"] == "empty"
 
 
 # ---------------------------------------------------------------------------
