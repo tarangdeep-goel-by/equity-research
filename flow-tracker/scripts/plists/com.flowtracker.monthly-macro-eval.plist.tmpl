@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Macro autoeval — fortnightly Gemini grading of rolling-window macro-agent
+     output. Runs at 14:00 IST on the 2nd and 17th of each month. Template:
+     __HOME__ substituted by scripts/install-launch-agents.sh at install time. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowtracker.monthly-macro-eval</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__HOME__/.local/share/flowtracker/scripts/monthly-macro-eval.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Day</key><integer>2</integer><key>Hour</key><integer>14</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Day</key><integer>17</integer><key>Hour</key><integer>14</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/flowtracker/logs/monthly-macro-eval.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/flowtracker/logs/monthly-macro-eval.launchd.log</string>
+</dict>
+</plist>

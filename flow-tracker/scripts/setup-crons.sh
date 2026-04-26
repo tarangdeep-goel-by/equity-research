@@ -12,6 +12,7 @@ PLISTS=(
     "com.flowtracker.fund-quarterly"
     "com.flowtracker.analytics-weekly"
     "com.flowtracker.quarterly-filings"
+    "com.flowtracker.monthly-macro-eval"
 )
 
 echo "Setting up flowtracker scheduled jobs..."
@@ -51,5 +52,6 @@ echo "  fund-weekly          — Sundays at 8:00 PM IST"
 echo "  fund-quarterly       — 20th of each month at 9:00 AM IST"
 echo "  analytics-weekly     — Sundays at 9:00 PM IST (after valuation)"
 echo "  quarterly-filings    — 25th of Feb/May/Aug/Nov at 10:00 AM IST"
+echo "  monthly-macro-eval   — 2nd & 17th of each month at 14:00 IST (com.flowtracker.monthly-macro-eval.plist)"
 echo ""
 echo "Note: alert-check.sh runs chained inside daily-fetch.sh (not a standalone plist)."
