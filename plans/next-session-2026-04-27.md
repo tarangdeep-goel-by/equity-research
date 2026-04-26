@@ -85,7 +85,82 @@ From `next-session-2026-04-25.md`, still unaddressed:
 
 ## 🔄 Side-thread context (parallel-session work today)
 
-The other session shipped a **Strategy 1 data-quality initiative** (PRs #110, #113, #115, #116, #126) plus a **screener discontinuity detector** (PR #110). Their open PRs at handoff: #114 (data-fixes wave 1), #119 (wave 2). Their reserved worktrees: `equity-research-wave1`, `wave2`, `wave45`, `dq-fixes`, `comparable-growth`. Stay clear of those branches.
+The other session shipped a **Strategy 1 data-quality initiative** (PRs #110, #113, #115, #116, #126) plus a **screener discontinuity detector** (PR #110). At handoff their open PRs were #114 (wave 1), #119 (wave 2), #125 (wave 4-5), #130 (finishing bundle), #131 (fno_positioning CLI fix), #132 (Strategy 2 wiring), #133 (IRDAI net premium), #134 (BFSI press-release extractor), #136 (Gemini #7 aggregate bridging) — **all 9 merged 2026-04-26**. Their worktrees `equity-research-{wave1,wave2,wave45,finish,s2wire,netprem,bfsipr,gemini7}` are now stale and can be pruned.
+
+## 🆕 Side-thread late-day additions (2026-04-26 PM)
+
+After the four wave PRs merged, the parallel session shipped **4 more PRs** closing the rest of the data-quality / pre-OCR backlog:
+
+- **PR #132 — Strategy 2 wiring**: `get_five_year_summary()` added to `ResearchDataAPI`; DuPont / F-score / CAGR / common-size now prefer `ar_five_year_summary` as canonical restated trend source when it covers the window, fall back to Strategy 1 narrowing otherwise. Annotation contract: `data_source ∈ {ar_five_year_summary, screener_annual, mixed, screener_annual_bridged}`. Includes 24 unit tests for the previously-untested `five_year_parser`. ICICIBANK now has 11 AR rows surfacing (Schedule III restated).
+
+- **PR #133 — IRDAI Net Premium ingestion**: curated `flowtracker/data/irdai_net_premium.json` (52 rows × 4 listed life insurers, FY24-FY25 annual + FY24-Q1..FY26-Q3 quarterly) sourced from IRDAI L-1-A-RA Revenue Account. Wave 1's `_apply_insurance_headline` swap-layer now flips `data_quality_note` off — HDFCLIFE FY25 NPE ₹70,537 Cr replaces the Schedule III ₹92,922 Cr (MTM-bundled). 38 new tests.
+
+- **PR #134 — BFSI press-release text extractor** (no OCR): pulls quarterly NIM / NNPA / PCR / GNPA / CASA / CRAR / CET-1 / LCR from BSE-filed press-release PDFs via Claude SDK. Verified live: HDFCBANK Q3 NIM 3.51 / NNPA 0.42; ICICIBANK Q4 NIM 4.32; SBIN Q2 NIM 3.09; KOTAKBANK Q4 NIM 4.97. Lifts HDFCBANK `get_sector_kpis` from 8→11. **HDFCBANK FY26-Q4 PDF turned out image-rendered → correctly deferred to OCR session.** AXISBANK skipped (no `corporate_filings` rows ingested yet). 53 new tests.
+
+- **PR #136 — Gemini review #7 aggregate bridging** (stacked on #132): when sub-component reshuffles but parent aggregate (`total_expenses` for P&L within ±10pp of revenue YoY; `total_assets` for BS within ±15% absolute) is conserved, suppress per-component flag for ratio computation. **HDFCBANK DuPont restored from 1y → 3y** (FY26 other_expenses_detail bridges; FY24 HDFC-merger flag correctly does NOT). **INFY DuPont restored to full 10y** (parent total_expenses gap only 0.58pp despite +3129% line shift). F-score for both stocks moves from `abstain` to computed score=5 with `bridged_via_aggregate=true`. 26 new tests.
+
+**Operational backfills also done by side-thread:**
+- AR re-extract: ICICIBANK / DRREDDY / VEDL / POLICYBZR — fresh per-year JSONs with PR #125's heading slicer
+- BFSI sector_kpis: HDFCBANK / ICICIBANK / SBIN / BANKBARODA — 3 new quarters (458s)
+- Pharma sector_kpis: SUNPHARMA / DRREDDY / CIPLA — already current after concall sweep, 0 new
+- M&A catalyst: NO-OP (parser fires live in `gather_catalysts`; surfaces on next eval run)
+
+## 🔥 Side-thread carry-over to next session
+
+These are the held items from the data-quality / pre-OCR work that were intentionally deferred to next session (the user said "no evals today, defer to later"):
+
+### A. Autoeval validation slice — confirm all the wave merges actually moved grader scores
+
+```bash
+cd /Users/tarang/Documents/Projects/equity-research
+
+# 5 stocks × ~4 most-impacted agents = 20 runs. ~$5-8 in Gemini grading. ~30-45 min.
+# Run after the macro/F&O autoevals from §"Highest ROI" above complete (rate-limit headroom).
+for stock in HDFCBANK ICICIBANK SBIN INFY SUNPHARMA; do
+  case $stock in
+    HDFCBANK|ICICIBANK|SBIN) sector=bfsi ;;
+    INFY) sector=it_services ;;
+    SUNPHARMA) sector=pharma ;;
+  esac
+  ./scripts/eval-pipeline.sh $sector $stock financials sector valuation business
+done
+```
+
+Expected uplift vs night2/night3 baseline: financials + sector should move on BFSI (PR #134 press-release backfill); valuation should move on INFY (PR #119 DCF / EV-EBITDA fixes); business should move on pharma (PR #125 24-KPI pharma config + sector_kpis backfill).
+
+### B. AR 5-year highlights backfill — universe-wide (Strategy 2 needs data to be useful)
+
+PR #132 wires Strategy 2 into the trend methods, but `ar_five_year_summary` table currently has only **1 stock × 11 rows (ICICIBANK)**. HDFCBANK / INFY / SUNPHARMA / 50+ Nifty names need their 5-yr highlights table parsed + persisted before the wiring helps them.
+
+```bash
+# Re-extract all ARs with the new heading slicer + 5-yr parser. ~30 min, ~$2 (rate-limited).
+# Pareto: top-50 Nifty universe is enough for first pass; full 500 can run overnight.
+for s in $(uv run python -c "from flowtracker.store import FlowStore; \
+  print('\n'.join(FlowStore()._conn.execute('SELECT symbol FROM company_snapshot WHERE market_cap_cr > 50000 ORDER BY market_cap_cr DESC LIMIT 50').fetchall() | jq))"); do
+  uv run flowtrack filings extract-ar -s $s --force
+done
+```
+
+After this lands, smoke-test by running `get_dupont_decomposition` on HDFCBANK + 5 other large-caps and confirming `data_source` shows `ar_five_year_summary` (or `mixed`) instead of `screener_annual_bridged`.
+
+### C. AR image-OCR session — the deferred big rock
+
+The remaining gap surfaced by today's PRs:
+
+1. **HDFCBANK AR is image-rendered** — Strategy 2 gives it nothing until OCR; falls through to Strategy 1 narrowing + Gemini #7 bridging (which works for FY26 but not FY24)
+2. **HDFCBANK FY26-Q4 press release is image-rendered** — PR #134 correctly skipped; OCR would unlock the most-recent quarter's NIM/NNPA/PCR
+3. **AR segmentals / RPTs / EV rollforwards / ICICIBANK notes** — original P0 from `eval-data-fixes-next-session.md`
+4. **Insurance KPIs (EV / VNB / ROEV / persistency / solvency)** — depends on AR image-OCR
+5. **Deck image-OCR** — same harness as #3
+6. **HINDALCO nameplate-capacity tables** — folds into AR image-OCR
+
+This is the next big workstream. Plan it as its own multi-day effort with a vision-OCR fallback pass in `annual_report_extractor.py` (cost-budget: ~$24 one-time backfill at $0.10/page × 16 stocks × 3 image sections × 5 pages, ~$5/quarter ongoing).
+
+### D. Truly low-priority (post-OCR, optional)
+
+- FDA inspection auto-fetch from `datadashboard.fda.gov` (PR #125 ships CSV-seed; works for now)
+- ADR/GDR programmatic ingestion from BNY Mellon (PR #125 XBRL `CustodianOrDRHolder` covers filers; external scrape pending)
+- yfinance share-count sanity gate (NESTLEIND 2× bug) — covered partially in PR #114, but a generic Screener-vs-yfinance reconciliation pass would catch the long tail
 
 ## 🏗️ Long-parked
 
