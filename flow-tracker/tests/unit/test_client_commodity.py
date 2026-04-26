@@ -113,6 +113,104 @@ class TestFetchPrices:
         assert gold_records == []
 
 
+class TestFetchMetals:
+    """Test fetch_metals with mocked yfinance Ticker.history."""
+
+    def test_basic_metals(self):
+        ali_hist = _make_hist({"Close": [3600.0, 3610.0]}, ["2026-04-23", "2026-04-24"])
+        hg_hist = _make_hist({"Close": [6.0, 6.05]}, ["2026-04-23", "2026-04-24"])
+
+        def mock_ticker(symbol):
+            t = MagicMock()
+            if symbol == "ALI=F":
+                t.history.return_value = ali_hist
+            elif symbol == "HG=F":
+                t.history.return_value = hg_hist
+            else:
+                t.history.return_value = pd.DataFrame()
+            return t
+
+        with patch("flowtracker.commodity_client.yf.Ticker", side_effect=mock_ticker):
+            with CommodityClient() as client:
+                records = client.fetch_metals(days=5)
+
+        symbols = {r.symbol for r in records}
+        assert "ALUMINIUM" in symbols
+        assert "COPPER" in symbols
+
+        alu = [r for r in records if r.symbol == "ALUMINIUM"]
+        assert len(alu) == 2
+        assert alu[0].unit == "USD/MT"
+        assert alu[1].price == 3610.0
+
+        cu = [r for r in records if r.symbol == "COPPER"]
+        assert len(cu) == 2
+        assert cu[0].unit == "USD/lb"
+        assert cu[1].price == 6.05
+
+    def test_empty_ticker_skipped(self):
+        """A ticker returning empty DataFrame must be skipped without error."""
+        ali_hist = _make_hist({"Close": [3600.0]}, ["2026-04-24"])
+
+        def mock_ticker(symbol):
+            t = MagicMock()
+            if symbol == "ALI=F":
+                t.history.return_value = ali_hist
+            else:
+                t.history.return_value = pd.DataFrame()
+            return t
+
+        with patch("flowtracker.commodity_client.yf.Ticker", side_effect=mock_ticker):
+            with CommodityClient() as client:
+                records = client.fetch_metals(days=5)
+
+        symbols = {r.symbol for r in records}
+        assert "ALUMINIUM" in symbols
+        assert "COPPER" not in symbols
+
+    def test_nan_prices_skipped(self):
+        ali_hist = _make_hist(
+            {"Close": [float("nan"), 3610.0]},
+            ["2026-04-23", "2026-04-24"],
+        )
+
+        def mock_ticker(symbol):
+            t = MagicMock()
+            if symbol == "ALI=F":
+                t.history.return_value = ali_hist
+            else:
+                t.history.return_value = pd.DataFrame()
+            return t
+
+        with patch("flowtracker.commodity_client.yf.Ticker", side_effect=mock_ticker):
+            with CommodityClient() as client:
+                records = client.fetch_metals(days=5)
+
+        alu = [r for r in records if r.symbol == "ALUMINIUM"]
+        assert len(alu) == 1
+        assert alu[0].price == 3610.0
+
+    def test_metals_history(self):
+        ali_hist = _make_hist({"Close": [3500.0, 3600.0]}, ["2025-04-25", "2026-04-24"])
+
+        def mock_ticker(symbol):
+            t = MagicMock()
+            if symbol == "ALI=F":
+                t.history.return_value = ali_hist
+            else:
+                t.history.return_value = pd.DataFrame()
+            return t
+
+        with patch("flowtracker.commodity_client.yf.Ticker", side_effect=mock_ticker):
+            with CommodityClient() as client:
+                records = client.fetch_metals_history(start="2025-04-25")
+
+        alu = [r for r in records if r.symbol == "ALUMINIUM"]
+        assert len(alu) == 2
+        assert alu[0].date == "2025-04-25"
+        assert alu[0].unit == "USD/MT"
+
+
 class TestFetchEtfNavs:
     """Test fetch_etf_navs with respx mock for mfapi.in."""
 

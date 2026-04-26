@@ -92,3 +92,53 @@ def trend(
     with FlowStore() as store:
         snapshots = store.get_macro_trend(days)
     display_macro_trend(snapshots)
+
+
+@app.command("wss-fetch")
+def wss_fetch(
+    selected_date: Annotated[
+        str | None,
+        typer.Option(
+            "--date",
+            help="Override release date (RBI format M/DD/YYYY). Default = latest release.",
+        ),
+    ] = None,
+) -> None:
+    """Fetch RBI WSS system credit/deposit aggregates (weekly).
+
+    Idempotent — re-running for a release that's already in the DB overwrites
+    with whatever the parser extracts this run.
+    """
+    with MacroClient() as client, FlowStore() as store:
+        record = client._fetch_rbi_wss(selected_date)
+        if record is None:
+            console.print(
+                "[yellow]RBI WSS fetch returned no data — see logs for parser/network detail.[/]"
+            )
+            raise typer.Exit(1)
+        rowcount = store.upsert_system_credit(record)
+    console.print(
+        f"[green]RBI WSS upserted ({rowcount} row) — release {record.release_date}, "
+        f"as_of {record.as_of_date}: credit YoY {record.credit_growth_yoy}%, "
+        f"deposit YoY {record.deposit_growth_yoy}%, CD ratio {record.cd_ratio}%[/]"
+    )
+
+
+@app.command("wss-summary")
+def wss_summary() -> None:
+    """Show the latest RBI WSS system-credit snapshot."""
+    with FlowStore() as store:
+        record = store.get_latest_system_credit()
+    if record is None:
+        console.print("[yellow]No RBI WSS data. Run 'flowtrack macro wss-fetch' first.[/]")
+        raise typer.Exit(1)
+    console.print(
+        f"[bold cyan]RBI WSS — release {record.release_date} (as of {record.as_of_date}):[/]\n"
+        f"  Credit growth YoY:        {record.credit_growth_yoy}%\n"
+        f"  Deposit growth YoY:       {record.deposit_growth_yoy}%\n"
+        f"  Non-food credit YoY:      {record.non_food_credit_growth_yoy}%\n"
+        f"  M3 growth YoY:            {record.m3_growth_yoy}%\n"
+        f"  C/D ratio:                {record.cd_ratio}%\n"
+        f"  Aggregate deposits (Cr):  {record.aggregate_deposits_cr}\n"
+        f"  Bank credit (Cr):         {record.bank_credit_cr}\n"
+    )

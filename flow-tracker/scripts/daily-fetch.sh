@@ -42,9 +42,13 @@ run_with_retry() {
 
 run_with_retry "flowtrack fetch" "FII/DII flows"
 run_with_retry "flowtrack gold fetch" "Gold/silver prices"
+run_with_retry "flowtrack gold metals" "Industrial metals prices (Al/Cu)"
 run_with_retry "flowtrack mf daily fetch" "SEBI daily MF flows"
 run_with_retry "flowtrack macro fetch" "Macro indicators"
 run_with_retry "flowtrack macro fetch-index" "Index daily prices"
+# RBI WSS publishes Friday but daily idempotent fetches keep cron simple
+# (re-fetching the same release_date is a no-op INSERT OR REPLACE).
+run_with_retry "flowtrack macro wss-fetch" "RBI WSS system credit/deposit"
 run_with_retry "flowtrack bhavcopy fetch" "Bhavcopy + delivery"
 run_with_retry "flowtrack fno fetch" "F&O bhavcopy + participant OI"
 run_with_retry "flowtrack deals fetch" "Bulk/block deals"

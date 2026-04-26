@@ -63,6 +63,93 @@ class TestAnnualFinancials:
         assert len(data) == 0
 
 
+class TestInsuranceHeadlineRevenue:
+    """Headline-revenue swap for life insurers — annual + quarterly.
+
+    Screener's "Revenue" line for insurers includes mark-to-market gains/losses
+    on policyholder funds, producing wild year-on-year swings unrelated to
+    underwriting. The clean industry-standard top line is Net Premium Earned.
+    The data layer adds a `headline_revenue` field that prefers Net Premium
+    Earned for insurers and falls back to revenue with a `data_quality_note`
+    when net_premium_earned isn't ingested. See
+    `ResearchDataAPI._apply_insurance_headline`.
+    """
+
+    @staticmethod
+    def _set_industry(store, symbol: str, industry: str) -> None:
+        """Insert an industry row into company_snapshot (the path
+        `_get_industry` reads first)."""
+        store._conn.execute(
+            "INSERT OR REPLACE INTO company_snapshot (symbol, industry) VALUES (?, ?)",
+            (symbol, industry),
+        )
+        store._conn.commit()
+
+    def test_non_insurer_headline_equals_revenue_no_note(self, api: ResearchDataAPI):
+        # SBIN (Banks — non-insurance) → headline_revenue == revenue, no note.
+        rows = api.get_annual_financials("SBIN")
+        assert len(rows) > 0
+        for row in rows:
+            assert row.get("headline_revenue") == row.get("revenue")
+            assert "data_quality_note" not in row
+            assert "notes" not in row
+
+    def test_insurer_with_net_premium_uses_premium_as_headline(
+        self, api: ResearchDataAPI, populated_store
+    ):
+        """When net_premium_earned is populated, headline_revenue switches to it."""
+        # Mark SBIN as a life insurer (uses one of the insurance industry strings).
+        self._set_industry(populated_store, "SBIN", "Insurance - Life")
+        rows = api.get_annual_financials("SBIN")
+        assert len(rows) > 0
+        # Inject a synthetic net_premium_earned into the returned dicts and
+        # re-run the swap to verify the branch (round-trip helper).
+        for row in rows:
+            row["net_premium_earned"] = (row.get("revenue") or 0) * 0.6
+        swapped = api._apply_insurance_headline("SBIN", rows)
+        for row in swapped:
+            assert row["headline_revenue"] == row["net_premium_earned"]
+            assert row["headline_metric"] == "net_premium_earned"
+            assert "Net Premium Earned" in row["notes"]
+            # Original revenue is preserved.
+            assert row.get("revenue") is not None
+            assert row["revenue"] != row["headline_revenue"]
+
+    def test_insurer_without_net_premium_falls_back_with_note(
+        self, api: ResearchDataAPI, populated_store
+    ):
+        """When net_premium_earned is null, fallback to revenue + data_quality_note."""
+        self._set_industry(populated_store, "SBIN", "Insurance - Life")
+        rows = api.get_annual_financials("SBIN")
+        assert len(rows) > 0
+        for row in rows:
+            assert row.get("headline_revenue") == row.get("revenue")
+            assert row.get("headline_metric") == "revenue (fallback)"
+            assert "data_quality_note" in row
+            assert "MTM" in row["data_quality_note"] or "mark-to-market" in row["data_quality_note"]
+
+    def test_quarterly_results_insurer_gets_headline(
+        self, api: ResearchDataAPI, populated_store
+    ):
+        """Quarterly path applies the same swap layer."""
+        self._set_industry(populated_store, "SBIN", "Insurance - Life")
+        rows = api.get_quarterly_results("SBIN")
+        assert len(rows) > 0
+        for row in rows:
+            # Fallback path (no net_premium_earned in quarterly_results either).
+            assert "headline_revenue" in row
+            assert "data_quality_note" in row
+
+    def test_screener_industry_string_also_matches(
+        self, api: ResearchDataAPI, populated_store
+    ):
+        """Screener's bare 'Life Insurance' string also triggers the swap."""
+        self._set_industry(populated_store, "SBIN", "Life Insurance")
+        rows = api.get_annual_financials("SBIN")
+        assert len(rows) > 0
+        assert "data_quality_note" in rows[0]
+
+
 class TestScreenerRatios:
     def test_returns_list_of_dicts(self, api: ResearchDataAPI):
         data = api.get_screener_ratios("SBIN")
@@ -85,6 +172,136 @@ class TestValuationSnapshot:
     def test_unknown_symbol(self, api: ResearchDataAPI):
         data = api.get_valuation_snapshot("NONEXIST")
         assert data == {}
+
+
+class TestReconcileSharesOutstanding:
+    """Source-selection rule for share count: prefer Screener, warn on >5% disagreement."""
+
+    def test_both_agree_returns_screener(self):
+        from flowtracker.research.data_api import _reconcile_shares_outstanding
+        # Both sources agree within tolerance → use screener
+        result = _reconcile_shares_outstanding(
+            yfinance_shares=1_000_000_000,
+            screener_shares=1_010_000_000,  # 1% spread
+            symbol="TESTSYM",
+        )
+        assert result == 1_010_000_000
+
+    def test_both_disagree_uses_screener_and_warns(self, caplog):
+        import logging
+        from flowtracker.research.data_api import _reconcile_shares_outstanding
+        # NESTLEIND-style 2x bug
+        with caplog.at_level(logging.WARNING, logger="flowtracker.research.data_api"):
+            result = _reconcile_shares_outstanding(
+                yfinance_shares=1_928_000_000,
+                screener_shares=964_000_000,
+                symbol="NESTLEIND",
+            )
+        assert result == 964_000_000  # screener wins
+        assert any(
+            "share-count mismatch" in rec.message and "NESTLEIND" in rec.message
+            and "using screener" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_only_screener_populated(self):
+        from flowtracker.research.data_api import _reconcile_shares_outstanding
+        result = _reconcile_shares_outstanding(
+            yfinance_shares=None,
+            screener_shares=500_000_000,
+            symbol="TESTSYM",
+        )
+        assert result == 500_000_000
+
+    def test_only_yfinance_populated(self):
+        from flowtracker.research.data_api import _reconcile_shares_outstanding
+        result = _reconcile_shares_outstanding(
+            yfinance_shares=750_000_000,
+            screener_shares=None,
+            symbol="TESTSYM",
+        )
+        assert result == 750_000_000
+
+    def test_both_zero_returns_none(self):
+        from flowtracker.research.data_api import _reconcile_shares_outstanding
+        result = _reconcile_shares_outstanding(
+            yfinance_shares=0,
+            screener_shares=0,
+            symbol="TESTSYM",
+        )
+        assert result is None or result == 0
+
+    def test_both_none_returns_none(self):
+        from flowtracker.research.data_api import _reconcile_shares_outstanding
+        result = _reconcile_shares_outstanding(
+            yfinance_shares=None,
+            screener_shares=None,
+            symbol="TESTSYM",
+        )
+        assert result is None
+
+    def test_within_5pct_no_warning(self, caplog):
+        import logging
+        from flowtracker.research.data_api import _reconcile_shares_outstanding
+        with caplog.at_level(logging.WARNING, logger="flowtracker.research.data_api"):
+            _reconcile_shares_outstanding(
+                yfinance_shares=1_000_000_000,
+                screener_shares=1_040_000_000,  # 4% spread, within tol
+                symbol="TESTSYM",
+            )
+        # No warning should fire
+        assert not any("share-count mismatch" in rec.message for rec in caplog.records)
+
+
+class TestValuationSnapshotShareReconciliation:
+    """get_valuation_snapshot must reconcile yfinance vs Screener share counts."""
+
+    def test_yfinance_2x_bug_corrected_via_screener(self, tmp_db, monkeypatch, caplog):
+        """When valuation_snapshot.shares_outstanding is 2x annual_financials.num_shares,
+        the read layer should override with Screener and recompute mcap."""
+        import logging
+        from flowtracker.fund_models import ValuationSnapshot, AnnualFinancials
+        from flowtracker.store import FlowStore
+        from flowtracker.research.data_api import ResearchDataAPI
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        with FlowStore(tmp_db) as store:
+            # yfinance: 1928M shares, mcap = price × 1928M / 1e7 = 2x correct
+            store.upsert_valuation_snapshot(ValuationSnapshot(
+                symbol="NESTLEIND",
+                date="2026-04-25",
+                price=1421.3,
+                market_cap=274071.34,  # buggy yfinance mcap
+                shares_outstanding=1_928_314_320,
+                float_shares=702_388_491,
+                pe_trailing=70.0,
+                book_value_per_share=22.99,
+            ))
+            # Screener: correct 964M shares
+            store.upsert_annual_financials([AnnualFinancials(
+                symbol="NESTLEIND",
+                fiscal_year_end="2025-03-31",
+                num_shares=964_157_160.0,
+                revenue=20000.0,
+                net_income=3000.0,
+            )])
+
+        api = ResearchDataAPI()
+        try:
+            with caplog.at_level(logging.WARNING, logger="flowtracker.research.data_api"):
+                snap = api.get_valuation_snapshot("NESTLEIND")
+        finally:
+            api.close()
+
+        assert snap["shares_outstanding"] == 964_157_160
+        assert snap["shares_outstanding_lakh"] == round(964_157_160 / 1e5, 2)
+        # mcap recomputed from corrected share count
+        assert abs(snap["market_cap"] - (1421.3 * 964_157_160 / 1e7)) < 1.0
+        # warning was logged
+        assert any(
+            "share-count mismatch" in r.message and "NESTLEIND" in r.message
+            for r in caplog.records
+        )
 
 
 class TestValuationBand:
@@ -257,6 +474,89 @@ class TestMacroSnapshot:
         # No as_of marker for today-sourced field.
         assert "usd_inr_as_of" not in data
 
+    def test_embeds_system_credit_when_present(self, tmp_db, monkeypatch):
+        """get_macro_snapshot embeds latest RBI WSS aggregate under 'system_credit'."""
+        from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        store = FlowStore(db_path=tmp_db)
+        store.upsert_macro_snapshots([
+            MacroSnapshot(date="2026-04-25", india_vix=14.0, usd_inr=85.0,
+                          brent_crude=72.0, gsec_10y=6.5),
+        ])
+        store.upsert_system_credit(MacroSystemCredit(
+            release_date="2026-04-24",
+            as_of_date="2026-04-15",
+            aggregate_deposits_cr=25648470.0,
+            bank_credit_cr=20921084.0,
+            deposit_growth_yoy=12.2,
+            credit_growth_yoy=15.0,
+            cd_ratio=81.57,
+            m3_growth_yoy=11.9,
+        ))
+        store.close()
+
+        api = ResearchDataAPI()
+        try:
+            data = api.get_macro_snapshot()
+        finally:
+            api.close()
+
+        assert "system_credit" in data
+        sc = data["system_credit"]
+        assert sc["release_date"] == "2026-04-24"
+        assert sc["credit_growth_yoy"] == 15.0
+        assert sc["deposit_growth_yoy"] == 12.2
+        assert sc["cd_ratio"] == 81.57
+
+    def test_omits_system_credit_when_no_wss_rows(self, tmp_db, monkeypatch):
+        """system_credit key is omitted when no WSS rows exist (don't mislead with empty dict)."""
+        from flowtracker.macro_models import MacroSnapshot
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        store = FlowStore(db_path=tmp_db)
+        store.upsert_macro_snapshots([
+            MacroSnapshot(date="2026-04-25", india_vix=14.0, usd_inr=85.0,
+                          brent_crude=72.0, gsec_10y=6.5),
+        ])
+        store.close()
+
+        api = ResearchDataAPI()
+        try:
+            data = api.get_macro_snapshot()
+        finally:
+            api.close()
+
+        assert "system_credit" not in data
+
+
+class TestSystemCreditSnapshot:
+    def test_returns_empty_when_no_rows(self, api: ResearchDataAPI):
+        # The shared `api` fixture doesn't seed system_credit.
+        sc = api.get_system_credit_snapshot()
+        assert sc == {}
+
+    def test_returns_dict_when_present(self, tmp_db, monkeypatch):
+        from flowtracker.macro_models import MacroSystemCredit
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        store = FlowStore(db_path=tmp_db)
+        store.upsert_system_credit(MacroSystemCredit(
+            release_date="2026-04-24", credit_growth_yoy=15.0,
+            deposit_growth_yoy=12.2, cd_ratio=81.57,
+        ))
+        store.close()
+
+        api = ResearchDataAPI()
+        try:
+            sc = api.get_system_credit_snapshot()
+        finally:
+            api.close()
+
+        assert sc["release_date"] == "2026-04-24"
+        assert sc["credit_growth_yoy"] == 15.0
+        assert sc["source"] == "RBI_WSS"
+
 
 class TestCommoditySnapshot:
     def test_includes_brent(self, api: ResearchDataAPI):
@@ -273,6 +573,40 @@ class TestCommoditySnapshot:
         assert "change_3m_pct" in brent
         assert "change_1y_pct" in brent
         assert isinstance(brent["price"], (int, float))
+
+    def test_includes_industrial_metals(self, tmp_db, monkeypatch):
+        """Aluminium and copper (LME proxies via yfinance) must be exposed
+        alongside gold/silver/brent with unit and delta shape.
+        """
+        from flowtracker.commodity_models import CommodityPrice
+
+        monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+        store = FlowStore(db_path=tmp_db)
+        store.upsert_commodity_prices([
+            CommodityPrice(date="2026-04-23", symbol="ALUMINIUM", price=3600.0, unit="USD/MT"),
+            CommodityPrice(date="2026-04-24", symbol="ALUMINIUM", price=3610.0, unit="USD/MT"),
+            CommodityPrice(date="2026-04-23", symbol="COPPER", price=6.00, unit="USD/lb"),
+            CommodityPrice(date="2026-04-24", symbol="COPPER", price=6.05, unit="USD/lb"),
+        ])
+        store.close()
+
+        api = ResearchDataAPI()
+        try:
+            data = api.get_commodity_snapshot()
+        finally:
+            api.close()
+
+        assert "aluminium" in data
+        alu = data["aluminium"]
+        assert alu["price"] == 3610.0
+        assert alu["unit"] == "USD/MT"
+        assert alu["date"] == "2026-04-24"
+        assert "change_1m_pct" in alu
+
+        assert "copper" in data
+        cu = data["copper"]
+        assert cu["price"] == 6.05
+        assert cu["unit"] == "USD/lb"
 
 
 class TestFiiDiiStreak:

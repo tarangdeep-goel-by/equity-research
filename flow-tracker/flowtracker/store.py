@@ -22,7 +22,7 @@ from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, Share
 from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrelation
 from flowtracker.scan_models import IndexConstituent, ScanSummary
 from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials, ScreenerRatios
-from flowtracker.macro_models import MacroSnapshot
+from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit
 from flowtracker.bhavcopy_models import DailyStockData
 from flowtracker.deals_models import BulkBlockDeal
 from flowtracker.insider_models import InsiderTransaction
@@ -374,6 +374,25 @@ CREATE TABLE IF NOT EXISTS macro_daily (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(date)
 );
+
+-- Weekly RBI WSS system credit/deposit aggregates. WSS publishes Friday;
+-- Section 4 (SCB Business) is keyed to fortnight-end (15th + last calendar day).
+-- We use the WSS publication date as PK because that's the unambiguous
+-- release identity; ``as_of_date`` records the fortnight the values cover.
+CREATE TABLE IF NOT EXISTS macro_system_credit (
+    release_date TEXT PRIMARY KEY,
+    as_of_date TEXT,
+    aggregate_deposits_cr REAL,
+    bank_credit_cr REAL,
+    deposit_growth_yoy REAL,
+    credit_growth_yoy REAL,
+    non_food_credit_growth_yoy REAL,
+    cd_ratio REAL,
+    m3_growth_yoy REAL,
+    source TEXT NOT NULL DEFAULT 'RBI_WSS',
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_macro_system_credit_as_of ON macro_system_credit(as_of_date);
 
 CREATE TABLE IF NOT EXISTS index_daily_prices (
     date TEXT NOT NULL,
@@ -2586,6 +2605,71 @@ class FlowStore:
         )
         self._conn.commit()
         return cursor.rowcount
+
+    # -- RBI WSS System Credit (weekly) --
+
+    def upsert_system_credit(self, record: MacroSystemCredit) -> int:
+        """Insert or replace one weekly RBI WSS system-credit record.
+
+        Idempotent: re-running with the same release_date overwrites with
+        whatever the parser produced this round (allowing late-day re-fetches
+        to fill in fields the morning fetch couldn't extract).
+        """
+        cursor = self._conn.execute(
+            "INSERT OR REPLACE INTO macro_system_credit "
+            "(release_date, as_of_date, aggregate_deposits_cr, bank_credit_cr, "
+            " deposit_growth_yoy, credit_growth_yoy, non_food_credit_growth_yoy, "
+            " cd_ratio, m3_growth_yoy, source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                record.release_date, record.as_of_date,
+                record.aggregate_deposits_cr, record.bank_credit_cr,
+                record.deposit_growth_yoy, record.credit_growth_yoy,
+                record.non_food_credit_growth_yoy,
+                record.cd_ratio, record.m3_growth_yoy, record.source,
+            ),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
+    def get_latest_system_credit(self) -> MacroSystemCredit | None:
+        """Most recent RBI WSS system-credit record."""
+        row = self._conn.execute(
+            "SELECT * FROM macro_system_credit ORDER BY release_date DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+        return MacroSystemCredit(
+            release_date=row["release_date"],
+            as_of_date=row["as_of_date"],
+            aggregate_deposits_cr=row["aggregate_deposits_cr"],
+            bank_credit_cr=row["bank_credit_cr"],
+            deposit_growth_yoy=row["deposit_growth_yoy"],
+            credit_growth_yoy=row["credit_growth_yoy"],
+            non_food_credit_growth_yoy=row["non_food_credit_growth_yoy"],
+            cd_ratio=row["cd_ratio"],
+            m3_growth_yoy=row["m3_growth_yoy"],
+            source=row["source"] or "RBI_WSS",
+        )
+
+    def get_system_credit_trend(self, weeks: int = 12) -> list[MacroSystemCredit]:
+        """Return up to ``weeks`` most-recent system-credit records (newest first)."""
+        rows = self._conn.execute(
+            "SELECT * FROM macro_system_credit ORDER BY release_date DESC LIMIT ?",
+            (weeks,),
+        ).fetchall()
+        return [MacroSystemCredit(
+            release_date=r["release_date"],
+            as_of_date=r["as_of_date"],
+            aggregate_deposits_cr=r["aggregate_deposits_cr"],
+            bank_credit_cr=r["bank_credit_cr"],
+            deposit_growth_yoy=r["deposit_growth_yoy"],
+            credit_growth_yoy=r["credit_growth_yoy"],
+            non_food_credit_growth_yoy=r["non_food_credit_growth_yoy"],
+            cd_ratio=r["cd_ratio"],
+            m3_growth_yoy=r["m3_growth_yoy"],
+            source=r["source"] or "RBI_WSS",
+        ) for r in rows]
 
     # -- Bhavcopy + Delivery --
 
