@@ -243,6 +243,7 @@ CREATE TABLE IF NOT EXISTS quarterly_results (
     eps_diluted REAL,
     operating_margin REAL,
     net_margin REAL,
+    net_premium_earned REAL,  -- Insurers only (₹ Cr). See _apply_insurance_headline.
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, quarter_end)
 );
@@ -294,6 +295,7 @@ CREATE TABLE IF NOT EXISTS annual_financials (
     symbol TEXT NOT NULL,
     fiscal_year_end TEXT NOT NULL,
     revenue REAL,
+    net_premium_earned REAL,  -- Insurers only (₹ Cr). See _apply_insurance_headline.
     employee_cost REAL,
     other_income REAL,
     depreciation REAL,
@@ -1464,6 +1466,11 @@ class FlowStore:
         new_qr_cols = [
             ("expenses", "REAL"), ("other_income", "REAL"), ("depreciation", "REAL"),
             ("interest", "REAL"), ("profit_before_tax", "REAL"), ("tax_pct", "REAL"),
+            # Insurance-only: Net Premium Earned (Schedule III "premium income net
+            # of reinsurance ceded"). Stays NULL for non-insurers and for insurers
+            # whose source feed doesn't expose the row. See
+            # ResearchDataAPI._apply_insurance_headline for the read-side swap.
+            ("net_premium_earned", "REAL"),
         ]
         for col_name, col_type in new_qr_cols:
             if col_name not in existing_qr:
@@ -1478,6 +1485,8 @@ class FlowStore:
             ("other_mfr_exp", "REAL"), ("selling_and_admin", "REAL"),
             ("other_expenses_detail", "REAL"), ("total_expenses", "REAL"),
             ("operating_profit", "REAL"),
+            # Insurance-only: Net Premium Earned (₹ Cr). See note above.
+            ("net_premium_earned", "REAL"),
         ]
         for col_name, col_type in new_af_cols:
             if col_name not in existing_af:
@@ -2421,11 +2430,13 @@ class FlowStore:
                 "INSERT OR REPLACE INTO quarterly_results "
                 "(symbol, quarter_end, revenue, gross_profit, operating_income, net_income, "
                 "ebitda, eps, eps_diluted, operating_margin, net_margin, "
-                "expenses, other_income, depreciation, interest, profit_before_tax, tax_pct) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "expenses, other_income, depreciation, interest, profit_before_tax, tax_pct, "
+                "net_premium_earned) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (r.symbol, r.quarter_end, r.revenue, r.gross_profit, r.operating_income,
                  r.net_income, r.ebitda, r.eps, r.eps_diluted, r.operating_margin, r.net_margin,
-                 r.expenses, r.other_income, r.depreciation, r.interest, r.profit_before_tax, r.tax_pct),
+                 r.expenses, r.other_income, r.depreciation, r.interest, r.profit_before_tax, r.tax_pct,
+                 r.net_premium_earned),
             )
             count += cursor.rowcount
         self._conn.commit()
@@ -2447,6 +2458,7 @@ class FlowStore:
             expenses=r["expenses"], other_income=r["other_income"],
             depreciation=r["depreciation"], interest=r["interest"],
             profit_before_tax=r["profit_before_tax"], tax_pct=r["tax_pct"],
+            net_premium_earned=r["net_premium_earned"],
         ) for r in rows]
 
     # -- Fundamentals: Valuation Snapshots --
@@ -2779,8 +2791,8 @@ class FlowStore:
                 "net_block, cwip, investments, other_assets, receivables, inventory, "
                 "cash_and_bank, num_shares, cfo, cfi, cff, net_cash_flow, price, "
                 "raw_material_cost, power_and_fuel, other_mfr_exp, selling_and_admin, "
-                "other_expenses_detail, total_expenses, operating_profit) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "other_expenses_detail, total_expenses, operating_profit, net_premium_earned) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (r.symbol, r.fiscal_year_end, r.revenue, r.employee_cost, r.other_income,
                  r.depreciation, r.interest, r.profit_before_tax, r.tax, r.net_income,
                  r.eps, r.dividend_amount, r.equity_capital, r.reserves, r.borrowings,
@@ -2788,7 +2800,8 @@ class FlowStore:
                  r.other_assets, r.receivables, r.inventory, r.cash_and_bank, r.num_shares,
                  r.cfo, r.cfi, r.cff, r.net_cash_flow, r.price,
                  r.raw_material_cost, r.power_and_fuel, r.other_mfr_exp, r.selling_and_admin,
-                 r.other_expenses_detail, r.total_expenses, r.operating_profit),
+                 r.other_expenses_detail, r.total_expenses, r.operating_profit,
+                 r.net_premium_earned),
             )
             count += cursor.rowcount
         self._conn.commit()
@@ -2820,6 +2833,7 @@ class FlowStore:
             other_mfr_exp=r["other_mfr_exp"], selling_and_admin=r["selling_and_admin"],
             other_expenses_detail=r["other_expenses_detail"], total_expenses=r["total_expenses"],
             operating_profit=r["operating_profit"],
+            net_premium_earned=r["net_premium_earned"],
         ) for r in rows]
 
     # -- Data Quality Flags (Screener reclassification discontinuities) --

@@ -257,6 +257,24 @@ def backfill(
                             if not quarters:
                                 quarters = sc.parse_quarterly_results(sym, excel_bytes)
 
+                            # 6. Insurance-only enrichment: Net Premium Earned. Screener
+                            # collapses insurer top-line to a single "Sales" row that
+                            # bundles MTM on policyholder funds. Probe yfinance income_stmt
+                            # for a premium-earned-style row and merge in. yfinance does
+                            # not currently surface this for Indian life insurers either —
+                            # in that case the column stays None and the read-side swap
+                            # layer (data_api._apply_insurance_headline) falls back to
+                            # revenue with a data_quality_note.
+                            try:
+                                premium_annual = client.fetch_annual_net_premium_earned(sym)
+                            except Exception:
+                                premium_annual = {}
+                            if premium_annual:
+                                for af in annual_fin:
+                                    npe = premium_annual.get(af.fiscal_year_end)
+                                    if npe is not None:
+                                        af.net_premium_earned = npe
+
                             with FlowStore() as store:
                                 if quarters:
                                     store.upsert_quarterly_results(quarters)

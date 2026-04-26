@@ -384,6 +384,54 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "new_product_contribution_pct", "label": "NPD Contribution %", "unit": "pct", "description": "New product introductions (last 3 years) as % of revenue"},
         ],
     },
+    # --- Added 2026-04-25 — covers new-age consumer platforms (Zomato/Eternal,
+    # Nykaa, Swiggy, FirstCry, IndiaMart, Naukri, Paytm) previously falling
+    # through to generic extraction. Note: 'Restaurants' (Jubilant Foodworks,
+    # Devyani, Sapphire) stays in retail — those are franchisee-operated brick-
+    # and-mortar QSR chains, not marketplace platforms.
+    "platform": {
+        "industries": [
+            # Consumer-internet / quick-commerce / food delivery
+            "Internet Retail",                  # ETERNAL (Zomato), NYKAA
+            "Internet & Catalogue Retail",      # INDIAMART, NAUKRI
+            "E-Retail/ E-Commerce",             # SWIGGY, FIRSTCRY
+            "Internet Content & Information",   # standard yfinance label
+            "Internet Content",
+            "E-Commerce",
+            # Fintech marketplaces (lending + payments + brokerage platforms)
+            "Financial Technology (Fintech)",   # PAYTM
+            "Fintech",
+            # Online travel / transport
+            "Travel Services",                  # MAKEMYTRIP-equivalents
+        ],
+        "kpis": [
+            # Top-line operating — GMV/GOV is the true scale; revenue is the cut
+            {"key": "gov_cr", "label": "GOV (Gross Order Value)", "unit": "cr", "description": "Gross Order Value — total transactional value flowing through the platform in crores", "aliases": ["gross_order_value_cr", "gov", "gross_order_value"]},
+            {"key": "gmv_cr", "label": "GMV (Gross Merchandise Value)", "unit": "cr", "description": "Gross Merchandise Value of transactions on the platform in crores", "aliases": ["gross_merchandise_value_cr", "gmv", "gross_merchandise_value"]},
+            {"key": "take_rate_pct", "label": "Take Rate %", "unit": "pct", "description": "Platform revenue as % of GOV/GMV — monetization power", "aliases": ["take_rate", "monetization_rate_pct", "commission_rate_pct"]},
+            # Profitability waterfall
+            {"key": "contribution_margin_pct", "label": "Contribution Margin %", "unit": "pct", "description": "Contribution margin (revenue − variable costs) as % of revenue/GOV — unit economics test", "aliases": ["contribution_margin", "cm_pct", "contribution_pct"]},
+            {"key": "adj_ebitda_margin_pct", "label": "Adj EBITDA Margin %", "unit": "pct", "description": "Adjusted EBITDA margin (post ESOP add-back) as % of revenue", "aliases": ["adjusted_ebitda_margin_pct", "adj_ebitda_pct"]},
+            {"key": "unit_economics_per_order_inr", "label": "Unit Economics / Order", "unit": "rs", "description": "Contribution profit per order in rupees (positive = unit economics work)", "aliases": ["contribution_per_order_inr", "ce_per_order", "unit_economics_per_order"]},
+            # Engagement
+            {"key": "mtu_mn", "label": "Monthly Transacting Users", "unit": "mn", "description": "Monthly Transacting Users in millions — paying user base", "aliases": ["monthly_transacting_users_mn", "mtu", "mau_transacting_mn"]},
+            {"key": "aov_inr", "label": "Average Order Value", "unit": "rs", "description": "Average basket size per order in rupees", "aliases": ["average_order_value_inr", "aov", "basket_size_inr"]},
+            {"key": "frequency_per_user_per_month", "label": "Order Frequency / User / Month", "unit": "number", "description": "Orders per active user per month — stickiness / engagement metric", "aliases": ["order_frequency_per_user", "frequency_per_mtu", "monthly_order_frequency"]},
+            # Quick-commerce specific (Blinkit, BBNow, Zepto, Instamart)
+            {"key": "dark_store_count", "label": "Dark Store Count", "unit": "number", "description": "Total operational quick-commerce dark stores at quarter-end", "aliases": ["dark_stores_number", "dark_stores", "qc_dark_store_count"]},
+            {"key": "qc_gov_cr", "label": "Quick-Commerce GOV", "unit": "cr", "description": "Quick-commerce vertical GOV in crores (Blinkit, BBNow, Instamart segment)", "aliases": ["quick_commerce_gov_cr", "qc_gmv_cr", "blinkit_gov_cr"]},
+            {"key": "qc_aov_inr", "label": "Quick-Commerce AOV", "unit": "rs", "description": "Quick-commerce segment AOV in rupees", "aliases": ["quick_commerce_aov_inr", "blinkit_aov_inr"]},
+            {"key": "qc_orders_per_dark_store_per_day", "label": "QC Orders / Dark Store / Day", "unit": "number", "description": "Daily orders per dark store — utilization / throughput metric", "aliases": ["orders_per_dark_store_per_day", "qc_throughput_per_store_per_day"]},
+            # Food-delivery specific (Eternal core, Swiggy)
+            {"key": "food_delivery_gov_cr", "label": "Food Delivery GOV", "unit": "cr", "description": "Food-delivery vertical GOV in crores", "aliases": ["fd_gov_cr", "food_gov_cr", "food_delivery_gmv_cr"]},
+            {"key": "food_delivery_aov_inr", "label": "Food Delivery AOV", "unit": "rs", "description": "Food-delivery AOV in rupees", "aliases": ["fd_aov_inr", "food_aov_inr"]},
+            {"key": "food_delivery_take_rate_pct", "label": "Food Delivery Take Rate %", "unit": "pct", "description": "Food-delivery revenue as % of food-delivery GOV", "aliases": ["fd_take_rate_pct", "food_take_rate_pct"]},
+            # Supply-side / capacity
+            {"key": "delivery_partners_active_thousand", "label": "Active Delivery Partners ('000)", "unit": "thousand", "description": "Active delivery partners (riders) in thousands", "aliases": ["delivery_partners_thousand", "active_riders_thousand", "rider_base_thousand"]},
+            {"key": "monthly_active_restaurants_thousand", "label": "Monthly Active Restaurants ('000)", "unit": "thousand", "description": "Monthly active restaurant partners in thousands", "aliases": ["mar_thousand", "active_restaurants_thousand"]},
+            {"key": "geographic_footprint_cities", "label": "Cities Covered", "unit": "number", "description": "Number of cities with active operational presence", "aliases": ["cities_present_number", "city_count_number", "cities_served"]},
+        ],
+    },
     "logistics": {
         "industries": [
             "Logistics", "Transportation", "Logistics Services",

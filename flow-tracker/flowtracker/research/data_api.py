@@ -61,6 +61,103 @@ def _percentile_rank(values: list[float], value: float) -> float:
     return round(100 * below / len(values)) if values else 0
 
 
+def _ema(series: list[float], period: int) -> list[float]:
+    """Exponential moving average. Series is oldest-first; returns same-length list.
+
+    Standard Wilder/MACD-style seeding: first EMA value is the SMA of the first
+    ``period`` values, subsequent values use ``alpha = 2 / (period + 1)``.
+    Pads the warmup region with the seed SMA so the output length matches the
+    input — callers index ``[-1]`` for the latest value.
+    """
+    if len(series) < period:
+        raise ValueError(f"need ≥{period} points for EMA, got {len(series)}")
+    alpha = 2.0 / (period + 1)
+    seed = sum(series[:period]) / period
+    out = [seed] * period
+    prev = seed
+    for x in series[period:]:
+        prev = alpha * x + (1 - alpha) * prev
+        out.append(prev)
+    return out
+
+
+def _adx_wilder(
+    highs: list[float], lows: list[float], closes: list[float], period: int = 14,
+) -> dict | None:
+    """ADX with Wilder's smoothing. All inputs oldest-first, same length.
+
+    Returns ``{"adx": float, "plus_di": float, "minus_di": float}`` for the
+    latest bar, or None if there's insufficient history.
+
+    Wilder's recurrence: smoothed_t = smoothed_{t-1} - smoothed_{t-1}/period + value_t.
+    Initial smoothed value is the simple sum over the first ``period`` bars.
+    """
+    n = len(closes)
+    if n < period * 2 + 1:
+        return None
+
+    # True Range, +DM, -DM per bar (starting from index 1; bar 0 has no prior).
+    tr = [0.0] * n
+    plus_dm = [0.0] * n
+    minus_dm = [0.0] * n
+    for i in range(1, n):
+        up = highs[i] - highs[i - 1]
+        down = lows[i - 1] - lows[i]
+        plus_dm[i] = up if (up > down and up > 0) else 0.0
+        minus_dm[i] = down if (down > up and down > 0) else 0.0
+        tr[i] = max(
+            highs[i] - lows[i],
+            abs(highs[i] - closes[i - 1]),
+            abs(lows[i] - closes[i - 1]),
+        )
+
+    # First smoothed values: sum of first `period` bars (Wilder's init).
+    sum_tr = sum(tr[1 : period + 1])
+    sum_pdm = sum(plus_dm[1 : period + 1])
+    sum_mdm = sum(minus_dm[1 : period + 1])
+
+    smoothed_tr = [sum_tr]
+    smoothed_pdm = [sum_pdm]
+    smoothed_mdm = [sum_mdm]
+
+    # Wilder's recurrence over the rest.
+    for i in range(period + 1, n):
+        smoothed_tr.append(smoothed_tr[-1] - smoothed_tr[-1] / period + tr[i])
+        smoothed_pdm.append(smoothed_pdm[-1] - smoothed_pdm[-1] / period + plus_dm[i])
+        smoothed_mdm.append(smoothed_mdm[-1] - smoothed_mdm[-1] / period + minus_dm[i])
+
+    # +DI / -DI series.
+    plus_di_series = []
+    minus_di_series = []
+    for s_tr, s_pdm, s_mdm in zip(smoothed_tr, smoothed_pdm, smoothed_mdm):
+        if s_tr == 0:
+            plus_di_series.append(0.0)
+            minus_di_series.append(0.0)
+        else:
+            plus_di_series.append(100 * s_pdm / s_tr)
+            minus_di_series.append(100 * s_mdm / s_tr)
+
+    # DX series.
+    dx_series = []
+    for p, m in zip(plus_di_series, minus_di_series):
+        denom = p + m
+        dx_series.append(100 * abs(p - m) / denom if denom else 0.0)
+
+    # ADX = Wilder smoothing of DX over `period`. Need `period` DX values to
+    # seed the SMA, then Wilder recurrence.
+    if len(dx_series) < period:
+        return None
+    adx = sum(dx_series[:period]) / period
+    for x in dx_series[period:]:
+        adx = (adx * (period - 1) + x) / period
+
+    return {
+        "adx": adx,
+        "plus_di": plus_di_series[-1],
+        "minus_di": minus_di_series[-1],
+    }
+
+
 _BFSI_INDUSTRIES = {
     # yfinance strings
     "Banks - Regional", "Banks - Diversified", "Credit Services",
@@ -3666,7 +3763,11 @@ class ResearchDataAPI:
         }
 
     def get_technical_indicators(self, symbol: str) -> list[dict]:
-        """Latest RSI, MACD, SMA-50, SMA-200, ADX (FMP primary, yfinance fallback).
+        """Latest RSI, MACD, SMA-50, SMA-200, ADX, Bollinger Bands.
+
+        FMP primary; daily_stock_data fallback for SMA/RSI; local-compute
+        augmentation for MACD / Bollinger / ADX (FMP coverage gap — those
+        endpoints are unavailable on our plan, so always computed locally).
 
         Augments the indicator row with F&O fields (PCR, futures/call/put OI,
         rollover %) when F&O contracts exist for the symbol — required for
@@ -3674,9 +3775,34 @@ class ResearchDataAPI:
         """
         fno = self.get_fno_metrics(symbol)
 
+        # Compute local MACD / Bollinger / ADX from bhavcopy. FMP doesn't ship
+        # signal/histogram/upper/lower/+DI/-DI on this plan, so even when FMP
+        # returns rows we surface these locally.
+        local_extra, local_note = self._compute_local_macd_bb_adx(symbol)
+
         rows = self._store.get_fmp_technical_indicators(symbol)
         if rows:
             out = [r.model_dump() for r in rows]
+            existing = {r["indicator"] for r in out}
+            # Wire-in pattern: when FMP provides MACD/ADX scalars, prefer them;
+            # otherwise fall back to local. Bollinger always comes from local
+            # (FMP doesn't expose upper/lower bands).
+            if local_extra:
+                augment: dict = {"symbol": symbol, "date": local_extra["date"]}
+                if "macd" not in existing:
+                    augment["macd"] = local_extra.get("macd")
+                    augment["macd_signal"] = local_extra.get("macd_signal")
+                    augment["macd_histogram"] = local_extra.get("macd_histogram")
+                if "adx" not in existing:
+                    augment["adx"] = local_extra.get("adx")
+                    augment["adx_plus_di"] = local_extra.get("adx_plus_di")
+                    augment["adx_minus_di"] = local_extra.get("adx_minus_di")
+                augment["bollinger_upper"] = local_extra.get("bollinger_upper")
+                augment["bollinger_middle"] = local_extra.get("bollinger_middle")
+                augment["bollinger_lower"] = local_extra.get("bollinger_lower")
+                if local_note:
+                    augment["data_quality_note"] = local_note
+                out.append(augment)
             if fno and out:
                 out[0] = {**out[0], "fno": fno}
             return _clean(out)
@@ -3692,6 +3818,10 @@ class ResearchDataAPI:
             (symbol,),
         ).fetchall()
         if len(prices) < 50:
+            # Still surface an explicit insufficient-history note rather than [].
+            if local_note:
+                return [{"date": prices[0]["date"] if prices else None,
+                         "data_quality_note": local_note}]
             return []
 
         closes = [float(p["close"]) for p in prices]
@@ -3735,10 +3865,187 @@ class ResearchDataAPI:
                 result["sma_cross"] = "golden_cross"
                 result["sma_cross_note"] = "SMA50 above SMA200 — bullish trend signal (golden cross)"
 
+        # Local MACD / Bollinger / ADX (read-time fill for FMP gap).
+        if local_extra:
+            for k in ("macd", "macd_signal", "macd_histogram",
+                     "bollinger_upper", "bollinger_middle", "bollinger_lower",
+                     "adx", "adx_plus_di", "adx_minus_di"):
+                if local_extra.get(k) is not None:
+                    result[k] = local_extra[k]
+        if local_note:
+            result["data_quality_note"] = local_note
+
         if fno:
             result["fno"] = fno
 
         return [result] if result else []
+
+    def _compute_local_macd_bb_adx(
+        self, symbol: str,
+    ) -> tuple[dict | None, str | None]:
+        """Compute MACD / Bollinger / ADX from daily_stock_data.
+
+        Returns ``(values_dict, data_quality_note)``. ``values_dict`` is None
+        when there is no history at all; otherwise it carries whichever
+        indicators we had enough bars to compute (others left as None).
+
+        Standard parameters: MACD(12, 26, 9); BB(20, 2σ); ADX(14, Wilder).
+        Uses adj_close to avoid split/bonus cliffs distorting EMAs / stdev /
+        true-range. If adj_close isn't populated, falls back to raw close —
+        ADX uses raw high/low/close (NSE bhavcopy doesn't store adj high/low).
+        """
+        conn = self._store._conn
+        # Need 60+ bars for stable MACD-26+9 + ADX-14 warmup; ask for 250
+        # to give EMA enough history to converge.
+        rows = conn.execute(
+            "SELECT date, high, low, COALESCE(adj_close, close) AS close "
+            "FROM daily_stock_data WHERE symbol = ? ORDER BY date DESC LIMIT 250",
+            (symbol,),
+        ).fetchall()
+        if not rows:
+            return None, None
+        # Reverse to oldest-first (standard for cumulative TA recurrences).
+        bars = list(reversed(rows))
+        closes = [float(b["close"]) for b in bars]
+        highs = [float(b["high"]) if b["high"] is not None else float(b["close"])
+                 for b in bars]
+        lows = [float(b["low"]) if b["low"] is not None else float(b["close"])
+                for b in bars]
+        latest_date = bars[-1]["date"]
+        n = len(closes)
+
+        # Need at least 30 bars for MACD-26 to be remotely meaningful.
+        if n < 30:
+            return ({"date": latest_date},
+                    "insufficient history for MACD/BB/ADX")
+
+        out: dict = {"date": latest_date}
+
+        # MACD(12, 26, 9) — exponential moving averages.
+        if n >= 26 + 9:
+            ema12 = _ema(closes, 12)
+            ema26 = _ema(closes, 26)
+            macd_line = [a - b for a, b in zip(ema12, ema26)]
+            signal_line = _ema(macd_line, 9)
+            out["macd"] = round(macd_line[-1], 4)
+            out["macd_signal"] = round(signal_line[-1], 4)
+            out["macd_histogram"] = round(macd_line[-1] - signal_line[-1], 4)
+
+        # Bollinger Bands (20-period SMA ± 2σ).
+        if n >= 20:
+            window = closes[-20:]
+            mid = sum(window) / 20
+            # Population stdev (divide by N, not N-1) — standard for BB.
+            var = sum((x - mid) ** 2 for x in window) / 20
+            sd = var ** 0.5
+            out["bollinger_middle"] = round(mid, 2)
+            out["bollinger_upper"] = round(mid + 2 * sd, 2)
+            out["bollinger_lower"] = round(mid - 2 * sd, 2)
+
+        # ADX(14) with Wilder's smoothing.
+        if n >= 14 * 2 + 1:  # need 28 bars minimum for stable Wilder ADX
+            adx_vals = _adx_wilder(highs, lows, closes, period=14)
+            if adx_vals is not None:
+                out["adx"] = round(adx_vals["adx"], 2)
+                out["adx_plus_di"] = round(adx_vals["plus_di"], 2)
+                out["adx_minus_di"] = round(adx_vals["minus_di"], 2)
+
+        note = "MACD/BB/ADX computed locally — FMP source unavailable"
+        return out, note
+
+    # ------------------------------------------------------------------
+    # Strategy 3 — concall comparable-basis overlay for trend methods.
+    # See plans/screener-data-discontinuity.md.
+    #
+    # When a trend method narrows its `effective_window` because a
+    # MEDIUM+ reclassification flag falls inside the requested window,
+    # we attach a `comparable_overlay` showing management's stated
+    # like-for-like / pre-merger comparable / constant-currency growth
+    # for the same period. This is annotation, NOT a primary series —
+    # the trend's own numbers come from Screener; the overlay is a
+    # second opinion the agent can quote alongside.
+    # ------------------------------------------------------------------
+    def _load_comparable_overlay(self, symbol: str) -> list[dict]:
+        """Flat list of every comparable_growth_metrics entry across all
+        cached concall quarters, with the source quarter attached.
+
+        Each entry has the original concall fields (metric, value,
+        comparable_basis, period, context, speaker, plus optional
+        base_value / metric_type / is_pro_forma) PLUS:
+          - `fy_quarter`: the quarter the statement was made in
+          - `data_source_for_comparable`: 'concall_management_commentary'
+
+        Returns [] when no concall extraction exists, when the file
+        cannot be read, or when no quarter has a populated
+        comparable_growth_metrics array.
+        """
+        import json as _json
+        from pathlib import Path as _Path
+
+        symbol = symbol.upper()
+        for _fn in ("concall_extraction_v2.json", "concall_extraction.json"):
+            _p = _Path.home() / "vault" / "stocks" / symbol / "fundamentals" / _fn
+            if not _p.exists():
+                continue
+            try:
+                _raw = _json.loads(_p.read_text(encoding="utf-8"))
+            except (OSError, _json.JSONDecodeError):
+                continue
+            entries: list[dict] = []
+            for q in _raw.get("quarters", []) or []:
+                fq = q.get("fy_quarter") or q.get("label") or ""
+                cgm = q.get("comparable_growth_metrics") or []
+                if not isinstance(cgm, list):
+                    continue
+                for item in cgm:
+                    if not isinstance(item, dict):
+                        continue
+                    annotated = dict(item)
+                    annotated["fy_quarter"] = fq
+                    annotated["data_source_for_comparable"] = "concall_management_commentary"
+                    entries.append(annotated)
+            return entries
+        return []
+
+    def _attach_comparable_overlay(
+        self, payload: dict, symbol: str
+    ) -> dict:
+        """Annotate a trend-method response with `comparable_overlay`
+        when its `effective_window` narrowed due to a reclass flag.
+
+        Surfaces management's verbatim comparable-basis statements as
+        a second opinion alongside the headline (Screener-derived)
+        series. The agent reasons over both — the overlay never
+        overrides the primary numbers.
+
+        Mutates and returns ``payload`` in place. No-op (returns
+        payload unchanged) when:
+          - effective_window is missing or empty
+          - narrowed_due_to is empty (no reclass actually narrowed
+            the window — overlay would be noise)
+          - the concall extraction has no comparable_growth_metrics
+        """
+        ew = payload.get("effective_window") if isinstance(payload, dict) else None
+        if not isinstance(ew, dict):
+            return payload
+        narrowed = ew.get("narrowed_due_to")
+        if not narrowed:
+            return payload
+        overlay = self._load_comparable_overlay(symbol)
+        if not overlay:
+            return payload
+        payload["comparable_overlay"] = {
+            "source": "concall_management_commentary",
+            "purpose": (
+                "Management-stated like-for-like / pre-merger comparable / "
+                "constant-currency growth for periods where the headline "
+                "Screener trend was narrowed by a reclassification flag. "
+                "Use as a second opinion alongside the headline series — "
+                "do NOT replace the primary numbers with these."
+            ),
+            "entries": overlay,
+        }
+        return payload
 
     def get_dupont_decomposition(self, symbol: str) -> dict:
         """ROE = margin × turnover × leverage (10yr). Uses Screener annual_financials, falls back to FMP key_metrics.
@@ -3795,7 +4102,10 @@ class ResearchDataAPI:
                         "roe_dupont": round(roe, 4),
                     })
             if decomp:
-                return {"source": "screener", "years": decomp, "effective_window": effective_window}
+                return self._attach_comparable_overlay(
+                    {"source": "screener", "years": decomp, "effective_window": effective_window},
+                    symbol,
+                )
 
         # Fallback to FMP
         metrics = self._store.get_fmp_key_metrics(symbol, limit=10)
@@ -5592,7 +5902,7 @@ class ResearchDataAPI:
             (d["metric_affected"], d["horizon"]) for d in narrowed_due_to
         })
 
-        return {
+        return self._attach_comparable_overlay({
             "symbol": symbol,
             "years_available": n,
             "cagrs": metrics,
@@ -5603,7 +5913,7 @@ class ResearchDataAPI:
                 ],
                 "narrowed_due_to": narrowed_due_to,
             },
-        }
+        }, symbol)
 
     # --- Auto-Detected Risk Flags ---
 
@@ -6683,12 +6993,12 @@ class ResearchDataAPI:
             ],
         }
         if len(segment) < 2:
-            return {
+            return self._attach_comparable_overlay({
                 "error": "F-score abstained: most-recent year-pair crosses a MEDIUM+ reclassification flag.",
                 "reason": "stale_due_to_reclass",
                 "effective_window": effective_window,
                 "fallback_hint": "Cite management's comparable basis from get_company_context(section='concall_insights', sub_section='comparable_growth_metrics') or narrate the structural break.",
-            }
+            }, symbol)
         t, t1 = segment[0], segment[1]  # t = latest, t1 = prior — same bucketing era
         is_bfsi = self._is_bfsi(symbol)
 
@@ -6819,13 +7129,13 @@ class ResearchDataAPI:
         else:
             signal = "weak"
 
-        return _clean({
+        return self._attach_comparable_overlay(_clean({
             "score": score,
             "max_score": max_score,
             "criteria": criteria,
             "signal": signal,
             "effective_window": effective_window,
-        })
+        }), symbol)
 
     def get_beneish_score(self, symbol: str) -> dict:
         """Beneish M-Score: earnings manipulation probability (8-variable model)."""
@@ -7590,13 +7900,13 @@ class ResearchDataAPI:
                         max_increase = increase
                         fastest_growing = f
 
-        return {
+        return self._attach_comparable_overlay({
             "years": years_data,
             "is_bfsi": is_bfsi,
             "biggest_cost": biggest_cost,
             "fastest_growing_cost": fastest_growing,
             "effective_window": effective_window,
-        }
+        }, symbol)
 
     # --- Consensus Estimates (Batch 2A) ---
 

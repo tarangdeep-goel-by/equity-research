@@ -543,6 +543,166 @@ class TestFetchQuarterlyResults:
             assert client.fetch_quarterly_results("SBIN") == []
 
 
+class TestNetPremiumEarnedExtraction:
+    """Net Premium Earned plumbing for life insurers.
+
+    yfinance does not currently surface this row for Indian life insurers
+    (HDFCLIFE, SBILIFE, ICICIPRULI, LICI) — they only return TotalRevenue /
+    OperatingRevenue (Schedule III "Revenue from operations" which bundles
+    MTM on policyholder funds). The extractor stays forward-compatible: any
+    of the candidate row labels in `_PREMIUM_EARNED_ROWS` triggers a populate.
+    """
+
+    def test_quarterly_no_premium_row_yields_none(self):
+        """Real Indian-life-insurer shape: TotalRevenue only, no premium row."""
+        col = pd.Timestamp("2024-12-31")
+        income_df = pd.DataFrame(
+            {col: [1000.0, 150.0]},
+            index=["TotalRevenue", "NetIncome"],
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.get_income_stmt.return_value = income_df
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            results = client.fetch_quarterly_results("HDFCLIFE")
+        assert len(results) == 1
+        assert results[0].net_premium_earned is None
+        assert results[0].revenue == 1000.0
+
+    def test_quarterly_with_premium_row_populates(self):
+        """When yfinance surfaces 'Net Premiums Earned', wire it through."""
+        col = pd.Timestamp("2024-12-31")
+        income_df = pd.DataFrame(
+            {col: [1000.0, 650.0, 150.0]},
+            index=["TotalRevenue", "Net Premiums Earned", "NetIncome"],
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.get_income_stmt.return_value = income_df
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            results = client.fetch_quarterly_results("HDFCLIFE")
+        assert len(results) == 1
+        # Quarterly path stores raw rupees (matching `revenue`).
+        assert results[0].net_premium_earned == 650.0
+
+    def test_quarterly_alternate_label_total_premiums_earned(self):
+        col = pd.Timestamp("2024-12-31")
+        income_df = pd.DataFrame(
+            {col: [1000.0, 700.0]},
+            index=["TotalRevenue", "Total Premiums Earned"],
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.get_income_stmt.return_value = income_df
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            results = client.fetch_quarterly_results("HDFCLIFE")
+        assert results[0].net_premium_earned == 700.0
+
+    def test_annual_extractor_no_premium_row_returns_empty(self):
+        """Today's reality for Indian life insurers."""
+        col = pd.Timestamp("2025-03-31")
+        income_df = pd.DataFrame(
+            {col: [9.94e11, 1.91e10]},  # raw rupees
+            index=["Total Revenue", "Net Income"],
+        )
+        mock_ticker = MagicMock()
+        type(mock_ticker).income_stmt = PropertyMock(return_value=income_df)
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            out = client.fetch_annual_net_premium_earned("HDFCLIFE")
+        assert out == {}
+
+    def test_annual_extractor_with_premium_row_converts_to_crores(self):
+        """When the row is present, convert raw rupees → crores."""
+        col1 = pd.Timestamp("2025-03-31")
+        col2 = pd.Timestamp("2024-03-31")
+        income_df = pd.DataFrame(
+            {col1: [9.94e11, 6.5e11], col2: [9.68e11, 6.3e11]},
+            index=["Total Revenue", "Net Premiums Earned"],
+        )
+        mock_ticker = MagicMock()
+        type(mock_ticker).income_stmt = PropertyMock(return_value=income_df)
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            out = client.fetch_annual_net_premium_earned("HDFCLIFE")
+        # 6.5e11 raw rupees / 1e7 = 65000 Cr
+        assert out == {"2025-03-31": pytest.approx(65000.0), "2024-03-31": pytest.approx(63000.0)}
+
+    def test_annual_extractor_handles_empty_frame(self):
+        mock_ticker = MagicMock()
+        type(mock_ticker).income_stmt = PropertyMock(return_value=pd.DataFrame())
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            assert client.fetch_annual_net_premium_earned("HDFCLIFE") == {}
+
+    def test_annual_extractor_handles_yfinance_exception(self):
+        """Defensive: yfinance access errors yield empty dict, not crash."""
+        mock_ticker = MagicMock()
+        type(mock_ticker).income_stmt = PropertyMock(side_effect=RuntimeError("network"))
+        with patch("flowtracker.fund_client.yf.Ticker", return_value=mock_ticker):
+            client = FundClient()
+            assert client.fetch_annual_net_premium_earned("HDFCLIFE") == {}
+
+
+class TestNetPremiumEarnedSchemaMigration:
+    """Round-trip: net_premium_earned column persists through upsert/get."""
+
+    def test_annual_round_trip(self, tmp_path):
+        from flowtracker.store import FlowStore
+        from flowtracker.fund_models import AnnualFinancials
+
+        db = tmp_path / "test.db"
+        with FlowStore(db_path=db) as store:
+            af = AnnualFinancials(
+                symbol="HDFCLIFE",
+                fiscal_year_end="2025-03-31",
+                revenue=10_000.0,
+                net_premium_earned=6_500.0,
+                net_income=1_200.0,
+            )
+            store.upsert_annual_financials([af])
+            results = store.get_annual_financials("HDFCLIFE")
+            assert len(results) == 1
+            assert results[0].net_premium_earned == 6_500.0
+            assert results[0].revenue == 10_000.0
+
+    def test_quarterly_round_trip(self, tmp_path):
+        from flowtracker.store import FlowStore
+        from flowtracker.fund_models import QuarterlyResult
+
+        db = tmp_path / "test.db"
+        with FlowStore(db_path=db) as store:
+            qr = QuarterlyResult(
+                symbol="HDFCLIFE",
+                quarter_end="2024-12-31",
+                revenue=2_500.0,
+                net_premium_earned=1_700.0,
+                net_income=300.0,
+            )
+            store.upsert_quarterly_results([qr])
+            results = store.get_quarterly_results("HDFCLIFE")
+            assert len(results) == 1
+            assert results[0].net_premium_earned == 1_700.0
+
+    def test_non_insurer_round_trip_stays_none(self, tmp_path):
+        """Don't pollute non-insurer rows."""
+        from flowtracker.store import FlowStore
+        from flowtracker.fund_models import AnnualFinancials
+
+        db = tmp_path / "test.db"
+        with FlowStore(db_path=db) as store:
+            af = AnnualFinancials(
+                symbol="SBIN",
+                fiscal_year_end="2025-03-31",
+                revenue=10_000.0,
+                # net_premium_earned omitted → defaults to None
+                net_income=1_200.0,
+            )
+            store.upsert_annual_financials([af])
+            results = store.get_annual_financials("SBIN")
+            assert results[0].net_premium_earned is None
+
+
 class TestFetchQuarterlyBSCF:
     """Test fetch_quarterly_bs_cf with mocked balance sheet + cash flow."""
 

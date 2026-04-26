@@ -520,9 +520,95 @@ class TestNewSectorRouting:
         ("Logistics", "logistics"),
         ("Airlines", "logistics"),
         ("Marine Ports & Services", "logistics"),
+        # platform (added 2026-04-25 — ETERNAL/Zomato, NYKAA, IndiaMart, Naukri,
+        # Swiggy, FirstCry, Paytm). Must NOT regress 'Restaurants' (Jubilant
+        # Foodworks etc. — franchisee QSR, stays in retail) or other sectors.
+        ("Internet Retail", "platform"),
+        ("Internet & Catalogue Retail", "platform"),
+        ("E-Retail/ E-Commerce", "platform"),
+        ("Internet Content & Information", "platform"),
+        ("Financial Technology (Fintech)", "platform"),
     ])
     def test_industry_routes_to_expected_sector(self, industry, expected_sector):
         assert get_sector_for_industry(industry) == expected_sector
+
+
+class TestPlatformKPIs:
+    """Platform sector (ETERNAL/Zomato, NYKAA, IndiaMart, Swiggy, Paytm) added
+    2026-04-25 — covers consumer-internet, quick-commerce, food delivery,
+    online marketplaces, and fintech platforms.
+    """
+
+    _CANONICAL_REQUIRED = (
+        # Top-line operating
+        "gov_cr", "gmv_cr", "take_rate_pct",
+        # Profitability waterfall
+        "contribution_margin_pct", "adj_ebitda_margin_pct", "unit_economics_per_order_inr",
+        # Engagement
+        "mtu_mn", "aov_inr", "frequency_per_user_per_month",
+        # Quick-commerce specific
+        "dark_store_count", "qc_gov_cr", "qc_aov_inr", "qc_orders_per_dark_store_per_day",
+        # Food-delivery specific
+        "food_delivery_gov_cr", "food_delivery_aov_inr", "food_delivery_take_rate_pct",
+        # Supply-side / capacity
+        "delivery_partners_active_thousand", "monthly_active_restaurants_thousand",
+        "geographic_footprint_cities",
+    )
+
+    def test_platform_registered_with_kpis_and_industries(self):
+        assert "platform" in SECTOR_KPI_CONFIG
+        cfg = SECTOR_KPI_CONFIG["platform"]
+        assert cfg["industries"], "platform must list at least one industry"
+        assert cfg["kpis"], "platform must register at least one KPI"
+
+    def test_canonical_kpis_present(self):
+        canonical = {k["key"] for k in SECTOR_KPI_CONFIG["platform"]["kpis"]}
+        missing = [k for k in self._CANONICAL_REQUIRED if k not in canonical]
+        assert not missing, f"platform missing canonical KPIs: {missing}"
+
+    def test_eternal_industry_routes_to_platform(self):
+        """ETERNAL (Zomato/Blinkit parent) is tagged 'Internet Retail' in the
+        company_snapshot table — must route to platform sector."""
+        assert get_sector_for_industry("Internet Retail") == "platform"
+
+    def test_indiamart_naukri_industry_routes_to_platform(self):
+        """B2B and classifieds platforms — 'Internet & Catalogue Retail'."""
+        assert get_sector_for_industry("Internet & Catalogue Retail") == "platform"
+
+    def test_swiggy_firstcry_industry_routes_to_platform(self):
+        """SWIGGY, FIRSTCRY are tagged 'E-Retail/ E-Commerce' in DB."""
+        assert get_sector_for_industry("E-Retail/ E-Commerce") == "platform"
+
+    def test_paytm_industry_routes_to_platform(self):
+        """PAYTM tagged 'Financial Technology (Fintech)' — fintech marketplace."""
+        assert get_sector_for_industry("Financial Technology (Fintech)") == "platform"
+
+    def test_restaurants_does_not_regress_to_platform(self):
+        """JUBLFOOD, DEVYANI, SAPPHIRE — franchisee QSR, NOT marketplace
+        platforms — must stay in retail (regression guard)."""
+        assert get_sector_for_industry("Restaurants") == "retail"
+
+    def test_platform_kpis_resolve_via_industry(self):
+        keys = get_kpi_keys_for_industry("Internet Retail")
+        assert keys is not None
+        for required in self._CANONICAL_REQUIRED:
+            assert required in keys, f"platform via industry lookup missing {required!r}"
+
+    def test_platform_aliases_normalize_to_canonical(self):
+        """LLM extractor drift (gmv → gmv_cr, take_rate → take_rate_pct etc.)
+        must canonicalize via the alias map."""
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+
+        ops = {
+            "gmv": {"value": 12500.0},                 # alias → gmv_cr
+            "take_rate": {"value": 4.5},               # alias → take_rate_pct
+            "monthly_transacting_users_mn": {"value": 22.7},  # alias → mtu_mn
+        }
+        result, renamed = canonicalize_operational_metrics(ops, "Internet Retail")
+        assert "gmv_cr" in result
+        assert "take_rate_pct" in result
+        assert "mtu_mn" in result
+        assert sorted(renamed) == sorted(["gmv", "take_rate", "monthly_transacting_users_mn"])
 
 
 class TestNewSectorCanonicalKpis:
