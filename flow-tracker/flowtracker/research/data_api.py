@@ -938,6 +938,18 @@ class ResearchDataAPI:
         """
         return self._store.get_five_year_summary(symbol, limit=years)
 
+    def _ar_five_year_index(self, symbol: str) -> dict[str, dict]:
+        """Return AR five-year highlights indexed by fy_end.
+
+        Helper for Strategy 2 consumer wiring (DuPont, F-score, CAGR table,
+        common-size). Empty dict when the symbol has no AR-restated rows
+        — callers must treat the AR series as opt-in: presence triggers
+        the restated path, absence preserves the legacy Screener+narrowing
+        contract from Strategy 1.
+        """
+        rows = self._store.get_five_year_summary(symbol, limit=11)
+        return {r["fy_end"]: r for r in rows}
+
     def get_screener_ratios(self, symbol: str, years: int = 10) -> list[dict]:
         """Efficiency ratios: debtor days, inventory days, CCC, working capital days, ROCE%."""
         rows = self._store.get_screener_ratios(symbol, limit=years)
@@ -4050,14 +4062,65 @@ class ResearchDataAPI:
     def get_dupont_decomposition(self, symbol: str) -> dict:
         """ROE = margin × turnover × leverage (10yr). Uses Screener annual_financials, falls back to FMP key_metrics.
 
-        If MEDIUM+ data_quality_flags overlap the requested window, the result
-        is computed only on the longest unbroken segment, and the dropped
-        boundary is reported in `effective_window.narrowed_due_to`. Agents should
-        narrate the break rather than chain ratios across it.
+        Strategy 2 (plans/screener-data-discontinuity.md): when
+        `ar_five_year_summary` has rows covering the requested window with the
+        four needed metrics (revenue, pat, total_assets, net_worth), the
+        restated AR series is used as primary and the response is annotated
+        with `data_source: 'ar_five_year_summary'`. Because the AR table is
+        internally consistent across Schedule III reclasses, no narrowing is
+        applied on the AR-covered span.
+
+        Strategy 1 fallback: when AR coverage is partial or absent, the
+        legacy Screener-with-narrowing contract is preserved. If MEDIUM+
+        data_quality_flags overlap the requested window, the result is
+        computed only on the longest unbroken segment, and the dropped
+        boundary is reported in `effective_window.narrowed_due_to`. Agents
+        should narrate the break rather than chain ratios across it.
+        Hybrid windows (AR covers part, Screener covers older years)
+        annotate `data_source: 'mixed'` with `source_per_year`.
         """
         from flowtracker.data_quality import longest_unflagged_window
 
-        # Try Screener data first
+        # Strategy 2: try AR-restated highlights first.
+        ar_index = self._ar_five_year_index(symbol)
+        ar_dupont_years: list[dict] = []
+        ar_covered_fys: set[str] = set()
+        if ar_index:
+            # Walk AR rows latest-first and compute DuPont on rows that have
+            # all four metrics (revenue, pat, total_assets, net_worth). Use
+            # average of T and T-1 for BS items where the prior year is also
+            # AR-sourced (consistent restated era).
+            ar_rows_desc = sorted(ar_index.values(), key=lambda r: r["fy_end"], reverse=True)
+            for i, r in enumerate(ar_rows_desc):
+                rev = r.get("revenue")
+                pat = r.get("pat")
+                ta = r.get("total_assets")
+                nw = r.get("net_worth")
+                if not (rev and rev > 0 and pat is not None and ta and ta > 0 and nw and nw > 0):
+                    continue
+                if i + 1 < len(ar_rows_desc):
+                    prev = ar_rows_desc[i + 1]
+                    prev_ta = prev.get("total_assets") or 0
+                    prev_nw = prev.get("net_worth") or 0
+                    avg_ta = (ta + prev_ta) / 2 if prev_ta > 0 else ta
+                    avg_nw = (nw + prev_nw) / 2 if prev_nw > 0 else nw
+                else:
+                    avg_ta, avg_nw = ta, nw
+                npm = pat / rev
+                at = rev / avg_ta
+                em = avg_ta / avg_nw
+                roe = npm * at * em
+                ar_dupont_years.append({
+                    "fiscal_year_end": r["fy_end"],
+                    "net_profit_margin": round(npm, 4),
+                    "asset_turnover": round(at, 4),
+                    "equity_multiplier": round(em, 4),
+                    "roe_dupont": round(roe, 4),
+                    "source": "ar_five_year_summary",
+                })
+                ar_covered_fys.add(r["fy_end"])
+
+        # Try Screener data — needed for Strategy 1 fallback / hybrid fill.
         annuals = self._store.get_annual_financials(symbol, limit=10)
         if annuals:
             # Narrow to longest unbroken segment if flags overlap.
@@ -4074,7 +4137,7 @@ class ResearchDataAPI:
                     for f in dropped
                 ],
             }
-            decomp = []
+            screener_decomp = []
             for i, a in enumerate(segment):
                 total_equity = (a.equity_capital or 0) + (a.reserves or 0)
                 # Use average of T and T-1 for balance sheet items (more accurate
@@ -4094,18 +4157,74 @@ class ResearchDataAPI:
                     at = a.revenue / avg_ta
                     em = avg_ta / avg_equity
                     roe = npm * at * em
-                    decomp.append({
+                    screener_decomp.append({
                         "fiscal_year_end": a.fiscal_year_end,
                         "net_profit_margin": round(npm, 4),
                         "asset_turnover": round(at, 4),
                         "equity_multiplier": round(em, 4),
                         "roe_dupont": round(roe, 4),
+                        "source": "screener_annual",
                     })
-            if decomp:
-                return self._attach_comparable_overlay(
-                    {"source": "screener", "years": decomp, "effective_window": effective_window},
-                    symbol,
-                )
+
+            # Strategy 2 decision: AR primary if every Screener-segment year
+            # also exists in AR (or AR has at least 2 years of computed data —
+            # the standalone restated trend is enough). Hybrid when AR covers
+            # only part of the segment.
+            if ar_dupont_years:
+                ar_only_fys = {y["fiscal_year_end"] for y in ar_dupont_years}
+                screener_only = [y for y in screener_decomp if y["fiscal_year_end"] not in ar_only_fys]
+                if not screener_only:
+                    # AR fully covers the Screener segment — pure AR path. No
+                    # narrowing on the restated series.
+                    return self._attach_comparable_overlay({
+                        "source": "ar_five_year_summary",
+                        "data_source": "ar_five_year_summary",
+                        "years": ar_dupont_years,
+                        "effective_window": {
+                            "start_fy": ar_dupont_years[-1]["fiscal_year_end"],
+                            "end_fy": ar_dupont_years[0]["fiscal_year_end"],
+                            "n_years": len(ar_dupont_years),
+                            "narrowed_due_to": [],
+                        },
+                    }, symbol)
+                # Hybrid: AR for AR-covered years, Screener-narrowed for the rest.
+                merged = list(ar_dupont_years) + screener_only
+                merged.sort(key=lambda y: y["fiscal_year_end"], reverse=True)
+                source_per_year = {y["fiscal_year_end"]: y["source"] for y in merged}
+                return self._attach_comparable_overlay({
+                    "source": "mixed",
+                    "data_source": "mixed",
+                    "years": merged,
+                    "source_per_year": source_per_year,
+                    "effective_window": {
+                        "start_fy": merged[-1]["fiscal_year_end"],
+                        "end_fy": merged[0]["fiscal_year_end"],
+                        "n_years": len(merged),
+                        "narrowed_due_to": effective_window["narrowed_due_to"],
+                    },
+                }, symbol)
+
+            if screener_decomp:
+                return self._attach_comparable_overlay({
+                    "source": "screener",
+                    "data_source": "screener_annual",
+                    "years": screener_decomp,
+                    "effective_window": effective_window,
+                }, symbol)
+
+        # Pure AR (no Screener data at all) — rare but valid.
+        if ar_dupont_years:
+            return self._attach_comparable_overlay({
+                "source": "ar_five_year_summary",
+                "data_source": "ar_five_year_summary",
+                "years": ar_dupont_years,
+                "effective_window": {
+                    "start_fy": ar_dupont_years[-1]["fiscal_year_end"],
+                    "end_fy": ar_dupont_years[0]["fiscal_year_end"],
+                    "n_years": len(ar_dupont_years),
+                    "narrowed_due_to": [],
+                },
+            }, symbol)
 
         # Fallback to FMP
         metrics = self._store.get_fmp_key_metrics(symbol, limit=10)
@@ -5753,13 +5872,25 @@ class ResearchDataAPI:
 
         Pre-computed so agents don't calculate CAGRs themselves.
 
-        Per-metric × per-horizon nullification (Gemini review fix): each
-        metric has a dependency set of underlying line items. A horizon's
-        CAGR for that metric is suppressed only if a MEDIUM+ flag in that
-        horizon falls on a dependency line. Revenue / net_income / EPS are
-        never invalidated by reclass flags (they're aggregates that survive
-        bucketing changes); EBITDA depends on operating_profit + depreciation;
-        FCF depends on depreciation. So a `depreciation` reclass nullifies
+        Strategy 2 (plans/screener-data-discontinuity.md): when
+        `ar_five_year_summary` covers both endpoints of a (metric, horizon)
+        cell with the AR-supplied series (revenue, net_income, eps, fcf —
+        EBITDA is *not* in the AR table, so it stays Screener-sourced),
+        the cell is computed from AR and its provenance is tracked under
+        `source_per_cell`. Because the AR table is internally consistent
+        across reclasses, AR-sourced cells are NEVER suppressed by data-
+        quality flags. The response is annotated with `data_source`:
+        `'ar_five_year_summary'` if every populated cell came from AR,
+        `'screener_annual'` if none did, otherwise `'mixed'`.
+
+        Per-metric × per-horizon nullification (Gemini review fix, applies
+        only to Screener-sourced cells): each metric has a dependency set
+        of underlying line items. A horizon's CAGR for that metric is
+        suppressed only if a MEDIUM+ flag in that horizon falls on a
+        dependency line. Revenue / net_income / EPS are never invalidated
+        by reclass flags (they're aggregates that survive bucketing
+        changes); EBITDA depends on operating_profit + depreciation; FCF
+        depends on depreciation. So a `depreciation` reclass nullifies
         EBITDA + FCF CAGRs across that horizon but lets revenue / NI / EPS
         survive.
         """
@@ -5854,6 +5985,25 @@ class ResearchDataAPI:
             applicable = [f for f in horizon_flags.get(horizon, []) if f["line"] in deps]
             return bool(applicable), applicable
 
+        # Strategy 2: AR-sourced metric extractors. Used per-cell when both
+        # endpoints exist in `ar_five_year_summary`. EBITDA is intentionally
+        # absent — the AR highlights table doesn't carry depreciation, so
+        # there's no reliable AR EBITDA series.
+        ar_index = self._ar_five_year_index(symbol)
+        ar_metric_extract: dict[str, callable] = {
+            "revenue":    lambda r: r.get("revenue"),
+            "net_income": lambda r: r.get("pat"),
+            "eps":        lambda r: r.get("eps"),
+            "fcf":        lambda r: (
+                (r.get("cfo") - r.get("capex"))
+                if r.get("cfo") is not None and r.get("capex") is not None
+                else None
+            ),
+        }
+
+        # Per-cell source tracking: {(metric, horizon): "ar_five_year_summary" | "screener_annual"}
+        source_per_cell: dict[tuple[str, str], str] = {}
+
         metrics = {}
         for label, extract in metric_defs:
             values = []
@@ -5868,7 +6018,31 @@ class ResearchDataAPI:
                 ("5y", 5, lambda v: _cagr(v[0], v[5], 5)),
                 ("10y", 10, lambda v: _cagr(v[0], v[10], 10)),
             ):
-                if idx >= len(values) or not values[0] or not values[idx]:
+                if idx >= len(values):
+                    continue
+                # Strategy 2 — try AR first for this (metric, horizon) cell.
+                ar_val = None
+                if label in ar_metric_extract and idx < len(annual):
+                    latest_fy_iso = annual[0]["fiscal_year_end"]
+                    oldest_fy_iso = annual[idx]["fiscal_year_end"]
+                    ar_latest = ar_index.get(latest_fy_iso)
+                    ar_oldest = ar_index.get(oldest_fy_iso)
+                    if ar_latest and ar_oldest:
+                        v_latest = ar_metric_extract[label](ar_latest)
+                        v_oldest = ar_metric_extract[label](ar_oldest)
+                        if v_latest and v_oldest and v_latest > 0 and v_oldest > 0:
+                            if h_label == "1y":
+                                ar_val = _yoy(v_latest, v_oldest)
+                            else:
+                                yrs = {"3y": 3, "5y": 5, "10y": 10}[h_label]
+                                ar_val = _cagr(v_latest, v_oldest, yrs)
+                if ar_val is not None:
+                    row[h_label] = ar_val
+                    source_per_cell[(label, h_label)] = "ar_five_year_summary"
+                    continue
+
+                # Strategy 1 fallback — Screener with reclass-flag suppression.
+                if not values[0] or not values[idx]:
                     continue
                 suppressed, applicable_flags = _cell_suppressed(label, h_label)
                 if suppressed:
@@ -5880,6 +6054,7 @@ class ResearchDataAPI:
                         })
                     continue  # leave cell unset
                 row[h_label] = compute(values)
+                source_per_cell[(label, h_label)] = "screener_annual"
 
             row["latest"] = round(values[0], 2) if values[0] else None
             metrics[label] = row
@@ -5902,11 +6077,26 @@ class ResearchDataAPI:
             (d["metric_affected"], d["horizon"]) for d in narrowed_due_to
         })
 
+        # Strategy 2 — derive top-level data_source from per-cell sources.
+        sources_seen = set(source_per_cell.values())
+        if sources_seen == {"ar_five_year_summary"}:
+            data_source = "ar_five_year_summary"
+        elif sources_seen == {"screener_annual"}:
+            data_source = "screener_annual"
+        elif sources_seen:
+            data_source = "mixed"
+        else:
+            data_source = "screener_annual"  # nothing computed; default
+
         return self._attach_comparable_overlay({
             "symbol": symbol,
             "years_available": n,
             "cagrs": metrics,
             "growth_trajectory": trajectory,
+            "data_source": data_source,
+            "source_per_cell": {
+                f"{m}.{h}": s for (m, h), s in sorted(source_per_cell.items())
+            },
             "effective_window": {
                 "suppressed_cells": [
                     {"metric": m, "horizon": h} for m, h in suppressed_cells
@@ -6962,16 +7152,24 @@ class ResearchDataAPI:
     def get_piotroski_score(self, symbol: str) -> dict:
         """Piotroski F-Score (0-9): profitability, leverage, operating efficiency.
 
-        Reclassification gate (Gemini review fix): F-score is a *current-period*
-        signal — a stale F-score on (T-1, T-2) is worse than no score at all
-        for screening purposes. So when the most-recent (T, T-1) pair crosses a
-        MEDIUM+ flag boundary, we ABSTAIN with reason='stale_due_to_reclass'
-        rather than shifting back. Caller should fall back to manual analysis or
-        cite management's comparable basis from the concall.
+        Strategy 2 (plans/screener-data-discontinuity.md): when
+        `ar_five_year_summary` contains T and T-1 with the needed metrics
+        (revenue, pat, total_assets, cfo, borrowings, operating_profit), the
+        F-score is computed from the restated AR pair and `data_source` is
+        annotated `'ar_five_year_summary'`. The AR is internally consistent
+        across reclasses, so no abstain is required even when Screener
+        flagged the same boundary.
 
-        With longest_unflagged_window's recency anchor, the helper returns at most
-        the segment containing T0 — so this method never silently scores a
-        detached historical era.
+        Strategy 1 fallback: F-score is a *current-period* signal — a stale
+        F-score on (T-1, T-2) is worse than no score at all for screening
+        purposes. So when the most-recent (T, T-1) pair crosses a MEDIUM+
+        flag boundary AND AR rows are absent, we ABSTAIN with
+        reason='stale_due_to_reclass'. Caller should fall back to manual
+        analysis or cite management's comparable basis from the concall.
+
+        With longest_unflagged_window's recency anchor, the helper returns at
+        most the segment containing T0 — so the legacy path never silently
+        scores a detached historical era.
         """
         from flowtracker.data_quality import longest_unflagged_window
 
@@ -6992,14 +7190,88 @@ class ResearchDataAPI:
                 for f in dropped
             ],
         }
+
+        # Strategy 2: when the (T, T-1) pair is fully covered by AR rows, use
+        # the restated pair. Required AR fields for the F-score: revenue, pat,
+        # total_assets, cfo, borrowings, operating_profit. EPS / num_shares
+        # add the dilution check; raw_material_cost is Screener-only and the
+        # AR path falls through to the operating-margin proxy.
+        ar_index = self._ar_five_year_index(symbol)
+        latest_fy = annuals[0]["fiscal_year_end"]
+        # T-1 from the originally requested annuals (not segment, which may
+        # have been truncated by Strategy 1) — we want the actual prior
+        # fiscal year, then look for it in AR.
+        prior_fy = annuals[1]["fiscal_year_end"] if len(annuals) >= 2 else None
+        ar_t = ar_index.get(latest_fy) if latest_fy else None
+        ar_t1 = ar_index.get(prior_fy) if prior_fy else None
+
+        def _ar_row_ok(row: dict | None) -> bool:
+            if not row:
+                return False
+            return all(
+                row.get(k) is not None
+                for k in ("revenue", "pat", "total_assets", "cfo", "borrowings", "operating_profit")
+            )
+
+        if _ar_row_ok(ar_t) and _ar_row_ok(ar_t1):
+            t, t1 = self._ar_row_to_fscore_dict(ar_t, annuals[0]), \
+                    self._ar_row_to_fscore_dict(ar_t1, annuals[1])
+            data_source = "ar_five_year_summary"
+            ar_effective_window = {
+                "start_fy": prior_fy,
+                "end_fy": latest_fy,
+                "n_years": 2,
+                "narrowed_due_to": [],
+            }
+            return self._compute_piotroski(symbol, t, t1, ar_effective_window, data_source)
+
         if len(segment) < 2:
             return self._attach_comparable_overlay({
                 "error": "F-score abstained: most-recent year-pair crosses a MEDIUM+ reclassification flag.",
                 "reason": "stale_due_to_reclass",
+                "data_source": "screener_annual",
                 "effective_window": effective_window,
                 "fallback_hint": "Cite management's comparable basis from get_company_context(section='concall_insights', sub_section='comparable_growth_metrics') or narrate the structural break.",
             }, symbol)
         t, t1 = segment[0], segment[1]  # t = latest, t1 = prior — same bucketing era
+        return self._compute_piotroski(symbol, t, t1, effective_window, "screener_annual")
+
+    def _ar_row_to_fscore_dict(self, ar_row: dict, screener_row: dict) -> dict:
+        """Map an AR five-year row + matching Screener row to the dict shape
+        expected by `_compute_piotroski`.
+
+        AR provides the trend-bearing fields (revenue, pat, total_assets,
+        cfo, borrowings, operating_profit, num_shares, eps). Screener row
+        supplies fields the AR table never carries (interest, raw_material_cost)
+        — used as advisory inputs to the gross-margin step.
+        """
+        return {
+            "fiscal_year_end": ar_row["fy_end"],
+            "revenue": ar_row.get("revenue"),
+            "net_income": ar_row.get("pat"),
+            "total_assets": ar_row.get("total_assets"),
+            "cfo": ar_row.get("cfo"),
+            "borrowings": ar_row.get("borrowings"),
+            "operating_profit": ar_row.get("operating_profit"),
+            "num_shares": ar_row.get("num_shares"),
+            "eps": ar_row.get("eps"),
+            # Screener-only fields used downstream — fall back to None when
+            # the matching Screener row isn't available.
+            "interest": (screener_row or {}).get("interest"),
+            "raw_material_cost": (screener_row or {}).get("raw_material_cost"),
+        }
+
+    def _compute_piotroski(
+        self,
+        symbol: str,
+        t: dict,
+        t1: dict,
+        effective_window: dict,
+        data_source: str,
+    ) -> dict:
+        """F-Score body. Pure function over (t, t1) pair — caller supplies the
+        provenance (AR-restated or Screener-narrowed segment) via
+        `effective_window` and `data_source`."""
         is_bfsi = self._is_bfsi(symbol)
 
         criteria = []
@@ -7016,7 +7288,6 @@ class ResearchDataAPI:
         cfo_t = g(t, "cfo")
         borr_t, borr_t1 = g(t, "borrowings"), g(t1, "borrowings")
         rev_t, rev_t1 = g(t, "revenue"), g(t1, "revenue")
-        eps_t, eps_t1 = g(t, "eps"), g(t1, "eps")
         interest_t, interest_t1 = g(t, "interest"), g(t1, "interest")
         op_t, op_t1 = g(t, "operating_profit"), g(t1, "operating_profit")
         rmc_t, rmc_t1 = g(t, "raw_material_cost"), g(t1, "raw_material_cost")
@@ -7134,6 +7405,7 @@ class ResearchDataAPI:
             "max_score": max_score,
             "criteria": criteria,
             "signal": signal,
+            "data_source": data_source,
             "effective_window": effective_window,
         }), symbol)
 
@@ -7811,9 +8083,24 @@ class ResearchDataAPI:
         """Common size P&L — all items as % of revenue (or Total Income for BFSI).
 
         Margin walks ("OPM expanded 200bps over 3yr") are the canonical use case.
-        If MEDIUM+ data_quality_flags overlap the requested 10yr window, the result
-        is narrowed to the longest unbroken segment so the walk doesn't span a
-        bucketing change. The dropped boundary is reported in `effective_window`.
+
+        Strategy 2 (plans/screener-data-discontinuity.md): the AR five-year
+        highlights table does not carry the line-item breakdown needed for
+        common-size analysis (raw material / employee / depreciation /
+        interest / etc.) — AR only has top-line revenue + operating profit
+        + PAT. So this method's primary source remains Screener
+        (`data_source: 'screener_annual'`). When AR has rows that overlap
+        the response years, those years are marked under `ar_confirmed_years`
+        — the agent can use that as a check that Screener's narrowed
+        segment top-line agrees with the AR restated trend, without
+        replacing the breakdown. When every year in the response is
+        AR-confirmed AND the Screener segment was narrowed, the response
+        is annotated `data_source: 'mixed'` to surface the consult.
+
+        If MEDIUM+ data_quality_flags overlap the requested 10yr window,
+        the result is narrowed to the longest unbroken segment so the walk
+        doesn't span a bucketing change. The dropped boundary is reported
+        in `effective_window`.
         """
         from flowtracker.data_quality import longest_unflagged_window
 
@@ -7835,6 +8122,9 @@ class ResearchDataAPI:
                 for f in dropped
             ],
         }
+
+        # Strategy 2 — index AR rows for cross-source confirmation.
+        ar_index = self._ar_five_year_index(symbol)
 
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
 
@@ -7900,11 +8190,25 @@ class ResearchDataAPI:
                         max_increase = increase
                         fastest_growing = f
 
+        # Strategy 2 — list years with AR-restated rows on file. AR doesn't
+        # carry the cost-line breakdown, so the breakdown stays Screener-
+        # sourced; ar_confirmed_years lets the agent verify the top-line.
+        ar_confirmed_years = sorted(
+            [y["fiscal_year"] for y in years_data if y["fiscal_year"] in ar_index],
+            reverse=True,
+        )
+        if ar_confirmed_years and effective_window["narrowed_due_to"]:
+            data_source = "mixed"
+        else:
+            data_source = "screener_annual"
+
         return self._attach_comparable_overlay({
             "years": years_data,
             "is_bfsi": is_bfsi,
             "biggest_cost": biggest_cost,
             "fastest_growing_cost": fastest_growing,
+            "data_source": data_source,
+            "ar_confirmed_years": ar_confirmed_years,
             "effective_window": effective_window,
         }, symbol)
 
