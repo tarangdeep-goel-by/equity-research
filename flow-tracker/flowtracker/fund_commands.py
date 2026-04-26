@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from flowtracker.fund_client import FundClient, YFinanceError
+from flowtracker.irdai_client import IRDAIClient, IRDAIClientError, backfill_all
 from flowtracker.screener_client import ScreenerClient, ScreenerError
 from flowtracker.fund_display import (
     display_live_snapshot,
@@ -260,20 +261,40 @@ def backfill(
                             # 6. Insurance-only enrichment: Net Premium Earned. Screener
                             # collapses insurer top-line to a single "Sales" row that
                             # bundles MTM on policyholder funds. Probe yfinance income_stmt
-                            # for a premium-earned-style row and merge in. yfinance does
-                            # not currently surface this for Indian life insurers either —
-                            # in that case the column stays None and the read-side swap
-                            # layer (data_api._apply_insurance_headline) falls back to
-                            # revenue with a data_quality_note.
+                            # first; for the four publicly-listed life insurers yfinance
+                            # has nothing on file, so fall back to the curated IRDAI
+                            # dataset (Form L-1-A-RA Premium earned (Net)) shipped via
+                            # ``flowtracker.data.irdai_net_premium``. Both annual and
+                            # quarterly are enriched. If neither source has data the
+                            # column stays None and the read-side swap layer
+                            # (``data_api._apply_insurance_headline``) falls back to
+                            # revenue with a ``data_quality_note``.
                             try:
                                 premium_annual = client.fetch_annual_net_premium_earned(sym)
                             except Exception:
                                 premium_annual = {}
+                            premium_quarterly: dict[str, float] = {}
+                            try:
+                                irdai = IRDAIClient()
+                                if irdai.has_symbol(sym):
+                                    # IRDAI takes precedence over yfinance because
+                                    # yfinance returns nothing for the listed insurers
+                                    # today; if that ever changes, prefer IRDAI anyway
+                                    # since it's the regulatory canonical source.
+                                    premium_annual = {**premium_annual, **irdai.annual_lookup(sym)}
+                                    premium_quarterly = irdai.quarterly_lookup(sym)
+                            except IRDAIClientError as e:
+                                errors.append(f"{sym}: IRDAI dataset error — {e}")
                             if premium_annual:
                                 for af in annual_fin:
                                     npe = premium_annual.get(af.fiscal_year_end)
                                     if npe is not None:
                                         af.net_premium_earned = npe
+                            if premium_quarterly:
+                                for q in quarters:
+                                    npe = premium_quarterly.get(q.quarter_end)
+                                    if npe is not None:
+                                        q.net_premium_earned = npe
 
                             with FlowStore() as store:
                                 if quarters:
@@ -568,3 +589,63 @@ def schedules(
     except ScreenerError as e:
         console.print(f"[red]{e}[/]")
         raise typer.Exit(1)
+
+
+@app.command("irdai-backfill")
+def irdai_backfill(
+    symbol: Annotated[
+        str | None,
+        typer.Option(
+            "-s",
+            "--symbol",
+            help="Backfill a single insurer; default is all covered insurers",
+        ),
+    ] = None,
+) -> None:
+    """Populate ``net_premium_earned`` from the curated IRDAI dataset.
+
+    Reads ``flowtracker/data/irdai_net_premium.json`` (Form L-1-A-RA Premium
+    earned (Net) for the four publicly-listed Indian life insurers) and
+    writes the values onto matching ``annual_financials`` and
+    ``quarterly_results`` rows. Existing rows for other columns are
+    untouched — this is a column-only enrichment.
+
+    Run ``flowtrack fund backfill`` first to seed the Screener-side rows.
+    Re-run after each new IRDAI quarterly disclosure to top up.
+    """
+    try:
+        client = IRDAIClient()
+    except IRDAIClientError as e:
+        console.print(f"[red]IRDAI dataset error: {e}[/]")
+        raise typer.Exit(1)
+
+    targets = (
+        [symbol.upper()]
+        if symbol
+        else client.covered_symbols
+    )
+    if symbol and not client.has_symbol(symbol.upper()):
+        console.print(
+            f"[red]No IRDAI data for {symbol.upper()}.[/] "
+            f"Covered: {', '.join(client.covered_symbols)}"
+        )
+        raise typer.Exit(1)
+
+    from flowtracker.irdai_client import backfill_symbol
+
+    total_a = total_q = total_missing = 0
+    with FlowStore() as store:
+        for sym in targets:
+            stats = backfill_symbol(sym, store, client=client)
+            total_a += stats["annual"]
+            total_q += stats["quarterly"]
+            total_missing += stats["missing"]
+            console.print(
+                f"  [cyan]{sym}[/]: annual=[green]{stats['annual']}[/] "
+                f"quarterly=[green]{stats['quarterly']}[/] "
+                f"missing-rows=[yellow]{stats['missing']}[/]"
+            )
+    console.print(
+        f"[bold]Done.[/] annual={total_a} quarterly={total_q} "
+        f"missing-rows={total_missing} (no matching annual_financials/quarterly_results row)"
+    )
