@@ -114,6 +114,16 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "cdmo_revenue_cr", "label": "CDMO Revenue", "unit": "cr", "description": "Contract Development & Manufacturing revenue in crores (Divi's, Syngene, Suven) — premium-multiple segment"},
             {"key": "biosimilar_market_share_pct", "label": "Biosimilar Market Share %", "unit": "pct", "description": "Market share in key biosimilar molecule (US/EU) — critical for Biocon, Dr. Reddy's"},
             {"key": "complex_generics_mix_pct", "label": "Complex Generics Mix %", "unit": "pct", "description": "Complex generics / specialty / injectables as % of revenue (vs plain vanilla generics)"},
+            # Wave 4-5 P2 additions 2026-04-25 — pharma autoeval flagged USFDA compliance + GTN + R&D detail gaps
+            {"key": "usfda_observations_count", "label": "USFDA Observations Count", "unit": "number", "description": "Form 483 observation count from the most recent USFDA inspection across plants. Track most-recent inspection's observation count, summed across multi-day inspections", "aliases": ["form_483_count", "fda_483_count", "fda_observations_count"]},
+            {"key": "usfda_warning_letters_active", "label": "Active USFDA Warning Letters", "unit": "number", "description": "Count of active (un-cleared) USFDA warning letters across manufacturing facilities — a single warning letter can disable an entire plant's US business", "aliases": ["fda_warning_letters_active", "warning_letters_active"]},
+            {"key": "anda_filings_pending", "label": "ANDA Filings Pending", "unit": "number", "description": "Count of ANDA filings with USFDA awaiting approval (cumulative pending filings, not quarterly)", "aliases": ["anda_pending_count", "anda_filings_pending_approval"]},
+            {"key": "anda_approvals_ytd", "label": "ANDA Approvals YTD", "unit": "number", "description": "ANDA approvals received from USFDA year-to-date (calendar or fiscal as disclosed)", "aliases": ["anda_approvals_ytd_number"]},
+            {"key": "gross_to_net_pct", "label": "US Gross-to-Net (GTN) %", "unit": "pct", "description": "US generics gross-to-net deduction as % of gross sales — captures channel rebates, chargebacks, returns. Spike = price erosion / pricing pressure", "aliases": ["gtn_pct", "us_gtn_pct", "gross_to_net_deduction_pct"]},
+            {"key": "us_revenue_pct", "label": "US Revenue %", "unit": "pct", "description": "US generics + branded sales as % of total revenue (geographic mix)", "aliases": ["us_sales_mix_pct", "us_revenue_share_pct"]},
+            {"key": "india_branded_pct", "label": "India Branded Formulations %", "unit": "pct", "description": "India branded formulations / IPM revenue as % of total revenue", "aliases": ["india_formulations_mix_pct", "ipm_revenue_pct", "domestic_branded_pct"]},
+            {"key": "gross_margin_pct", "label": "Gross Margin %", "unit": "pct", "description": "Revenue minus COGS as % of revenue — pharma gross margin tracks API cost + product mix"},
+            {"key": "ebitda_margin_pct", "label": "EBITDA Margin %", "unit": "pct", "description": "Operating EBITDA margin — pharma EBITDA margin is the headline profitability metric for the sector"},
         ],
     },
     "fmcg": {

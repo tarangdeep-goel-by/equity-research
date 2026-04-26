@@ -60,6 +60,14 @@ DEFAULT_SECTIONS = (
     "corporate_governance",
     "related_party",
     "segmental",
+    # `esop_disclosure` (Wave 5 P2) — Schedule III mandates ESOP disclosure;
+    # slice is small (~5-30KB) so it's safe to extract by default.
+    "esop_disclosure",
+    # `five_year_summary` (Wave 5 Strategy 2) — AR's 5/10-year financial-
+    # highlights table, restated by the company per Schedule III. Used as
+    # the canonical restated trend source for DuPont/F-score/CAGR — see
+    # plans/screener-data-discontinuity.md. Pure-Python parser, no Claude.
+    "five_year_summary",
 )
 FULL_ONLY_SECTIONS = (
     "brsr",
@@ -489,6 +497,94 @@ Return ONLY JSON:
   "consolidated": {"...same fields..."},
   "standalone_vs_consolidated_gap_notes": "<any material divergence and why>"
 }""",
+
+    # Pharma-specific section — Wave 4-5 P2 addition 2026-04-25.
+    # Captures USFDA inspection outcomes, warning letter status, ANDA pipeline,
+    # DMF disclosures, and biosimilar / complex-generic regulatory milestones.
+    # Pharma agent eval was consistently flagging this as missing structured
+    # data — we have the AR text but no targeted extraction.
+    "usfda_compliance": """Extract USFDA / regulatory-compliance disclosures from a pharma annual report.
+
+Focus on quantified, plant-level facts. If a number is not disclosed, set it to
+null (don't fabricate). Cite plant location + audit date for each inspection.
+
+Return ONLY JSON:
+{
+  "facilities_audited_this_year": [
+    {
+      "plant_location": "<city, country>",
+      "audit_date": "<YYYY-MM-DD or month/year>",
+      "outcome": "<no_observations | 483_issued | warning_letter | OAI | EIR_pending | VAI | NAI>",
+      "form_483_observation_count": <number or null>,
+      "remediation_status": "<closed | in_progress | not_started | re-inspection_pending | unknown>"
+    }
+  ],
+  "active_warning_letters": [
+    {"plant_location": "<...>", "issued_date": "<YYYY-MM-DD>", "status": "<active | resolved>", "products_impacted": "<brief>"}
+  ],
+  "anda_filings_summary": {
+    "total_filed_cumulative": <number or null>,
+    "approvals_received_cumulative": <number or null>,
+    "pending_approval": <number or null>,
+    "approvals_this_year": <number or null>,
+    "para_iv_filings": <number or null>,
+    "first_to_file_count": <number or null>
+  },
+  "drug_master_files_disclosure": "<brief on DMF count, recent submissions if disclosed>",
+  "biosimilar_or_complex_generic_milestones": ["<key regulatory milestones — 351(k) approvals, EMA submissions, etc.>"],
+  "regulatory_outlook": "<management's narrative on regulatory risk and remediation roadmap, 2-3 sentences>",
+  "red_flags": ["<material concerns — un-resolved warning letters, repeat 483s, OAI status, GMP-related product withdrawals>"]
+}""",
+
+    # Wave 5 P2 — ESOP / share-based-payments disclosure.
+    # Schedule III mandates this in Notes to Financials, Directors' Report, or
+    # a standalone "ESOP Disclosure" annexure. Heading variants: "Employee
+    # Stock Option Scheme", "ESOP Schemes", "Employee Stock Options",
+    # "Employee Benefit Trust", "Share-based Payments", "Stock Appreciation
+    # Rights", "Performance Share Units". Critical for new-age tech dilution
+    # analysis (Nykaa, Zomato, Paytm) where ESOP pool can be 5-10% of paid-up.
+    "esop_disclosure": """Extract the Employee Stock Option / share-based payments disclosure.
+
+Goal: surface (a) total options outstanding at FY-end as a fraction of
+paid-up capital (the dilution headline), (b) per-plan detail useful for
+modeling vesting cliffs, (c) flow figures (granted / exercised / lapsed
+during the FY).
+
+Notes on units:
+  - Option counts are RAW SHARE COUNTS, not crores. Do NOT convert.
+  - Pool % of paid-up capital is paid-up SHARES (not market cap).
+  - When the AR gives both standalone and consolidated, prefer consolidated.
+  - Multiple ESOP/RSU plans are common (founder/legacy plus 2021+ plan) —
+    capture each separately under `plans`.
+
+Return ONLY JSON:
+{
+  "total_plans": <number — count of distinct active ESOP/RSU/SAR/PSU schemes>,
+  "options_outstanding": <number — total options outstanding at FY-end across all plans>,
+  "options_outstanding_pct_paidup": <number — outstanding / paid-up shares × 100>,
+  "options_granted_fy": <number — total granted during this FY across all plans>,
+  "options_exercised_fy": <number — total exercised during this FY>,
+  "options_lapsed_fy": <number — total forfeited / lapsed during this FY>,
+  "weighted_avg_exercise_price": <number — weighted-avg strike of outstanding options, in rupees>,
+  "plans": [
+    {
+      "name": "<plan name e.g. 'ESOP 2017', 'FSN Employees Stock Option Plan 2017'>",
+      "year_introduced": <year — e.g. 2017>,
+      "type": "<ESOP | RSU | SAR | PSU | EBT>",
+      "total_options_authorized": <number>,
+      "options_outstanding_fy_end": <number>,
+      "options_granted_fy": <number>,
+      "options_exercised_fy": <number>,
+      "options_lapsed_fy": <number>,
+      "weighted_avg_exercise_price": <number — rupees>,
+      "vesting_schedule": "<describe — e.g. '4-year graded, 25%/year'>",
+      "expiry_year": <year or null>
+    }
+  ],
+  "ebt_held_shares": <number or null — Employee Benefit Trust holding, if separately disclosed>,
+  "esop_charge_to_pl_cr": <number or null — share-based-payment expense to P&L this FY, in crores>,
+  "_extraction_note": "<flag any partial / ambiguous / missing data>"
+}""",
 }
 
 
@@ -764,6 +860,15 @@ async def _extract_single_ar(
     async def _one(sec: str) -> tuple[str, dict, bool]:
         async with sem:
             slice_text = slice_section(md, section_index, sec)
+
+            # `five_year_summary` is a deterministic, table-only section.
+            # No Claude call needed — parse the markdown table directly.
+            # See plans/screener-data-discontinuity.md (Strategy 2).
+            if sec == "five_year_summary":
+                return sec, _extract_five_year_summary_section(
+                    slice_text, md, section_index, symbol, fy_label,
+                ), False
+
             if not slice_text or len(slice_text) < 200:
                 return sec, {"status": "section_not_found_or_empty", "chars": len(slice_text)}, False
             try:
@@ -815,7 +920,174 @@ async def _extract_single_ar(
 
     result["_elapsed_s"] = round(_time.time() - t0, 1)
     _atomic_write_json(out_path, result)
+    # Wave 5 P2: mirror the ESOP section into `ar_esop_summary` SQLite table
+    # so downstream callers (data_api.get_esop_summary, MCP tools) don't have
+    # to re-read the JSON file. Best-effort — failure here doesn't poison the
+    # AR extraction result.
+    try:
+        _persist_esop_to_store(symbol, fy_label, result.get("esop_disclosure"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[ar] %s %s: ESOP persistence failed: %s",
+                       symbol, fy_label, exc)
+    # Wave 5 Strategy 2: mirror parsed five-year highlights into
+    # `ar_five_year_summary`. Same best-effort contract as ESOP.
+    try:
+        _persist_five_year_summary_to_store(
+            symbol, fy_label, result.get("five_year_summary"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[ar] %s %s: five-year summary persistence failed: %s",
+                       symbol, fy_label, exc)
     return result
+
+
+def _extract_five_year_summary_section(
+    slice_text: str,
+    md: str,
+    section_index: dict,
+    symbol: str,
+    fy_label: str,
+) -> dict:
+    """Pure-Python extraction of the five/ten-year highlights table.
+
+    Returns one of:
+      * {"status": "section_not_found_or_empty", "chars": N}
+            — heading not detected via heading_toc.
+      * {"status": "image_rendered", "chars": N, "reason": "..."}
+            — heading found but body has no parseable tables / too sparse.
+            Deferred to a future OCR session per
+            plans/screener-data-discontinuity.md.
+      * {"status": "complete", "rows_extracted": N, "rows": [...]}
+            — at least one year parsed. Each row is a serialized
+            FiveYearHighlight.
+    """
+    from flowtracker.research.five_year_parser import (
+        _looks_image_rendered,
+        parse_five_year_summary,
+    )
+
+    if not slice_text:
+        return {"status": "section_not_found_or_empty", "chars": 0}
+
+    # Pre-section context: 2.5KB before the section heading. Some ARs
+    # (ICICIBANK FY25) put the unit annotation ("` in billion") in the
+    # MD&A prose immediately above the highlights heading.
+    sec_meta = section_index.get("five_year_summary") or {}
+    char_start = sec_meta.get("char_start", 0)
+    pre_context = md[max(0, char_start - 2500):char_start]
+
+    if _looks_image_rendered(slice_text):
+        logger.info(
+            "[ar] %s %s: five_year_summary heading present but body "
+            "looks image-rendered (chars=%d) — deferred to OCR session",
+            symbol, fy_label, len(slice_text),
+        )
+        return {
+            "status": "image_rendered",
+            "chars": len(slice_text),
+            "reason": "heading detected but markdown table absent or too sparse",
+        }
+
+    rows = parse_five_year_summary(
+        slice_text, source_ar_fy=fy_label, pre_section_context=pre_context,
+    )
+    if not rows:
+        return {
+            "status": "image_rendered",
+            "chars": len(slice_text),
+            "reason": "no parseable rows — likely image-rendered table",
+        }
+    return {
+        "status": "complete",
+        "rows_extracted": len(rows),
+        "rows": [r.model_dump() for r in rows],
+    }
+
+
+def _persist_five_year_summary_to_store(
+    symbol: str, fy_label: str, section: dict | None,
+) -> None:
+    """Mirror an extracted `five_year_summary` section into `ar_five_year_summary`.
+
+    Skips silently when the section is absent, an extraction error, image-
+    rendered, or empty. The store method is idempotent on (symbol, fy_end).
+    """
+    if not isinstance(section, dict):
+        return
+    if section.get("status") != "complete":
+        return
+    rows = section.get("rows") or []
+    if not rows:
+        return
+
+    from flowtracker.research.five_year_parser import FiveYearHighlight
+    from flowtracker.store import FlowStore
+    typed_rows = []
+    for r in rows:
+        try:
+            typed_rows.append(FiveYearHighlight(**r))
+        except Exception:  # noqa: BLE001
+            continue
+    if not typed_rows:
+        return
+    with FlowStore() as store:
+        store.upsert_five_year_summary(symbol, typed_rows)
+
+
+def _persist_esop_to_store(
+    symbol: str, fy_label: str, esop_section: dict | None,
+) -> None:
+    """Mirror an extracted `esop_disclosure` section into `ar_esop_summary`.
+
+    Skips silently when the section is absent, an extraction error, or empty
+    (`section_not_found_or_empty`). Writes plans as a JSON-serialized string.
+    """
+    if not isinstance(esop_section, dict):
+        return
+    if "extraction_error" in esop_section:
+        return
+    if esop_section.get("status") == "section_not_found_or_empty":
+        return
+    # Avoid persisting when every numeric field is null (Claude returned only
+    # the schema-shaped placeholder). One non-null business field is enough.
+    business_fields = (
+        "total_plans", "options_outstanding", "options_outstanding_pct_paidup",
+        "options_granted_fy", "options_exercised_fy", "options_lapsed_fy",
+        "weighted_avg_exercise_price",
+    )
+    if not any(esop_section.get(f) is not None for f in business_fields):
+        if not esop_section.get("plans"):
+            return
+
+    plans_obj = esop_section.get("plans") or []
+    plans_json_str: str | None = None
+    if plans_obj:
+        try:
+            plans_json_str = json.dumps(plans_obj, default=str)
+        except (TypeError, ValueError):
+            plans_json_str = None
+
+    # Deferred import — keeps the extractor module importable when SQLite is
+    # not available in the runtime (e.g. some test envs that exercise prompt
+    # building without a DB).
+    from flowtracker.store import FlowStore
+    with FlowStore() as store:
+        store.upsert_ar_esop_summary(
+            symbol=symbol,
+            fiscal_year=fy_label,
+            total_plans=esop_section.get("total_plans"),
+            options_outstanding=esop_section.get("options_outstanding"),
+            options_outstanding_pct_paidup=esop_section.get(
+                "options_outstanding_pct_paidup"
+            ),
+            options_granted_fy=esop_section.get("options_granted_fy"),
+            options_exercised_fy=esop_section.get("options_exercised_fy"),
+            options_lapsed_fy=esop_section.get("options_lapsed_fy"),
+            weighted_avg_exercise_price=esop_section.get(
+                "weighted_avg_exercise_price"
+            ),
+            plans_json=plans_json_str,
+        )
 
 
 # --- Cross-year narrative ---
@@ -936,6 +1208,11 @@ async def extract_annual_reports(
         )
 
     sections = DEFAULT_SECTIONS + (FULL_ONLY_SECTIONS if full else ())
+    # Pharma-specific section — Wave 4-5 P2 (2026-04-25). Only extract
+    # `usfda_compliance` for pharma issuers; non-pharma ARs don't have
+    # the heading and the slice would come back empty.
+    if industry and ("pharma" in industry.lower() or "drug" in industry.lower()):
+        sections = sections + ("usfda_compliance",)
     logger.info("[ar] %s: extracting %d year(s) — sections=%s force=%s",
                 symbol, len(pdfs), list(sections), force)
 
@@ -1031,6 +1308,9 @@ async def ensure_annual_report_data(
 
     logger.info("[ar_ensure] %s: extracting %d new year(s)", symbol, len(needing_extraction))
     sections = DEFAULT_SECTIONS + (FULL_ONLY_SECTIONS if full else ())
+    # Pharma-specific section — Wave 4-5 P2 (2026-04-25). See `extract_annual_reports`.
+    if industry and ("pharma" in industry.lower() or "drug" in industry.lower()):
+        sections = sections + ("usfda_compliance",)
 
     sem = asyncio.Semaphore(MAX_CONCURRENT_AR_EXTRACTIONS)
 

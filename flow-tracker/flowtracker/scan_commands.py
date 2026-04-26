@@ -118,11 +118,13 @@ def fetch(
                 for sym in to_fetch:
                     progress.update(task, description=f"[cyan]{sym}[/]")
                     try:
-                        records, pledges = client.fetch_latest_quarters(sym, quarters)
+                        records, pledges, breakdowns = client.fetch_latest_quarters_full(sym, quarters)
                         if records:
                             store.upsert_shareholding(records)
                             if pledges:
                                 store.upsert_promoter_pledges(pledges)
+                            if breakdowns:
+                                store.upsert_shareholding_breakdown(breakdowns)
                             result.fetched += 1
                         else:
                             result.skipped += 1

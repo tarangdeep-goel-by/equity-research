@@ -507,8 +507,14 @@ Extract into this JSON structure:
     // For pharma: rd_pct_of_revenue (R&D % of revenue), usfda_facility_status
     //   (one of: "active_no_observations" | "483s_open" | "warning_letter" | "unknown"),
     //   anda_approvals_ltm (integer — trailing-twelve-month ANDA approvals),
+    //   anda_approvals_ytd (integer — calendar/fiscal YTD approvals),
+    //   anda_filings_pending (integer — cumulative pending filings with FDA),
     //   key_molecule_pipeline (list of molecule names with optional launch dates),
-    //   us_revenue_usd_mn, india_formulations_revenue_cr, us_price_erosion_pct.
+    //   us_revenue_usd_mn, us_revenue_pct, india_formulations_revenue_cr,
+    //   india_branded_pct, us_price_erosion_pct, gross_to_net_pct (GTN deduction
+    //   in US — extract whenever management quantifies "GTN was X% in this
+    //   quarter" or rebate-deduction commentary), usfda_observations_count
+    //   (Form 483 observation count if disclosed), usfda_warning_letters_active.
     // For FMCG: uvg_pct (underlying volume growth %), price_growth_pct,
     //   channel_gt_pct (general trade share), channel_mt_pct (modern trade share),
     //   channel_ecom_pct (e-commerce share), rural_growth_pct, urban_growth_pct,

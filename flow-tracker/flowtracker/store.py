@@ -18,7 +18,13 @@ from pathlib import Path
 
 from flowtracker.models import DailyFlow, DailyFlowPair, StreakInfo
 from flowtracker.mf_models import MFMonthlyFlow, MFAUMSummary, MFDailyFlow
-from flowtracker.holding_models import WatchlistEntry, ShareholdingRecord, ShareholdingChange, PromoterPledge
+from flowtracker.holding_models import (
+    WatchlistEntry,
+    ShareholdingRecord,
+    ShareholdingChange,
+    PromoterPledge,
+    ShareholdingBreakdown,
+)
 from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrelation
 from flowtracker.scan_models import IndexConstituent, ScanSummary
 from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials, ScreenerRatios
@@ -1166,6 +1172,131 @@ CREATE TABLE IF NOT EXISTS fno_universe (
     eligible_since TEXT NOT NULL,
     last_verified TEXT NOT NULL
 );
+
+-- Wave 5 P2 — granular shareholding sub-categories from the BSE/NSE XBRL.
+-- Augments the canonical 7-bucket `shareholding` table with the rich detail
+-- the XBRL exposes but the flat table flattens away (Retail vs HNI inside
+-- Public, FPI Cat-I/II inside FII, CustodianOrDRHolder for ADR/GDR holdings,
+-- Employee Benefit Trust / IEPF, etc.). All `*_pct` fields are stored in
+-- percent form (12.5 = 12.5%). `dr_underlying_shares` is the raw count of
+-- equity shares represented by ADRs/GDRs — pulled from
+-- NumberOfSharesUnderlyingOutstandingDepositoryReceipts under
+-- CustodianOrDRHolder context.
+CREATE TABLE IF NOT EXISTS shareholding_breakdown (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    -- Public sub-breakdown
+    retail_pct REAL,
+    hni_pct REAL,
+    bodies_corporate_pct REAL,
+    nri_pct REAL,
+    -- FPI sub-breakdown
+    fpi_cat1_pct REAL,
+    fpi_cat2_pct REAL,
+    -- Public institutional sub-breakdown
+    banks_pct REAL,
+    other_financial_institutions_pct REAL,
+    nbfc_pct REAL,
+    provident_pension_funds_pct REAL,
+    venture_capital_funds_pct REAL,
+    sovereign_wealth_domestic_pct REAL,
+    sovereign_wealth_foreign_pct REAL,
+    -- Other foreign / other domestic
+    foreign_companies_pct REAL,
+    foreign_nationals_pct REAL,
+    foreign_dr_holder_pct REAL,
+    other_foreign_pct REAL,
+    other_indian_pct REAL,
+    -- Misc
+    employee_benefit_trust_pct REAL,
+    iepf_pct REAL,
+    -- ADR/GDR specifics
+    dr_underlying_shares INTEGER,
+    custodian_total_shares INTEGER,
+    -- Bookkeeping
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, quarter_end)
+);
+
+-- Wave 5 P2 — ESOP pool size disclosure surfaced from AR Notes to Financial
+-- Statements / Directors' Report / Schedule III ESOP disclosure. One row
+-- per (symbol, fiscal_year). Total options outstanding is the headline pool
+-- size; pct_of_paidup_capital captures dilution potential. `plans_json`
+-- stores the per-plan detail (plan name, year introduced, options
+-- authorized/granted/vested/exercised/lapsed) for drill-down.
+CREATE TABLE IF NOT EXISTS ar_esop_summary (
+    symbol TEXT NOT NULL,
+    fiscal_year TEXT NOT NULL,            -- "FY25"
+    total_plans INTEGER,                  -- # of distinct ESOP/RSU schemes active
+    options_outstanding REAL,             -- end-of-FY pool (raw count, not Cr)
+    options_outstanding_pct_paidup REAL,  -- pool / paid-up shares × 100
+    options_granted_fy REAL,              -- granted during the FY
+    options_exercised_fy REAL,            -- exercised during the FY
+    options_lapsed_fy REAL,               -- forfeited / lapsed during the FY
+    weighted_avg_exercise_price REAL,     -- weighted-avg strike of outstanding
+    plans_json TEXT,                      -- JSON array of per-plan dicts
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, fiscal_year)
+);
+
+-- Wave 5 Strategy 2 — restated 5/10-year financial highlights extracted
+-- from the company's AR. Schedule III mandates restatement of prior years
+-- when bucketing changes, so this table is internally consistent and is
+-- the canonical trend source preferred over Screener's as-reported series.
+-- See plans/screener-data-discontinuity.md and
+-- flowtracker/research/five_year_parser.py.
+--
+-- Monetary values in **crores** (project standard). Per-share in rupees.
+-- num_shares in millions. fy_end is canonical "YYYY-03-31" (Indian FY close).
+-- source_ar_fy records which AR ("FY25") supplied this row — newer ARs
+-- supersede older ones when both contain the same fy_end (PK collision
+-- on (symbol, fy_end) → INSERT OR REPLACE writes the newer FY's value).
+CREATE TABLE IF NOT EXISTS ar_five_year_summary (
+    symbol TEXT NOT NULL,
+    fy_end TEXT NOT NULL,                 -- canonical "2025-03-31"
+    revenue REAL,
+    operating_profit REAL,
+    pat REAL,
+    eps REAL,
+    net_worth REAL,
+    total_assets REAL,
+    borrowings REAL,
+    cfo REAL,
+    capex REAL,
+    dividend_per_share REAL,
+    num_shares REAL,                      -- millions of shares
+    source_ar_fy TEXT,                    -- "FY25" — which AR this row came from
+    raw_unit TEXT,                        -- "crore" / "million" / "billion" / "lakh"
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, fy_end)
+);
+CREATE INDEX IF NOT EXISTS idx_ar_five_year_summary_symbol
+    ON ar_five_year_summary(symbol);
+
+-- Wave 5 P2 — manual override / seed table for ADR/GDR outstanding when
+-- XBRL data is unavailable (older filings) or when an analyst wants to
+-- record a specific as-of-date measurement (e.g. depositary bank's monthly
+-- position report). Consulted by `get_adr_gdr` BEFORE the XBRL/AR fallback
+-- chain. Use cases:
+--   1. Seeding a known value before XBRL ingestion is wired (HDFCBANK FY26).
+--   2. Recording the latest BNY Mellon / DB Trust position report (monthly
+--      cadence) for symbols where the SEBI quarterly XBRL lags.
+CREATE TABLE IF NOT EXISTS adr_gdr_outstanding (
+    symbol TEXT NOT NULL,
+    as_of_date TEXT NOT NULL,                  -- "2025-03-31"
+    listed_on TEXT,                            -- "NYSE", "LSE", "Luxembourg" — comma-separated for dual-listed
+    sponsor_bank TEXT,                         -- "BNY Mellon", "Citi", "Deutsche Bank", "JP Morgan"
+    adr_ratio TEXT,                            -- "1 ADR = 3 equity shares" (free-text — formats vary)
+    units_outstanding REAL,                    -- # of ADR/GDR units (NOT underlying equity shares)
+    underlying_shares_outstanding REAL,        -- # of equity shares represented by all ADRs/GDRs
+    pct_of_total_equity REAL,                  -- underlying / total equity × 100
+    source TEXT NOT NULL,                      -- "XBRL_CustodianOrDRHolder", "BNY_Mellon_position_report",
+                                               -- "FY25_AR_notes", "manual_seed"
+    notes TEXT,                                -- free-text caveat / data_quality_note
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, as_of_date)
+);
 """
 
 
@@ -2029,6 +2160,213 @@ class FlowStore:
             symbol=r["symbol"], quarter_end=r["quarter_end"],
             pledge_pct=r["pledge_pct"], encumbered_pct=r["encumbered_pct"],
         ) for r in rows]
+
+    # --- Wave 5 P2: granular shareholding breakdown ---
+
+    _BREAKDOWN_PCT_FIELDS: tuple[str, ...] = (
+        "retail_pct", "hni_pct", "bodies_corporate_pct", "nri_pct",
+        "fpi_cat1_pct", "fpi_cat2_pct",
+        "banks_pct", "other_financial_institutions_pct", "nbfc_pct",
+        "provident_pension_funds_pct", "venture_capital_funds_pct",
+        "sovereign_wealth_domestic_pct", "sovereign_wealth_foreign_pct",
+        "foreign_companies_pct", "foreign_nationals_pct",
+        "foreign_dr_holder_pct", "other_foreign_pct", "other_indian_pct",
+        "employee_benefit_trust_pct", "iepf_pct",
+    )
+
+    _BREAKDOWN_INT_FIELDS: tuple[str, ...] = (
+        "dr_underlying_shares", "custodian_total_shares",
+    )
+
+    def upsert_shareholding_breakdown(self, breakdowns: list[ShareholdingBreakdown]) -> int:
+        """Insert or replace granular shareholding sub-category rows."""
+        if not breakdowns:
+            return 0
+        all_fields = self._BREAKDOWN_PCT_FIELDS + self._BREAKDOWN_INT_FIELDS
+        cols_sql = ", ".join(("symbol", "quarter_end", *all_fields))
+        placeholders = ", ".join(["?"] * (2 + len(all_fields)))
+        sql = (
+            f"INSERT OR REPLACE INTO shareholding_breakdown ({cols_sql}) "
+            f"VALUES ({placeholders})"
+        )
+        cur = self._conn.cursor()
+        count = 0
+        for b in breakdowns:
+            params = [b.symbol.upper(), b.quarter_end]
+            for fld in all_fields:
+                params.append(getattr(b, fld, None))
+            cur.execute(sql, params)
+            count += cur.rowcount
+        self._conn.commit()
+        return count
+
+    def get_shareholding_breakdown(
+        self, symbol: str, limit: int = 8,
+    ) -> list[ShareholdingBreakdown]:
+        """Latest-first granular breakdown rows for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM shareholding_breakdown WHERE symbol = ? "
+            "ORDER BY quarter_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        out: list[ShareholdingBreakdown] = []
+        for r in rows:
+            kw: dict = {"symbol": r["symbol"], "quarter_end": r["quarter_end"]}
+            for fld in self._BREAKDOWN_PCT_FIELDS + self._BREAKDOWN_INT_FIELDS:
+                kw[fld] = r[fld] if fld in r.keys() else None
+            kw["fetched_at"] = r["fetched_at"] if "fetched_at" in r.keys() else None
+            out.append(ShareholdingBreakdown(**kw))
+        return out
+
+    def get_latest_shareholding_breakdown(
+        self, symbol: str,
+    ) -> ShareholdingBreakdown | None:
+        """Single most-recent breakdown row, or None when nothing on file."""
+        rows = self.get_shareholding_breakdown(symbol, limit=1)
+        return rows[0] if rows else None
+
+    # --- Wave 5 P2: AR ESOP summary ---
+
+    def upsert_ar_esop_summary(
+        self,
+        symbol: str,
+        fiscal_year: str,
+        *,
+        total_plans: int | None = None,
+        options_outstanding: float | None = None,
+        options_outstanding_pct_paidup: float | None = None,
+        options_granted_fy: float | None = None,
+        options_exercised_fy: float | None = None,
+        options_lapsed_fy: float | None = None,
+        weighted_avg_exercise_price: float | None = None,
+        plans_json: str | None = None,
+    ) -> int:
+        """Persist (or replace) one ESOP summary row.
+
+        `plans_json` is the raw JSON string for the per-plan list — pass
+        `json.dumps(plans_list)` from the caller; this method does not
+        re-serialize.
+        """
+        cur = self._conn.cursor()
+        cur.execute(
+            "INSERT OR REPLACE INTO ar_esop_summary "
+            "(symbol, fiscal_year, total_plans, options_outstanding, "
+            "options_outstanding_pct_paidup, options_granted_fy, "
+            "options_exercised_fy, options_lapsed_fy, "
+            "weighted_avg_exercise_price, plans_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                symbol.upper(), fiscal_year, total_plans, options_outstanding,
+                options_outstanding_pct_paidup, options_granted_fy,
+                options_exercised_fy, options_lapsed_fy,
+                weighted_avg_exercise_price, plans_json,
+            ),
+        )
+        self._conn.commit()
+        return cur.rowcount
+
+    def get_ar_esop_summary(self, symbol: str, limit: int = 5) -> list[dict]:
+        """Latest-first ESOP summary rows for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM ar_esop_summary WHERE symbol = ? "
+            "ORDER BY fiscal_year DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- Wave 5 Strategy 2: AR five-year financial highlights ---
+
+    def upsert_five_year_summary(self, symbol: str, rows: list) -> int:
+        """Persist (or replace) parsed 5/10-year highlight rows for a symbol.
+
+        `rows` is an iterable of FiveYearHighlight Pydantic instances (or
+        dicts with the same fields). Idempotent on (symbol, fy_end).
+        Returns the number of rows written.
+
+        Newer ARs supersede older ones — a row with the same fy_end from
+        a more recent AR will overwrite the older value via INSERT OR
+        REPLACE. Caller should walk ARs in chronological order
+        (oldest first) so the newest restated values win.
+        """
+        cur = self._conn.cursor()
+        sym_upper = symbol.upper()
+        count = 0
+        for r in rows:
+            d = r.model_dump() if hasattr(r, "model_dump") else dict(r)
+            cur.execute(
+                "INSERT OR REPLACE INTO ar_five_year_summary "
+                "(symbol, fy_end, revenue, operating_profit, pat, eps, "
+                "net_worth, total_assets, borrowings, cfo, capex, "
+                "dividend_per_share, num_shares, source_ar_fy, raw_unit) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    sym_upper, d.get("fy_end"),
+                    d.get("revenue"), d.get("operating_profit"), d.get("pat"),
+                    d.get("eps"), d.get("net_worth"), d.get("total_assets"),
+                    d.get("borrowings"), d.get("cfo"), d.get("capex"),
+                    d.get("dividend_per_share"), d.get("num_shares"),
+                    d.get("source_ar_fy"), d.get("raw_unit"),
+                ),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_five_year_summary(self, symbol: str, limit: int = 11) -> list[dict]:
+        """Latest-first restated 5/10-year highlights for a symbol.
+
+        Returns up to `limit` rows ordered by fy_end DESC. Empty list when
+        the symbol has no AR-restated highlights persisted (i.e., the AR
+        section was image-rendered, missing, or extraction never ran).
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM ar_five_year_summary WHERE symbol = ? "
+            "ORDER BY fy_end DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- Wave 5 P2: ADR/GDR outstanding override / seed ---
+
+    def upsert_adr_gdr_outstanding(
+        self,
+        symbol: str,
+        as_of_date: str,
+        *,
+        listed_on: str | None = None,
+        sponsor_bank: str | None = None,
+        adr_ratio: str | None = None,
+        units_outstanding: float | None = None,
+        underlying_shares_outstanding: float | None = None,
+        pct_of_total_equity: float | None = None,
+        source: str = "manual_seed",
+        notes: str | None = None,
+    ) -> int:
+        """Insert or replace one ADR/GDR outstanding row keyed by (symbol, as_of_date)."""
+        cur = self._conn.cursor()
+        cur.execute(
+            "INSERT OR REPLACE INTO adr_gdr_outstanding "
+            "(symbol, as_of_date, listed_on, sponsor_bank, adr_ratio, "
+            "units_outstanding, underlying_shares_outstanding, "
+            "pct_of_total_equity, source, notes) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                symbol.upper(), as_of_date, listed_on, sponsor_bank, adr_ratio,
+                units_outstanding, underlying_shares_outstanding,
+                pct_of_total_equity, source, notes,
+            ),
+        )
+        self._conn.commit()
+        return cur.rowcount
+
+    def get_adr_gdr_outstanding(self, symbol: str, limit: int = 5) -> list[dict]:
+        """Latest-first ADR/GDR rows for a symbol."""
+        rows = self._conn.execute(
+            "SELECT * FROM adr_gdr_outstanding WHERE symbol = ? "
+            "ORDER BY as_of_date DESC LIMIT ?",
+            (symbol.upper(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def get_scan_summary(self) -> ScanSummary:
         """Get aggregate stats for the scanner."""

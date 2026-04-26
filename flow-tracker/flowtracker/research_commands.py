@@ -155,12 +155,14 @@ def fundamentals(
 
         console.print(f"  Fetching shareholding from NSE...")
         with NSEHoldingClient() as nse:
-            records, pledges = nse.fetch_latest_quarters(symbol, num_quarters=8)
+            records, pledges, breakdowns = nse.fetch_latest_quarters_full(symbol, num_quarters=8)
             if records:
                 with FlowStore() as store:
                     store.upsert_shareholding(records)
                     if pledges:
                         store.upsert_promoter_pledges(pledges)
+                    if breakdowns:
+                        store.upsert_shareholding_breakdown(breakdowns)
                 quarters_fetched = len({r.quarter_end for r in records})
                 console.print(f"  Shareholding: [green]{quarters_fetched}[/] quarters, {len(records)} records")
             else:

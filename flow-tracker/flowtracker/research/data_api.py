@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import statistics
 import logging
 import re
@@ -820,6 +821,26 @@ class ResearchDataAPI:
         """
         return self._store.get_data_quality_flags(symbol, min_severity=min_severity)
 
+    def get_five_year_summary(self, symbol: str, years: int = 11) -> list[dict]:
+        """Restated 5/10-year financial highlights extracted from the AR.
+
+        Schedule III mandates that companies restate prior years when
+        bucketing changes, so the AR's highlights table is the canonical
+        restated trend source — preferred over Screener's as-reported
+        stitching for any multi-year compute (DuPont, F-score, CAGR).
+        See plans/screener-data-discontinuity.md (Strategy 2).
+
+        Returns latest-first rows. Empty list when the AR section was
+        image-rendered, the AR hasn't been extracted, or the section
+        wasn't found.
+
+        Each row has fy_end ('YYYY-03-31'), monetary values in **crores**,
+        EPS / DPS in rupees, num_shares in millions, plus provenance
+        (source_ar_fy = which AR supplied this row, raw_unit = source
+        unit before crore-normalization).
+        """
+        return self._store.get_five_year_summary(symbol, limit=years)
+
     def get_screener_ratios(self, symbol: str, years: int = 10) -> list[dict]:
         """Efficiency ratios: debtor days, inventory days, CCC, working capital days, ROCE%."""
         rows = self._store.get_screener_ratios(symbol, limit=years)
@@ -985,6 +1006,169 @@ class ResearchDataAPI:
             {"category": r.category, "curr_pct": r.curr_pct, "prev_pct": r.prev_pct, "change_pct": r.change_pct}
             for r in rows
         ])
+
+    # --- Wave 5 P2: granular shareholding breakdown surfacing ---
+
+    def get_public_breakdown(self, symbol: str, quarters: int = 4) -> dict:
+        """Public-bucket sub-breakdown plus FPI/institutional sub-categories.
+
+        Sources `shareholding_breakdown` (XBRL CustodianOrDRHolder + retail vs
+        HNI vs Bodies Corporate vs NRI). Returns the latest quarter as a flat
+        dict plus a quarter-over-quarter delta block. When no breakdown is on
+        file (older XBRL formats), returns `{available: False, reason: ...}`.
+
+        Use to drill into the Public bucket beyond the canonical roll-up —
+        institutional analysts care about Retail vs HNI dispersion (sticky
+        retail vs flighty HNI), Bodies-Corporate vs NRI breakdowns (cross-
+        holding signals), and ADR/GDR-attributable foreign holding (which
+        sits inside the Public bucket via the CustodianOrDRHolder context).
+        """
+        rows = self._store.get_shareholding_breakdown(symbol, limit=quarters)
+        if not rows:
+            return {
+                "available": False,
+                "reason": (
+                    "No shareholding_breakdown rows on file. Re-run "
+                    "`flowtrack holding fetch -s <SYMBOL>` to ingest the latest "
+                    "XBRL filing — pre-2019 filings may lack the granular "
+                    "sub-category contexts."
+                ),
+            }
+        latest = rows[0]
+        prev = rows[1] if len(rows) > 1 else None
+
+        pct_fields = self._store._BREAKDOWN_PCT_FIELDS
+        latest_dict = {f: getattr(latest, f) for f in pct_fields}
+        latest_dict["dr_underlying_shares"] = latest.dr_underlying_shares
+        latest_dict["custodian_total_shares"] = latest.custodian_total_shares
+
+        qoq: dict[str, float | None] = {}
+        if prev is not None:
+            for f in pct_fields:
+                cur = getattr(latest, f)
+                pre = getattr(prev, f)
+                if cur is not None and pre is not None:
+                    qoq[f] = round(cur - pre, 2)
+
+        # Compute "Public bucket sums" for quick sanity checks. Non-institutional
+        # sub-cats (retail + hni + bodies_corp + nri + employee_benefit_trust + iepf
+        # + other_indian + foreign_dr_holder) should approximately roll up to the
+        # canonical NonInstitutions value (post-rounding).
+        non_inst_components = [
+            getattr(latest, f) or 0
+            for f in (
+                "retail_pct", "hni_pct", "bodies_corporate_pct", "nri_pct",
+                "employee_benefit_trust_pct", "iepf_pct",
+                "other_indian_pct", "foreign_dr_holder_pct",
+            )
+        ]
+        non_inst_sum = round(sum(non_inst_components), 2)
+
+        return _clean({
+            "available": True,
+            "as_of_quarter": latest.quarter_end,
+            "public_breakdown": {
+                # Public non-institutional drill (the Wave-5 P2 ask)
+                "retail_pct": latest.retail_pct,
+                "hni_pct": latest.hni_pct,
+                "bodies_corporate_pct": latest.bodies_corporate_pct,
+                "nri_pct": latest.nri_pct,
+                "employee_benefit_trust_pct": latest.employee_benefit_trust_pct,
+                "iepf_pct": latest.iepf_pct,
+                "other_indian_pct": latest.other_indian_pct,
+                "non_institutional_pct_sum_check": non_inst_sum,
+            },
+            "fpi_breakdown": {
+                "fpi_cat1_pct": latest.fpi_cat1_pct,
+                "fpi_cat2_pct": latest.fpi_cat2_pct,
+                "foreign_companies_pct": latest.foreign_companies_pct,
+                "foreign_nationals_pct": latest.foreign_nationals_pct,
+                "foreign_dr_holder_pct": latest.foreign_dr_holder_pct,
+                "other_foreign_pct": latest.other_foreign_pct,
+                "sovereign_wealth_foreign_pct": latest.sovereign_wealth_foreign_pct,
+            },
+            "domestic_institutional_breakdown": {
+                "banks_pct": latest.banks_pct,
+                "other_financial_institutions_pct": latest.other_financial_institutions_pct,
+                "nbfc_pct": latest.nbfc_pct,
+                "provident_pension_funds_pct": latest.provident_pension_funds_pct,
+                "venture_capital_funds_pct": latest.venture_capital_funds_pct,
+                "sovereign_wealth_domestic_pct": latest.sovereign_wealth_domestic_pct,
+            },
+            "adr_gdr_underlying": {
+                "underlying_shares_outstanding": latest.dr_underlying_shares,
+                "custodian_total_shares": latest.custodian_total_shares,
+                "pct_of_total_equity": latest.foreign_dr_holder_pct,
+            },
+            "qoq_changes": qoq,
+            "quarters_available": len(rows),
+            "_source": "SEBI_shareholding_XBRL",
+        })
+
+    def get_esop_summary(self, symbol: str, fiscal_years: int = 5) -> dict:
+        """ESOP / share-based-payments disclosure summary across recent FYs.
+
+        Sourced from the AR `esop_disclosure` extraction (Schedule III
+        mandate). Returns the latest year as a headline dict + a per-FY
+        history list. When no rows are persisted (extraction not yet run or
+        section_not_found_or_empty), returns `{available: False, reason: ...}`.
+
+        Critical for new-economy dilution analysis (Nykaa, Zomato, Paytm,
+        Policybazaar) where ESOP pool can be 5-10% of paid-up capital.
+        """
+        rows = self._store.get_ar_esop_summary(symbol, limit=fiscal_years)
+        if not rows:
+            return {
+                "available": False,
+                "reason": (
+                    "No ESOP rows on file. Re-run AR extraction "
+                    "(`flowtrack filings extract-ar -s <SYMBOL>`) to populate "
+                    "ar_esop_summary. Older AR layouts may not have a labeled "
+                    "ESOP section — section_not_found_or_empty is normal for "
+                    "filers with no active scheme."
+                ),
+            }
+        latest = rows[0]
+        plans = []
+        if latest.get("plans_json"):
+            try:
+                plans = json.loads(latest["plans_json"])
+            except (json.JSONDecodeError, TypeError):
+                plans = []
+
+        return _clean({
+            "available": True,
+            "latest_fy": latest.get("fiscal_year"),
+            "headline": {
+                "total_plans": latest.get("total_plans"),
+                "options_outstanding": latest.get("options_outstanding"),
+                "options_outstanding_pct_paidup": latest.get(
+                    "options_outstanding_pct_paidup"
+                ),
+                "weighted_avg_exercise_price": latest.get(
+                    "weighted_avg_exercise_price"
+                ),
+            },
+            "fy_flow": {
+                "options_granted_fy": latest.get("options_granted_fy"),
+                "options_exercised_fy": latest.get("options_exercised_fy"),
+                "options_lapsed_fy": latest.get("options_lapsed_fy"),
+            },
+            "plans": plans,
+            "history": [
+                {
+                    "fiscal_year": r.get("fiscal_year"),
+                    "options_outstanding": r.get("options_outstanding"),
+                    "options_outstanding_pct_paidup": r.get(
+                        "options_outstanding_pct_paidup"
+                    ),
+                    "options_granted_fy": r.get("options_granted_fy"),
+                    "options_exercised_fy": r.get("options_exercised_fy"),
+                }
+                for r in rows
+            ],
+            "_source": "AR_esop_disclosure",
+        })
 
     def get_insider_transactions(
         self, symbol: str, days: int = 1825, top_n: int = 50,
@@ -1651,6 +1835,46 @@ class ResearchDataAPI:
             default=None,
         ) or None
 
+        # Wave 5 P2: surface the granular public-bucket and ESOP signals in the
+        # TOC so the agent doesn't have to drill blindly. Each is a tiny
+        # summary; full data is available via dedicated sections.
+        try:
+            pb = self.get_public_breakdown(symbol, quarters=2)
+        except Exception:
+            pb = {"available": False, "reason": "public_breakdown_lookup_failed"}
+        public_brief: dict
+        if pb.get("available"):
+            sub = pb.get("public_breakdown") or {}
+            public_brief = {
+                "available": True,
+                "as_of_quarter": pb.get("as_of_quarter"),
+                "retail_pct": sub.get("retail_pct"),
+                "hni_pct": sub.get("hni_pct"),
+                "bodies_corporate_pct": sub.get("bodies_corporate_pct"),
+                "nri_pct": sub.get("nri_pct"),
+                "employee_benefit_trust_pct": sub.get("employee_benefit_trust_pct"),
+            }
+        else:
+            public_brief = {"available": False, "reason": pb.get("reason")}
+
+        try:
+            esop = self.get_esop_summary(symbol, fiscal_years=1)
+        except Exception:
+            esop = {"available": False, "reason": "esop_lookup_failed"}
+        esop_brief: dict
+        if esop.get("available"):
+            head = esop.get("headline") or {}
+            esop_brief = {
+                "available": True,
+                "latest_fy": esop.get("latest_fy"),
+                "options_outstanding_pct_paidup": head.get(
+                    "options_outstanding_pct_paidup"
+                ),
+                "total_plans": head.get("total_plans"),
+            }
+        else:
+            esop_brief = {"available": False, "reason": esop.get("reason")}
+
         return {
             "symbol": symbol.upper(),
             "current_ownership": current_ownership,
@@ -1669,11 +1893,13 @@ class ResearchDataAPI:
                 "count": len(deals_365d),
                 "latest_deal_date": latest_deal_date,
             },
+            "public_breakdown_brief": public_brief,
+            "esop_brief": esop_brief,
             "available_sections": [
                 "shareholding", "changes", "shareholder_detail",
                 "mf_holdings", "mf_changes", "mf_conviction",
                 "insider", "bulk_block", "promoter_pledge",
-                "adr_gdr",
+                "adr_gdr", "public_breakdown", "esop",
             ],
             "hint": (
                 "This is a compact TOC. Call get_ownership(section='<name>') "
@@ -1681,7 +1907,10 @@ class ResearchDataAPI:
                 "mf_holdings returns top 30 schemes by value (+ tail summary); "
                 "shareholder_detail returns top 20 holders. Pass section=['s1','s2'] "
                 "for multiple targeted sections in one call — avoid section='all' "
-                "which can exceed the MCP tool-result transport limit."
+                "which can exceed the MCP tool-result transport limit. "
+                "Wave 5 P2 sections: 'public_breakdown' (Retail/HNI/Bodies "
+                "Corporate/NRI sub-cats from XBRL), 'esop' (pool size + per-plan "
+                "detail from AR Schedule III)."
             ),
         }
 
@@ -2671,36 +2900,44 @@ class ResearchDataAPI:
     }
 
     def get_adr_gdr(self, symbol: str) -> dict:
-        """ADR/GDR outstanding — reads from AR notes-to-financials when present,
-        falls back to a structured stub payload otherwise.
+        """ADR/GDR outstanding — Wave 5 P2 makes this fully live for symbols
+        whose XBRL exposes the `CustodianOrDRHolder` context (HDFCBANK, INFY,
+        WIPRO, ICICIBANK, etc.). Resolution chain:
 
-        Attempts live extraction by scanning the most recent AR's
-        `notes_to_financials` section for depositary-receipt disclosures:
-          1. A dedicated `share_capital.adr_gdr_details` sub-dict, if the
-             extractor produces one.
-          2. Any `material_items` / `forensic_red_flags` entry that mentions
-             "depositary receipts" / "ADR" / "GDR" / "American Depositary"
-             with an adjacent numeric (outstanding units) token.
-
-        The AR extractor schema today does NOT emit ADR-specific fields
-        (see _SECTION_PROMPTS['notes_to_financials'] in
-        annual_report_extractor.py), so live population is best-effort. When
-        nothing is found we preserve the stub behavior but record which
-        AR years were consulted in `_meta.source_checked`.
+          1. Manual override — `adr_gdr_outstanding` table. Lets analysts
+             seed a known value or record the latest depositary-bank position
+             report (BNY Mellon / DB Trust / Citi) when the SEBI quarterly
+             XBRL lags.
+          2. XBRL CustodianOrDRHolder context — pulled from
+             `shareholding_breakdown.foreign_dr_holder_pct` +
+             `dr_underlying_shares`. Definitive source: the
+             `NumberOfSharesUnderlyingOutstandingDepositoryReceipts` element
+             in the SEBI shareholding XBRL. No web scraping needed.
+          3. AR `notes_to_financials.share_capital.adr_gdr_details` sub-dict
+             (when extractor surfaces it).
+          4. Free-text scan of `material_items` / `forensic_red_flags` for
+             "ADR" / "GDR" / "depositary receipts" + adjacent numeric.
+          5. Stub fallback — listed_on tag only, all numerics null, with
+             `data_quality_note` explaining which sources were consulted.
 
         Returned shape:
           {
             "listed_on": ["NYSE", ...],           # empty list if none
-            "outstanding_units_mn": None | float,
+            "outstanding_units_mn": None | float,  # # of depositary receipts (units)
+            "underlying_shares_outstanding": None | float,  # # of equity shares represented
             "pct_of_total_equity": None | float,
             "as_of_date": None | "YYYY-MM-DD",
-            "source": "stub" | "FY25_AR_notes_to_financials",
+            "source": "manual_seed" | "XBRL_CustodianOrDRHolder" |
+                       "FY25_AR_notes_to_financials" | "stub",
+            "sponsor_bank": None | str,
+            "adr_ratio": None | str,
+            "data_quality_note": None | str,
             "_meta": {"stub": bool, "source_checked": [...], ...}
           }
         """
         sym_up = symbol.upper()
         listed = self._ADR_GDR_LISTINGS.get(sym_up, [])
-        meta: dict = {"stub": True, "todo": "E7"}
+        meta: dict = {"stub": True}
         if sym_up not in self._ADR_GDR_LISTINGS:
             meta["reason"] = "symbol_not_in_known_adr_gdr_list"
         elif not listed:
@@ -2709,14 +2946,81 @@ class ResearchDataAPI:
         payload: dict = {
             "listed_on": listed,
             "outstanding_units_mn": None,
+            "underlying_shares_outstanding": None,
             "pct_of_total_equity": None,
             "as_of_date": None,
             "source": "stub",
+            "sponsor_bank": None,
+            "adr_ratio": None,
+            "data_quality_note": None,
             "_meta": meta,
         }
 
-        # Only attempt live extraction for known ADR/GDR issuers.
+        # 1. Manual override — `adr_gdr_outstanding` table. This wins over
+        #    everything else because analysts seed it deliberately (e.g.
+        #    when the SEBI XBRL lags the depositary bank's monthly report).
+        try:
+            seeded = self._store.get_adr_gdr_outstanding(sym_up, limit=1)
+        except Exception:
+            seeded = []
+        if seeded:
+            row = seeded[0]
+            payload["listed_on"] = (
+                [s.strip() for s in (row.get("listed_on") or "").split(",") if s.strip()]
+                or listed
+            )
+            units = row.get("units_outstanding")
+            payload["outstanding_units_mn"] = (
+                round(units / 1_000_000, 4) if isinstance(units, (int, float)) and units else None
+            )
+            payload["underlying_shares_outstanding"] = row.get("underlying_shares_outstanding")
+            payload["pct_of_total_equity"] = row.get("pct_of_total_equity")
+            payload["as_of_date"] = row.get("as_of_date")
+            payload["source"] = row.get("source") or "manual_seed"
+            payload["sponsor_bank"] = row.get("sponsor_bank")
+            payload["adr_ratio"] = row.get("adr_ratio")
+            payload["data_quality_note"] = row.get("notes")
+            meta["stub"] = False
+            meta["source_checked"] = [payload["source"]]
+            meta.pop("reason", None)
+            return payload
+
+        # 2. XBRL CustodianOrDRHolder — definitive when present. The
+        #    `foreign_dr_holder_pct` is the % of total equity held by the
+        #    custodian on behalf of ADR/GDR holders; `dr_underlying_shares`
+        #    is the raw equity-share count those receipts represent.
+        try:
+            xbrl_breakdown = self._store.get_latest_shareholding_breakdown(sym_up)
+        except Exception:
+            xbrl_breakdown = None
+        if xbrl_breakdown is not None and (
+            xbrl_breakdown.foreign_dr_holder_pct is not None
+            or xbrl_breakdown.dr_underlying_shares is not None
+        ):
+            payload["pct_of_total_equity"] = xbrl_breakdown.foreign_dr_holder_pct
+            payload["underlying_shares_outstanding"] = xbrl_breakdown.dr_underlying_shares
+            payload["as_of_date"] = xbrl_breakdown.quarter_end
+            payload["source"] = "XBRL_CustodianOrDRHolder"
+            payload["data_quality_note"] = (
+                "ADR/GDR underlying-share count from SEBI shareholding XBRL "
+                "(NumberOfSharesUnderlyingOutstandingDepositoryReceipts under "
+                "CustodianOrDRHolder context). ADR unit count not in XBRL — "
+                "would need depositary-bank position report. ADR ratio "
+                "(depositary receipts → equity shares) is symbol-specific "
+                "(HDFCBANK historically 1:3); confirm via Form 20-F if needed."
+            )
+            meta["stub"] = False
+            meta["source_checked"] = ["XBRL_CustodianOrDRHolder"]
+            meta.pop("reason", None)
+            return payload
+
+        # 3-4. AR notes scan (existing logic).
         if not listed:
+            payload["data_quality_note"] = (
+                "Symbol not in the known-ADR-issuer list and no XBRL "
+                "CustodianOrDRHolder context found; treating as no active "
+                "depositary program."
+            )
             return payload
 
         try:
@@ -2761,9 +3065,22 @@ class ResearchDataAPI:
             payload["pct_of_total_equity"] = found_entry.get("pct_of_total_equity")
             payload["as_of_date"] = found_entry.get("as_of_date")
             payload["source"] = f"{found_fy}_AR_notes_to_financials"
+            payload["data_quality_note"] = (
+                "ADR/GDR figure parsed from AR Notes-to-Financials free text; "
+                "treat as approximate. For higher precision, populate the "
+                "`adr_gdr_outstanding` table via the depositary bank's monthly "
+                "position report."
+            )
             meta["stub"] = False
-            meta.pop("todo", None)
             meta.pop("reason", None)
+        else:
+            payload["data_quality_note"] = (
+                "No XBRL CustodianOrDRHolder context, no manual seed in "
+                "`adr_gdr_outstanding`, and no AR Notes hit. Symbol is in the "
+                "known-ADR-issuer list but the data sources are silent. "
+                "Consider seeding via `upsert_adr_gdr_outstanding` from the "
+                "latest Form 20-F or depositary-bank position report."
+            )
         return payload
 
     @staticmethod
@@ -4216,6 +4533,8 @@ class ResearchDataAPI:
         "segmental",
         "notes_to_financials",
         "financial_statements",
+        "esop_disclosure",
+        "five_year_summary",
     )
 
     def get_annual_report(

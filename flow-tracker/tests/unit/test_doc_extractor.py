@@ -648,6 +648,275 @@ def test_section_size_summary_classifies_by_size():
 
 
 # ---------------------------------------------------------------------------
+# Wave 4-5 P2: chairman_letter / mdna / corporate_governance heading variants
+# ---------------------------------------------------------------------------
+
+
+def test_mdna_matches_html_entity_ampersand():
+    """ICICIBANK / VEDL FY25 layout: Docling emits MD&A as the literal HTML
+    entity 'MANAGEMENT DISCUSSION &amp; ANALYSIS' (uppercase, ampersand
+    encoded). The bare-`&` regex didn't match — must normalize entities.
+    """
+    md = (
+        "## MANAGEMENT DISCUSSION &amp; ANALYSIS\n\n"
+        "## Industry Overview\n\n"
+        + ("industry body " * 200) + "\n\n"
+        "## Operating Performance\n\n"
+        + ("ops body " * 100) + "\n\n"
+        "## Outlook\n\n"
+        + ("outlook body " * 50) + "\n\n"
+        "## INDEPENDENT AUDITOR'S REPORT\n\n"
+        + ("auditor " * 100) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "mdna" in idx, "MD&A with &amp; entity must match"
+    assert idx["mdna"]["size_chars"] > 2_000
+
+
+def test_chairman_letter_matches_message_from_chairman():
+    """ICICIBANK FY25 / DRREDDY FY25 / many integrated-report ARs use
+    'MESSAGE FROM THE CHAIRMAN' rather than 'Chairman's Message'. The new
+    'message from the chairman' alias must catch these.
+    """
+    md = (
+        "## MESSAGE FROM THE CHAIRMAN\n\n"
+        "Dear Shareholders,\n\n"
+        + ("Year under review chairman prose " * 200) + "\n\n"
+        "## INDEPENDENT AUDITOR'S REPORT\n\n"
+        + ("auditor " * 100) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "chairman_letter" in idx
+    assert idx["chairman_letter"]["size_chars"] > 2_000
+
+
+def test_chairman_letter_matches_chairman_speech():
+    """VEDL FY25 layout: 'Chairman's Speech' rather than 'Chairman's Letter'."""
+    md = (
+        "## Chairman's Speech\n\n"
+        "Dear Stakeholders,\n\n"
+        + ("speech body line " * 200) + "\n\n"
+        "## CEO Speak\n\n"
+        + ("ceo body " * 50) + "\n\n"
+        "## INDEPENDENT AUDITOR'S REPORT\n\n"
+        + ("auditor " * 100) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "chairman_letter" in idx
+    assert idx["chairman_letter"]["matched_heading"] == "Chairman's Speech"
+    assert "ceo_letter" in idx
+
+
+def test_chairman_letter_matches_message_from_founders():
+    """POLICYBZR FY25 / startup integrated-reports use 'Message from Founders'
+    rather than a chairman letter. Treat as the canonical opener.
+    """
+    md = (
+        "## Message from Founders\n\n"
+        "Dear Shareholders,\n\n"
+        + ("founder prose " * 300) + "\n\n"
+        "## Message from CFO\n\n"
+        + ("cfo prose " * 50) + "\n\n"
+        "## INDEPENDENT AUDITOR'S REPORT\n\n"
+        + ("auditor " * 100) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "chairman_letter" in idx
+    assert idx["chairman_letter"]["matched_heading"] == "Message from Founders"
+    assert idx["chairman_letter"]["size_chars"] > 2_000
+    text = slice_section(md, idx, "chairman_letter")
+    # Must end at "Message from CFO" (a different letter type), not run into
+    # the auditor report.
+    assert "cfo prose" not in text
+    assert "auditor" not in text
+
+
+def test_chairman_letter_matches_chairman_and_md_message():
+    """SUNPHARMA FY25: 'Chairman and Managing Director's Message' — joint
+    title where the trailing possessive belongs to 'Director's', not
+    'Chairman's'. The simple 'chairman'?s?\\s+message' alias misses it.
+    """
+    md = (
+        "## Chairman and Managing Director's Message\n\n"
+        "Dear Stakeholders,\n\n"
+        + ("year under review " * 200) + "\n\n"
+        "## INDEPENDENT AUDITOR'S REPORT\n\n"
+        + ("auditor " * 100) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "chairman_letter" in idx
+    assert idx["chairman_letter"]["size_chars"] > 2_000
+
+
+def test_corporate_governance_matches_with_running_header_pollution():
+    """ICICIBANK FY25 layout: the real CORPORATE GOVERNANCE heading is
+    immediately followed by a page-running-header repeat ('BOARD'S REPORT'
+    appears 48x as page header) which matches `directors_report` and would
+    otherwise truncate the CG slice to 615 chars. Running-header detection
+    skips these so the section extends to the real next canonical heading.
+    """
+    rh_count = 8  # ≥5 → triggers running-header detection
+    rh_block = "## BOARD'S REPORT\n\n" + ("running-header line\n" * 5) + "\n"
+    md = (
+        "## CORPORATE GOVERNANCE\n\n"
+        + ("Philosophy of Corporate Governance prose " * 50) + "\n\n"
+        # Page-running-header repeat appears between CG body chunks.
+        + (rh_block * rh_count)
+        + "## Audit Committee\n\n"
+        + ("audit committee body " * 100) + "\n\n"
+        + "## Nomination and Remuneration Committee\n\n"
+        + ("NRC body " * 50) + "\n\n"
+        + "## Risk Management Committee\n\n"
+        + ("RMC body " * 50) + "\n\n"
+        + "## CONSOLIDATED BALANCE SHEET\n\n"
+        + ("bs body " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "corporate_governance" in idx
+    cg = idx["corporate_governance"]
+    # Slice should span the full CG body — must NOT be truncated to a few
+    # hundred chars by the running-header repeat.
+    assert cg["size_chars"] > 5_000, (
+        f"Expected CG body >5KB despite running-header pollution, "
+        f"got {cg['size_chars']} chars"
+    )
+    text = slice_section(md, idx, "corporate_governance")
+    assert "audit committee body" in text
+    assert "NRC body" in text
+    # Must end at the financial statements anchor.
+    assert "bs body" not in text
+
+
+def test_corporate_governance_excludes_esg_governance_report():
+    """ICICIBANK FY25: only 'ENVIRONMENTAL, SOCIAL AND GOVERNANCE REPORT'
+    matched the bare `governance\\s+report` alias because every real CG
+    heading was running-header-truncated. ESG-governance must be excluded
+    from CG candidates.
+    """
+    md = (
+        "## CORPORATE GOVERNANCE REPORT\n\n"
+        "## Audit Committee\n\n"
+        + ("real CG body " * 100) + "\n\n"
+        "## Nomination and Remuneration Committee\n\n"
+        + ("NRC " * 50) + "\n\n"
+        # ESG report — must NOT be picked as the CG section start.
+        "## ENVIRONMENTAL, SOCIAL AND GOVERNANCE REPORT\n\n"
+        + ("esg body " * 100) + "\n\n"
+        "## CONSOLIDATED BALANCE SHEET\n\n"
+        + ("bs " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "corporate_governance" in idx
+    cg = idx["corporate_governance"]
+    matched = cg.get("matched_heading", "").lower()
+    assert "environmental" not in matched
+    assert "esg" not in matched
+
+
+def test_corporate_governance_excludes_nyse_compliance_certificate():
+    """DRREDDY FY25 (ADR filing): contains both the SEBI 'CORPORATE
+    GOVERNANCE REPORT' and a separate 'COMPLIANCE REPORT ON THE NYSE
+    CORPORATE GOVERNANCE GUIDELINES'. The NYSE certificate must NOT be
+    picked even though it contains audit-committee / NRC mentions in its
+    body — those describe NYSE compliance, not the actual SEBI governance
+    structure.
+    """
+    md = (
+        "## CORPORATE GOVERNANCE REPORT\n\n"
+        "## Audit Committee\n\n"
+        + ("audit body " * 100) + "\n\n"
+        "## Nomination and Remuneration Committee\n\n"
+        + ("nrc " * 50) + "\n\n"
+        "## CSR Committee\n\n"
+        + ("csr " * 50) + "\n\n"
+        # NYSE certificate appears later — must be excluded.
+        "## COMPLIANCE REPORT ON THE NYSE CORPORATE GOVERNANCE GUIDELINES\n\n"
+        + ("Audit Committee composition under NYSE compliance " * 100) + "\n\n"
+        "## CONSOLIDATED BALANCE SHEET\n\n"
+        + ("bs " * 30) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "corporate_governance" in idx
+    matched = idx["corporate_governance"]["matched_heading"].lower()
+    assert "nyse" not in matched
+    assert "compliance report on" not in matched
+
+
+def test_mdna_ends_at_next_canonical_section_not_first_subheading():
+    """MD&A and CG sections contain dozens of L2 sub-headings of their own
+    (Industry Overview, Outlook, Operating Performance for MD&A; Audit
+    Committee / NRC / RMC for CG). Default same-or-higher-level end
+    heuristic over-cuts to the first sub-heading. Smart end-detection ends
+    at the next financial-statements anchor or a different canonical
+    section instead.
+    """
+    md = (
+        "## MANAGEMENT DISCUSSION AND ANALYSIS\n\n"
+        # Many same-level (L2) sub-headings — these must NOT terminate the section.
+        "## Industry Overview\n\n"
+        + ("industry body " * 500) + "\n\n"
+        "## Operating Performance\n\n"
+        + ("ops body " * 500) + "\n\n"
+        "## Outlook\n\n"
+        + ("outlook body " * 200) + "\n\n"
+        "## Risks and Concerns\n\n"
+        + ("risks body " * 100) + "\n\n"
+        "## Internal Control Systems\n\n"
+        + ("ic body " * 100) + "\n\n"
+        # Next canonical section.
+        "## INDEPENDENT AUDITOR'S REPORT\n\n"
+        + ("auditor body " * 100) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "mdna" in idx
+    assert idx["mdna"]["size_chars"] > 10_000, (
+        "Expected MD&A to span all sub-headings, not stop at first L2 sibling"
+    )
+    text = slice_section(md, idx, "mdna")
+    assert "industry body" in text
+    assert "outlook body" in text
+    assert "ic body" in text
+    # Must end at the auditor section, not run into it.
+    assert "auditor body" not in text
+
+
+def test_chairman_letter_ends_at_message_from_cfo():
+    """POLICYBZR FY25 layout: chairman / founders message is followed by a
+    'Message from CFO' which is a different letter, then the rest of the
+    integrated report. Without a letter-end anchor, the chairman section
+    runs >100K into governance content. With the anchor, it ends cleanly.
+    """
+    md = (
+        "## Message from Founders\n\n"
+        "Dear Shareholders,\n\n"
+        + ("founder body " * 200) + "\n\n"
+        "## Message from CFO\n\n"
+        + ("cfo body " * 50) + "\n\n"
+        "## Performance Review\n\n"
+        + ("perf body " * 200) + "\n\n"
+        "## Board of Directors\n\n"
+        + ("bod body " * 200) + "\n\n"
+    )
+    headings = _scan_headings(md)
+    idx = build_ar_section_index(md, headings)
+    assert "chairman_letter" in idx
+    text = slice_section(md, idx, "chairman_letter")
+    assert "founder body" in text
+    # Must end at the CFO letter, not run into it.
+    assert "cfo body" not in text
+    assert "perf body" not in text
+
+
+# ---------------------------------------------------------------------------
 # deck_slide_index — slide topic index
 # ---------------------------------------------------------------------------
 

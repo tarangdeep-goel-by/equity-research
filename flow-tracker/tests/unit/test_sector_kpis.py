@@ -542,3 +542,78 @@ class TestNewSectorCanonicalKpis:
         canonical = {k["key"] for k in SECTOR_KPI_CONFIG[sector]["kpis"]}
         missing = [k for k in required if k not in canonical]
         assert not missing, f"{sector} missing flagship KPIs: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Wave 4-5 P2 — Pharma sector pack (USFDA / GTN / R&D detail)
+# ---------------------------------------------------------------------------
+class TestPharmaWave45KPIs:
+    """USFDA + GTN + R&D detail keys flagged as missing by SUNPHARMA / DRREDDY /
+    CIPLA pharma autoeval. Must register as canonical (not just alias) keys.
+    """
+
+    _REQUIRED_NEW = (
+        "usfda_observations_count",
+        "usfda_warning_letters_active",
+        "anda_filings_pending",
+        "anda_approvals_ytd",
+        "gross_to_net_pct",
+        "us_revenue_pct",
+        "india_branded_pct",
+        "gross_margin_pct",
+        "ebitda_margin_pct",
+    )
+
+    def test_new_pharma_kpis_are_canonical(self):
+        pharma = SECTOR_KPI_CONFIG["pharma"]["kpis"]
+        canonical_keys = {k["key"] for k in pharma}
+        for key in self._REQUIRED_NEW:
+            assert key in canonical_keys, f"pharma canonical KPIs missing '{key}'"
+
+    def test_new_pharma_kpis_resolve_via_industry(self):
+        keys = get_kpi_keys_for_industry("Pharmaceuticals")
+        assert keys is not None
+        for key in self._REQUIRED_NEW:
+            assert key in keys
+
+    def test_existing_pharma_kpis_still_present(self):
+        """Adding new KPIs must not have removed any existing canonical key.
+
+        Regression guard against careless edits to the pharma section.
+        """
+        keys = set(get_kpi_keys_for_industry("Pharmaceuticals") or [])
+        # Pre-existing keys that the autoeval already trusted to be present.
+        for legacy in (
+            "us_revenue_usd_mn",
+            "india_formulations_revenue_cr",
+            "r_and_d_spend_pct",
+            "anda_filed_number",
+            "anda_approved_number",
+            "us_price_erosion_pct",
+            "rd_pct_of_revenue",
+            "usfda_facility_status",
+            "anda_approvals_ltm",
+            "key_molecule_pipeline",
+            "cdmo_revenue_cr",
+            "biosimilar_market_share_pct",
+            "complex_generics_mix_pct",
+        ):
+            assert legacy in keys, f"pharma lost legacy KPI '{legacy}'"
+
+    def test_gross_to_net_alias_collapses(self):
+        """`gtn_pct` (LLM-emitted alias) must canonicalize to `gross_to_net_pct`."""
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+        ops_in = {"gtn_pct": {"value": 32.0, "context": "GTN was 32% in Q3"}}
+        out, renamed = canonicalize_operational_metrics(ops_in, "Pharmaceuticals")
+        assert "gross_to_net_pct" in out
+        assert "gtn_pct" not in out
+        assert "gtn_pct" in renamed
+
+    def test_form_483_alias_collapses(self):
+        """`form_483_count` (alias) must canonicalize to `usfda_observations_count`."""
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+        ops_in = {"form_483_count": {"value": 9, "context": "Halol audit Apr 2026"}}
+        out, renamed = canonicalize_operational_metrics(ops_in, "Pharmaceuticals")
+        assert "usfda_observations_count" in out
+        assert "form_483_count" not in out
+        assert "form_483_count" in renamed
