@@ -168,6 +168,7 @@ HELP_COMMANDS = [
     ["research", "run", "--help"],
     ["research", "verify", "--help"],
     ["research", "autoeval-macro", "--help"],
+    ["research", "analog-backtest", "--help"],
 ]
 # fmt: on
 

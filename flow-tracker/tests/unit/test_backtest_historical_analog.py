@@ -226,6 +226,9 @@ def test_skip_run_fails_loud_with_path(tmp_path, monkeypatch, capsys):
     )
     # Bypass open() for TSV write (we only care about print output)
     monkeypatch.setattr(bh, "append_backtest_tsv", lambda *a, **k: None)
+    # Redirect archive writer to tmp so the test doesn't pollute the live
+    # eval_history dir (PR-B3 added _archive_run inside main()).
+    monkeypatch.setattr(bh, "EVAL_HISTORY_DIR", tmp_path / "eval_history")
 
     monkeypatch.setattr(
         "sys.argv",
@@ -259,3 +262,59 @@ def test_uses_timezone_aware_datetime(tmp_path, monkeypatch):
     data_row = lines[1]
     ts = data_row.split("\t")[0]
     assert "+00:00" in ts or ts.endswith("Z"), f"timestamp lacks tz: {ts}"
+
+
+# ---------------------------------------------------------------------------
+# 10. _archive_run dumps run metadata + samples + calibration (PR-B3)
+# ---------------------------------------------------------------------------
+
+def test_archive_run_writes_round_trippable_json(tmp_path, monkeypatch):
+    from argparse import Namespace
+
+    monkeypatch.setattr(bh, "EVAL_HISTORY_DIR", tmp_path / "eval_history")
+
+    samples = [
+        bh.BacktestSample(
+            symbol="AAA", as_of_date="2024-01-01", realized_12m_pct=12.5,
+            realized_quartile=4, directional_call={"upside": "Thicker"},
+            upside_hit=True, cohort_n=10, cohort_p25_12m=-5.0, cohort_p75_12m=8.0,
+        ),
+        bh.BacktestSample(
+            symbol="BBB", as_of_date="2024-02-01", realized_12m_pct=-22.0,
+            realized_quartile=1, directional_call={"downside": "Thicker"},
+            downside_hit=True, cohort_n=8,
+        ),
+        bh.BacktestSample(
+            symbol="CCC", as_of_date="2024-03-01", realized_12m_pct=3.0,
+            realized_quartile=2, directional_call={"base": "Thinner"},
+            base_hit=False, cohort_n=6, error=None,
+        ),
+    ]
+    calibration = {
+        "upside_Thicker": {"n": 1, "hit_rate": 1.0, "threshold": 0.35, "passed": True},
+        "downside_Thicker": {"n": 1, "hit_rate": 1.0, "threshold": 0.35, "passed": True},
+    }
+    args = Namespace(n=3, seed=42, skip_run=False, cutoff_days=450, note="unit-test")
+    started = "2026-04-26T10:00:00+00:00"
+    finished = "2026-04-26T10:00:05+00:00"
+
+    path = bh._archive_run(samples, calibration, args, started, finished)
+
+    assert path.exists()
+    assert path.parent == tmp_path / "eval_history"
+    assert path.name.startswith("analog_backtest_")
+    assert path.suffix == ".json"
+
+    payload = json.loads(path.read_text())
+    assert payload["agent"] == "historical_analog"
+    assert payload["kind"] == "backtest"
+    assert payload["started_at"] == started
+    assert payload["finished_at"] == finished
+    assert payload["args"] == {
+        "n": 3, "seed": 42, "skip_run": False, "cutoff_days": 450, "note": "unit-test",
+    }
+    assert len(payload["samples"]) == 3
+    assert payload["samples"][0]["symbol"] == "AAA"
+    assert payload["samples"][0]["upside_hit"] is True
+    assert payload["samples"][1]["downside_hit"] is True
+    assert payload["calibration"]["upside_Thicker"]["passed"] is True

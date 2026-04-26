@@ -194,9 +194,11 @@ uv sync --extra autoeval
 uv run flowtrack research autoeval -a business --sectors bfsi      # run + grade
 uv run flowtrack research autoeval -a business --sectors bfsi --skip-run  # grade only
 uv run flowtrack research autoeval --progress                      # progress chart
+uv run flowtrack research autoeval-macro --note baseline           # macro grader (flat date matrix)
+uv run flowtrack research analog-backtest --n 20 --seed 42 --note baseline  # analog calibration backtest (~3hr)
 ```
 
-Key files in `research/autoeval/`: `evaluate.py` (harness), `eval_matrix.yaml` (14 sectors × test stocks), `fix_tracker.md` (Gemini-recommended fixes), `results.tsv` (grades). See `research/autoeval/README.md` for full workflow.
+Key files in `research/autoeval/`: `evaluate.py` (harness), `eval_matrix.yaml` (14 sectors × test stocks), `fix_tracker.md` (Gemini-recommended fixes), `results.tsv` (grades), `evaluate_macro.py` + `eval_matrix_macro.yaml` (macro grader), `backtest_historical_analog.py` (analog calibration backtest). See `research/autoeval/README.md` for full workflow.
 
 ### Buy-Side Decision Framework
 
