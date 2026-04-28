@@ -138,6 +138,27 @@ AR_SECTIONS: dict[str, list[str]] = {
     "related_party": [
         r"related\s+party\s+transactions?",
         r"\brpt\b\s+disclosure",
+        # AS-18 / Ind AS 24 disclosure heading variants used by banks (BANKBARODA
+        # FY25 "12.5 Related Party Disclosures (AS-18)", SBIN FY25 "2.4 AS-18
+        # Related Party Disclosures") and consolidated-notes sections in
+        # corporates (HDFCBANK note 29/47, HINDALCO note 30, NESTLEIND note 41,
+        # HINDUNILVR note 44 — all "Related party disclosures").
+        r"related\s+party\s+disclosures?",
+        # SEBI Listing-Reg / Companies-Act AOC-2 wrapper headings — observed in
+        # HDFCBANK ("Particulars of Contracts or Arrangements with Related
+        # Parties"), INFY ("Particulars of contracts/arrangements made with
+        # related parties"), POLICYBZR ("PARTICULARS OF CONTRACTS OR ARRANGEMENT
+        # WITH RELATED PARTIES").
+        r"particulars\s+of\s+contracts?\s*"
+        r"(or|/|and)?\s*arrangements?\s+(made\s+)?(with|for)\s+related\s+parties?",
+        # Schedule III / consolidated-notes lead-with-transactions form: ETERNAL
+        # FY25 "ix. Transactions with related parties", TCS FY25 "19.
+        # Transactions with related parties".
+        r"transactions\s+with\s+related\s+parties?",
+        # Form AOC-2 standalone heading — ICICIBANK FY25, HINDUNILVR FY25 both
+        # surface "Form No. AOC-2" / "FORM NO. AOC-2" as a top-level heading
+        # separate from the wrapping Particulars-of-Contracts heading.
+        r"form\s+(no\.?\s+)?aoc[-\s]?2",
     ],
     "esop_disclosure": [
         r"employee\s+stock\s+option\s+(plan|scheme)\s+disclosure",
