@@ -120,3 +120,147 @@ def test_section_index_finds_related_party_with_new_alias() -> None:
     entry = idx["related_party"]
     assert entry["matched_heading"].startswith("12.5"), entry
     assert entry["size_chars"] > 100, entry
+
+
+# ============================================================================
+# Track B (2026-04-28) — heading_toc tie-breakers and rejection patterns
+# ============================================================================
+
+NOTES_TO_FINANCIALS_HEADINGS = [
+    # Standard form
+    ("Notes to the Consolidated Financial Statements", "ETERNAL FY25"),
+    ("Notes to the Standalone Financial Statements", "POLICYBZR FY25"),
+    ("NOTES TO FINANCIAL STATEMENTS", "DRREDDY FY25"),
+    # `accounts` variant (Indian banks)
+    ("Notes to Accounts", "HDFCBANK FY25 schedule-18 ref"),
+    ("SCHEDULE 18: NOTES TO ACCOUNTS", "SBIN FY25"),
+    ("SCHEDULE 18 - NOTES TO ACCOUNTS:", "SBIN FY25"),
+    # `forming part of` variants (consolidated/standalone, financial-statements/accounts)
+    ("NOTES FORMING PART OF THE STANDALONE FINANCIAL STATEMENTS FOR THE YEAR "
+     "ENDED 31 st MARCH, 2025", "NESTLEIND FY25"),
+    ("NOTES FORMING PART OF CONSOLIDATED FINANCIAL STATEMENTS", "TCS FY25"),
+    ("NOTES FORMING PART OF THE ACCOUNTS", "ICICIBANK FY25"),
+    # `notes on` variant (BANKBARODA Schedule-19 form)
+    ("Notes on the Consolidated Financial Statements", "BANKBARODA FY25"),
+    # Schedule-prefixed
+    ("Schedule-19 : Notes on the Consolidated Financial Statements (CFS) for "
+     "the year ended 31 st March 2025", "BANKBARODA FY25"),
+    ("Schedule 18 - Notes to Accounts", "SBIN-style"),
+]
+
+
+@pytest.mark.parametrize("heading,source", NOTES_TO_FINANCIALS_HEADINGS,
+                         ids=[s for _, s in NOTES_TO_FINANCIALS_HEADINGS])
+def test_notes_to_financials_aliases_match_cohort_headings(
+        heading: str, source: str) -> None:
+    assert _matches("notes_to_financials", heading), (
+        f"notes_to_financials alias did not match: {heading!r} (from {source})"
+    )
+
+
+def test_notes_to_financials_does_not_match_significant_accounting_policies() -> None:
+    """Track B.5: Removed `significant accounting policies` from the alias list
+    because it consistently mis-routed to a < 200-char SAP slice instead of the
+    real notes data section. Verify it no longer matches."""
+    for heading in [
+        "SIGNIFICANT ACCOUNTING POLICIES",
+        "SCHEDULE 17: SIGNIFICANT ACCOUNTING POLICIES",
+        "Schedule 17 - Significant accounting policies appended to and forming "
+        "part of the Standalone Balance Sheet",
+        "SIGNIFICANT ACCOUNTING POLICIES FOR THE YEAR ENDED MARCH 31, 2025",
+    ]:
+        assert not _matches("notes_to_financials", heading), (
+            f"notes_to_financials alias matched SAP heading: {heading!r}"
+        )
+
+
+def _build_index_with_two_candidates(
+        canonical: str, heading_a: str, heading_b: str,
+        body_a: str = "policy text without numbers.",
+        body_b: str = "Revenue 12,345 Cr. Expenses 8,901 Cr. PAT 3,444 Cr.",
+        repeat_b: int = 100,
+) -> dict:
+    """Helper: build a two-candidate markdown where heading_b's body is more
+    data-rich. Used to test policy-rejection and digit-density tie-breakers."""
+    body_a_block = (body_a + " ") * 50
+    body_b_block = (body_b + " ") * repeat_b
+    md = (
+        f"## {heading_a}\n\n{body_a_block}\n\n"
+        f"## Some unrelated heading\n\nfiller content\n\n"
+        f"## {heading_b}\n\n{body_b_block}\n\n"
+        f"## End\n"
+    )
+    headings = [
+        {"level": 2, "text": heading_a, "char_offset": md.index(f"## {heading_a}")},
+        {"level": 2, "text": "Some unrelated heading",
+         "char_offset": md.index("## Some unrelated heading")},
+        {"level": 2, "text": heading_b, "char_offset": md.index(f"## {heading_b}")},
+        {"level": 2, "text": "End", "char_offset": md.index("## End")},
+    ]
+    return build_ar_section_index(md, headings)
+
+
+def test_track_b_policy_letter_prefix_rejection_for_segmental() -> None:
+    """Track B.1: `n) Segment reporting` (ETERNAL FY25 accounting policy) must
+    be rejected when a real data heading exists."""
+    idx = _build_index_with_two_candidates(
+        "segmental",
+        "n) Segment reporting",
+        "Summarised segment information for the year ended March 31, 2025",
+    )
+    entry = idx.get("segmental")
+    assert entry is not None
+    assert "Summarised" in entry["matched_heading"], (
+        f"policy-letter prefix not rejected; got: {entry['matched_heading']!r}"
+    )
+
+
+def test_track_b_agm_notice_rejection_for_related_party() -> None:
+    """Track B.2: AGM-notice resolutions must be rejected for related_party.
+    TCS FY25 had an 82KB AGM-resolution slice; INFY had an Item-no-N slice.
+    """
+    idx = _build_index_with_two_candidates(
+        "related_party",
+        "To approve material related party transactions with Tata Capital Limited",
+        "22) Related party transactions",
+    )
+    entry = idx.get("related_party")
+    assert entry is not None
+    assert "22)" in entry["matched_heading"], (
+        f"AGM 'To approve...' not rejected; got: {entry['matched_heading']!r}"
+    )
+
+    idx2 = _build_index_with_two_candidates(
+        "related_party",
+        "Item no. 5 - Material related party transactions of Infosys Limited",
+        "2.24 Related party transactions",
+    )
+    entry2 = idx2.get("related_party")
+    assert entry2 is not None
+    assert "2.24" in entry2["matched_heading"], (
+        f"AGM 'Item no. N' not rejected; got: {entry2['matched_heading']!r}"
+    )
+
+
+def test_track_b_digit_density_tiebreaker() -> None:
+    """Track B.3: when two candidates match, the one with more numeric runs
+    (table-like data) wins over policy-text or forward-references.
+    HDFCBANK FY25 had a 1633ch policy block + a richer disclosure block —
+    density picks the richer one.
+    """
+    # Both candidates pass alias matching; only digit content distinguishes
+    # them. Make body_a (first candidate) prose-only, body_b numeric-heavy.
+    idx = _build_index_with_two_candidates(
+        "related_party",
+        "Related Party Transactions",  # first occurrence — policy text
+        "29. Related party disclosures",  # second occurrence — data
+        body_a="The Company has policies covering related party transactions "
+               "in line with applicable regulations.",
+        body_b="Tata Sons Pvt Ltd 12,345 Cr. Tata Capital 6,789 Cr. ICICI Bank 4,567 Cr.",
+    )
+    entry = idx.get("related_party")
+    assert entry is not None
+    assert "29." in entry["matched_heading"], (
+        f"density tie-breaker did not pick data-rich candidate; "
+        f"got: {entry['matched_heading']!r}"
+    )
