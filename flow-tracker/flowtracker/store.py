@@ -1299,6 +1299,51 @@ CREATE TABLE IF NOT EXISTS adr_gdr_outstanding (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (symbol, as_of_date)
 );
+
+-- Directory of Indian-issuer Depositary Receipt programs (ADR/GDR/ADS) with
+-- custodian and conversion-ratio metadata. This is the *qualitative* counterpart
+-- to ``adr_gdr_outstanding`` (which holds quantitative per-date holdings).
+-- Populated by ``flowtracker.adr_client`` from a curated seed JSON because the
+-- public depositary-bank directories are JavaScript-rendered and not scrape-friendly.
+-- ``nse_symbol`` is intentionally nullable — many DR programs (HDB, IBN, RDY)
+-- trade under a different US ticker and the NSE-side mapping is curated by hand.
+CREATE TABLE IF NOT EXISTS adr_programs (
+    nse_symbol TEXT,                           -- "INFY", "ICICIBANK" or NULL if unmapped
+    company_name TEXT NOT NULL,                -- "Infosys Limited"
+    us_ticker TEXT,                            -- "INFY", "HDB", "IBN" — may be NULL for unsponsored
+    program_type TEXT NOT NULL,                -- "ADR" / "GDR" / "ADS"
+    sponsorship TEXT,                          -- "sponsored" / "unsponsored"
+    depositary TEXT,                           -- "BNY Mellon" / "Citi" / "Deutsche Bank" / "JPMorgan"
+    ratio TEXT,                                -- "1 ADR = 1 ord. share" — free-text, no parsing
+    country TEXT NOT NULL DEFAULT 'India',
+    ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (company_name, us_ticker)
+);
+CREATE INDEX IF NOT EXISTS idx_adr_programs_nse_symbol
+    ON adr_programs(nse_symbol);
+
+-- 2026-04-29 (feat/strategy2-ops): live-fetch FDA inspection / drug-enforcement
+-- records sourced from openFDA `/drug/enforcement.json`. Distinct from the
+-- CSV-seed `FDAInspection` model (NAI/VAI/OAI inspection-outcome taxonomy)
+-- which has its own separate persistence path. This table holds the public
+-- recall feed which is the closest free proxy for USFDA compliance signal
+-- on Indian pharma names (SUNPHARMA, DRREDDY, CIPLA, etc.). PK columns
+-- (fei_number, inspection_date) use empty-string sentinels rather than
+-- NULL so SQLite uniqueness actually constrains duplicate upserts.
+CREATE TABLE IF NOT EXISTS fda_inspections (
+    symbol TEXT NOT NULL,
+    firm_name TEXT NOT NULL,
+    fei_number TEXT NOT NULL DEFAULT '',
+    inspection_date TEXT NOT NULL DEFAULT '',
+    classification TEXT,
+    product_area TEXT,
+    country TEXT,
+    posted_date TEXT,
+    ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, fei_number, inspection_date)
+);
+CREATE INDEX IF NOT EXISTS idx_fda_inspections_symbol
+    ON fda_inspections(symbol, inspection_date DESC);
 """
 
 
@@ -5567,6 +5612,126 @@ class FlowStore:
             "SELECT symbol FROM fno_universe ORDER BY symbol"
         ).fetchall()
         return [r["symbol"] for r in rows]
+
+    # ------------------------------------------------------------------
+    # ADR/GDR program directory
+    # ------------------------------------------------------------------
+
+    def upsert_adr_programs(self, rows: list) -> int:
+        """Insert or replace a batch of ``AdrProgram`` records.
+
+        ``rows`` is typed loosely as ``list`` to avoid pulling
+        ``adr_models`` into the store module's import surface — but in
+        practice every element must expose the ``AdrProgram`` attributes
+        (nse_symbol, company_name, us_ticker, program_type, sponsorship,
+        depositary, ratio, country). Returns the number of rows touched.
+        """
+        cursor = self._conn.cursor()
+        count = 0
+        for r in rows:
+            cursor.execute(
+                "INSERT OR REPLACE INTO adr_programs "
+                "(nse_symbol, company_name, us_ticker, program_type, "
+                "sponsorship, depositary, ratio, country, ingested_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                (
+                    r.nse_symbol,
+                    r.company_name,
+                    r.us_ticker,
+                    r.program_type,
+                    r.sponsorship,
+                    r.depositary,
+                    r.ratio,
+                    r.country,
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_adr_programs(self, nse_symbol: str | None = None) -> list[dict]:
+        """Return DR program rows as plain dicts.
+
+        If ``nse_symbol`` is given, filters to programs that map to that
+        NSE listing (case-insensitive). Otherwise returns every program
+        ordered by company_name for stable display.
+        """
+        if nse_symbol:
+            sql = (
+                "SELECT nse_symbol, company_name, us_ticker, program_type, "
+                "sponsorship, depositary, ratio, country, ingested_at "
+                "FROM adr_programs WHERE nse_symbol = ? "
+                "ORDER BY company_name, us_ticker"
+            )
+            rows = self._conn.execute(sql, (nse_symbol.upper().strip(),)).fetchall()
+        else:
+            sql = (
+                "SELECT nse_symbol, company_name, us_ticker, program_type, "
+                "sponsorship, depositary, ratio, country, ingested_at "
+                "FROM adr_programs ORDER BY company_name, us_ticker"
+            )
+            rows = self._conn.execute(sql).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- FDA inspections (live-fetch from openFDA, 2026-04-29 strategy2-ops) --
+
+    def upsert_fda_inspections(self, symbol: str, rows: list) -> int:
+        """Upsert openFDA-sourced inspection / drug-enforcement rows.
+
+        ``rows`` are FdaInspection pydantic models (see fda_models.FdaInspection).
+        ``symbol`` is the NSE symbol (uppercased on insert) — supplied by the
+        caller because openFDA records carry only the FDA-side firm name and
+        cannot be back-mapped to NSE tickers automatically.
+
+        Returns the count of rows attempted (matches list length on success).
+        Empty fei_number / inspection_date are persisted as the empty-string
+        sentinel so the (symbol, fei_number, inspection_date) PK enforces
+        uniqueness without NULL-collision quirks.
+        """
+        if not rows:
+            return 0
+        sym = symbol.upper().strip()
+        sql = (
+            "INSERT OR REPLACE INTO fda_inspections "
+            "(symbol, firm_name, fei_number, inspection_date, classification, "
+            "product_area, country, posted_date, ingested_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
+        )
+        for r in rows:
+            self._conn.execute(
+                sql,
+                (
+                    sym,
+                    r.firm_name,
+                    r.fei_number or "",
+                    r.inspection_date.isoformat() if r.inspection_date else "",
+                    r.classification,
+                    r.product_area,
+                    r.country,
+                    r.posted_date.isoformat() if r.posted_date else None,
+                ),
+            )
+        self._conn.commit()
+        return len(rows)
+
+    def get_fda_inspections(self, symbol: str, limit: int = 50) -> list[dict]:
+        """Return stored FDA inspection rows for ``symbol``, newest first.
+
+        Sort key is ``inspection_date DESC`` then ``posted_date DESC`` —
+        ``inspection_date`` may be the empty-string sentinel for malformed
+        upstream rows, which sort to the end.
+        """
+        sql = (
+            "SELECT symbol, firm_name, fei_number, inspection_date, "
+            "classification, product_area, country, posted_date, ingested_at "
+            "FROM fda_inspections WHERE symbol = ? "
+            "ORDER BY inspection_date DESC, posted_date DESC "
+            "LIMIT ?"
+        )
+        rows = self._conn.execute(
+            sql, (symbol.upper().strip(), int(limit)),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""

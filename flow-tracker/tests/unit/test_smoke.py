@@ -173,6 +173,20 @@ HELP_COMMANDS = [
     ["research", "verify", "--help"],
     ["research", "autoeval-macro", "--help"],
     ["research", "analog-backtest", "--help"],
+
+    # share_count (added 2026-04-29)
+    ["share_count", "--help"],
+    ["share_count", "check", "--help"],
+
+    # fda (added 2026-04-29)
+    ["fda", "--help"],
+    ["fda", "fetch", "--help"],
+    ["fda", "list", "--help"],
+
+    # adr (added 2026-04-29)
+    ["adr", "--help"],
+    ["adr", "refresh", "--help"],
+    ["adr", "list", "--help"],
 ]
 # fmt: on
 

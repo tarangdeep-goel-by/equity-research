@@ -14,6 +14,17 @@
       'underlying_shares_outstanding',
       'units_outstanding',
     ]),
+    'adr_programs': list([
+      'company_name',
+      'country',
+      'depositary',
+      'ingested_at',
+      'nse_symbol',
+      'program_type',
+      'ratio',
+      'sponsorship',
+      'us_ticker',
+    ]),
     'alert_history': list([
       'alert_id',
       'current_value',
@@ -412,6 +423,17 @@
       'revisions_down_7d',
       'revisions_up_30d',
       'revisions_up_7d',
+      'symbol',
+    ]),
+    'fda_inspections': list([
+      'classification',
+      'country',
+      'fei_number',
+      'firm_name',
+      'ingested_at',
+      'inspection_date',
+      'posted_date',
+      'product_area',
       'symbol',
     ]),
     'financial_schedules': list([
@@ -940,6 +962,7 @@
 # name: TestSchemaSnapshot.test_table_names_snapshot
   list([
     'adr_gdr_outstanding',
+    'adr_programs',
     'alert_history',
     'alerts',
     'analog_forward_returns',
@@ -962,6 +985,7 @@
     'delisted_symbols',
     'earnings_surprises',
     'estimate_revisions',
+    'fda_inspections',
     'financial_schedules',
     'fmp_analyst_grades',
     'fmp_dcf',

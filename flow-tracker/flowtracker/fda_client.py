@@ -25,14 +25,27 @@ via `aggregate_fda_summary`).
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import logging
 from datetime import date, timedelta
 from pathlib import Path
 
-from .fda_models import FDAInspection, FDAInspectionSummary, normalize_outcome
+import httpx
+
+from .fda_models import (
+    FDAInspection,
+    FDAInspectionSummary,
+    FdaInspection,
+    normalize_outcome,
+)
 
 logger = logging.getLogger(__name__)
+
+# openFDA drug enforcement (recall) endpoint — closest free-public proxy for
+# USFDA compliance signal. Free, no API key required (rate-limited per IP).
+# See https://open.fda.gov/apis/drug/enforcement/
+OPENFDA_DRUG_ENFORCEMENT_URL = "https://api.fda.gov/drug/enforcement.json"
 
 
 def load_inspections_from_csv(csv_path: str | Path) -> list[FDAInspection]:
@@ -155,19 +168,120 @@ def aggregate_fda_summary(
 
 
 # ---------------------------------------------------------------------------
-# Stub: FDA datadashboard fetcher
+# Live-fetch: openFDA drug enforcement
 # ---------------------------------------------------------------------------
 # https://datadashboard.fda.gov/ora/cd/inspections.htm renders results via
-# client-side React. A direct httpx GET returns only the SPA shell. The
-# real data lives behind /api/datadashboard/inspections endpoints which
-# require a session cookie + CSRF token tied to the browser load. Automated
-# scraping is fragile enough that we keep manual-seed as the canonical path
-# and leave the live-fetch as a follow-up. If/when we wire it, the skeleton
-# below is the entry point.
-#
-# def fetch_inspections_for_firm(firm_name: str) -> list[FDAInspection]:
-#     """Live fetch from FDA datadashboard. Currently stubbed."""
-#     raise NotImplementedError(
-#         "FDA datadashboard live-fetch not implemented — use load_inspections_from_csv. "
-#         "See module docstring for the manual-seed workflow."
-#     )
+# client-side React, so a direct scrape returns only the SPA shell. We fall
+# back to openFDA's `/drug/enforcement.json` — well-documented, free, no API
+# key required. Records are drug RECALL events (not raw inspections) but
+# this is the closest public proxy for USFDA compliance signal on Indian
+# pharma firms (SUNPHARMA, DRREDDY, CIPLA, etc.). Caller passes the FDA-
+# side firm name (e.g. "Sun Pharmaceutical") since NSE symbol → firm name
+# is not auto-derivable.
+
+
+def _parse_openfda_date(raw: str | None) -> date | None:
+    """Parse openFDA's `YYYYMMDD` date format. Returns None if malformed/empty."""
+    if not raw:
+        return None
+    s = str(raw).strip()
+    # openFDA uses YYYYMMDD compact form; some fields occasionally arrive ISO.
+    if len(s) == 8 and s.isdigit():
+        s = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+    try:
+        return date.fromisoformat(s[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def _record_to_inspection(rec: dict) -> FdaInspection:
+    """Map an openFDA drug-enforcement result row to FdaInspection."""
+    return FdaInspection(
+        firm_name=(rec.get("recalling_firm") or "").strip() or "unknown",
+        fei_number=(rec.get("recall_number") or rec.get("event_id") or None),
+        inspection_date=_parse_openfda_date(rec.get("recall_initiation_date")),
+        classification=(rec.get("classification") or None),
+        product_area=(rec.get("product_description") or None),
+        country=(rec.get("country") or None),
+        posted_date=_parse_openfda_date(rec.get("report_date")),
+    )
+
+
+async def fetch_inspections(
+    firm_name_query: str,
+    limit: int = 100,
+    *,
+    timeout: float = 30.0,
+) -> list[FdaInspection]:
+    """Fetch FDA drug-enforcement records from openFDA for a firm name.
+
+    Hits `https://api.fda.gov/drug/enforcement.json` with a `recalling_firm`
+    search filter. Retries once on 5xx. Returns [] for empty results
+    (openFDA returns 404 on no-match). Malformed dates parse to None rather
+    than dropping the row.
+
+    Args:
+        firm_name_query: FDA-side firm name (e.g. "Sun Pharmaceutical").
+            Quoted automatically into a phrase search.
+        limit: Max records to return (openFDA caps at 1000 per request).
+        timeout: Per-attempt HTTP timeout in seconds.
+    """
+    if not firm_name_query or not firm_name_query.strip():
+        return []
+    # openFDA expects: recalling_firm:"<phrase>"
+    quoted = firm_name_query.strip().replace('"', "")
+    params = {
+        "search": f'recalling_firm:"{quoted}"',
+        "limit": str(min(max(int(limit), 1), 1000)),
+    }
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for attempt in (1, 2):  # initial + 1 retry
+            try:
+                resp = await client.get(OPENFDA_DRUG_ENFORCEMENT_URL, params=params)
+            except httpx.HTTPError as exc:
+                if attempt == 2:
+                    logger.warning("openFDA fetch failed (network): %s", exc)
+                    return []
+                await asyncio.sleep(0.5)
+                continue
+            # openFDA returns 404 with `{"error": {"code": "NOT_FOUND"}}` on
+            # zero matches — treat as empty result, not an error.
+            if resp.status_code == 404:
+                return []
+            if resp.status_code >= 500:
+                if attempt == 2:
+                    logger.warning(
+                        "openFDA fetch failed (HTTP %d after retry)", resp.status_code,
+                    )
+                    return []
+                await asyncio.sleep(0.5)
+                continue
+            if resp.status_code != 200:
+                logger.warning(
+                    "openFDA fetch unexpected status %d for firm=%r",
+                    resp.status_code, firm_name_query,
+                )
+                return []
+            break
+        else:  # pragma: no cover — for-else exits via break above
+            return []
+
+    try:
+        payload = resp.json()
+    except ValueError:
+        logger.warning("openFDA returned non-JSON body for firm=%r", firm_name_query)
+        return []
+
+    results = payload.get("results") or []
+    inspections: list[FdaInspection] = []
+    for rec in results:
+        try:
+            inspections.append(_record_to_inspection(rec))
+        except Exception:  # pydantic validation
+            logger.warning("openFDA record skipped (validation)", exc_info=True)
+            continue
+    logger.info(
+        "openFDA returned %d records for firm=%r", len(inspections), firm_name_query,
+    )
+    return inspections
