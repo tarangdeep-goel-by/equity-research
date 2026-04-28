@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper to run flowtrack CLI via uv
-exec uv run --directory "$(dirname "$0")" python -m flowtracker "$@"
+# Wrapper to run flowtrack CLI via uv.
+# PYTHONUNBUFFERED=1 forces line-buffered stdout so progress lines flush
+# through `tee` and other pipes during long-running ops (autoeval, backtest).
+exec env PYTHONUNBUFFERED=1 uv run --directory "$(dirname "$0")" python -m flowtracker "$@"

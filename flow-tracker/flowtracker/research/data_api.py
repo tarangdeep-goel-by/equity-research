@@ -2482,6 +2482,29 @@ class ResearchDataAPI:
 
     # --- Macro Context ---
 
+    def get_macro_catalog(self) -> dict:
+        """List macro anchor docs in the vault. Mirrors the ``get_macro_catalog``
+        MCP tool shape: ``{"anchors": [{doc_type, title, status, heading_count, url}, ...]}``.
+        Used by the macro autoeval grader (``evaluate_macro.py``) to enforce
+        anchor exhaustion against ``status == 'complete'`` rows.
+        """
+        from flowtracker.research.macro_anchors import list_current_anchors
+
+        catalog = list_current_anchors()
+        return {
+            "anchors": [
+                {
+                    "doc_type": k,
+                    "title": v.get("title") if isinstance(v, dict) else None,
+                    "status": v.get("status") if isinstance(v, dict) else "unknown",
+                    "heading_count": v.get("heading_count") if isinstance(v, dict) else None,
+                    "url": v.get("url") if isinstance(v, dict) else None,
+                }
+                for k, v in catalog.get("anchors", {}).items()
+                if isinstance(v, dict)
+            ],
+        }
+
     def get_macro_snapshot(self) -> dict:
         """Current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec, system credit.
 
