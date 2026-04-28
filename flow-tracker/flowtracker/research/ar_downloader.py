@@ -37,8 +37,67 @@ def _period_to_fy_label(period: str) -> str | None:
     return f"FY{year % 100:02d}"
 
 
+# Minimum-page sanity gate for downloaded ARs. An Integrated Annual Report
+# for an Indian listed company is virtually never below ~80-100 pages — even
+# the smallest large-cap reports run 150-300 pages and most hit 300-600.
+# A < 80-page download is almost certainly the wrong document: a Reg 30
+# disclosure cover letter, a BRSR-only excerpt, an AGM notice, or a partial
+# Section A filing indexed under doc_type='annual_report' by mistake.
+#
+# HDFCLIFE FY25 was the canary: the BSE-tracked URL pointed to a 42-page
+# corp-filing AttachHis (cover letter + BRSR Section A General Disclosures
+# only). Cached file passed the previous size-only gate (498KB > 10KB)
+# but was useless to every downstream consumer (8 sections returned empty
+# in the AR extractor JSON). Reference: plans/ar-ocr-phase0-findings.md.
+_MIN_AR_PAGES = 80
+
+
+def _validate_ar_pdf(content: bytes) -> tuple[bool, str]:
+    """Validate a downloaded AR PDF before caching. Returns (ok, reason).
+
+    Two-tier validation:
+      1. Size — must be > 10KB (catches HTTP error pages cached as PDFs).
+      2. Page count — must be >= _MIN_AR_PAGES. A 42-page "annual report"
+         is virtually always a partial filing or cover letter; the real
+         Integrated AR is hosted on the company's IR site or under a
+         different BSE filing index.
+
+    Best-effort: if pypdfium2 isn't importable or fails to parse, accept
+    the download (size check already passed) — we don't want a transient
+    parser failure to permanently reject a valid AR.
+    """
+    if len(content) <= 10_000:
+        return False, "too_small"
+    try:
+        import pypdfium2 as pdfium  # type: ignore[import-untyped]
+    except ImportError:
+        return True, "size_only_check"
+    try:
+        # pdfium can read from bytes via PdfDocument(BytesIO(content)) but
+        # the simpler path is a temp file. We avoid the temp-file dance by
+        # writing to dest *first*, then reading it back — but that races
+        # with concurrent extract calls. Use BytesIO instead.
+        from io import BytesIO
+        doc = pdfium.PdfDocument(BytesIO(content))
+        try:
+            pages = len(doc)
+        finally:
+            doc.close()
+    except Exception as e:
+        logger.debug("AR validation: pypdfium2 parse failed (%s); accepting on size", e)
+        return True, "size_only_check"
+    if pages < _MIN_AR_PAGES:
+        return False, f"too_few_pages={pages}"
+    return True, f"pages={pages}"
+
+
 def _download_pdf(url: str, dest: Path) -> bool:
-    """Download a PDF with BSE-friendly browser headers. Returns True on success."""
+    """Download a PDF with BSE-friendly browser headers. Returns True on success.
+
+    Validates the downloaded payload via `_validate_ar_pdf` before writing.
+    Rejects under-80-page documents that have been mis-indexed as annual
+    reports (HDFCLIFE FY25 partial-BRSR pattern; see _MIN_AR_PAGES note).
+    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "Accept": "application/pdf,application/octet-stream,*/*",
@@ -47,9 +106,17 @@ def _download_pdf(url: str, dest: Path) -> bool:
         try:
             with httpx.Client(follow_redirects=True, timeout=120, headers=headers) as client:
                 resp = client.get(url)
-                if resp.status_code == 200 and len(resp.content) > 10_000:
+                if resp.status_code == 200:
+                    ok, reason = _validate_ar_pdf(resp.content)
+                    if not ok:
+                        logger.warning(
+                            "AR download rejected (%s): %s -> %s",
+                            reason, url, dest,
+                        )
+                        return False
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(resp.content)
+                    logger.debug("AR cached (%s): %s -> %s", reason, url, dest)
                     return True
                 if resp.status_code in (403, 404, 406):
                     return False
