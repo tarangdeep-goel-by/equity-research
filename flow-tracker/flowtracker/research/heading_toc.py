@@ -120,9 +120,28 @@ AR_SECTIONS: dict[str, list[str]] = {
         r"business\s+responsibility\s+report",
     ],
     "notes_to_financials": [
-        r"notes\s+to\s+(the\s+)?(consolidated\s+|standalone\s+)?financial\s+statements",
-        r"notes\s+forming\s+part\s+of\s+(the\s+)?financial\s+statements",
-        r"significant\s+accounting\s+policies",
+        # Standard "Notes to the [Consolidated|Standalone] Financial Statements"
+        # (ETERNAL FY25, DRREDDY FY25, POLICYBZR FY25, SUNPHARMA FY25). Extended
+        # with `accounts` because some banks use "Notes to Accounts" as the
+        # equivalent heading (HDFCBANK FY25, ICICIBANK FY25 schedule-18).
+        r"notes\s+to\s+(the\s+)?(consolidated\s+|standalone\s+)?(financial\s+statements|accounts)",
+        # "Notes forming part of [the] [Consolidated|Standalone] [Financial
+        # Statements|Accounts]" — NESTLEIND FY25, TCS FY25, ICICIBANK FY25
+        # ("NOTES FORMING PART OF THE ACCOUNTS"). Earlier alias only allowed
+        # `financial statements`; extend to `accounts` and prefix qualifiers.
+        r"notes\s+forming\s+part\s+of\s+(the\s+)?(consolidated\s+|standalone\s+)?(financial\s+statements|accounts)",
+        # "Notes on the [Consolidated|Standalone] Financial Statements" —
+        # BANKBARODA FY25 ("Schedule-19 : Notes on the Consolidated Financial
+        # Statements"). The schedule prefix is captured by the alias below.
+        r"notes\s+on\s+(the\s+)?(consolidated\s+|standalone\s+)?financial\s+statements",
+        # Schedule-prefixed bank notes: "Schedule 18: Notes to Accounts" (SBIN),
+        # "Schedule-19 : Notes on the Consolidated Financial Statements"
+        # (BANKBARODA), Schedule-numbered notes blocks (HDFCBANK).
+        r"schedule[\s\-]?\d+\s*[:.\s\-]+\s*notes\s+(to|on|forming\s+part\s+of)",
+        # NOTE: `significant accounting policies` was previously listed as a
+        # notes alias, but it consistently matched the wrong section
+        # (BANKBARODA/SBIN/HDFCBANK/ICICIBANK all had < 200-char SAP slices and
+        # missed the real notes data). Removed as part of Track B 2026-04-28.
     ],
     "financial_statements": [
         # Match only when not preceded by "Notes to" — order in this dict already handles nesting.
@@ -138,6 +157,27 @@ AR_SECTIONS: dict[str, list[str]] = {
     "related_party": [
         r"related\s+party\s+transactions?",
         r"\brpt\b\s+disclosure",
+        # AS-18 / Ind AS 24 disclosure heading variants used by banks (BANKBARODA
+        # FY25 "12.5 Related Party Disclosures (AS-18)", SBIN FY25 "2.4 AS-18
+        # Related Party Disclosures") and consolidated-notes sections in
+        # corporates (HDFCBANK note 29/47, HINDALCO note 30, NESTLEIND note 41,
+        # HINDUNILVR note 44 — all "Related party disclosures").
+        r"related\s+party\s+disclosures?",
+        # SEBI Listing-Reg / Companies-Act AOC-2 wrapper headings — observed in
+        # HDFCBANK ("Particulars of Contracts or Arrangements with Related
+        # Parties"), INFY ("Particulars of contracts/arrangements made with
+        # related parties"), POLICYBZR ("PARTICULARS OF CONTRACTS OR ARRANGEMENT
+        # WITH RELATED PARTIES").
+        r"particulars\s+of\s+contracts?\s*"
+        r"(or|/|and)?\s*arrangements?\s+(made\s+)?(with|for)\s+related\s+parties?",
+        # Schedule III / consolidated-notes lead-with-transactions form: ETERNAL
+        # FY25 "ix. Transactions with related parties", TCS FY25 "19.
+        # Transactions with related parties".
+        r"transactions\s+with\s+related\s+parties?",
+        # Form AOC-2 standalone heading — ICICIBANK FY25, HINDUNILVR FY25 both
+        # surface "Form No. AOC-2" / "FORM NO. AOC-2" as a top-level heading
+        # separate from the wrapping Particulars-of-Contracts heading.
+        r"form\s+(no\.?\s+)?aoc[-\s]?2",
     ],
     "esop_disclosure": [
         r"employee\s+stock\s+option\s+(plan|scheme)\s+disclosure",
@@ -330,6 +370,32 @@ _CHAIRMAN_SUBSTANCE_RE = re.compile(
 _CHAIRMAN_SUBSTANCE_WINDOW = 12_000
 
 
+# Track B 2026-04-28: data-density score for problem sections (segmental,
+# related_party, notes_to_financials, financial_statements). When multiple
+# candidates exist, prefer the one whose body actually contains a numerical
+# table (high digit-run count) over candidates that are policy descriptions
+# or forward-references. Used as primary sort key with section-size as
+# tie-breaker.
+#
+# Why: HDFCBANK FY25 has TWO headings matching `related_party`: a 1633ch
+# policy block ("Related Party Transactions" — Director's-Report flag) and a
+# data-rich block under "29. Related party disclosures" (note 29). Without
+# density scoring, size-sort picks the policy block. The data block has
+# ~50× more numeric content. Same pattern observed for VEDL segmental,
+# ICICIBANK segmental, NESTLEIND segmental — heading-only candidates lose to
+# data-table candidates once we score by density.
+_DATA_DIGIT_RUN_RE = re.compile(r"[\d,]{4,}")
+
+
+def _data_density_score(md: str, char_start: int, char_end: int) -> int:
+    """Count digit runs (4+ consecutive digit/comma chars) in the candidate
+    body. Capped at 200 to avoid one giant table dominating tie-breaks. Used
+    by Track B problem-section tie-breakers.
+    """
+    body = md[char_start:char_end]
+    return min(len(_DATA_DIGIT_RUN_RE.findall(body)), 200)
+
+
 def _running_header_set(headings: list[dict], threshold: int = 5) -> set[str]:
     """Return the set of normalized heading texts that appear `threshold`+
     times in the heading list — these are page-running headers (e.g. ICICIBANK
@@ -366,6 +432,48 @@ def _running_header_set(headings: list[dict], threshold: int = 5) -> set[str]:
 _AUDITOR_EXCLUDE_RE = re.compile(
     r"annexure\s+['\"]?[a-z0-9]+['\"]?\s+(to|of)\s+(the\s+)?(independent\s+)?auditor'?s?'?"
     r"|independent\s+practitioner",
+    re.IGNORECASE,
+)
+
+# Track B exclusion patterns (added 2026-04-28). These reject heading
+# candidates that match canonical aliases but represent a related policy/
+# notice/AGM-resolution rather than the actual data section. Without these,
+# heading_toc consistently mis-routes to the wrong section even though the
+# alias technically fits.
+#
+# `_SEGMENTAL_POLICY_EXCLUDE_RE`: ETERNAL FY25 heading
+# "n) Segment reporting" is the lettered accounting-policy entry inside the
+# Significant Accounting Policies sub-section, NOT the segment data. The
+# real data heading is "35 Segment information" hundreds of pages later.
+# Pattern: lower-case-letter + closing-paren + space (a/b/c/.../n/etc.).
+# Same applies to `notes_to_financials` matches that hit a policy entry
+# letter inside SAP.
+_POLICY_LETTER_PREFIX_RE = re.compile(
+    r"^\s*[a-z]\)\s+",
+    re.IGNORECASE,
+)
+
+# `_RELATED_PARTY_AGM_EXCLUDE_RE`: TCS FY25 picked an 82KB AGM-notice block
+# led by "To approve material related party transactions with Tata Capital
+# Limited"; INFY FY25 picked "Item no. 5 - Material related party
+# transactions of Infosys Limited and ...". Both are agenda items in the
+# AGM notice, not the AS-18 disclosure. Pattern: imperative "To approve"
+# OR "Item no.\s*\d+" prefix.
+_RELATED_PARTY_AGM_EXCLUDE_RE = re.compile(
+    r"^\s*("
+    r"to\s+approve\s+(material\s+)?related\s+party"
+    r"|item\s+no\.?\s*\d+\s*[-–:]\s*material\s+related\s+party"
+    r")",
+    re.IGNORECASE,
+)
+
+# `_NOTES_POLICY_EXCLUDE_RE`: Significant Accounting Policies headings
+# (sometimes prefixed by "Schedule 17"). These were previously matched as
+# `notes_to_financials` causing 4 cohort stocks to land < 200-char SAP
+# slices. Removed from the alias list in Track B.5 but also reject here as
+# defense-in-depth in case the alias re-appears.
+_NOTES_POLICY_EXCLUDE_RE = re.compile(
+    r"^\s*(schedule[\s\-]?\d+\s*[:.\s\-]+\s*)?significant\s+accounting\s+policies",
     re.IGNORECASE,
 )
 
@@ -464,6 +572,31 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
                 if canonical == "corporate_governance" and _CG_EXCLUDE_RE.search(text):
                     matched_heading_ids.add(h["char_offset"])
                     break
+                # Track B 2026-04-28: reject lettered accounting-policy entries
+                # ("n) Segment reporting" — ETERNAL FY25) when matching
+                # `segmental` or `notes_to_financials`. Real data tables don't
+                # have this prefix.
+                if canonical in ("segmental", "notes_to_financials") \
+                        and _POLICY_LETTER_PREFIX_RE.match(text):
+                    matched_heading_ids.add(h["char_offset"])
+                    break
+                # Track B 2026-04-28: reject AGM-notice resolution agenda items
+                # (TCS "To approve material RPT with Tata Capital", INFY
+                # "Item no. 5 - Material related party transactions of Infosys
+                # Limited and ..."). These are board agenda proposals, not the
+                # AS-18 disclosure.
+                if canonical == "related_party" \
+                        and _RELATED_PARTY_AGM_EXCLUDE_RE.match(text):
+                    matched_heading_ids.add(h["char_offset"])
+                    break
+                # Track B 2026-04-28: reject SAP headings even if they sneak
+                # past the alias list (defense-in-depth — alias removed in B.5
+                # but old aliases or new heading variants might re-introduce
+                # the issue).
+                if canonical == "notes_to_financials" \
+                        and _NOTES_POLICY_EXCLUDE_RE.match(text):
+                    matched_heading_ids.add(h["char_offset"])
+                    break
                 candidates.setdefault(canonical, []).append(h)
                 matched_heading_ids.add(h["char_offset"])
                 break  # one canonical per heading
@@ -529,6 +662,24 @@ def build_ar_section_index(md: str, headings: list[dict]) -> dict[str, dict]:
                     _chairman_substantive_score(md, t[1]["char_offset"], t[2]),
                     t[0],
                 ),
+                reverse=True,
+            )
+        elif canonical in ("segmental", "related_party",
+                           "notes_to_financials", "financial_statements"):
+            # Track B 2026-04-28: data-density tie-break for problem sections.
+            # Prefer candidates whose body actually contains numerical tables
+            # over policy descriptions or forward-references.
+            #   - HDFCBANK FY25 related_party: 1633ch policy block vs richer
+            #     "29. Related party disclosures" block — density picks the
+            #     latter.
+            #   - VEDL FY25 segmental: "5 Segment Information" header (26ch)
+            #     loses to a candidate further down with the actual table.
+            #   - ICICIBANK FY25 segmental: "SEGMENT INFORMATION" 578ch vs a
+            #     numbered note candidate with the data.
+            #   - NESTLEIND FY25 segmental: TOC entry (370ch) loses to the
+            #     data block.
+            scored.sort(
+                key=lambda t: (_data_density_score(md, t[1]["char_offset"], t[2]), t[0]),
                 reverse=True,
             )
         else:
