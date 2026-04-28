@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 import csv
+import sys
 from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated
+
+# Line-buffer stdout/stderr so progress prints flush through pipes (tee, tmux
+# capture, log redirection). Equivalent to PYTHONUNBUFFERED=1 but works for
+# entry-point invocations (`uv run flowtrack`) where the env can't be pre-set.
+# hasattr guards against pytest replacing streams with capture buffers.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(line_buffering=True)
 
 import typer
 from rich.console import Console
