@@ -321,6 +321,34 @@ class TestSectorMapping:
     def test_unknown_industry_returns_none(self):
         assert get_sector_for_industry("Underwater Basket Weaving") is None
 
+    # 2026-04-28 — singular/exact industry names from Screener that were missing
+    # from the alias lists for the 6 sectors added 2026-04-24. Each reproduces
+    # the exact industry string returned by `_get_industry()` for a benchmark
+    # stock in that sector.
+    def test_civil_construction_maps_to_capital_goods(self):
+        # LT (Larsen & Toubro)
+        assert get_sector_for_industry("Civil Construction") == "capital_goods"
+
+    def test_hospital_singular_maps_to_hospitals(self):
+        # APOLLOHOSP — Screener returns bare "Hospital", not the plural variants
+        assert get_sector_for_industry("Hospital") == "hospitals"
+
+    def test_asset_management_company_singular_maps_to_amc(self):
+        # HDFCAMC
+        assert get_sector_for_industry("Asset Management Company") == "amc_capital_markets"
+
+    def test_airline_singular_maps_to_logistics(self):
+        # INDIGO
+        assert get_sector_for_industry("Airline") == "logistics"
+
+    def test_speciality_retail_maps_to_retail(self):
+        # TRENT — already worked, locked in to prevent regression
+        assert get_sector_for_industry("Speciality Retail") == "retail"
+
+    def test_consumer_electronics_maps_to_durables(self):
+        # HAVELLS — already worked, locked in to prevent regression
+        assert get_sector_for_industry("Consumer Electronics") == "consumer_durables"
+
 
 # ---------------------------------------------------------------------------
 # Six new sectors added 2026-04-24 per Gemini review (covers ~30% of Nifty 500

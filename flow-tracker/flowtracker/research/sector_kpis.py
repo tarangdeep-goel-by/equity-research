@@ -290,6 +290,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
     "capital_goods": {
         "industries": [
             "Industrial Machinery", "Engineering", "Construction Engineering",
+            "Civil Construction",  # LT (Larsen & Toubro)
             "Heavy Electrical Equipment", "Electrical Equipment",
             "Defence", "Aerospace & Defense",
             "Diversified", "Other Industrial Goods",
@@ -309,6 +310,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         "industries": [
             "Healthcare Services", "Hospitals & Healthcare Services",
             "Healthcare Facilities", "Medical Care Facilities",
+            "Hospital",  # APOLLOHOSP, FORTIS — Screener returns bare "Hospital"
             "Diagnostic Services",
         ],
         "kpis": [
@@ -347,6 +349,7 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
     "amc_capital_markets": {
         "industries": [
             "Asset Management", "Asset Management Companies",
+            "Asset Management Company",  # HDFCAMC — Screener returns singular
             "Financial - Capital Markets", "Capital Markets",
             "Exchanges & Data", "Stock Exchanges",
             "Financial - Data & Stock Exchanges",
@@ -437,7 +440,8 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             "Logistics", "Transportation", "Logistics Services",
             "Road Transport", "Trucking", "Freight Road",
             "Shipping", "Marine", "Marine Ports & Services",
-            "Airlines", "Passenger Airlines",
+            "Airlines", "Airline",  # INDIGO — Screener returns singular
+            "Passenger Airlines",
             "Airports", "Ports",
             "Warehousing", "Rail Transport",
             "Courier Services", "Integrated Shipping & Logistics",
