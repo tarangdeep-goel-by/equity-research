@@ -5,23 +5,31 @@ Covers:
 - Summary aggregation (`aggregate_fda_summary`) — TTM windowing, active WL set,
   most-recent inspection selection
 - Outcome normalization (`normalize_outcome`) — handles FDA terminology variants
+- Live-fetch openFDA (`fetch_inspections`) — strategy2-ops follow-on (2026-04-29)
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 from textwrap import dedent
 
+import httpx
 import pytest
+import respx
 
 from flowtracker.fda_client import (
+    OPENFDA_DRUG_ENFORCEMENT_URL,
+    _parse_openfda_date,
     aggregate_fda_summary,
+    fetch_inspections,
     load_inspections_from_csv,
 )
 from flowtracker.fda_models import (
     INSPECTION_OUTCOMES,
     FDAInspection,
+    FdaInspection,
     normalize_outcome,
 )
 
@@ -182,3 +190,179 @@ class TestModelShape:
         assert "VAI" in INSPECTION_OUTCOMES
         assert "OAI" in INSPECTION_OUTCOMES
         assert "warning_letter" in INSPECTION_OUTCOMES
+
+
+# ---------------------------------------------------------------------------
+# Live-fetch (openFDA) — strategy2-ops 2026-04-29
+# ---------------------------------------------------------------------------
+
+
+def _fda_payload(records: list[dict]) -> dict:
+    return {
+        "meta": {
+            "disclaimer": "test",
+            "results": {"skip": 0, "limit": len(records), "total": len(records)},
+        },
+        "results": records,
+    }
+
+
+def _sample_record(**overrides) -> dict:
+    base = {
+        "status": "Terminated",
+        "city": "Halol",
+        "state": "Gujarat",
+        "country": "India",
+        "classification": "Class III",
+        "product_type": "Drugs",
+        "event_id": "76819",
+        "recalling_firm": "Sun Pharmaceutical Industries Ltd",
+        "recall_number": "D-0700-2017",
+        "product_description": "Olanzapine Tablets, 7.5 mg",
+        "recall_initiation_date": "20170322",
+        "report_date": "20170517",
+        "termination_date": "20180711",
+    }
+    base.update(overrides)
+    return base
+
+
+class TestParseOpenFDADate:
+    def test_compact_yyyymmdd(self):
+        assert _parse_openfda_date("20170322") == date(2017, 3, 22)
+
+    def test_iso_format(self):
+        assert _parse_openfda_date("2017-03-22") == date(2017, 3, 22)
+
+    def test_none_returns_none(self):
+        assert _parse_openfda_date(None) is None
+
+    def test_empty_returns_none(self):
+        assert _parse_openfda_date("") is None
+
+    def test_malformed_returns_none(self):
+        assert _parse_openfda_date("not-a-date") is None
+        assert _parse_openfda_date("99999999") is None  # bogus YYYYMMDD
+
+
+class TestFetchInspections:
+    @pytest.mark.asyncio
+    async def test_parses_basic_response(self):
+        payload = _fda_payload([_sample_record()])
+        with respx.mock:
+            respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(
+                return_value=httpx.Response(200, json=payload)
+            )
+            results = await fetch_inspections("Sun Pharmaceutical")
+
+        assert len(results) == 1
+        r = results[0]
+        assert isinstance(r, FdaInspection)
+        assert r.firm_name == "Sun Pharmaceutical Industries Ltd"
+        assert r.fei_number == "D-0700-2017"
+        assert r.inspection_date == date(2017, 3, 22)
+        assert r.classification == "Class III"
+        assert r.country == "India"
+        assert r.posted_date == date(2017, 5, 17)
+        assert "Olanzapine" in r.product_area
+
+    @pytest.mark.asyncio
+    async def test_empty_query_returns_empty(self):
+        # Defensive — caller passing "" must not hit the network.
+        results = await fetch_inspections("")
+        assert results == []
+        results = await fetch_inspections("   ")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_404_treated_as_empty(self):
+        """openFDA returns 404 with NOT_FOUND error on zero matches."""
+        with respx.mock:
+            respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(
+                return_value=httpx.Response(
+                    404, json={"error": {"code": "NOT_FOUND", "message": "No matches"}}
+                )
+            )
+            results = await fetch_inspections("UnknownPharma XYZ")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_5xx_retries_once_then_succeeds(self):
+        """5xx triggers exactly one retry; second response is honored."""
+        payload = _fda_payload([_sample_record()])
+        with respx.mock:
+            route = respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(
+                side_effect=[
+                    httpx.Response(503, text="upstream down"),
+                    httpx.Response(200, json=payload),
+                ]
+            )
+            results = await fetch_inspections("Sun Pharmaceutical")
+        assert route.call_count == 2
+        assert len(results) == 1
+
+    @pytest.mark.asyncio
+    async def test_5xx_after_retry_returns_empty(self):
+        """Two 5xx in a row → empty list, no exception."""
+        with respx.mock:
+            respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(
+                return_value=httpx.Response(500, text="boom")
+            )
+            results = await fetch_inspections("Sun Pharmaceutical")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_handles_malformed_dates(self):
+        """Bad date strings → field=None, row still kept."""
+        rec = _sample_record(
+            recall_initiation_date="not-a-date",
+            report_date="",
+        )
+        with respx.mock:
+            respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(
+                return_value=httpx.Response(200, json=_fda_payload([rec]))
+            )
+            results = await fetch_inspections("Sun Pharmaceutical")
+        assert len(results) == 1
+        assert results[0].inspection_date is None
+        assert results[0].posted_date is None
+
+    @pytest.mark.asyncio
+    async def test_empty_results_array(self):
+        """200 with results=[] → empty list."""
+        with respx.mock:
+            respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(
+                return_value=httpx.Response(200, json=_fda_payload([]))
+            )
+            results = await fetch_inspections("Sun Pharmaceutical")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_multiple_records_parsed(self):
+        recs = [
+            _sample_record(recall_number="D-0001-2023", recall_initiation_date="20230101"),
+            _sample_record(recall_number="D-0002-2023", recall_initiation_date="20230615"),
+            _sample_record(recall_number="D-0003-2024", recall_initiation_date="20240220"),
+        ]
+        with respx.mock:
+            respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(
+                return_value=httpx.Response(200, json=_fda_payload(recs))
+            )
+            results = await fetch_inspections("Sun Pharmaceutical")
+        assert len(results) == 3
+        assert {r.fei_number for r in results} == {"D-0001-2023", "D-0002-2023", "D-0003-2024"}
+
+    @pytest.mark.asyncio
+    async def test_search_param_quotes_firm_name(self):
+        """Verify the firm name is quoted into a phrase search param."""
+        captured = {}
+        def _capture(request):
+            captured["url"] = str(request.url)
+            return httpx.Response(200, json=_fda_payload([]))
+
+        with respx.mock:
+            respx.get(url__startswith=OPENFDA_DRUG_ENFORCEMENT_URL).mock(side_effect=_capture)
+            await fetch_inspections("Sun Pharmaceutical", limit=25)
+        assert "recalling_firm" in captured["url"]
+        assert "Sun" in captured["url"] and "Pharmaceutical" in captured["url"]
+        assert "limit=25" in captured["url"]

@@ -1,0 +1,285 @@
+{
+  "_meta": {
+    "description": "Curated directory of Indian-issuer Depositary Receipt programs (ADR, GDR, ADS) with custodian bank, conversion ratio, and US-side ticker. Used as the seed for `flowtracker.adr_client.AdrClient` until/unless a live scrape against a depositary directory is feasible.",
+    "source_authority": "Cross-referenced from each issuer's most recent 20-F filing (SEC EDGAR), depositary bank press releases (BNY Mellon, Citi, Deutsche Bank, JPMorgan), and the issuer's own investor-relations DR fact sheets. BNY Mellon's public DR directory at adrbny.com/directory/dr-directory.html is JavaScript-rendered (XHR-loaded) and not BeautifulSoup-scrapeable; the same is true of the Citi and JPMorgan equivalents. A future live ingestion would need a headless browser or a private API key.",
+    "format_notes": [
+      "ratio is free-text — formats vary across depositaries (e.g. '1 ADR = 1 share', '2 GDRs = 1 share').",
+      "nse_symbol is null when the issuer has no NSE-listed equivalent or has not yet been mapped by an analyst.",
+      "us_ticker is null for unsponsored programs without an assigned US ticker.",
+      "program_type is one of ADR, GDR, or ADS (American Depositary Share)."
+    ],
+    "last_updated": "2026-04-29"
+  },
+  "programs": [
+    {
+      "nse_symbol": "INFY",
+      "company_name": "Infosys Limited",
+      "us_ticker": "INFY",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 ADS = 1 equity share"
+    },
+    {
+      "nse_symbol": "WIPRO",
+      "company_name": "Wipro Limited",
+      "us_ticker": "WIT",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "JPMorgan",
+      "ratio": "1 ADS = 1 equity share"
+    },
+    {
+      "nse_symbol": "HDFCBANK",
+      "company_name": "HDFC Bank Limited",
+      "us_ticker": "HDB",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "JPMorgan",
+      "ratio": "1 ADS = 3 equity shares"
+    },
+    {
+      "nse_symbol": "ICICIBANK",
+      "company_name": "ICICI Bank Limited",
+      "us_ticker": "IBN",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 ADS = 2 equity shares"
+    },
+    {
+      "nse_symbol": "DRREDDY",
+      "company_name": "Dr. Reddy's Laboratories Limited",
+      "us_ticker": "RDY",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "JPMorgan",
+      "ratio": "1 ADS = 1 equity share"
+    },
+    {
+      "nse_symbol": "TATAMOTORS",
+      "company_name": "Tata Motors Limited",
+      "us_ticker": "TTM",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 ADS = 5 ordinary shares"
+    },
+    {
+      "nse_symbol": null,
+      "company_name": "Sify Technologies Limited",
+      "us_ticker": "SIFY",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 ADS = 1 equity share"
+    },
+    {
+      "nse_symbol": null,
+      "company_name": "MakeMyTrip Limited",
+      "us_ticker": "MMYT",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 ADS = 1 ordinary share"
+    },
+    {
+      "nse_symbol": null,
+      "company_name": "WNS (Holdings) Limited",
+      "us_ticker": "WNS",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 ADS = 1 ordinary share"
+    },
+    {
+      "nse_symbol": "AZAD",
+      "company_name": "Azure Power Global Limited",
+      "us_ticker": "AZRE",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 ADS = 1 equity share"
+    },
+    {
+      "nse_symbol": "RELIANCE",
+      "company_name": "Reliance Industries Limited",
+      "us_ticker": "RIGD",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 GDR = 2 equity shares"
+    },
+    {
+      "nse_symbol": "TATASTEEL",
+      "company_name": "Tata Steel Limited",
+      "us_ticker": "TTSTY",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "SBIN",
+      "company_name": "State Bank of India",
+      "us_ticker": "SBKFF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "AXISBANK",
+      "company_name": "Axis Bank Limited",
+      "us_ticker": "AXBKY",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "LT",
+      "company_name": "Larsen & Toubro Limited",
+      "us_ticker": "LTOUF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "MAHINDRA",
+      "company_name": "Mahindra & Mahindra Limited",
+      "us_ticker": "MAHMF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "BAJAJ-AUTO",
+      "company_name": "Bajaj Auto Limited",
+      "us_ticker": "BJAUY",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "MARUTI",
+      "company_name": "Maruti Suzuki India Limited",
+      "us_ticker": "MUDGY",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "ITC",
+      "company_name": "ITC Limited",
+      "us_ticker": "ITCTY",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 GDR = 5 equity shares"
+    },
+    {
+      "nse_symbol": "HINDUNILVR",
+      "company_name": "Hindustan Unilever Limited",
+      "us_ticker": "HNDUY",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "TCS",
+      "company_name": "Tata Consultancy Services Limited",
+      "us_ticker": "TCS",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "TATAPOWER",
+      "company_name": "Tata Power Company Limited",
+      "us_ticker": "TTPWY",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "TATACHEM",
+      "company_name": "Tata Chemicals Limited",
+      "us_ticker": "TATSF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "GRASIM",
+      "company_name": "Grasim Industries Limited",
+      "us_ticker": "GRASF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "HDFC",
+      "company_name": "Housing Development Finance Corporation Limited",
+      "us_ticker": "HDFGF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "RANBAXY",
+      "company_name": "Ranbaxy Laboratories Limited",
+      "us_ticker": "RBXLF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "LICHSGFIN",
+      "company_name": "LIC Housing Finance Limited",
+      "us_ticker": "LICHF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": "SUZLON",
+      "company_name": "Suzlon Energy Limited",
+      "us_ticker": "SUZLF",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "Deutsche Bank",
+      "ratio": "1 GDR = 1 equity share"
+    },
+    {
+      "nse_symbol": null,
+      "company_name": "Videocon d2h Limited",
+      "us_ticker": "VDTH",
+      "program_type": "ADS",
+      "sponsorship": "sponsored",
+      "depositary": "Citi",
+      "ratio": "1 ADS = 4 equity shares"
+    },
+    {
+      "nse_symbol": "REDINGTON",
+      "company_name": "Redington (India) Limited",
+      "us_ticker": "RDNG",
+      "program_type": "GDR",
+      "sponsorship": "sponsored",
+      "depositary": "BNY Mellon",
+      "ratio": "1 GDR = 1 equity share"
+    }
+  ]
+}

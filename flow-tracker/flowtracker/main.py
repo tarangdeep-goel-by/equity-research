@@ -47,6 +47,9 @@ from flowtracker.portfolio_commands import app as portfolio_app
 from flowtracker.alert_commands import app as alert_app
 from flowtracker.research_commands import app as research_app
 from flowtracker.catalyst_commands import app as catalyst_app
+from flowtracker.fda_commands import app as fda_app
+from flowtracker.share_count_commands import app as share_count_app
+from flowtracker.adr_commands import app as adr_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -76,6 +79,9 @@ app.add_typer(portfolio_app)
 app.add_typer(alert_app)
 app.add_typer(research_app)
 app.add_typer(catalyst_app)
+app.add_typer(fda_app)
+app.add_typer(share_count_app, name="share_count")
+app.add_typer(adr_app)
 console = Console()
 
 
