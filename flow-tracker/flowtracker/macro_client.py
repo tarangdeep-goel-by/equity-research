@@ -25,6 +25,58 @@ _CCIL_URL = "https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields"
 _RBI_WSS_INDEX_URL = "https://rbi.org.in/Scripts/BS_viewWssExtract.aspx"
 _RBI_WSS_DETAIL_URL = "https://rbi.org.in/Scripts/BS_viewWssExtract.aspx?SelectedDate={date}"
 
+# Plausible-yield band — anything outside is parser confusion (likely the
+# wrong column matched, e.g. the security coupon rather than YTM).
+_GSEC_VALID_RANGE: tuple[float, float] = (3.0, 12.0)
+
+
+def _parse_ccil_tenor(html: str, tenor_re: str, *, label: str) -> float | None:
+    """Extract a single tenor's YTM from a CCIL Tenorwise Indicative Yields
+    HTML page. Returns the parsed yield in percent or ``None`` if not found
+    / outside [3.0, 12.0].
+
+    Three layered patterns (most-specific first) so legacy 2-column test
+    fixtures and the live 3-column site both work:
+
+    1. ``<td>TENOR</td><td>...%...</td><td>YTM</td>`` — current CCIL.
+    2. ``<td>TENOR</td><td>YTM</td>`` — simplified 2-column legacy.
+    3. ``TENOR ... YTM`` — last-resort prose pattern.
+    """
+    match = re.search(
+        tenor_re + r'\s*</td>'
+        r'\s*<td[^>]*>[^<]*%[^<]*</td>'
+        r'\s*<td[^>]*>\s*(\d+\.\d+)\s*</td>',
+        html, re.DOTALL | re.IGNORECASE,
+    )
+    if not match:
+        match = re.search(
+            tenor_re + r'\s*</td>\s*<td[^>]*>\s*(\d+\.\d+)\s*</td>',
+            html, re.DOTALL | re.IGNORECASE,
+        )
+    if not match:
+        match = re.search(
+            tenor_re + r'[^0-9]*?(\d+\.\d+)',
+            html, re.DOTALL | re.IGNORECASE,
+        )
+    if not match:
+        logger.warning(
+            "CCIL G-sec yield-curve scrape: tenor %s not found in page",
+            label,
+        )
+        return None
+    try:
+        value = round(float(match.group(1)), 2)
+    except (TypeError, ValueError):
+        return None
+    lo, hi = _GSEC_VALID_RANGE
+    if not (lo <= value <= hi):
+        logger.warning(
+            "CCIL G-sec %s yield %.4f outside plausible [%s, %s] band — dropping",
+            label, value, lo, hi,
+        )
+        return None
+    return value
+
 
 class MacroClient:
     """Client for macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec."""
@@ -44,11 +96,11 @@ class MacroClient:
     def fetch_snapshot(self, days: int = 5) -> list[MacroSnapshot]:
         """Fetch recent N days of macro data from yfinance + CCIL.
 
-        CCIL only publishes today\'s 10Y yield snapshot. Without carry-forward,
-        prior-day rows get gsec_10y=None permanently (this function never
-        revisits them). The 10Y yield moves <5bps/day typically, so we carry
-        today\'s value back to every day in the window — well within
-        analytical tolerance.
+        CCIL only publishes today\'s yield-curve snapshot (1Y/5Y/10Y/30Y).
+        Without carry-forward, prior-day rows get NULL yields permanently
+        (this function never revisits them). G-sec yields move <5bps/day
+        typically, so we carry today\'s values back to every day in the
+        window — well within analytical tolerance.
         """
         period = f"{days}d"
         tickers = [
@@ -70,8 +122,8 @@ class MacroClient:
             except Exception as e:
                 logger.warning("Failed to fetch %s: %s", ticker_sym, e)
 
-        # Try to get today\'s G-sec yield (also used to backfill prior days)
-        gsec = self._fetch_gsec_yield()
+        # Today\'s full yield curve (also used to backfill prior days)
+        curve = self._fetch_gsec_curve()
 
         snapshots: list[MacroSnapshot] = []
         for d in sorted(data.keys()):
@@ -83,7 +135,10 @@ class MacroClient:
                 eur_inr=vals.get(_EURINR_TICKER),
                 gbp_inr=vals.get(_GBPINR_TICKER),
                 brent_crude=vals.get(_BRENT_TICKER),
-                gsec_10y=gsec,
+                gsec_1y=curve.get("1y"),
+                gsec_5y=curve.get("5y"),
+                gsec_10y=curve.get("10y"),
+                gsec_30y=curve.get("30y"),
             ))
 
         return snapshots
@@ -113,13 +168,14 @@ class MacroClient:
             except Exception as e:
                 logger.warning("Failed to fetch history for %s: %s", ticker_sym, e)
 
-        gsec = self._fetch_gsec_yield()
+        curve = self._fetch_gsec_curve()
         sorted_dates = sorted(data.keys())
         latest_date = sorted_dates[-1] if sorted_dates else None
 
         snapshots: list[MacroSnapshot] = []
         for d in sorted_dates:
             vals = data[d]
+            is_latest = d == latest_date
             snapshots.append(MacroSnapshot(
                 date=d,
                 india_vix=vals.get(_VIX_TICKER),
@@ -127,7 +183,10 @@ class MacroClient:
                 eur_inr=vals.get(_EURINR_TICKER),
                 gbp_inr=vals.get(_GBPINR_TICKER),
                 brent_crude=vals.get(_BRENT_TICKER),
-                gsec_10y=gsec if d == latest_date else None,
+                gsec_1y=curve.get("1y") if is_latest else None,
+                gsec_5y=curve.get("5y") if is_latest else None,
+                gsec_10y=curve.get("10y") if is_latest else None,
+                gsec_30y=curve.get("30y") if is_latest else None,
             ))
 
         return snapshots
@@ -163,79 +222,52 @@ class MacroClient:
         logger.info("Fetched %d index price records for %s", len(records), tickers)
         return records
 
-    def _fetch_gsec_yield(self) -> float | None:
-        """Scrape CCIL for 10Y G-sec yield. Returns None on failure.
+    # CCIL tenor buckets we extract. The page lists ~15 buckets; we sample
+    # the four that map naturally to a "yield curve" (short / belly / long /
+    # ultra-long). Each is the canonical analyst comparable.
+    _CCIL_TENOR_BUCKETS: tuple[tuple[str, str], ...] = (
+        ("1y", r"0\s*Y?\s*[-–]\s*1\s*Y"),
+        ("5y", r"4\s*Y?\s*[-–]\s*5\s*Y"),
+        ("10y", r"9\s*Y?\s*[-–]\s*10\s*Y"),
+        ("30y", r"19\s*Y\s*[-–]\s*Above"),
+    )
+
+    def _fetch_gsec_curve(self) -> dict[str, float | None]:
+        """Scrape CCIL for the full G-sec yield curve (1Y / 5Y / 10Y / 30Y).
+
+        Returns a dict ``{"1y": ..., "5y": ..., "10y": ..., "30y": ...}``;
+        any tenor that fails parsing or validation is ``None`` in the result.
+        A network failure returns all-Nones (the caller handles by emitting
+        NULLs).
 
         CCIL Tenorwise Indicative Yields table layout (4 columns):
             Date | Tenor Bucket | Security | YTM (%)
 
         The Security column contains text like '6.33% GS 2035' — the leading
-        coupon there must NOT be confused with the YTM. The previous regex
-        `9Y-10Y.*?(\\d+\\.\\d+)` greedily lazy-matched the coupon in the
-        Security cell instead of skipping forward to the YTM cell, returning
-        ~6.33 for years (close enough to the real yield to look plausible).
-
-        New strategy: locate the 9Y-10Y tenor cell, then walk past the Security
-        cell (which contains '%') to the next numeric-only `<td>` cell — that
-        is the YTM. Validate it falls in [3.0, 12.0] (sane 10Y yield range);
-        anything outside that triggers logger.error and returns None so
-        downstream consumers see a clear NULL rather than garbage.
+        coupon there must NOT be confused with the YTM. We locate the tenor
+        cell, then walk past the Security cell (which contains '%') to the
+        next numeric ``<td>`` cell — that is the YTM. Each parsed value is
+        validated against [3.0, 12.0] (regime-wide plausible band); anything
+        outside is dropped to None.
         """
         try:
             resp = self._http.get(_CCIL_URL)
             resp.raise_for_status()
             html = resp.text
-
-            # Match: 9Y-10Y tenor cell, then ANY cell containing '%' (security
-            # name), then the YTM cell which is a bare decimal.
-            # The `[^<]*%[^<]*` segment consumes the '6.33% GS 2035' security
-            # cell so the trailing capture grabs YTM (6.8537), not the coupon.
-            match = re.search(
-                r'9\s*Y?\s*[-–]\s*10\s*Y\s*</td>'
-                r'\s*<td[^>]*>[^<]*%[^<]*</td>'
-                r'\s*<td[^>]*>\s*(\d+\.\d+)\s*</td>',
-                html, re.DOTALL | re.IGNORECASE,
-            )
-            if not match:
-                # Fallback: simpler layout (e.g. legacy/test HTML with only
-                # 2 columns: tenor + YTM, no Security cell). Match a tenor
-                # cell directly followed by a numeric cell.
-                match = re.search(
-                    r'9\s*Y?\s*[-–]\s*10\s*Y\s*</td>'
-                    r'\s*<td[^>]*>\s*(\d+\.\d+)\s*</td>',
-                    html, re.DOTALL | re.IGNORECASE,
-                )
-            if not match:
-                # Last-resort fallback: original loose pattern, for legacy
-                # test fixtures that use plain `<td>9Y-10Y</td><td>7.15</td>`
-                # without explicit closing tags around the value.
-                match = re.search(
-                    r'9\s*Y?\s*[-–]\s*10\s*Y[^0-9]*?(\d+\.\d+)',
-                    html, re.DOTALL | re.IGNORECASE,
-                )
-
-            if not match:
-                logger.error(
-                    "CCIL G-sec yield scrape FAILED: 9Y-10Y row not found. "
-                    "Page layout may have changed at %s", _CCIL_URL,
-                )
-                return None
-
-            value = round(float(match.group(1)), 2)
-            # Sanity-check: 10Y G-sec yields move in 5%-9% historically;
-            # widen to 3%-12% to allow regime extremes. Anything outside
-            # is parser confusion (e.g. matched the wrong column).
-            if not (3.0 <= value <= 12.0):
-                logger.error(
-                    "CCIL G-sec yield scrape FAILED: parsed value %.4f "
-                    "outside plausible 3-12%% range — parser likely "
-                    "matched wrong cell. Returning None.", value,
-                )
-                return None
-            return value
         except Exception as e:
-            logger.error("Failed to fetch G-sec yield from CCIL: %s", e)
-            return None
+            logger.error("Failed to fetch G-sec yield curve from CCIL: %s", e)
+            return {key: None for key, _ in self._CCIL_TENOR_BUCKETS}
+
+        out: dict[str, float | None] = {}
+        for key, tenor_re in self._CCIL_TENOR_BUCKETS:
+            out[key] = _parse_ccil_tenor(html, tenor_re, label=key)
+        return out
+
+    def _fetch_gsec_yield(self) -> float | None:
+        """Legacy single-tenor 10Y wrapper retained for back-compat with the
+        existing cron / tests. Equivalent to ``_fetch_gsec_curve()["10y"]``.
+        """
+        return self._fetch_gsec_curve().get("10y")
 
     def _list_wss_release_dates(self) -> list[str]:
         """Return RBI WSS release dates ('M/DD/YYYY') ordered most-recent-FIRST.

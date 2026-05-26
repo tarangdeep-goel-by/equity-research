@@ -224,6 +224,27 @@ HELP_COMMANDS = [
     ["gst", "backfill", "--help"],
     ["gst", "latest", "--help"],
     ["gst", "trend", "--help"],
+
+    # cpi / iip / pmi / yield-curve (added 2026-05-26, feat/macro-expansion)
+    ["cpi", "--help"],
+    ["cpi", "fetch", "--help"],
+    ["cpi", "backfill", "--help"],
+    ["cpi", "latest", "--help"],
+    ["cpi", "trend", "--help"],
+    ["iip", "--help"],
+    ["iip", "fetch", "--help"],
+    ["iip", "backfill", "--help"],
+    ["iip", "latest", "--help"],
+    ["iip", "trend", "--help"],
+    ["pmi", "--help"],
+    ["pmi", "fetch", "--help"],
+    ["pmi", "backfill", "--help"],
+    ["pmi", "latest", "--help"],
+    ["pmi", "trend", "--help"],
+    ["yield-curve", "--help"],
+    ["yield-curve", "backfill", "--help"],
+    ["yield-curve", "curve", "--help"],
+    ["yield-curve", "trend", "--help"],
 ]
 # fmt: on
 

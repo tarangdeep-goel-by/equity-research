@@ -6,14 +6,23 @@ from pydantic import BaseModel
 
 
 class MacroSnapshot(BaseModel):
-    """Daily macro indicator snapshot."""
+    """Daily macro indicator snapshot.
+
+    G-sec yields are stored at four canonical tenors (1Y, 5Y, 10Y, 30Y) so
+    the yield-curve module can compute slope, butterfly, and inversion
+    signals without round-tripping through additional tables. All yields
+    are in percent (7.15 = 7.15%, not 0.0715).
+    """
     date: str          # "2026-03-20"
     india_vix: float | None = None
     usd_inr: float | None = None
     eur_inr: float | None = None
     gbp_inr: float | None = None
     brent_crude: float | None = None  # USD/barrel
-    gsec_10y: float | None = None     # yield %
+    gsec_1y: float | None = None      # 1Y G-sec yield %
+    gsec_5y: float | None = None      # 5Y G-sec yield %
+    gsec_10y: float | None = None     # 10Y G-sec yield %
+    gsec_30y: float | None = None     # 30Y G-sec yield %
 
 
 class MacroSystemCredit(BaseModel):
