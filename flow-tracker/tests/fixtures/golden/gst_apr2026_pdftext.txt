@@ -1,0 +1,76 @@
+GST Gross and Net Collections as on 30/4/2026 (Amount in crores)
+Monthly Yearly
+GST Collections Apr-25 Apr-26 % Growth Apr-25 Apr-26 % Growth
+A B C D = C/B-1 E F G = F/E-1
+A.1. Domestic
+CGST 48,634 52,140 48,634 52,140
+SGST 59,372 61,331 59,372 61,331
+IGST 69,504 71,651 69,504 71,651
+Gross Domestic Revenue 1,77,511 1,85,122 4.3% 1,77,511 1,85,122 4.3%
+A.2. Imports
+IGST 45,754 57,580 45,754 57,580
+Gross Import Revenue 45,754 57,580 25.8% 45,754 57,580 25.8%
+A.3. Gross GST Revenue(A.1+A.2)
+CGST 48,634 52,140 48,634 52,140
+SGST 59,372 61,331 59,372 61,331
+IGST 1,15,259 1,29,232 1,15,259 1,29,232
+Total Gross GST Revenue 2,23,265 2,42,702 8.7% 2,23,265 2,42,702 8.7%
+B.1. Domestic Refunds
+CGST 3,231 5,253 3,231 5,253
+SGST 3,846 5,889 3,846 5,889
+IGST 5,854 8,854 5,854 8,854
+Refund - Domestic 12,931 19,996 54.6% 12,931 19,996 54.6%
+B.2. Export GST Refunds through ICEGATE
+IGST 13,716 11,797 13,716 11,797
+Refund - Imports 13,716 11,797 -14.0% 13,716 11,797 -14.0%
+B.3. Total Refund (B.1+B.2)
+CGST 3,231 5,253 3,231 5,253
+SGST 3,846 5,889 3,846 5,889
+IGST 19,570 20,651 19,570 20,651
+Total Refund 26,647 31,793 19.3% 26,647 31,793 19.3%
+C.1 Net Revenue Domestic (A.1 - B.1)
+CGST 45,403 46,887 45,403 46,887
+SGST 55,527 55,442 55,527 55,442
+IGST 63,650 62,797 63,650 62,797
+Net Domestic Revenue 1,64,580 1,65,126 0.3% 1,64,580 1,65,126 0.3%
+C.2 Net Revenue Customs (GST) (A.2 - B.2)
+IGST 32,038 45,784 32,038 45,784
+Net Customs Revenue 32,038 45,784 42.9% 32,038 45,784 42.9%
+C.3 Net Revenue (C.1+C.2))
+CGST 45,403 46,887 45,403 46,887
+SGST 55,527 55,442 55,527 55,442
+IGST 95,688 1,08,581 95,688 1,08,581
+Total Net GST Revenue 1,96,618 2,10,909 7.3% 1,96,618 2,10,909 7.3%
+Note:
+(1) The above numbers are provisional and the actuals number may have slightly vary on finalisation.
+Table 1: SGST & SGST portion of IGST settled to States/UTs in April, 2026
+(Rs. in crore)
+Pre-Settlement SGST Post-Settlement SGST1
+State/UT Apr-25 Apr-26 Growth (%) Apr-25 Apr-26 Growth (%)
+Jammu and Kashmir 376 446 19% 714 1,079 51%
+Himachal Pradesh 315 322 2% 536 817 52%
+Punjab 1,082 1,179 9% 1,795 2,987 66%
+Chandigarh 79 80 2% 175 289 65%
+Uttarakhand 721 640 -11% 884 1,249 41%
+Haryana 2,515 2,647 5% 3,739 5,914 58%
+Delhi 2,062 2,166 5% 3,161 4,379 39%
+Rajasthan 2,091 2,139 2% 3,762 4,927 31%
+Uttar Pradesh 4,315 4,399 2% 7,277 10,178 40%
+Bihar 1,105 859 -22% 2,379 2,930 23%
+Sikkim 92 101 10% 157 179 14%
+Arunachal Pradesh 163 187 15% 312 347 11%
+Nagaland 58 59 1% 137 140 2%
+Manipur 61 52 -14% 104 126 20%
+Mizoram 45 37 -17% 107 121 13%
+Tripura 75 80 8% 154 194 26%
+Meghalaya 118 101 -15% 197 220 12%
+Assam 828 774 -7% 1,344 1,681 25%
+West Bengal 2,860 2,745 -4% 3,903 5,116 31%
+Jharkhand 1,086 998 -8% 1,280 1,285 0%
+Odisha 1,931 2,145 11% 2,260 3,046 35%
+Chhattisgarh 945 1,125 19% 1,093 1,488 36%
+Madhya Pradesh 1,682 1,831 9% 3,130 4,201 34%
+Gujarat 5,281 5,455 3% 6,908 9,916 44%
+Dadra and Nagar Haveli and Daman & 8D5i u 92 8% 97 134 39%
+Maharashtra 13,177 13,793 5% 16,429 22,929 40%
+Karnataka 5,570 

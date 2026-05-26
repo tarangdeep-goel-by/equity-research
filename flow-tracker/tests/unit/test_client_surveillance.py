@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import respx
 
+from flowtracker.js_fetch import JSFetchError
 from flowtracker.surveillance_client import (
     BSESurveillanceClient,
     NSESurveillanceClient,
@@ -339,12 +341,17 @@ class TestNSESurveillanceClient:
 
 class TestBSESurveillanceClient:
     def test_fetch_esm_spa_shell_returns_empty(self, esm_html: str):
+        # JS-render fallback patched out — simulate Playwright unavailable.
         with respx.mock:
             respx.get(url__regex=r"bseindia\.com/markets/equity/EQReports/ESM\.html").respond(
                 200, text=esm_html,
             )
-            with BSESurveillanceClient() as client:
-                flags = client.fetch_esm()
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                side_effect=JSFetchError("test: no browser"),
+            ):
+                with BSESurveillanceClient() as client:
+                    flags = client.fetch_esm()
         assert flags == []
 
     def test_fetch_esm_static_table(self, esm_table_html: str):
@@ -371,6 +378,79 @@ class TestBSESurveillanceClient:
                 flags = client.fetch_esm()
         assert len(flags) == 1
         assert flags[0].symbol == "JSONPATH"
+
+    def test_js_fallback_invoked_when_httpx_returns_spa_shell(
+        self, esm_html: str, esm_table_html: str,
+    ):
+        """When httpx returns an SPA shell (no parseable rows), the JS-rendered
+        fallback runs and its result is returned."""
+        with respx.mock:
+            respx.get(
+                url__regex=r"bseindia\.com/markets/equity/EQReports/ESM\.html"
+            ).respond(200, text=esm_html)
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                return_value=esm_table_html,
+            ) as mock_fetch:
+                with BSESurveillanceClient() as client:
+                    flags = client.fetch_esm()
+        # The JS fetch was called once with the BSE ESM URL
+        mock_fetch.assert_called_once()
+        assert mock_fetch.call_args.args[0] == (
+            "https://www.bseindia.com/markets/equity/EQReports/ESM.html"
+        )
+        # And the synthetic table fixture's two rows came through
+        assert len(flags) == 2
+        assert {f.symbol for f in flags} == {"ACMECORP", "WIDGETSLTD"}
+
+    def test_js_fallback_access_denied_returns_empty(self, esm_html: str):
+        """JS-render returns Akamai's 'Access Denied' shell → still empty,
+        no exception. The graceful pre-existing behaviour is preserved."""
+        access_denied = (
+            "<html><head><title>Access Denied</title></head>"
+            "<body><h1>Access Denied</h1></body></html>"
+        )
+        with respx.mock:
+            respx.get(
+                url__regex=r"bseindia\.com/markets/equity/EQReports/ESM\.html"
+            ).respond(200, text=esm_html)
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                return_value=access_denied,
+            ):
+                with BSESurveillanceClient() as client:
+                    flags = client.fetch_esm()
+        assert flags == []
+
+    def test_js_fallback_unavailable_returns_empty(self, esm_html: str):
+        """When js_fetch raises JSFetchError (no browser / nav timeout),
+        the SPA-shell httpx path's [] result is returned."""
+        with respx.mock:
+            respx.get(
+                url__regex=r"bseindia\.com/markets/equity/EQReports/ESM\.html"
+            ).respond(200, text=esm_html)
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                side_effect=JSFetchError("browser missing"),
+            ):
+                with BSESurveillanceClient() as client:
+                    flags = client.fetch_esm()
+        assert flags == []
+
+    def test_static_table_path_skips_js_fallback(self, esm_table_html: str):
+        """If httpx returns a real table, the JS fallback must NOT be
+        invoked — we already have the data."""
+        with respx.mock:
+            respx.get(
+                url__regex=r"bseindia\.com/markets/equity/EQReports/ESM\.html"
+            ).respond(200, text=esm_table_html)
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+            ) as mock_fetch:
+                with BSESurveillanceClient() as client:
+                    flags = client.fetch_esm()
+        mock_fetch.assert_not_called()
+        assert len(flags) == 2
 
 
 # ---------------------------------------------------------------------------

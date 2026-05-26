@@ -178,9 +178,17 @@ class BSESurveillanceClient:
         """Fetch the current BSE ESM list.
 
         Tries the configured ``json_endpoint`` first if one is set, then
-        falls back to scraping the public HTML. Returns ``[]`` if the page
-        is the Angular shell with no harvestable data (the common case
-        today).
+        falls back to ``httpx`` HTML scrape, then to a Playwright
+        rendered-HTML scrape (handles the Angular SPA case). Returns
+        ``[]`` if none of the paths yield rows — typical when no ESM
+        flags are currently active.
+
+        Note: BSE's Akamai Bot Manager actively blocks headless browsers
+        too (returns ``Access Denied`` even to fully-rendered Chromium).
+        The Playwright fallback unblocks the *parsing* path so that any
+        future relaxation of the Akamai rule (or use behind a residential
+        proxy) immediately produces data — but on a clean dev machine
+        today, this path will also return empty.
         """
         if self.json_endpoint:
             try:
@@ -192,11 +200,18 @@ class BSESurveillanceClient:
                 logger.warning("BSE ESM JSON endpoint failed (%s); HTML fallback", e)
 
         last_error: Exception | None = None
+        httpx_html: str | None = None
         for attempt in range(MAX_RETRIES):
             try:
                 resp = self._client.get(_BSE_ESM_HTML)
                 resp.raise_for_status()
-                return _parse_bse_esm_html(resp.text)
+                httpx_html = resp.text
+                flags = _parse_bse_esm_html(httpx_html)
+                if flags:
+                    return flags
+                # httpx returned 200 but the parser found nothing (SPA shell
+                # case). Try the Playwright fallback below.
+                break
             except Exception as e:  # noqa: BLE001 — retry surface
                 last_error = e
                 logger.warning(
@@ -204,6 +219,23 @@ class BSESurveillanceClient:
                 )
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(BACKOFF_BASE * (2 ** attempt))
+
+        # Playwright fallback — JS-rendered HTML for the Angular SPA.
+        rendered_flags = _try_js_rendered_esm()
+        if rendered_flags is not None:
+            if rendered_flags:
+                logger.info(
+                    "BSE ESM: %d flags extracted via Playwright fallback",
+                    len(rendered_flags),
+                )
+            return rendered_flags
+
+        if httpx_html is not None:
+            # httpx succeeded earlier but yielded an empty parse and JS
+            # fallback also failed — return [] (matches the pre-existing
+            # graceful behavior).
+            return []
+
         raise SurveillanceFetchError(
             f"BSE ESM fetch failed after {MAX_RETRIES} attempts: {last_error}"
         )
@@ -216,6 +248,55 @@ class BSESurveillanceClient:
 
     def __exit__(self, *args: object) -> None:
         self.close()
+
+
+# ---------------------------------------------------------------------------
+# Playwright fallback (BSE ESM SPA-shell rescue)
+# ---------------------------------------------------------------------------
+
+
+def _try_js_rendered_esm() -> list[SurveillanceFlag] | None:
+    """Render the BSE ESM page with Playwright and parse the result.
+
+    Returns the parsed flag list (possibly empty), or ``None`` if the
+    Playwright fetch itself failed (browser missing, navigation timeout,
+    or Akamai block returning an Access-Denied shell). The caller treats
+    ``None`` as "JS path unavailable; fall through to httpx behavior".
+    """
+    try:
+        # Lazy import — keep js_fetch / Playwright out of the happy httpx
+        # path. The import succeeds even with no browser installed; the
+        # browser-missing case is raised as JSFetchError on first fetch.
+        from flowtracker.js_fetch import JSFetchError, fetch_rendered_html
+    except ImportError as exc:  # pragma: no cover — js_fetch is a sibling
+        logger.warning("BSE ESM: js_fetch not importable (%s)", exc)
+        return None
+
+    try:
+        html = fetch_rendered_html(
+            _BSE_ESM_HTML,
+            wait_for_selector="table",
+            timeout_ms=30_000,
+        )
+    except JSFetchError as exc:
+        # Common today: Akamai 403 → tiny "Access Denied" body → "table"
+        # selector never appears → JSFetchError. Log at info, return None
+        # so the caller's graceful-empty path takes over.
+        logger.info("BSE ESM JS-render fallback unavailable: %s", exc)
+        return None
+
+    if "Access Denied" in html:
+        logger.info(
+            "BSE ESM JS-render: Akamai access-denied (%d bytes)", len(html),
+        )
+        return []
+
+    flags = _parse_bse_esm_html(html)
+    logger.info(
+        "BSE ESM JS-render: parsed %d flag(s) from %d bytes",
+        len(flags), len(html),
+    )
+    return flags
 
 
 # ---------------------------------------------------------------------------

@@ -7,31 +7,49 @@ every month is the canonical source. The numeric layout is consistent across
 months — gross collection, CGST/SGST/IGST/cess, domestic-vs-imports split,
 year-on-year growth %.
 
-Live-scrape constraints
------------------------
-PIB's ``PressReleseDetailm.aspx`` and the GST Council's ``press-release``
-listing both render via client-side JavaScript — a raw HTTP fetch returns
-only the SPA shell. CBIC's ``cbic-gst.gov.in`` and GST Council PDF directory
-do not expose a predictable monthly URL pattern (probing 2024-04..2025-05
-candidates returns 404 across all conventional naming schemes). The two
-practical ingestion paths are therefore:
+Live-scrape strategy (post-Playwright)
+--------------------------------------
+The discovery surface is JS-rendered: ``www.gst.gov.in/newsandupdates/``
+loads its press-release list via an SPA bundle, so a plain ``httpx`` GET
+returns only the shell. We use the shared
+:mod:`flowtracker.js_fetch` Playwright helper to render the listing,
+follow the per-month link (e.g. ``/newsandupdates/read/659`` for "Gross
+and Net GST revenue collections for the month of Apr, 2026"), and then
+``httpx``-download the linked PDF on ``tutorial.gst.gov.in`` (the PDF
+host is *not* SPA-gated — it serves bytes to vanilla HTTP).
 
-1. **Bundled seed JSON** (``data/gst_collections_seed.json``) — verified
-   historical rows cross-referenced from the official press releases. This
-   is what ``fetch_latest`` / ``fetch_month`` / ``fetch_backfill`` consume by
-   default. Analysts extend the seed by appending new rows each month after
-   CBIC publishes.
-2. **Live URL with explicit source_url** — if the caller passes a
-   ``source_url`` to ``fetch_month``, the client downloads the bytes and
-   runs the defensive regex parser over the text content (PDF via
-   pdfplumber, HTML via BeautifulSoup). This is the escape hatch when the
-   seed lags or an analyst is processing a freshly-published release.
+Two ingestion paths are supported:
 
-The parser itself is **defensive by design**: it pattern-matches canonical
-phrases ("Gross GST revenue collected", "₹X crore", "Y% higher") rather
-than relying on HTML structure or table position. Any field that fails to
-match is set to ``None`` rather than crashing the row — the plan's
-constraint that "partial parses must persist, not crash the whole run".
+1. **Live fetch via** :meth:`GSTClient.fetch_month_live` — Playwright
+   discovery + httpx PDF download + tabular parser. Used by
+   ``flowtrack gst fetch`` by default; falls back to the seed if either
+   step fails (rendered page missing the link, PDF 404, parser yields
+   nothing).
+2. **Bundled seed JSON** (``data/gst_collections_seed.json``) — verified
+   historical rows. Used by ``fetch_latest`` / ``fetch_month`` /
+   ``fetch_backfill`` by default; remains the fallback for ``gst fetch``.
+3. **Explicit ``source_url``** — if a caller passes ``source_url=...`` to
+   :meth:`GSTClient.fetch_month`, the client httpx-downloads the bytes
+   and runs the defensive regex parser. This is the escape hatch when
+   the analyst hand-supplies a specific URL (e.g. an old PIB page that
+   *does* serve full HTML for that PRID).
+
+Parser
+------
+Two parsers are layered so older prose-style and newer tabular-style
+releases are both supported:
+
+* :func:`parse_press_release_text` — defensive regex parser, anchored on
+  canonical CBIC prose ("Gross GST revenue collected ... ₹X crore",
+  "Y% higher"). Used for legacy press-release HTML.
+* :func:`parse_gst_pdf_table` — table-row parser for the new
+  ``tutorial.gst.gov.in`` PDF layout where the data is presented as
+  rows like ``Total Gross GST Revenue 2,23,265 2,42,702 8.7%`` with
+  year-on-year side-by-side columns.
+
+Both parsers are **defensive by design** — any field that fails to match
+is set to ``None`` rather than crashing the row (the project rule that
+"partial parses must persist, not crash the whole run").
 """
 
 from __future__ import annotations
@@ -287,6 +305,119 @@ def parse_press_release_text(text: str) -> dict[str, float | None]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Tabular parser — new tutorial.gst.gov.in PDF layout
+# ---------------------------------------------------------------------------
+
+# Numbers in the new PDF look like ``48,634`` or ``1,15,259`` (Indian comma
+# grouping, no currency anchor since columns are pre-labelled "Amount in
+# crores"). Anchor the parser on row-leading labels so we capture the right
+# year's column (Apr-25 vs Apr-26, side-by-side).
+_TABULAR_NUMBER = r"((?:\d[\d,]*)(?:\.\d+)?)"
+_TABULAR_PCT = r"(-?\d+(?:\.\d+)?)\s*%"
+
+# Each pattern captures the *most recent year's* value — that's the second
+# numeric token on the row, because the layout is "<label> <prior_year>
+# <current_year> [pct]". For totals rows that include a "Monthly" + "Yearly"
+# duplication, both pairs match the same numbers so picking the first hit
+# is correct (April is always month #1 of the FY so monthly == yearly).
+_TABULAR_PATTERNS: dict[str, re.Pattern[str]] = {
+    "gross_collection_cr": re.compile(
+        r"Total\s+Gross\s+GST\s+Revenue\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER,
+        re.IGNORECASE,
+    ),
+    "domestic_cr": re.compile(
+        r"Gross\s+Domestic\s+Revenue\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER,
+        re.IGNORECASE,
+    ),
+    "imports_cr": re.compile(
+        r"Gross\s+Import\s+Revenue\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER,
+        re.IGNORECASE,
+    ),
+}
+
+# CGST / SGST / IGST appear in multiple sub-sections (A.1 Domestic, A.3
+# Gross, B.1 Refunds, C.1 Net). We want the A.3 Gross totals, which are
+# the rows that appear *after* "A.3. Gross GST Revenue" and before "B.1.".
+_TABULAR_GROSS_SECTION_RE = re.compile(
+    r"A\.3\.\s*Gross\s+GST\s+Revenue.*?(?=B\.1\.)",
+    re.IGNORECASE | re.DOTALL,
+)
+_TABULAR_GROSS_CGST_RE = re.compile(
+    r"\bCGST\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER, re.IGNORECASE,
+)
+_TABULAR_GROSS_SGST_RE = re.compile(
+    r"\bSGST\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER, re.IGNORECASE,
+)
+_TABULAR_GROSS_IGST_RE = re.compile(
+    r"\bIGST\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER, re.IGNORECASE,
+)
+
+# YoY growth: pick the percentage on the "Total Gross GST Revenue" row.
+_TABULAR_GROWTH_RE = re.compile(
+    r"Total\s+Gross\s+GST\s+Revenue\s+\S+\s+\S+\s+" + _TABULAR_PCT,
+    re.IGNORECASE,
+)
+
+
+def parse_gst_pdf_table(text: str) -> dict[str, float | None]:
+    """Parse the new ``tutorial.gst.gov.in`` PDF tabular format.
+
+    The PDF layout (verified Apr 2026 onwards) is a structured table where
+    each row reads ``<label> <prior_year_value> <current_year_value> [%]``,
+    e.g. ``Total Gross GST Revenue 2,23,265 2,42,702 8.7%``. This parser
+    captures the current-year (right-hand) column for each canonical row.
+
+    Returns a dict keyed by the ``GSTCollectionMonth`` numeric fields —
+    same shape as :func:`parse_press_release_text` so the two are
+    interchangeable downstream. Any field that cannot be matched is set
+    to ``None``.
+    """
+    flat = re.sub(r"\s+", " ", text or "").strip()
+    out: dict[str, float | None] = {
+        "gross_collection_cr": None,
+        "cgst_cr": None,
+        "sgst_cr": None,
+        "igst_cr": None,
+        "cess_cr": None,  # not present in this PDF format
+        "domestic_cr": None,
+        "imports_cr": None,
+        "growth_yoy_pct": None,
+    }
+
+    # Aggregate rows (Total Gross / Domestic / Imports)
+    for field, pat in _TABULAR_PATTERNS.items():
+        m = pat.search(flat)
+        if m:
+            # Group 2 is the current year (right-hand column).
+            out[field] = _to_float(m.group(2))
+
+    # Per-tax rows — restrict to the A.3 Gross GST Revenue subsection to
+    # disambiguate from A.1 Domestic / B Refunds / C Net.
+    section_match = _TABULAR_GROSS_SECTION_RE.search(flat)
+    section = section_match.group(0) if section_match else flat
+    for field, pat in (
+        ("cgst_cr", _TABULAR_GROSS_CGST_RE),
+        ("sgst_cr", _TABULAR_GROSS_SGST_RE),
+        ("igst_cr", _TABULAR_GROSS_IGST_RE),
+    ):
+        m = pat.search(section)
+        if m:
+            out[field] = _to_float(m.group(2))
+
+    # YoY growth from Total Gross row
+    growth_m = _TABULAR_GROWTH_RE.search(flat)
+    if growth_m:
+        out["growth_yoy_pct"] = _to_float(growth_m.group(1))
+
+    if all(v is None for v in out.values()):
+        sample = flat[:240]
+        logger.warning(
+            "GST tabular parser extracted zero fields. Source sample: %r", sample,
+        )
+    return out
+
+
 def _pdf_to_text(pdf_bytes: bytes) -> str:
     """Extract concatenated text from a PDF using pdfplumber.
 
@@ -463,8 +594,99 @@ class GSTClient:
         return sorted(self._by_period)
 
     # ------------------------------------------------------------------
-    # Live fetch (escape-hatch path)
+    # Live fetch via Playwright discovery + httpx PDF download
     # ------------------------------------------------------------------
+
+    def fetch_month_live(self, period: str) -> GSTCollectionMonth | None:
+        """Fetch a single month's GST row by JS-rendering gst.gov.in.
+
+        Three steps:
+
+        1. JS-render ``https://www.gst.gov.in/newsandupdates/`` and find the
+           ``/newsandupdates/read/<id>`` link whose title mentions
+           ``<Mon, YYYY>`` (e.g. ``Apr, 2026``).
+        2. JS-render that detail page and extract the
+           ``tutorial.gst.gov.in/.../*.pdf`` URL.
+        3. ``httpx``-download the PDF (the PDF host is *not* SPA-gated)
+           and run :func:`parse_gst_pdf_table` over the extracted text.
+
+        Returns ``None`` if any step fails or if the parser cannot extract
+        a single field — callers should fall back to the seed.
+
+        Raises
+        ------
+        ValueError
+            If ``period`` is not a valid YYYY-MM.
+        """
+        _validate_period(period)
+
+        # Lazy import — keep ``js_fetch`` (and therefore Playwright) out of
+        # the seed-only happy path so seed lookups don't import Chromium.
+        try:
+            from flowtracker.js_fetch import JSFetchError, JSFetchSession
+        except ImportError as exc:  # pragma: no cover — js_fetch is a sibling
+            logger.warning("GST live fetch unavailable: %s", exc)
+            return None
+
+        listing_url = "https://www.gst.gov.in/newsandupdates/"
+        target_label = period_to_release_label_short(period)  # e.g. "Apr, 2026"
+
+        try:
+            with JSFetchSession() as session:
+                listing_html = session.fetch(
+                    listing_url,
+                    wait_for_selector="a[href*='/newsandupdates/read/']",
+                    timeout_ms=30_000,
+                )
+                detail_path = _find_collection_link(listing_html, target_label)
+                if detail_path is None:
+                    logger.warning(
+                        "GST live: no collection link for %s on %s",
+                        target_label, listing_url,
+                    )
+                    return None
+                detail_url = _normalise_gst_url(detail_path)
+                detail_html = session.fetch(
+                    detail_url,
+                    wait_for_network_idle=True,
+                    timeout_ms=30_000,
+                )
+        except JSFetchError as exc:
+            logger.warning("GST live JS fetch failed: %s", exc)
+            return None
+
+        pdf_url = _extract_pdf_url(detail_html)
+        if pdf_url is None:
+            logger.warning(
+                "GST live: detail page for %s missing PDF link", target_label,
+            )
+            return None
+
+        try:
+            resp = self._http.get(
+                pdf_url,
+                follow_redirects=True,
+                headers={"User-Agent": "flowtracker-gst/1.0"},
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("GST live PDF download failed (%s): %s", pdf_url, exc)
+            return None
+
+        text = _pdf_to_text(resp.content)
+        parsed = parse_gst_pdf_table(text)
+        if all(v is None for v in parsed.values()):
+            # Tabular parser failed — try the prose parser as a last resort
+            # in case the PDF reverts to the older CBIC layout.
+            parsed = parse_press_release_text(text)
+        if all(v is None for v in parsed.values()):
+            logger.warning(
+                "GST live: parser extracted zero fields for %s (PDF %s)",
+                period, pdf_url,
+            )
+            return None
+
+        return GSTCollectionMonth(period=period, source_url=pdf_url, **parsed)
 
     def _fetch_from_url(
         self,
@@ -528,6 +750,67 @@ def period_to_release_label(period: str) -> str:
     """Render ``"2025-04"`` as ``"April 2025"`` — matches CBIC press-release language."""
     y, m = _validate_period(period)
     return f"{calendar.month_name[m]} {y}"
+
+
+def period_to_release_label_short(period: str) -> str:
+    """Render ``"2026-04"`` as ``"Apr, 2026"`` — matches gst.gov.in titles.
+
+    Used by :meth:`GSTClient.fetch_month_live` to find the matching link on
+    the news-listing page. gst.gov.in's titles are formatted as
+    ``"Gross and Net GST revenue collections for the month of Apr, 2026"``.
+    """
+    y, m = _validate_period(period)
+    return f"{calendar.month_abbr[m]}, {y}"
+
+
+# ---------------------------------------------------------------------------
+# Live-fetch HTML helpers (used by fetch_month_live)
+# ---------------------------------------------------------------------------
+
+
+_NEWS_LINK_RE = re.compile(
+    r"""<a[^>]+href=["'](?P<href>(?://www\.gst\.gov\.in)?/newsandupdates/read/\d+)["']"""
+    r"[^>]*>(?P<text>[^<]+)</a>",
+    re.IGNORECASE,
+)
+
+
+def _find_collection_link(html: str, target_label: str) -> str | None:
+    """Find the ``/newsandupdates/read/<id>`` href whose anchor text mentions
+    ``target_label`` (e.g. ``"Apr, 2026"``) and contains the word "collection".
+
+    Returns the relative or absolute href, or ``None`` if no match. The text
+    must contain both ``collection`` (to skip non-revenue advisories) AND the
+    target month label.
+    """
+    label_lc = target_label.lower()
+    for m in _NEWS_LINK_RE.finditer(html or ""):
+        text = m.group("text").strip()
+        text_lc = text.lower()
+        if "collection" in text_lc and label_lc in text_lc:
+            return m.group("href")
+    return None
+
+
+_PDF_URL_RE = re.compile(
+    r'https?://[^\s"\'<>]+\.pdf', re.IGNORECASE,
+)
+
+
+def _extract_pdf_url(html: str) -> str | None:
+    """Return the first ``.pdf`` URL found in ``html``, or ``None``."""
+    m = _PDF_URL_RE.search(html or "")
+    return m.group(0) if m else None
+
+
+def _normalise_gst_url(href: str) -> str:
+    """Make a gst.gov.in href absolute (handles ``//www.gst.gov.in/...``)."""
+    href = (href or "").strip()
+    if href.startswith("//"):
+        return "https:" + href
+    if href.startswith("/"):
+        return "https://www.gst.gov.in" + href
+    return href
 
 
 def previous_period(period: str) -> str:

@@ -6,6 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CLI tool (`flowtrack`) for tracking FII/DII institutional flows, MF data, shareholding patterns, commodity prices, equity fundamentals, and FMP valuation data in Indian markets. Includes a multi-agent AI research system (8 specialist agents + news + verification + web research + synthesis + explainer + comparison) that generates comprehensive equity research reports, plus portfolio tracking, alerts, catalyst events, and thesis condition tracking. Includes an autoeval loop (Gemini-graded) for iteratively improving agent prompts per sector. Single-user research tool — SQLite-backed, CLI-first, no server.
 
+## First-time setup
+
+After `uv sync`, install the Playwright browser binaries used by the
+JS-rendered-HTML fallback (`flowtracker/js_fetch.py`):
+
+```bash
+uv run playwright install chromium
+```
+
+This downloads Chromium (~150 MB) into `~/.cache/ms-playwright/` and is
+required for the live-fetch paths in `gst_client` (gst.gov.in
+discovery), `surveillance_client` (BSE ESM rendered scrape), and
+`ipo_client` (BSE SME rendered scrape). If the browser is missing, the
+helper raises `JSFetchError("Playwright browser missing. Run: uv run
+playwright install chromium")` so the failure mode is unambiguous.
+
 ## Commands
 
 ```bash
@@ -231,6 +247,23 @@ Screener.in has two company IDs per stock (extracted from `#company-info` HTML e
 - `data-warehouse-id` — used for Peers, Excel Export APIs
 
 FMP uses `/stable/` base URL with `?symbol=SYMBOL.NS&apikey=KEY` query params (legacy v3 endpoints deprecated Aug 2025).
+
+**JS-rendered SPA fallback (`flowtracker/js_fetch.py`).** Three sources
+ship with a Playwright-based rendered-HTML fallback because their public
+fronts are Angular/React SPAs that return only a shell to plain `httpx`:
+
+| Source | URL | JS-fetch role |
+|---|---|---|
+| GST live (`gst_client.fetch_month_live`) | `https://www.gst.gov.in/newsandupdates/` | Renders the press-release listing, picks the matching month link, follows it for the PDF URL on `tutorial.gst.gov.in`. **Works end-to-end** — the PDF host serves plain HTTP. |
+| BSE ESM (`surveillance_client.BSESurveillanceClient.fetch_esm`) | `https://www.bseindia.com/markets/equity/EQReports/ESM.html` | Falls back to Playwright if httpx returns the SPA shell. **BSE's Akamai Bot Manager today returns Access-Denied to headless Chromium too** — wiring is ready for the day BSE relaxes the rule or the client runs behind a residential proxy. |
+| BSE SME IPO (`ipo_client.BSEIPOClient.fetch_upcoming_sme`) | `https://www.bseindia.com/markets/PublicIssues/IPOIssues_new.aspx` | Same fallback structure as BSE ESM. Same Akamai constraint. |
+
+The helper itself is a sync wrapper around `sync_playwright`; one-off
+use is `fetch_rendered_html(url, wait_for_selector=...)`, batch use is
+`with JSFetchSession() as s: s.fetch(url, ...)`. Heavyweight resource
+types (images, fonts, media, stylesheets) are blocked at the routing
+layer for speed. Browser-missing surfaces as a clear `JSFetchError`
+pointing at `uv run playwright install chromium`.
 
 Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-source-comparison.md`.
 
