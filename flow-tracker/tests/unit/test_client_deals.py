@@ -173,3 +173,96 @@ class TestFetchDeals:
             with DealsClient() as client:
                 deals = client.fetch_deals()
             assert deals == []
+
+
+class TestToDdmmyyyy:
+    """Test DealsClient._to_ddmmyyyy used by the historical backfill path."""
+
+    def test_iso_to_ddmmyyyy(self):
+        assert DealsClient._to_ddmmyyyy("2026-05-25") == "25-05-2026"
+
+    def test_already_ddmmyyyy(self):
+        assert DealsClient._to_ddmmyyyy("25-05-2026") == "25-05-2026"
+
+    def test_slashed(self):
+        assert DealsClient._to_ddmmyyyy("25/05/2026") == "25-05-2026"
+
+    def test_garbage_passthrough(self):
+        assert DealsClient._to_ddmmyyyy("garbage") == "garbage"
+
+
+class TestFetchHistoricalDeals:
+    """Test the historical archive paging path used by `deals backfill`."""
+
+    _BULK_ROW = {
+        "BD_DT_DATE": "02-JAN-2024",
+        "BD_SYMBOL": "TCS",
+        "BD_CLIENT_NAME": "BlackRock",
+        "BD_BUY_SELL": "BUY",
+        "BD_QTY_TRD": 100000,
+        "BD_TP_WATP": 3500.50,
+    }
+    _BLOCK_ROW = {
+        "BD_DT_DATE": "02-JAN-2024",
+        "BD_SYMBOL": "INFY",
+        "BD_CLIENT_NAME": "Vanguard",
+        "BD_BUY_SELL": "SELL",
+        "BD_QTY_TRD": 50000,
+        "BD_TP_WATP": 1450.00,
+    }
+
+    def test_historical_fetch_bulk_and_block(self):
+        with respx.mock:
+            respx.get(url__regex=r"nseindia\.com/report-detail").respond(200, text="OK")
+            # Two endpoint calls (one per option_type)
+            route = respx.get(url__regex=r"nseindia\.com/api/historicalOR")
+            # respx returns each side_effect Response in order
+            route.side_effect = [
+                Response(200, json={"data": [self._BULK_ROW]}),
+                Response(200, json={"data": [self._BLOCK_ROW]}),
+            ]
+            with DealsClient() as client:
+                deals = client.fetch_historical_deals(
+                    "2024-01-02", "2024-01-02",
+                    option_types=("bulk_deals", "block_deals"),
+                )
+            assert len(deals) == 2
+            kinds = {d.deal_type for d in deals}
+            assert kinds == {"BULK", "BLOCK"}
+            # Date normalization across the parse path
+            assert all(d.date == "2024-01-02" for d in deals)
+
+    def test_historical_fetch_empty_response(self):
+        with respx.mock:
+            respx.get(url__regex=r"nseindia\.com/report-detail").respond(200, text="OK")
+            respx.get(url__regex=r"nseindia\.com/api/historicalOR").respond(
+                200, json={"data": []},
+            )
+            with DealsClient() as client:
+                deals = client.fetch_historical_deals(
+                    "2024-01-02", "2024-01-02",
+                    option_types=("bulk_deals",),
+                )
+            assert deals == []
+
+    def test_historical_fetch_swallows_permanent_failure(self):
+        """If one option type 503s after retries, others still run and the
+        method returns whatever it managed to collect (no raise)."""
+        with respx.mock:
+            respx.get(url__regex=r"nseindia\.com/report-detail").respond(200, text="OK")
+            route = respx.get(url__regex=r"nseindia\.com/api/historicalOR")
+            route.side_effect = [
+                Response(503, text="upstream"),
+                Response(503, text="upstream"),
+                Response(503, text="upstream"),
+                # Second option type's calls
+                Response(200, json={"data": [self._BLOCK_ROW]}),
+            ]
+            with DealsClient() as client:
+                deals = client.fetch_historical_deals(
+                    "2024-01-02", "2024-01-02",
+                    option_types=("bulk_deals", "block_deals"),
+                )
+            # bulk_deals 503'd permanently; block_deals succeeded
+            assert len(deals) == 1
+            assert deals[0].deal_type == "BLOCK"
