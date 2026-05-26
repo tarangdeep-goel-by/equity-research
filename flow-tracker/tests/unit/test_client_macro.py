@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import respx
 
-from flowtracker.macro_client import MacroClient
+from flowtracker.macro_client import INDEX_TICKERS, MacroClient
 from flowtracker.macro_models import MacroSystemCredit
 
 
@@ -448,3 +448,82 @@ class TestFetchRbiWss:
 
         assert result is not None
         assert result.release_date == "2026-04-24"
+
+
+class TestFetchIndexPrices:
+    """Test fetch_index_prices — default ticker list + skip behavior."""
+
+    def test_default_list_contains_broad_and_sectoral_tickers(self):
+        """The default INDEX_TICKERS must cover at least one ticker per band."""
+        # Broad market — Nifty 50 must be present (default benchmark)
+        assert "^NSEI" in INDEX_TICKERS
+        assert "^CRSLDX" in INDEX_TICKERS
+        # Sectoral — Nifty Bank is the single most-watched sectoral index;
+        # if it isn't in the default fetch list, the bank-sector breadth /
+        # alpha analysis loses its benchmark.
+        assert "^NSEBANK" in INDEX_TICKERS
+        # IT + Pharma + Auto (the three largest non-financial sectors) must
+        # also be present — these are the bedrock sector-rotation tickers.
+        for sectoral in ("^CNXIT", "^CNXPHARMA", "^CNXAUTO"):
+            assert sectoral in INDEX_TICKERS
+
+    def test_fetches_close_rows_for_each_ticker(self):
+        hist = _make_hist([1000.0, 1010.0], ["2026-05-23", "2026-05-26"])
+
+        def mock_ticker(symbol):
+            t = MagicMock()
+            t.history.return_value = hist
+            return t
+
+        with patch("flowtracker.macro_client.yf.Ticker", side_effect=mock_ticker):
+            with MacroClient() as client:
+                records = client.fetch_index_prices(
+                    tickers=["^NSEBANK", "^CNXIT"], period="5d",
+                )
+
+        # 2 tickers x 2 days = 4 rows
+        assert len(records) == 4
+        tickers = {r["index_ticker"] for r in records}
+        assert tickers == {"^NSEBANK", "^CNXIT"}
+        assert all(r["close"] in (1000.0, 1010.0) for r in records)
+
+    def test_empty_ticker_logged_and_skipped(self):
+        """Tickers with no yfinance data must be skipped, not raise."""
+        good_hist = _make_hist([100.0], ["2026-05-26"])
+
+        def mock_ticker(symbol):
+            t = MagicMock()
+            if symbol == "^NSEBANK":
+                t.history.return_value = good_hist
+            else:
+                t.history.return_value = pd.DataFrame()
+            return t
+
+        with patch("flowtracker.macro_client.yf.Ticker", side_effect=mock_ticker):
+            with MacroClient() as client:
+                records = client.fetch_index_prices(
+                    tickers=["^NSEBANK", "^NONEXISTENT"], period="5d",
+                )
+
+        # Only the working ticker should produce records — bad one is silent-skip.
+        assert len(records) == 1
+        assert records[0]["index_ticker"] == "^NSEBANK"
+
+    def test_default_tickers_used_when_none(self):
+        """Calling without `tickers` must fetch the full INDEX_TICKERS list."""
+        hist = _make_hist([1.0], ["2026-05-26"])
+        seen: list[str] = []
+
+        def mock_ticker(symbol):
+            seen.append(symbol)
+            t = MagicMock()
+            t.history.return_value = hist
+            return t
+
+        with patch("flowtracker.macro_client.yf.Ticker", side_effect=mock_ticker):
+            with MacroClient() as client:
+                client.fetch_index_prices(period="5d")
+
+        # Every default ticker must have been requested.
+        for ticker in INDEX_TICKERS:
+            assert ticker in seen

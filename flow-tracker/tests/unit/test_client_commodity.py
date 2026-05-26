@@ -214,6 +214,14 @@ class TestFetchMetals:
 class TestFetchEtfNavs:
     """Test fetch_etf_navs with respx mock for mfapi.in."""
 
+    # All scheme codes in _ETF_SCHEMES — kept in sync with commodity_client.
+    # Tests that target a single scheme mock the others as empty so respx
+    # doesn't 503 on unmatched URLs.
+    _ALL_SCHEME_CODES = (
+        "105085", "115744", "140088", "106193", "111954",
+        "113049", "113076", "149758",
+    )
+
     def test_basic_nav_fetch(self):
         today = date.today().isoformat()
         mfapi_response = {
@@ -224,14 +232,17 @@ class TestFetchEtfNavs:
         }
 
         with respx.mock:
-            respx.get(url__regex=r"api\.mfapi\.in/mf/140088").respond(200, json=mfapi_response)
-            respx.get(url__regex=r"api\.mfapi\.in/mf/149758").respond(200, json=mfapi_response)
+            for code in self._ALL_SCHEME_CODES:
+                respx.get(url__regex=rf"api\.mfapi\.in/mf/{code}").respond(
+                    200, json=mfapi_response,
+                )
 
             with CommodityClient() as client:
                 records = client.fetch_etf_navs(days=365)
 
         assert len(records) > 0
-        # Each scheme gets 2 records
+        # Each scheme gets 2 records — 8 schemes × 2 rows = 16
+        assert len(records) == 16
         assert all(r.nav > 0 for r in records)
 
     def test_date_parsing(self):
@@ -241,8 +252,15 @@ class TestFetchEtfNavs:
         }
 
         with respx.mock:
-            respx.get(url__regex=r"api\.mfapi\.in/mf/140088").respond(200, json=mfapi_response)
-            respx.get(url__regex=r"api\.mfapi\.in/mf/149758").respond(200, json={"data": []})
+            respx.get(url__regex=r"api\.mfapi\.in/mf/140088").respond(
+                200, json=mfapi_response,
+            )
+            for code in self._ALL_SCHEME_CODES:
+                if code == "140088":
+                    continue
+                respx.get(url__regex=rf"api\.mfapi\.in/mf/{code}").respond(
+                    200, json={"data": []},
+                )
 
             with CommodityClient() as client:
                 records = client.fetch_etf_navs(days=365)
@@ -257,8 +275,10 @@ class TestFetchEtfNavs:
         }
 
         with respx.mock:
-            respx.get(url__regex=r"api\.mfapi\.in/mf/140088").respond(200, json=mfapi_response)
-            respx.get(url__regex=r"api\.mfapi\.in/mf/149758").respond(200, json={"data": []})
+            for code in self._ALL_SCHEME_CODES:
+                respx.get(url__regex=rf"api\.mfapi\.in/mf/{code}").respond(
+                    200, json=mfapi_response if code == "140088" else {"data": []},
+                )
 
             with CommodityClient() as client:
                 records = client.fetch_etf_navs(days=365)
@@ -273,10 +293,98 @@ class TestFetchEtfNavs:
         }
 
         with respx.mock:
-            respx.get(url__regex=r"api\.mfapi\.in/mf/140088").respond(200, json=mfapi_response)
-            respx.get(url__regex=r"api\.mfapi\.in/mf/149758").respond(200, json={"data": []})
+            for code in ("105085", "115744", "140088", "106193", "111954",
+                         "113049", "113076", "149758"):
+                respx.get(url__regex=rf"api\.mfapi\.in/mf/{code}").respond(
+                    200, json=mfapi_response if code == "140088" else {"data": []},
+                )
 
             with CommodityClient() as client:
                 records = client.fetch_etf_navs(days=365)
 
         assert len(records) == 0
+
+
+class TestFetchEtfNavsSince:
+    """Test fetch_etf_navs_since — date-anchored backfill, 2007→present."""
+
+    def test_full_gold_bees_2007_to_2026_history(self):
+        """Gold BeES (Benchmark MF, code 105085) launched 2007. The mock
+        spans 2007-03-16 → 2026-05-26 and ``since='2007-03-08'`` (Gold
+        BeES inception) must surface every row."""
+        # mfapi returns newest-first; build oldest → newest then reverse.
+        navs_oldest_first = [
+            ("16-03-2007", "942.87"),
+            ("01-01-2010", "1700.50"),
+            ("22-08-2011", "2701.84"),
+            ("01-06-2015", "2500.00"),
+            ("07-11-2016", "2801.45"),
+            ("01-01-2020", "3500.00"),
+            ("25-05-2026", "130.29"),
+        ]
+        mfapi_response = {
+            "data": [{"date": d, "nav": n} for d, n in reversed(navs_oldest_first)],
+        }
+
+        with respx.mock:
+            # Gold BeES Benchmark scheme returns the full series; all
+            # other schemes mocked empty so the test isolates one stream.
+            respx.get(url__regex=r"api\.mfapi\.in/mf/105085").respond(
+                200, json=mfapi_response,
+            )
+            for code in ("115744", "140088", "106193", "111954",
+                         "113049", "113076", "149758"):
+                respx.get(url__regex=rf"api\.mfapi\.in/mf/{code}").respond(
+                    200, json={"data": []},
+                )
+
+            with CommodityClient() as client:
+                records = client.fetch_etf_navs_since("2007-03-08")
+
+        # All 7 rows must survive (oldest 2007-03-16 ≥ since 2007-03-08).
+        assert len(records) == 7
+        dates = sorted(r.date for r in records)
+        assert dates[0] == "2007-03-16"
+        assert dates[-1] == "2026-05-25"
+        assert all(r.scheme_code == "105085" for r in records)
+
+    def test_since_filters_earlier_rows(self):
+        """Rows with date < since must be excluded; ≥ since must be kept."""
+        mfapi_response = {
+            "data": [
+                {"date": "25-05-2026", "nav": "130.0"},
+                {"date": "01-01-2020", "nav": "3500.0"},
+                {"date": "16-03-2007", "nav": "942.0"},  # before since
+            ],
+        }
+
+        with respx.mock:
+            respx.get(url__regex=r"api\.mfapi\.in/mf/140088").respond(
+                200, json=mfapi_response,
+            )
+            for code in ("105085", "115744", "106193", "111954",
+                         "113049", "113076", "149758"):
+                respx.get(url__regex=rf"api\.mfapi\.in/mf/{code}").respond(
+                    200, json={"data": []},
+                )
+
+            with CommodityClient() as client:
+                records = client.fetch_etf_navs_since("2019-01-01")
+
+        # Only the 2026 and 2020 rows survive — 2007 row drops.
+        assert len(records) == 2
+        assert {r.date for r in records} == {"2026-05-25", "2020-01-01"}
+
+    def test_all_gold_bees_schemes_present_in_scheme_map(self):
+        """The three Gold BeES scheme codes (Benchmark/GS/Nippon) must
+        be in `_ETF_SCHEMES` — these chain together to cover 2007→present
+        because the ETF transferred between AMCs."""
+        from flowtracker.commodity_client import _ETF_SCHEMES
+
+        # Three Gold BeES codes covering 2007 → 2011, 2011 → 2016, 2016 → now
+        assert "105085" in _ETF_SCHEMES  # Benchmark MF
+        assert "115744" in _ETF_SCHEMES  # Goldman Sachs MF
+        assert "140088" in _ETF_SCHEMES  # Nippon India MF
+        # Triangulation gold ETFs
+        for triangulation_code in ("106193", "111954", "113049", "113076"):
+            assert triangulation_code in _ETF_SCHEMES

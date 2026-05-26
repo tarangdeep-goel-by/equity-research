@@ -20,6 +20,41 @@ _EURINR_TICKER = "EURINR=X"
 _GBPINR_TICKER = "GBPINR=X"
 _BRENT_TICKER = "BZ=F"
 
+# Default yfinance ticker set for `fetch_index_prices`. These cover the
+# broad-market and major sectoral indices that have working yfinance
+# symbols (probed 2026-05-26). Tickers without working yfinance feeds
+# (Healthcare, India Defence, MNC niche themes, Private Bank, etc.) are
+# intentionally omitted — adding them just logs a warning + skips and
+# adds no value. ^BSESN (BSE Sensex) is included as a non-Nifty broad
+# benchmark.
+INDEX_TICKERS: tuple[str, ...] = (
+    # Broad-market
+    "^NSEI",        # Nifty 50
+    "^CRSLDX",      # Nifty 500
+    "^CNX100",      # Nifty 100
+    "^CNX200",      # Nifty 200
+    "^CRSMID",      # Nifty Midcap 100 (CRSMID = CRISIL Midcap on Yahoo)
+    "^NSEMDCP50",   # Nifty Midcap 50
+    "^BSESN",       # BSE Sensex (non-Nifty broad benchmark)
+    # Sectoral
+    "^NSEBANK",     # Nifty Bank
+    "^CNXIT",       # Nifty IT
+    "^CNXPHARMA",   # Nifty Pharma
+    "^CNXAUTO",     # Nifty Auto
+    "^CNXFMCG",     # Nifty FMCG
+    "^CNXMETAL",    # Nifty Metal
+    "^CNXENERGY",   # Nifty Energy
+    "^CNXREALTY",   # Nifty Realty
+    "^CNXPSUBANK",  # Nifty PSU Bank
+    "^CNXFIN",      # Nifty Financial Services
+    # Thematic
+    "^CNXSERVICE",  # Nifty Service Sector
+    "^CNXMEDIA",    # Nifty Media
+    "^CNXCONSUM",   # Nifty Consumption
+    "^CNXINFRA",    # Nifty Infrastructure
+    "^CNXMNC",      # Nifty MNC
+)
+
 _CCIL_URL = "https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields"
 
 _RBI_WSS_INDEX_URL = "https://rbi.org.in/Scripts/BS_viewWssExtract.aspx"
@@ -139,28 +174,51 @@ class MacroClient:
     ) -> list[dict]:
         """Fetch daily closing prices for Nifty index tickers via yfinance.
 
-        Returns list of dicts: [{"date": "YYYY-MM-DD", "index_ticker": "^CRSLDX", "close": 12345.67}, ...]
+        Defaults to ``INDEX_TICKERS`` (broad + sectoral + thematic Nifty
+        indices that have working yfinance feeds). Tickers that return
+        empty histories (delisted / unsupported) are logged + skipped —
+        the call does not raise.
+
+        Returns list of dicts:
+            [{"date": "YYYY-MM-DD", "index_ticker": "^CRSLDX", "close": 12345.67}, ...]
         """
         if tickers is None:
-            tickers = ["^CRSLDX", "^NSEI"]
+            tickers = list(INDEX_TICKERS)
 
         records: list[dict] = []
+        skipped: list[str] = []
         for ticker_sym in tickers:
             try:
                 hist = yf.Ticker(ticker_sym).history(period=period)
-                for idx, row in hist.iterrows():
-                    close = row["Close"]
-                    if math.isnan(close):
-                        continue
-                    records.append({
-                        "date": idx.strftime("%Y-%m-%d"),
-                        "index_ticker": ticker_sym,
-                        "close": round(close, 2),
-                    })
             except Exception as e:
                 logger.warning("Failed to fetch index prices for %s: %s", ticker_sym, e)
+                skipped.append(ticker_sym)
+                continue
+            if hist.empty:
+                logger.warning(
+                    "No data for index %s on yfinance — skipping", ticker_sym,
+                )
+                skipped.append(ticker_sym)
+                continue
+            ticker_records = 0
+            for idx, row in hist.iterrows():
+                close = row["Close"]
+                if math.isnan(close):
+                    continue
+                records.append({
+                    "date": idx.strftime("%Y-%m-%d"),
+                    "index_ticker": ticker_sym,
+                    "close": round(close, 2),
+                })
+                ticker_records += 1
+            if ticker_records == 0:
+                skipped.append(ticker_sym)
 
-        logger.info("Fetched %d index price records for %s", len(records), tickers)
+        if skipped:
+            logger.info("Index price fetch skipped %d ticker(s): %s",
+                        len(skipped), ", ".join(skipped))
+        logger.info("Fetched %d index price records across %d tickers",
+                    len(records), len(tickers) - len(skipped))
         return records
 
     def _fetch_gsec_yield(self) -> float | None:
