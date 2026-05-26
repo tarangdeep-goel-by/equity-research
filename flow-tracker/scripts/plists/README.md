@@ -15,6 +15,8 @@ All jobs log to `$HOME/.local/share/flowtracker/cron.log`.
 | `com.flowtracker.nightly-adj-close` | Daily 21:00 | `scripts/nightly-adj-close.sh` |
 | `com.flowtracker.daily-fno` | Daily 18:30 | `scripts/daily-fno.sh` |
 | `com.flowtracker.quarterly-fno-universe` | 1st of month 10:00 | `scripts/quarterly-fno-universe.sh` |
+| `com.flowtracker.monthly-macro-eval` | 2nd & 17th of month 14:00 | `scripts/monthly-macro-eval.sh` |
+| `com.flowtracker.monthly-gst` | 2nd of month 12:00 | `scripts/monthly-gst.sh` |
 
 ## Install
 

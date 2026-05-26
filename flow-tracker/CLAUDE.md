@@ -270,12 +270,13 @@ Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-sou
 ## Cron / Scheduled Jobs
 
 `scripts/` contains shell wrappers for scheduled fetches, managed via macOS LaunchAgents at `~/.local/share/flowtracker/scripts/`:
-- `daily-fetch.sh` — FII/DII, gold, MF daily, macro, bhavcopy, deals, insider, valuation (weekdays 7pm IST, 3 retries)
+- `daily-fetch.sh` — FII/DII, gold, MF daily, macro, bhavcopy, deals, insider, valuation, **surveillance (ASM/GSM/ESM), index PE/PB/yield, IPO pipeline, market breadth** (weekdays 7pm IST, 3 retries; `breadth recompute` runs after bhavcopy so today's prices are present)
 - `alert-check.sh` — Alert engine sweep (chained after daily fetch)
 - `weekly-valuation.sh` — Consensus estimates + earnings surprises (Sunday 2:30pm)
 - `weekly-nifty250.sh` — Weekly valuation + estimates refresh for all Nifty index stocks (Sunday 9pm IST)
 - `monthly-mf.sh` — AMFI monthly flows (6th of month)
 - `monthly-mfportfolio.sh` — MF scheme holdings from 5 AMCs (12th of month)
+- `monthly-gst.sh` — CBIC GST collections for the previous month (2nd of month 12:00 IST; CBIC publishes on the 1st)
 - `quarterly-scan.sh` — Nifty 250 shareholding + pledges (quarterly)
 - `quarterly-results.sh` — Screener financials + ratios + BSE filings (20th of month)
 - `quarterly-filings.sh` — Concall + investor deck download for Nifty index stocks (25th of Feb/May/Aug/Nov 10am IST)
