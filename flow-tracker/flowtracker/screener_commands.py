@@ -23,6 +23,50 @@ app = typer.Typer(
 console = Console()
 
 
+def _annotate_surveillance(
+    scores: list,
+    store: FlowStore,
+    *,
+    exclude: bool,
+) -> list:
+    """Annotate / filter screener output with NSE/BSE surveillance flags.
+
+    Additive by default: returns the same list, but prints a footnote
+    listing any symbols carrying ASM/ESM/GSM flags so the caller sees the
+    risk-flag before acting. When ``exclude`` is True, drops flagged rows
+    entirely before display.
+    """
+    if not scores:
+        return scores
+    flagged_rows = {
+        r["symbol"] for r in store.get_surveillance_flags()
+    }
+    if not flagged_rows:
+        return scores
+    hits = [s for s in scores if s.symbol in flagged_rows]
+    if exclude:
+        kept = [s for s in scores if s.symbol not in flagged_rows]
+        # Re-rank the survivors so the display still shows contiguous 1..N.
+        for i, s in enumerate(kept, start=1):
+            s.rank = i
+        if hits:
+            console.print(
+                f"[yellow]Excluded {len(hits)} stock(s) under "
+                f"NSE/BSE surveillance:[/yellow] "
+                + ", ".join(sorted(s.symbol for s in hits))
+            )
+        return kept
+    if hits:
+        console.print(
+            f"[yellow]Warning:[/yellow] {len(hits)} ranked stock(s) "
+            f"under NSE/BSE surveillance "
+            f"(ASM/ESM/GSM): "
+            + ", ".join(sorted(s.symbol for s in hits))
+            + "  [dim](use --exclude-surveillance to drop)[/dim]"
+        )
+    return scores
+
+
 @app.command(name="top")
 def screen_top(
     limit: Annotated[
@@ -36,6 +80,13 @@ def screen_top(
     ] = None,
     watchlist: Annotated[
         bool, typer.Option("--watchlist", help="Score watchlist stocks only")
+    ] = False,
+    exclude_surveillance: Annotated[
+        bool,
+        typer.Option(
+            "--exclude-surveillance",
+            help="Drop stocks under NSE ASM/GSM or BSE ESM before ranking output",
+        ),
     ] = False,
 ) -> None:
     """Show top-ranked stocks across all factors."""
@@ -52,6 +103,9 @@ def screen_top(
         console.print("[dim]Scoring stocks...[/]")
         engine = ScreenerEngine(store)
         scores = engine.screen_all(symbols=symbols, factor=factor)
+        scores = _annotate_surveillance(
+            scores, store, exclude=exclude_surveillance,
+        )
 
     display_screen_results(scores, limit)
 
@@ -63,6 +117,13 @@ def rank(
     industry: Annotated[str | None, typer.Option("--industry", help="Filter by industry")] = None,
     weight: Annotated[list[str] | None, typer.Option("--weight", help="Custom weight e.g. valuation=0.3")] = None,
     min_score: Annotated[float, typer.Option("--min-score", help="Minimum composite score")] = 0,
+    exclude_surveillance: Annotated[
+        bool,
+        typer.Option(
+            "--exclude-surveillance",
+            help="Drop stocks under NSE ASM/GSM or BSE ESM before ranking output",
+        ),
+    ] = False,
 ) -> None:
     """Rank stocks with custom weights, industry filter, and score threshold."""
     # Parse custom weights
@@ -84,6 +145,9 @@ def rank(
         console.print("[dim]Scoring stocks...[/]")
         engine = ScreenerEngine(store, weights=parsed_weights)
         scores = engine.screen_all(factor=factor, industry=industry, min_score=min_score)
+        scores = _annotate_surveillance(
+            scores, store, exclude=exclude_surveillance,
+        )
 
     display_screen_results(scores, top)
     display_screen_summary(scores)

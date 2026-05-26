@@ -1399,6 +1399,26 @@ CREATE TABLE IF NOT EXISTS fda_inspections (
 );
 CREATE INDEX IF NOT EXISTS idx_fda_inspections_symbol
     ON fda_inspections(symbol, inspection_date DESC);
+
+-- 2026-05-26 (feat/surveillance): regulatory surveillance flags fetched from
+-- NSE ASM/GSM JSON endpoints and BSE ESM (HTML/JSON, best-effort). One row per
+-- (symbol, alert_type, exchange, effective_date) — the same symbol can carry
+-- multiple concurrent flags (e.g. NSE long-term ASM Stage I plus NSE short-term
+-- ASM Stage II) so the uniqueness key spans all four. ``stage`` and ``reason``
+-- are nullable because BSE's feed routinely omits both.
+CREATE TABLE IF NOT EXISTS surveillance_flags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    alert_type TEXT NOT NULL,                -- "ASM" / "ESM" / "GSM"
+    stage TEXT,                              -- "Stage I" / "I" / etc.
+    exchange TEXT NOT NULL,                  -- "NSE" / "BSE"
+    effective_date TEXT NOT NULL,            -- ISO YYYY-MM-DD
+    reason TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (symbol, alert_type, exchange, effective_date)
+);
+CREATE INDEX IF NOT EXISTS idx_surveillance_flags_symbol
+    ON surveillance_flags(symbol);
 """
 
 
@@ -6010,6 +6030,105 @@ class FlowStore:
             sql, (symbol.upper().strip(), int(limit)),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # NSE/BSE surveillance flags (ASM/ESM/GSM)
+    # ------------------------------------------------------------------
+
+    def upsert_surveillance_flags(self, rows: list) -> int:
+        """Insert-or-replace a batch of ``SurveillanceFlag`` rows.
+
+        ``rows`` is typed loosely as ``list`` to avoid coupling the store
+        module to ``surveillance_models``; in practice each element must
+        expose the ``SurveillanceFlag`` attributes (symbol, alert_type,
+        stage, exchange, effective_date, reason). Returns the number of
+        rows touched (matches the input length on a clean upsert; INSERT
+        OR REPLACE on the (symbol, alert_type, exchange, effective_date)
+        UNIQUE key replaces in place rather than duplicating).
+        """
+        if not rows:
+            return 0
+        cursor = self._conn.cursor()
+        sql = (
+            "INSERT OR REPLACE INTO surveillance_flags "
+            "(symbol, alert_type, stage, exchange, effective_date, reason, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
+        )
+        count = 0
+        for r in rows:
+            cursor.execute(
+                sql,
+                (
+                    r.symbol,
+                    r.alert_type,
+                    r.stage,
+                    r.exchange,
+                    r.effective_date,
+                    r.reason,
+                ),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def get_surveillance_flags(
+        self,
+        symbol: str | None = None,
+        *,
+        active_only: bool = True,
+        alert_type: str | None = None,
+        exchange: str | None = None,
+    ) -> list[dict]:
+        """Return surveillance-flag rows as plain dicts.
+
+        ``active_only`` is accepted for forward-compat — today every row in
+        ``surveillance_flags`` is treated as active (the exchanges' feeds
+        only list scrips currently under surveillance, so a row's presence
+        in the table is itself the active signal). When a future deactivation
+        column is added, this flag will gate it. Today it is a no-op.
+
+        Filtering:
+        - ``symbol`` (case-insensitive) — exact symbol match.
+        - ``alert_type`` — one of ``"ASM"``, ``"ESM"``, ``"GSM"``.
+        - ``exchange`` — one of ``"NSE"``, ``"BSE"``.
+        """
+        del active_only  # see docstring
+        clauses: list[str] = []
+        params: list = []
+        if symbol:
+            clauses.append("symbol = ?")
+            params.append(symbol.upper().strip())
+        if alert_type:
+            clauses.append("alert_type = ?")
+            params.append(alert_type.upper().strip())
+        if exchange:
+            clauses.append("exchange = ?")
+            params.append(exchange.upper().strip())
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        sql = (
+            "SELECT id, symbol, alert_type, stage, exchange, "
+            "effective_date, reason, fetched_at "
+            "FROM surveillance_flags"
+            + where
+            + " ORDER BY exchange, alert_type, symbol, effective_date DESC"
+        )
+        rows = self._conn.execute(sql, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+    def is_under_surveillance(self, symbol: str) -> bool:
+        """Return True if ``symbol`` carries at least one surveillance flag.
+
+        Used by the composite screener to surface a risk-flag column and to
+        optionally exclude flagged stocks via ``--exclude-surveillance``.
+        Case-insensitive match on ``symbol``.
+        """
+        if not symbol:
+            return False
+        row = self._conn.execute(
+            "SELECT 1 FROM surveillance_flags WHERE symbol = ? LIMIT 1",
+            (symbol.upper().strip(),),
+        ).fetchone()
+        return row is not None
 
     def close(self) -> None:
         """Close the database connection."""

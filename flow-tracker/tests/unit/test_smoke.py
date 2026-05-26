@@ -202,6 +202,12 @@ HELP_COMMANDS = [
     ["indexpe", "current", "--help"],
     ["indexpe", "trend", "--help"],
     ["indexpe", "percentile", "--help"],
+
+    # surveillance (added 2026-05-26)
+    ["surveillance", "--help"],
+    ["surveillance", "fetch", "--help"],
+    ["surveillance", "list", "--help"],
+    ["surveillance", "check", "--help"],
 ]
 # fmt: on
 
