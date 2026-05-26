@@ -2528,7 +2528,7 @@ class ResearchDataAPI:
         latest_date = rows[0]["date"]
         result: dict = {"date": latest_date}
         keys = set(rows[0].keys())
-        for field in ("india_vix", "usd_inr", "brent_crude", "gsec_10y"):
+        for field in ("india_vix", "usd_inr", "eur_inr", "gbp_inr", "brent_crude", "gsec_10y"):
             if field not in keys:
                 continue
             for row in rows:

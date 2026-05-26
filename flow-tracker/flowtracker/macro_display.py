@@ -33,6 +33,10 @@ def display_macro_summary(snapshot: MacroSnapshot, prev: MacroSnapshot | None) -
                        prev.india_vix if prev else None, invert=True))
     parts.append(_fmt("USD/INR", snapshot.usd_inr,
                        prev.usd_inr if prev else None))
+    parts.append(_fmt("EUR/INR", snapshot.eur_inr,
+                       prev.eur_inr if prev else None))
+    parts.append(_fmt("GBP/INR", snapshot.gbp_inr,
+                       prev.gbp_inr if prev else None))
     parts.append(_fmt("Brent", snapshot.brent_crude,
                        prev.brent_crude if prev else None, prefix="$"))
     parts.append(_fmt("10Y", snapshot.gsec_10y,
@@ -60,6 +64,8 @@ def display_macro_trend(snapshots: list[MacroSnapshot]) -> None:
     table.add_column("Date", width=12)
     table.add_column("India VIX", justify="right", width=10)
     table.add_column("USD/INR", justify="right", width=10)
+    table.add_column("EUR/INR", justify="right", width=10)
+    table.add_column("GBP/INR", justify="right", width=10)
     table.add_column("Brent USD", justify="right", width=10)
     table.add_column("10Y G-sec", justify="right", width=10)
 
@@ -70,10 +76,12 @@ def display_macro_trend(snapshots: list[MacroSnapshot]) -> None:
 
         vix_text = _colored_val(s.india_vix, next_s.india_vix if next_s else None, invert=True)
         usd_text = _colored_val(s.usd_inr, next_s.usd_inr if next_s else None)
+        eur_text = _colored_val(s.eur_inr, next_s.eur_inr if next_s else None)
+        gbp_text = _colored_val(s.gbp_inr, next_s.gbp_inr if next_s else None)
         brent_text = _colored_val(s.brent_crude, next_s.brent_crude if next_s else None)
         gsec_text = f"{s.gsec_10y:.2f}%" if s.gsec_10y else "—"
 
-        table.add_row(s.date, vix_text, usd_text, brent_text, gsec_text)
+        table.add_row(s.date, vix_text, usd_text, eur_text, gbp_text, brent_text, gsec_text)
 
     console.print(table)
 

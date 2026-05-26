@@ -10,6 +10,8 @@ class MacroSnapshot(BaseModel):
     date: str          # "2026-03-20"
     india_vix: float | None = None
     usd_inr: float | None = None
+    eur_inr: float | None = None
+    gbp_inr: float | None = None
     brent_crude: float | None = None  # USD/barrel
     gsec_10y: float | None = None     # yield %
 

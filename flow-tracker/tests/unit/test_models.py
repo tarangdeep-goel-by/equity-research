@@ -614,13 +614,18 @@ class TestMacroSnapshot:
         m = MacroMacroSnapshot(date="2026-03-17")
         assert m.india_vix is None
         assert m.usd_inr is None
+        assert m.eur_inr is None
+        assert m.gbp_inr is None
 
     def test_all_fields(self):
         m = MacroMacroSnapshot(
             date="2026-03-17", india_vix=14.5, usd_inr=83.5,
+            eur_inr=92.1, gbp_inr=108.4,
             brent_crude=80.0, gsec_10y=7.1,
         )
         assert m.india_vix == 14.5
+        assert m.eur_inr == 92.1
+        assert m.gbp_inr == 108.4
 
 
 # ---------------------------------------------------------------------------

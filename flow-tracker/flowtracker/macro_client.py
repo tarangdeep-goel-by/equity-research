@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 _VIX_TICKER = "^INDIAVIX"
 _USDINR_TICKER = "USDINR=X"
+_EURINR_TICKER = "EURINR=X"
+_GBPINR_TICKER = "GBPINR=X"
 _BRENT_TICKER = "BZ=F"
 
 _CCIL_URL = "https://www.ccilindia.com/web/ccil/tenorwise-indicative-yields"
@@ -49,7 +51,10 @@ class MacroClient:
         analytical tolerance.
         """
         period = f"{days}d"
-        tickers = [_VIX_TICKER, _USDINR_TICKER, _BRENT_TICKER]
+        tickers = [
+            _VIX_TICKER, _USDINR_TICKER, _EURINR_TICKER, _GBPINR_TICKER,
+            _BRENT_TICKER,
+        ]
 
         data: dict[str, dict[str, float]] = {}
 
@@ -75,6 +80,8 @@ class MacroClient:
                 date=d,
                 india_vix=vals.get(_VIX_TICKER),
                 usd_inr=vals.get(_USDINR_TICKER),
+                eur_inr=vals.get(_EURINR_TICKER),
+                gbp_inr=vals.get(_GBPINR_TICKER),
                 brent_crude=vals.get(_BRENT_TICKER),
                 gsec_10y=gsec,
             ))
@@ -91,7 +98,10 @@ class MacroClient:
         end = date.today().isoformat()
         data: dict[str, dict[str, float]] = {}
 
-        for ticker_sym in [_VIX_TICKER, _USDINR_TICKER, _BRENT_TICKER]:
+        for ticker_sym in [
+            _VIX_TICKER, _USDINR_TICKER, _EURINR_TICKER, _GBPINR_TICKER,
+            _BRENT_TICKER,
+        ]:
             try:
                 hist = yf.Ticker(ticker_sym).history(start=start, end=end)
                 for idx, row in hist.iterrows():
@@ -114,6 +124,8 @@ class MacroClient:
                 date=d,
                 india_vix=vals.get(_VIX_TICKER),
                 usd_inr=vals.get(_USDINR_TICKER),
+                eur_inr=vals.get(_EURINR_TICKER),
+                gbp_inr=vals.get(_GBPINR_TICKER),
                 brent_crude=vals.get(_BRENT_TICKER),
                 gsec_10y=gsec if d == latest_date else None,
             ))

@@ -648,7 +648,9 @@
     'macro_daily': list([
       'brent_crude',
       'date',
+      'eur_inr',
       'fetched_at',
+      'gbp_inr',
       'gsec_10y',
       'id',
       'india_vix',
