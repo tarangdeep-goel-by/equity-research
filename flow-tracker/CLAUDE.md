@@ -121,7 +121,8 @@ Every feature module follows:
 | *(core)* | `fetch`, `summary`, `flows`, `streak`, `backfill` | NSE FII/DII API |
 | `mf_` | `mf` | AMFI monthly reports |
 | `holding_` | `holding` | NSE XBRL shareholding filings |
-| `scan_` | `scan` | NSE index constituents + batch shareholding |
+| `scan_` | `scan` | NSE index constituents + batch shareholding (28 indices: 4 broad + 12 sectoral + 12 thematic — see `breadth_compute.DEFAULT_INDICES`) |
+| `breadth_` | `breadth` | Market breadth — % above 200DMA, advance/decline, 52w hi/lo, A/D ratio across 28 indices |
 | `fund_` | `fund` | yfinance + Screener.in (fundamentals, charts, peers, schedules) |
 | `commodity_` | `gold` | yfinance (gold/silver) + mfapi.in (ETF NAVs) |
 | `macro_` | `macro` | VIX, USD/INR, Brent crude, 10Y G-sec |
@@ -137,6 +138,7 @@ Every feature module follows:
 | `portfolio_` | `portfolio` | Portfolio tracking — holdings, P&L, sector concentration |
 | `alert_` | `alert` | Condition-based alerts — price, PE, RSI, ownership, pledge |
 | `catalyst_` | `catalyst` | Upcoming stock catalyst events |
+| `breadth_` | `breadth` | Market breadth (% above 200DMA, advance/decline, 52w hi/lo) across 16 indices — 6 broad-market (NIFTY 50, NEXT 50, 500, MIDCAP 100/150, SMALLCAP 250) + 10 sectoral (BANK, IT, PHARMA, AUTO, FMCG, METAL, ENERGY, REALTY, PSU BANK, FINANCIAL SERVICES) |
 | `research_` | `research` | Multi-agent research (7 specialists + verify + synthesis + explainer) + thesis tracker |
 
 ### Research Layer (multi-agent architecture)
@@ -254,16 +256,41 @@ fronts are Angular/React SPAs that return only a shell to plain `httpx`:
 
 | Source | URL | JS-fetch role |
 |---|---|---|
-| GST live (`gst_client.fetch_month_live`) | `https://www.gst.gov.in/newsandupdates/` | Renders the press-release listing, picks the matching month link, follows it for the PDF URL on `tutorial.gst.gov.in`. **Works end-to-end** — the PDF host serves plain HTTP. |
-| BSE ESM (`surveillance_client.BSESurveillanceClient.fetch_esm`) | `https://www.bseindia.com/markets/equity/EQReports/ESM.html` | Falls back to Playwright if httpx returns the SPA shell. **BSE's Akamai Bot Manager today returns Access-Denied to headless Chromium too** — wiring is ready for the day BSE relaxes the rule or the client runs behind a residential proxy. |
-| BSE SME IPO (`ipo_client.BSEIPOClient.fetch_upcoming_sme`) | `https://www.bseindia.com/markets/PublicIssues/IPOIssues_new.aspx` | Same fallback structure as BSE ESM. Same Akamai constraint. |
+| GST live (`gst_client.fetch_month_live`) | `https://www.gst.gov.in/newsandupdates/` | Renders the press-release listing, picks the matching month link, follows it for the PDF URL on `tutorial.gst.gov.in`. **Works end-to-end** — the PDF host serves plain HTTP. Plain bundled Chromium is fine (no stealth needed). |
+| BSE ESM (`surveillance_client.BSESurveillanceClient.fetch_esm`) | `https://www.bseindia.com/markets/equity/EQReports/ESM.html` | Falls back to Playwright with `use_stealth=True` if httpx returns the SPA shell. **Stealth bypasses Akamai (confirmed 2026-05-26)** but BSE has retired the ESM route in their Angular app — the SPA logs a `beta_404_lookup` to `api.bseindia.com` and never renders the data table. Returns `[]` gracefully until the right URL is rediscovered. NSE ASM+GSM coverage (~231 flags) is the practical answer. |
+| BSE SME IPO (`ipo_client.BSEIPOClient.fetch_upcoming_sme`) | `https://www.bseindia.com/markets/PublicIssues/IPOIssues_new.aspx` | Same fallback structure with `use_stealth=True`. **Works end-to-end (confirmed 2026-05-26)** — page renders, parser extracts rows from the Angular `<table>` (or "No Record Found" when none active). |
+
+**Stealth mode** (`use_stealth=True`) is the path past BSE's Akamai
+Bot Manager. It combines:
+- `channel='chrome'` — launches real Google Chrome instead of the
+  bundled Chromium (Akamai cross-checks the `HeadlessChrome` build
+  string in `sec-ch-ua`)
+- `playwright-stealth` evasions on the context (patches
+  `navigator.webdriver`, plugins, chrome.runtime, sec-ch-ua, WebGL
+  vendor, etc.)
+- `--disable-blink-features=AutomationControlled` Chromium arg
+- Realistic 1920x1080 / `en-IN` / `Asia/Kolkata` context
+- Chrome 131 UA + matching `sec-ch-ua` extra headers
+
+First-time setup also requires the real Chrome channel binary:
+`uv run playwright install chrome` (in addition to the existing
+`uv run playwright install chromium`). Akamai may detect and re-block
+this configuration over time — monitor the daily cron for the warning
+log line `Akamai DEFINITIVELY BLOCKED stealth Chromium`. If that fires,
+the next escalation is residential proxies, which is a paid-service
+decision out of scope for this codebase. For analysts needing SME IPO
+data ad-hoc while BSE is hostile, **<https://chittorgarh.com/> is the
+manual reference** — it aggregates SME IPO calendars from BSE/NSE and
+historically is the analyst-community fallback when BSE's site is
+unscrapable.
 
 The helper itself is a sync wrapper around `sync_playwright`; one-off
-use is `fetch_rendered_html(url, wait_for_selector=...)`, batch use is
-`with JSFetchSession() as s: s.fetch(url, ...)`. Heavyweight resource
-types (images, fonts, media, stylesheets) are blocked at the routing
-layer for speed. Browser-missing surfaces as a clear `JSFetchError`
-pointing at `uv run playwright install chromium`.
+use is `fetch_rendered_html(url, wait_for_selector=..., use_stealth=...)`,
+batch use is `with JSFetchSession(use_stealth=...) as s: s.fetch(url, ...)`.
+Heavyweight resource types (images, fonts, media, stylesheets) are
+blocked at the routing layer for speed. Browser-missing surfaces as a
+clear `JSFetchError` pointing at `uv run playwright install chromium`
+(and `chrome` when stealth is requested).
 
 Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-source-comparison.md`.
 
@@ -296,6 +323,7 @@ Ad-hoc scripts (not scheduled): `backfill_fii_dii.py`, `backfill_fundamentals.py
 - **Percentage standard (P-3B.2)**: All margins (OPM, NPM, GPM), returns (ROE, ROA, ROCE), growth rates, and yields stored as **percentage form** (25.0 = 25%). Ratios (PE, PB, D/E, current_ratio, beta) stay as raw ratios. Converted at ingestion in client files via `_to_pct()`.
 - **Price adjustment convention (Sprint 0)**: Three tables, three conventions — know which one your code reads.
   - **`daily_stock_data`** — `open/high/low/close/volume` are raw NSE bhavcopy values (unadjusted for splits/bonuses). **Use `adj_close` + `adj_factor` for any multi-period return, analog comparison, or charting**. `adj_close = close / adj_factor` where `adj_factor` is the cumulative split × bonus multiplier for actions after the row's date. Populated by `FlowStore.recompute_adj_close(symbol)` — auto-fires from `upsert_corporate_actions` (splits/bonuses only; dividend upserts skip recompute); nightly cron re-runs universe-wide and drift-sweeps against `ResearchDataAPI.get_adjusted_close_series()` helper.
+  - **Bhavcopy URL fallback (pre-2020 dates)**: `BhavcopyClient.fetch_day()` tries the modern URL (`products/content/sec_bhavdata_full_DDMMYYYY.csv`) first, then falls back on 404 to the legacy archive URL (`content/historical/EQUITIES/YYYY/MMM/cm{DDMMMYYYY}bhav.csv.zip`). The legacy zip uses the older column set (`SYMBOL,SERIES,OPEN,HIGH,LOW,CLOSE,LAST,PREVCLOSE,TOTTRDQTY,TOTTRDVAL,TIMESTAMP[,TOTALTRADES,ISIN]`) — no delivery columns, so `delivery_qty` / `delivery_pct` are persisted as `NULL` for pre-2014 dates. `TOTTRDVAL` is rupees and gets divided by 1e5 at parse time to match the modern `TURNOVER_LACS` unit. Pass `legacy=True` (or `--legacy` on the CLI) to skip auto-detection and go straight to the archive URL. This is what makes the 2007-2009 backfill (and the 18yr breadth series) possible.
   - **`valuation_snapshot`** — yfinance `auto_adjust=True` point-in-time metrics (market cap, PE, PB, etc.). Not a time-series, so adjustment concern is bounded; each row is a snapshot of then-current state.
   - **`screener_charts`** — raw at fetch time (21yr PE + price); PE itself is adjustment-invariant (ratio cancels), but raw price from this table has discontinuity cliffs at split/bonus ex-dates unless re-fetched post-action. Use for long-history PE context only; prefer `daily_stock_data.adj_close` for precision work.
 - **Screener.in is source of truth** for P/E history (TTM), growth rates, quarterly/annual financials. yfinance provides live valuation snapshots and analyst consensus.

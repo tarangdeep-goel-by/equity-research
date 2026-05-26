@@ -43,6 +43,7 @@ run_with_retry() {
 # Each step retries independently — a scan refresh failure shouldn't block holding fetch
 run_with_retry "flowtrack holding fetch" "Watchlist holdings"
 run_with_retry "flowtrack scan refresh" "Scanner refresh"
+run_with_retry "flowtrack scan refresh-sectoral" "Sectoral index refresh (10 sectoral + MIDCAP 100)"
 run_with_retry "flowtrack scan fetch" "Scanner batch fetch"
 
 echo "=== $(date) === Quarterly complete ===" >> "$LOG"
