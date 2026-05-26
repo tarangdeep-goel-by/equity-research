@@ -1,0 +1,35 @@
+[
+  {
+    "companyName": "Jio Platforms Limited",
+    "symbol": null,
+    "series": "EQ",
+    "issueStartDate": "10-Jun-2026",
+    "issueEndDate": "12-Jun-2026",
+    "listingDate": "18-Jun-2026",
+    "issuePrice": "950-1000",
+    "issueSize": 55000.00,
+    "lotSize": 15
+  },
+  {
+    "companyName": "Groww Technologies Ltd",
+    "symbol": null,
+    "series": "EQ",
+    "issueStartDate": "20-Jun-2026",
+    "issueEndDate": "24-Jun-2026",
+    "listingDate": "01-Jul-2026",
+    "issuePrice": "300-320",
+    "issueSize": 2500.0,
+    "lotSize": 45
+  },
+  {
+    "companyName": "TestCo SME Solutions Ltd",
+    "symbol": null,
+    "series": "SME",
+    "issueStartDate": "01-Jun-2026",
+    "issueEndDate": "03-Jun-2026",
+    "listingDate": null,
+    "issuePrice": "85",
+    "issueSize": 18.5,
+    "lotSize": 1600
+  }
+]

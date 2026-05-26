@@ -53,6 +53,7 @@ from flowtracker.adr_commands import app as adr_app
 from flowtracker.breadth_commands import app as breadth_app
 from flowtracker.indexpe_commands import app as indexpe_app
 from flowtracker.surveillance_commands import app as surveillance_app
+from flowtracker.ipo_commands import app as ipo_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -88,6 +89,7 @@ app.add_typer(adr_app)
 app.add_typer(breadth_app)
 app.add_typer(indexpe_app)
 app.add_typer(surveillance_app)
+app.add_typer(ipo_app)
 console = Console()
 
 

@@ -44,6 +44,7 @@ from flowtracker.fmp_models import (
 from flowtracker.portfolio_models import PortfolioHolding
 from flowtracker.alert_models import Alert
 from flowtracker.fno_models import FnoContract, FnoParticipantOi, FnoUniverse
+from flowtracker.ipo_models import IPOIssue, IPOListing, IPOSubscription
 
 import logging
 
@@ -1419,6 +1420,66 @@ CREATE TABLE IF NOT EXISTS surveillance_flags (
 );
 CREATE INDEX IF NOT EXISTS idx_surveillance_flags_symbol
     ON surveillance_flags(symbol);
+
+-- 2026-05-26 (feat/ipo-pipeline): IPO + SME pipeline tracker.
+-- Three tables follow the calendar/snapshot/event split — issuer_name is
+-- the join key across them because NSE assigns a listed symbol only at the
+-- listing event, not at the upcoming/current stage. Use cases:
+--   * Sandeep flagged Jio Platforms (~₹55,000 cr) as an upcoming
+--     ecosystem-repricer event — populates ipo_calendar.
+--   * Baid flagged dubious-IPO oversubscription as a bull-top indicator —
+--     populates ipo_subscription (look at retail_times / nii_times spikes).
+-- UNIQUE(issuer_name, open_date) lets re-fetches idempotently replace stale
+-- calendar rows without dupe-explosion when NSE shifts the open date.
+CREATE TABLE IF NOT EXISTS ipo_calendar (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    issuer_name TEXT NOT NULL,
+    symbol TEXT,
+    segment TEXT NOT NULL,                  -- "MAIN" | "SME"
+    exchange TEXT NOT NULL,                 -- "NSE" | "BSE"
+    open_date TEXT,
+    close_date TEXT,
+    listing_date TEXT,
+    price_band_low REAL,
+    price_band_high REAL,
+    issue_size_cr REAL,
+    lot_size INTEGER,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(issuer_name, open_date)
+);
+CREATE INDEX IF NOT EXISTS idx_ipo_calendar_open
+    ON ipo_calendar(open_date);
+CREATE INDEX IF NOT EXISTS idx_ipo_calendar_segment
+    ON ipo_calendar(segment, exchange);
+
+CREATE TABLE IF NOT EXISTS ipo_subscription (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    issuer_name TEXT NOT NULL,
+    as_of_date TEXT NOT NULL,
+    qib_times REAL,
+    nii_times REAL,
+    retail_times REAL,
+    employee_times REAL,
+    total_times REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(issuer_name, as_of_date)
+);
+CREATE INDEX IF NOT EXISTS idx_ipo_subscription_issuer
+    ON ipo_subscription(issuer_name, as_of_date DESC);
+
+CREATE TABLE IF NOT EXISTS ipo_listings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    issuer_name TEXT NOT NULL,
+    listing_date TEXT NOT NULL,
+    listing_price REAL,
+    listing_day_close REAL,
+    listing_pop_pct REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, listing_date)
+);
+CREATE INDEX IF NOT EXISTS idx_ipo_listings_date
+    ON ipo_listings(listing_date DESC);
 """
 
 
@@ -6129,6 +6190,137 @@ class FlowStore:
             (symbol.upper().strip(),),
         ).fetchone()
         return row is not None
+
+    # -- IPO + SME pipeline (live-fetch from NSE + BSE, 2026-05-26 feat/ipo-pipeline) --
+
+    def upsert_ipo_calendar(self, issues: list[IPOIssue]) -> int:
+        """Upsert IPO calendar rows. Returns number of input rows persisted.
+
+        Idempotency: UNIQUE(issuer_name, open_date). Re-fetches refresh price
+        band / size / lot which NSE sometimes adjusts before the open.
+        """
+        if not issues:
+            return 0
+        sql = (
+            "INSERT OR REPLACE INTO ipo_calendar "
+            "(issuer_name, symbol, segment, exchange, open_date, close_date, "
+            "listing_date, price_band_low, price_band_high, issue_size_cr, "
+            "lot_size, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
+        )
+        for i in issues:
+            self._conn.execute(
+                sql,
+                (
+                    i.issuer_name,
+                    i.symbol,
+                    i.segment,
+                    i.exchange,
+                    i.open_date,
+                    i.close_date,
+                    i.listing_date,
+                    i.price_band_low,
+                    i.price_band_high,
+                    i.issue_size_cr,
+                    i.lot_size,
+                ),
+            )
+        self._conn.commit()
+        return len(issues)
+
+    def upsert_ipo_subscription(self, rows: list[IPOSubscription]) -> int:
+        """Upsert subscription snapshots. UNIQUE(issuer_name, as_of_date)."""
+        if not rows:
+            return 0
+        sql = (
+            "INSERT OR REPLACE INTO ipo_subscription "
+            "(issuer_name, as_of_date, qib_times, nii_times, retail_times, "
+            "employee_times, total_times, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))"
+        )
+        for r in rows:
+            self._conn.execute(
+                sql,
+                (
+                    r.issuer_name,
+                    r.as_of_date,
+                    r.qib_times,
+                    r.nii_times,
+                    r.retail_times,
+                    r.employee_times,
+                    r.total_times,
+                ),
+            )
+        self._conn.commit()
+        return len(rows)
+
+    def upsert_ipo_listings(self, rows: list[IPOListing]) -> int:
+        """Upsert listing-day records. UNIQUE(symbol, listing_date)."""
+        if not rows:
+            return 0
+        sql = (
+            "INSERT OR REPLACE INTO ipo_listings "
+            "(symbol, issuer_name, listing_date, listing_price, "
+            "listing_day_close, listing_pop_pct, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
+        )
+        for r in rows:
+            self._conn.execute(
+                sql,
+                (
+                    r.symbol.upper(),
+                    r.issuer_name,
+                    r.listing_date,
+                    r.listing_price,
+                    r.listing_day_close,
+                    r.listing_pop_pct,
+                ),
+            )
+        self._conn.commit()
+        return len(rows)
+
+    def get_ipo_upcoming(self) -> list[IPOIssue]:
+        """Return upcoming issues — open_date in the future OR within 7 days past.
+
+        The 7-day rear window keeps an issue visible right after it closes so
+        the post-close subscription panel still has context. Rows with no
+        open_date (BSE SME stub rows where we couldn't parse) are returned
+        last.
+        """
+        sql = (
+            "SELECT issuer_name, symbol, segment, exchange, open_date, "
+            "close_date, listing_date, price_band_low, price_band_high, "
+            "issue_size_cr, lot_size FROM ipo_calendar "
+            "WHERE open_date IS NULL "
+            "   OR open_date >= date('now', '-7 day') "
+            "ORDER BY (open_date IS NULL), open_date ASC, issuer_name ASC"
+        )
+        rows = self._conn.execute(sql).fetchall()
+        return [IPOIssue(**dict(r)) for r in rows]
+
+    def get_ipo_subscription(self, issuer: str) -> list[IPOSubscription]:
+        """Return subscription snapshots for an issuer (substring match)."""
+        sql = (
+            "SELECT issuer_name, as_of_date, qib_times, nii_times, "
+            "retail_times, employee_times, total_times "
+            "FROM ipo_subscription "
+            "WHERE LOWER(issuer_name) LIKE ? "
+            "ORDER BY as_of_date ASC"
+        )
+        pattern = f"%{issuer.lower().strip()}%"
+        rows = self._conn.execute(sql, (pattern,)).fetchall()
+        return [IPOSubscription(**dict(r)) for r in rows]
+
+    def get_ipo_listings(self, days: int = 30) -> list[IPOListing]:
+        """Return listings whose listing_date is within the last ``days`` days."""
+        sql = (
+            "SELECT symbol, issuer_name, listing_date, listing_price, "
+            "listing_day_close, listing_pop_pct FROM ipo_listings "
+            "WHERE listing_date >= date('now', ?) "
+            "ORDER BY listing_date DESC"
+        )
+        rows = self._conn.execute(sql, (f"-{int(days)} day",)).fetchall()
+        return [IPOListing(**dict(r)) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""

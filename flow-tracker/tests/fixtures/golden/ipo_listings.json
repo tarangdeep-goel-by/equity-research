@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "symbol": "JIOPLAT",
+      "companyName": "Jio Platforms Limited",
+      "listingDate": "18-Jun-2026",
+      "issuePrice": 1000.00,
+      "lastTradedPrice": 1185.50,
+      "pChange": 18.55
+    },
+    {
+      "symbol": "SAMPLECO",
+      "companyName": "Sample Co Industries Ltd",
+      "listingDate": "15-Jun-2026",
+      "issuePrice": 200.00,
+      "lastTradedPrice": 175.25,
+      "pChange": -12.38
+    }
+  ],
+  "msg": "ok"
+}
