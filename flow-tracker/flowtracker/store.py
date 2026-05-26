@@ -1522,6 +1522,63 @@ CREATE TABLE IF NOT EXISTS gst_collections_monthly (
 );
 CREATE INDEX IF NOT EXISTS idx_gst_collections_period
     ON gst_collections_monthly(period DESC);
+
+-- CPI (Consumer Price Index) monthly inflation. Published by MoSPI on the 12th
+-- of each month for the prior month (e.g. April 2025 CPI released 12 May 2025).
+-- ``period`` is the data month ("YYYY-MM"), NOT the release month. ``cpi_index``
+-- is the headline All-India CPI (Combined) index level; ``yoy_pct`` is the
+-- year-on-year headline inflation. Seeded from FRED's OECD-sourced mirror
+-- (`INDCPIALLMINMEI`) which goes back to 1957; live re-fetch is supported via
+-- ``cpi fetch --source-url`` (point at MoSPI PDF / FRED CSV).
+CREATE TABLE IF NOT EXISTS cpi_monthly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period TEXT NOT NULL,
+    cpi_index REAL,
+    yoy_pct REAL,
+    source TEXT NOT NULL DEFAULT 'seed',
+    source_url TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(period)
+);
+CREATE INDEX IF NOT EXISTS idx_cpi_monthly_period
+    ON cpi_monthly(period DESC);
+
+-- IIP (Index of Industrial Production) monthly. Published by MoSPI on the 12th
+-- of each month for two months prior (one-month publication lag). ``iip_index``
+-- is the general (all-sectors) IIP level (base 2011-12=100); ``yoy_pct`` is
+-- YoY growth. Seeded from FRED `INDPROINDMISMEI`; live re-fetch via
+-- ``iip fetch --source-url``.
+CREATE TABLE IF NOT EXISTS iip_monthly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period TEXT NOT NULL,
+    iip_index REAL,
+    yoy_pct REAL,
+    source TEXT NOT NULL DEFAULT 'seed',
+    source_url TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(period)
+);
+CREATE INDEX IF NOT EXISTS idx_iip_monthly_period
+    ON iip_monthly(period DESC);
+
+-- PMI (Purchasing Managers' Index) Services + Manufacturing monthly.
+-- Published by S&P Global on the 1st-3rd of each month for the prior month.
+-- ``services_pmi`` and ``manufacturing_pmi`` are both >50 = expansion,
+-- <50 = contraction. No clean free API; seeded from public press releases
+-- (last ~10 years). Live re-fetch via ``pmi fetch --source-url`` (point at
+-- the S&P Global press release for the month).
+CREATE TABLE IF NOT EXISTS pmi_monthly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period TEXT NOT NULL,
+    services_pmi REAL,
+    manufacturing_pmi REAL,
+    source TEXT NOT NULL DEFAULT 'seed',
+    source_url TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(period)
+);
+CREATE INDEX IF NOT EXISTS idx_pmi_monthly_period
+    ON pmi_monthly(period DESC);
 """
 
 
@@ -1656,16 +1713,27 @@ class FlowStore:
         self._conn.commit()
 
     def _migrate_macro_daily(self) -> None:
-        """Add eur_inr + gbp_inr columns to macro_daily for additional FX pairs.
+        """Extend macro_daily with extra FX pairs and yield-curve tenors.
 
-        Used to verify INR cross-currency moves (e.g. INR vs EUR/GBP) that
-        USD/INR alone can't show. Idempotent — guarded by PRAGMA table_info.
+        - ``eur_inr`` / ``gbp_inr`` (PR #143) — additional cross-currency pairs.
+        - ``gsec_1y`` / ``gsec_5y`` / ``gsec_30y`` (feat/macro-expansion) —
+          three additional G-sec tenors so the yield-curve module can compute
+          slopes (1y-10y, 10y-30y) and inversion regimes. ``gsec_10y`` is
+          unchanged.
+
+        Idempotent — guarded by PRAGMA table_info.
         """
         existing = {
             row[1] for row in
             self._conn.execute("PRAGMA table_info(macro_daily)").fetchall()
         }
-        for col_name, col_type in [("eur_inr", "REAL"), ("gbp_inr", "REAL")]:
+        for col_name, col_type in [
+            ("eur_inr", "REAL"),
+            ("gbp_inr", "REAL"),
+            ("gsec_1y", "REAL"),
+            ("gsec_5y", "REAL"),
+            ("gsec_30y", "REAL"),
+        ]:
             if col_name not in existing:
                 self._conn.execute(
                     f"ALTER TABLE macro_daily ADD COLUMN {col_name} {col_type}"
@@ -3202,20 +3270,46 @@ class FlowStore:
     # -- Macro Indicators --
 
     def upsert_macro_snapshots(self, snapshots: list[MacroSnapshot]) -> int:
-        """Insert or replace macro daily snapshots."""
+        """Insert or replace macro daily snapshots.
+
+        Includes the four G-sec tenors (1Y / 5Y / 10Y / 30Y). Fields that
+        aren't supplied in a given snapshot stay NULL on existing rows because
+        ``INSERT OR REPLACE`` rewrites the row whole — the caller is expected
+        to merge multi-source data upstream (yfinance for FX/VIX/crude, CCIL
+        for the live yield curve, FBIL/seed for historical tenors).
+        """
         cursor = self._conn.cursor()
         count = 0
         for s in snapshots:
             cursor.execute(
                 "INSERT OR REPLACE INTO macro_daily "
-                "(date, india_vix, usd_inr, eur_inr, gbp_inr, brent_crude, gsec_10y) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(date, india_vix, usd_inr, eur_inr, gbp_inr, brent_crude, "
+                "gsec_1y, gsec_5y, gsec_10y, gsec_30y) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (s.date, s.india_vix, s.usd_inr, s.eur_inr, s.gbp_inr,
-                 s.brent_crude, s.gsec_10y),
+                 s.brent_crude, s.gsec_1y, s.gsec_5y, s.gsec_10y, s.gsec_30y),
             )
             count += cursor.rowcount
         self._conn.commit()
         return count
+
+    @staticmethod
+    def _row_to_macro_snapshot(row) -> MacroSnapshot:
+        """Build a ``MacroSnapshot`` from a ``macro_daily`` row, tolerating
+        rows that pre-date the gsec-tenor migration (missing keys → None)."""
+        keys = row.keys() if hasattr(row, "keys") else []
+        return MacroSnapshot(
+            date=row["date"],
+            india_vix=row["india_vix"],
+            usd_inr=row["usd_inr"],
+            eur_inr=row["eur_inr"],
+            gbp_inr=row["gbp_inr"],
+            brent_crude=row["brent_crude"],
+            gsec_1y=row["gsec_1y"] if "gsec_1y" in keys else None,
+            gsec_5y=row["gsec_5y"] if "gsec_5y" in keys else None,
+            gsec_10y=row["gsec_10y"],
+            gsec_30y=row["gsec_30y"] if "gsec_30y" in keys else None,
+        )
 
     def get_macro_latest(self) -> MacroSnapshot | None:
         """Get the most recent macro snapshot."""
@@ -3224,12 +3318,7 @@ class FlowStore:
         ).fetchone()
         if not row:
             return None
-        return MacroSnapshot(
-            date=row["date"], india_vix=row["india_vix"],
-            usd_inr=row["usd_inr"], eur_inr=row["eur_inr"],
-            gbp_inr=row["gbp_inr"], brent_crude=row["brent_crude"],
-            gsec_10y=row["gsec_10y"],
-        )
+        return self._row_to_macro_snapshot(row)
 
     def get_macro_previous(self) -> MacroSnapshot | None:
         """Get the second most recent macro snapshot (for delta display)."""
@@ -3238,12 +3327,7 @@ class FlowStore:
         ).fetchone()
         if not row:
             return None
-        return MacroSnapshot(
-            date=row["date"], india_vix=row["india_vix"],
-            usd_inr=row["usd_inr"], eur_inr=row["eur_inr"],
-            gbp_inr=row["gbp_inr"], brent_crude=row["brent_crude"],
-            gsec_10y=row["gsec_10y"],
-        )
+        return self._row_to_macro_snapshot(row)
 
     def get_macro_trend(self, days: int = 30) -> list[MacroSnapshot]:
         """Get macro snapshots for the last N days, most recent first."""
@@ -3253,12 +3337,7 @@ class FlowStore:
             "ORDER BY date DESC",
             (f"-{days}",),
         ).fetchall()
-        return [MacroSnapshot(
-            date=r["date"], india_vix=r["india_vix"],
-            usd_inr=r["usd_inr"], eur_inr=r["eur_inr"],
-            gbp_inr=r["gbp_inr"], brent_crude=r["brent_crude"],
-            gsec_10y=r["gsec_10y"],
-        ) for r in rows]
+        return [self._row_to_macro_snapshot(r) for r in rows]
 
     def backfill_missing_gsec(self, value: float, max_lookback_days: int = 7) -> int:
         """Fill NULL gsec_10y rows for the last N days with the given value.
@@ -3278,6 +3357,39 @@ class FlowStore:
         )
         self._conn.commit()
         return cursor.rowcount
+
+    def backfill_missing_gsec_curve(
+        self,
+        curve: dict[str, float | None],
+        max_lookback_days: int = 7,
+    ) -> int:
+        """Patch NULL gsec_{1y,5y,10y,30y} rows over the last N days.
+
+        ``curve`` keys are ``"1y"``, ``"5y"``, ``"10y"``, ``"30y"``; any
+        missing/None entry is skipped (we don't overwrite a real NULL with
+        another NULL). Returns the total number of column-updates issued
+        across all tenors (so the caller has something concrete to log).
+        """
+        tenor_to_col = {
+            "1y": "gsec_1y",
+            "5y": "gsec_5y",
+            "10y": "gsec_10y",
+            "30y": "gsec_30y",
+        }
+        total = 0
+        for key, col in tenor_to_col.items():
+            value = curve.get(key)
+            if value is None:
+                continue
+            cursor = self._conn.execute(
+                f"UPDATE macro_daily SET {col} = ? "
+                f"WHERE date >= date('now', ? || ' days') "
+                f"AND {col} IS NULL",
+                (value, f"-{max_lookback_days}"),
+            )
+            total += cursor.rowcount
+        self._conn.commit()
+        return total
 
     # -- Index-level Valuation (PE / PB / Dividend Yield) --
 
@@ -6471,6 +6583,205 @@ class FlowStore:
             WHERE prior.gross_collection_cr IS NOT NULL
             ORDER BY cur.period ASC
             """,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # CPI monthly inflation (feat/macro-expansion, 2026-05-26)
+    # ------------------------------------------------------------------
+
+    def upsert_cpi_monthly(self, rows: list) -> int:
+        """Insert-or-replace a batch of ``CPIMonth`` records.
+
+        ``rows`` is typed loosely as ``list`` so this module does not need to
+        import ``cpi_models`` at the top. Each element must expose the
+        ``CPIMonth`` attribute surface (period, cpi_index, yoy_pct, source,
+        source_url). Returns the count of rows touched. Idempotent on
+        ``period``.
+        """
+        if not rows:
+            return 0
+        cursor = self._conn.cursor()
+        count = 0
+        for r in rows:
+            cursor.execute(
+                "INSERT OR REPLACE INTO cpi_monthly "
+                "(period, cpi_index, yoy_pct, source, source_url, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                (
+                    r.period,
+                    r.cpi_index,
+                    r.yoy_pct,
+                    getattr(r, "source", "seed"),
+                    getattr(r, "source_url", None),
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_cpi_latest(self):
+        """Return the row with the most recent ``period`` as a ``CPIMonth``."""
+        from flowtracker.cpi_models import CPIMonth
+
+        row = self._conn.execute(
+            "SELECT period, cpi_index, yoy_pct, source, source_url "
+            "FROM cpi_monthly ORDER BY period DESC LIMIT 1",
+        ).fetchone()
+        if row is None:
+            return None
+        return CPIMonth(**dict(row))
+
+    def get_cpi_trend(self, months: int) -> list[dict]:
+        """Return the last ``months`` rows as plain dicts, newest first."""
+        if months < 1:
+            return []
+        rows = self._conn.execute(
+            "SELECT period, cpi_index, yoy_pct, source, source_url, fetched_at "
+            "FROM cpi_monthly ORDER BY period DESC LIMIT ?",
+            (int(months),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # IIP monthly industrial production (feat/macro-expansion)
+    # ------------------------------------------------------------------
+
+    def upsert_iip_monthly(self, rows: list) -> int:
+        if not rows:
+            return 0
+        cursor = self._conn.cursor()
+        count = 0
+        for r in rows:
+            cursor.execute(
+                "INSERT OR REPLACE INTO iip_monthly "
+                "(period, iip_index, yoy_pct, source, source_url, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                (
+                    r.period,
+                    r.iip_index,
+                    r.yoy_pct,
+                    getattr(r, "source", "seed"),
+                    getattr(r, "source_url", None),
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_iip_latest(self):
+        from flowtracker.iip_models import IIPMonth
+
+        row = self._conn.execute(
+            "SELECT period, iip_index, yoy_pct, source, source_url "
+            "FROM iip_monthly ORDER BY period DESC LIMIT 1",
+        ).fetchone()
+        if row is None:
+            return None
+        return IIPMonth(**dict(row))
+
+    def get_iip_trend(self, months: int) -> list[dict]:
+        if months < 1:
+            return []
+        rows = self._conn.execute(
+            "SELECT period, iip_index, yoy_pct, source, source_url, fetched_at "
+            "FROM iip_monthly ORDER BY period DESC LIMIT ?",
+            (int(months),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # PMI monthly Services + Manufacturing (feat/macro-expansion)
+    # ------------------------------------------------------------------
+
+    def upsert_pmi_monthly(self, rows: list) -> int:
+        """Insert-or-replace ``PMIMonth`` records.
+
+        Semantics: a row with only services_pmi set (Manufacturing release
+        not yet out for the month) is valid and will be replaced when the
+        Manufacturing follow-up upsert lands. The replace overwrites BOTH
+        columns, so the caller is responsible for merging a partial fetch
+        against the existing row when only one side is supplied. The default
+        seed ships both columns together; the live ``pmi fetch --source-url``
+        path handles single-side updates by passing through whatever the
+        parser extracted (None for the missing side).
+        """
+        if not rows:
+            return 0
+        cursor = self._conn.cursor()
+        count = 0
+        for r in rows:
+            cursor.execute(
+                "INSERT OR REPLACE INTO pmi_monthly "
+                "(period, services_pmi, manufacturing_pmi, source, source_url, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                (
+                    r.period,
+                    r.services_pmi,
+                    r.manufacturing_pmi,
+                    getattr(r, "source", "seed"),
+                    getattr(r, "source_url", None),
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_pmi_latest(self):
+        from flowtracker.pmi_models import PMIMonth
+
+        row = self._conn.execute(
+            "SELECT period, services_pmi, manufacturing_pmi, source, source_url "
+            "FROM pmi_monthly ORDER BY period DESC LIMIT 1",
+        ).fetchone()
+        if row is None:
+            return None
+        return PMIMonth(**dict(row))
+
+    def get_pmi_trend(self, months: int) -> list[dict]:
+        if months < 1:
+            return []
+        rows = self._conn.execute(
+            "SELECT period, services_pmi, manufacturing_pmi, source, source_url, fetched_at "
+            "FROM pmi_monthly ORDER BY period DESC LIMIT ?",
+            (int(months),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Yield-curve helpers (feat/macro-expansion)
+    # ------------------------------------------------------------------
+
+    def get_yield_curve_latest(self):
+        """Return today's (or most-recent) G-sec curve as a dict
+        ``{"date": ..., "gsec_1y": ..., "gsec_5y": ..., "gsec_10y": ...,
+        "gsec_30y": ...}``, or ``None`` if macro_daily is empty.
+
+        Reads from ``macro_daily`` directly so the live CCIL-scraped curve
+        and historical seed both flow through one surface.
+        """
+        row = self._conn.execute(
+            "SELECT date, gsec_1y, gsec_5y, gsec_10y, gsec_30y "
+            "FROM macro_daily "
+            "WHERE gsec_1y IS NOT NULL OR gsec_5y IS NOT NULL "
+            "OR gsec_10y IS NOT NULL OR gsec_30y IS NOT NULL "
+            "ORDER BY date DESC LIMIT 1",
+        ).fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    def get_yield_curve_history(self, days: int = 365) -> list[dict]:
+        """Return non-null curve observations from the last N days,
+        ordered date ascending (chart-friendly)."""
+        rows = self._conn.execute(
+            "SELECT date, gsec_1y, gsec_5y, gsec_10y, gsec_30y "
+            "FROM macro_daily "
+            "WHERE date >= date('now', ? || ' days') "
+            "AND (gsec_1y IS NOT NULL OR gsec_5y IS NOT NULL "
+            "OR gsec_10y IS NOT NULL OR gsec_30y IS NOT NULL) "
+            "ORDER BY date ASC",
+            (f"-{days}",),
         ).fetchall()
         return [dict(r) for r in rows]
 

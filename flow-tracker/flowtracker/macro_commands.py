@@ -40,18 +40,29 @@ def fetch(
         else:
             snapshots = client.fetch_snapshot(days)
         count = store.upsert_macro_snapshots(snapshots)
-        # Backfill NULL gsec_10y rows in the last week with today's value.
-        # CCIL only publishes today's yield; without this, any day the cron
-        # ran before CCIL's end-of-day update keeps gsec_10y=NULL forever.
-        latest_gsec = next(
-            (s.gsec_10y for s in reversed(snapshots) if s.gsec_10y is not None),
-            None,
-        )
-        if latest_gsec is not None:
-            patched = store.backfill_missing_gsec(latest_gsec)
+        # Backfill NULL gsec_{1y,5y,10y,30y} rows in the last week with the
+        # most-recently-observed value for each tenor. CCIL only publishes
+        # today's curve; without this any day the cron ran before CCIL's
+        # end-of-day update keeps the tenor NULL forever.
+        latest_curve: dict[str, float | None] = {}
+        for tenor_attr, key in (
+            ("gsec_1y", "1y"),
+            ("gsec_5y", "5y"),
+            ("gsec_10y", "10y"),
+            ("gsec_30y", "30y"),
+        ):
+            latest_val = next(
+                (getattr(s, tenor_attr) for s in reversed(snapshots)
+                 if getattr(s, tenor_attr) is not None),
+                None,
+            )
+            latest_curve[key] = latest_val
+        if any(v is not None for v in latest_curve.values()):
+            patched = store.backfill_missing_gsec_curve(latest_curve)
             if patched:
                 console.print(
-                    f"[dim]Backfilled gsec_10y={latest_gsec} into {patched} prior row(s)[/]"
+                    f"[dim]Backfilled G-sec curve into {patched} prior row(s) "
+                    f"(tenors={latest_curve})[/]"
                 )
     display_macro_fetch_result(count)
 

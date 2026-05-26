@@ -55,6 +55,10 @@ from flowtracker.indexpe_commands import app as indexpe_app
 from flowtracker.surveillance_commands import app as surveillance_app
 from flowtracker.ipo_commands import app as ipo_app
 from flowtracker.gst_commands import app as gst_app
+from flowtracker.cpi_commands import app as cpi_app
+from flowtracker.iip_commands import app as iip_app
+from flowtracker.pmi_commands import app as pmi_app
+from flowtracker.yield_curve_commands import app as yield_curve_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -92,6 +96,10 @@ app.add_typer(indexpe_app)
 app.add_typer(surveillance_app)
 app.add_typer(ipo_app)
 app.add_typer(gst_app)
+app.add_typer(cpi_app)
+app.add_typer(iip_app)
+app.add_typer(pmi_app)
+app.add_typer(yield_curve_app, name="yield-curve")
 console = Console()
 
 
