@@ -789,6 +789,18 @@ async def _extract_single_ar(
     t0 = _time.time()
     fy_label = _fy_label_from_path(ar_pdf)
 
+    # Retention prunes older AR PDFs, and a PDF can vanish between find_ar_pdfs
+    # and here (race with a retention sweep). Skip cleanly instead of crashing
+    # the whole extraction run.
+    if not ar_pdf.exists():
+        logger.warning("[ar] %s %s: PDF missing (pruned or race) — skipping", symbol, fy_label)
+        return {
+            "symbol": symbol,
+            "fiscal_year": fy_label,
+            "source_pdf": str(ar_pdf),
+            "extraction_status": "skipped_missing_pdf",
+        }
+
     # Docling pass (cached)
     extraction = extract_to_markdown(ar_pdf, ar_pdf.parent)
     md, headings = extraction.markdown, extraction.headings
@@ -1222,7 +1234,16 @@ async def extract_annual_reports(
         async with sem:
             return await _extract_single_ar(pdf, symbol, model, sections, industry, force=force)
 
-    year_results = list(await asyncio.gather(*[_with_sem(p) for p in pdfs]))
+    gathered = await asyncio.gather(*[_with_sem(p) for p in pdfs], return_exceptions=True)
+    year_results: list[dict] = []
+    for pdf, res in zip(pdfs, gathered):
+        if isinstance(res, Exception):
+            logger.warning(
+                "[ar] %s: extraction failed for %s (%s) — skipping year",
+                symbol, pdf.name, res,
+            )
+            continue
+        year_results.append(res)
 
     # Per-year JSONs are already persisted incrementally by _extract_single_ar.
     out_dir = _VAULT_BASE / symbol / "fundamentals"
@@ -1318,7 +1339,18 @@ async def ensure_annual_report_data(
         async with sem:
             return await _extract_single_ar(pdf, symbol, model, sections, industry)
 
-    new_results = list(await asyncio.gather(*[_with_sem(p) for p in needing_extraction]))
+    gathered = await asyncio.gather(
+        *[_with_sem(p) for p in needing_extraction], return_exceptions=True
+    )
+    new_results: list[dict] = []
+    for pdf, res in zip(needing_extraction, gathered):
+        if isinstance(res, Exception):
+            logger.warning(
+                "[ar_ensure] %s: extraction failed for %s (%s) — skipping year",
+                symbol, pdf.name, res,
+            )
+            continue
+        new_results.append(res)
     all_results = cached_years + new_results
     all_results.sort(key=lambda y: _fy_sort_num(y.get("fiscal_year", "FY00")), reverse=True)
 
