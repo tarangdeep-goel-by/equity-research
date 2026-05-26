@@ -93,6 +93,47 @@ _DEFAULT_USER_AGENT = (
 # in the HTML or JSON XHRs the page issues, never in images/fonts/media.
 _BLOCKED_RESOURCE_TYPES = frozenset({"image", "font", "media", "stylesheet"})
 
+# Chromium launch args used when stealth mode is enabled. Disables the
+# `--enable-automation` switch (which sets ``navigator.webdriver = true``) and
+# the AutomationControlled blink feature that some Akamai detectors fingerprint.
+# These are widely-shared community defaults for "look like a normal user".
+_STEALTH_CHROMIUM_ARGS: tuple[str, ...] = (
+    "--disable-blink-features=AutomationControlled",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-features=IsolateOrigins,site-per-process",
+    "--disable-site-isolation-trials",
+)
+
+# Realistic context defaults used when stealth mode is enabled.
+_STEALTH_VIEWPORT = {"width": 1920, "height": 1080}
+_STEALTH_LOCALE = "en-IN"
+_STEALTH_TIMEZONE_ID = "Asia/Kolkata"
+
+# Stealth mode uses real Google Chrome (``channel='chrome'``) rather than
+# the bundled Chromium because Akamai's bot manager fingerprints the build
+# string in ``sec-ch-ua`` headers — bundled Chromium emits
+# ``HeadlessChrome`` and triggers a block, real Chrome doesn't. Requires the
+# user to have Chrome installed (standard on macOS / Linux dev machines).
+_STEALTH_CHANNEL = "chrome"
+
+# A modern Chrome user-agent that pairs with the sec-ch-ua headers below.
+# Keep them in sync — Akamai cross-references the UA major-version with the
+# ``sec-ch-ua`` Chrome brand version.
+_STEALTH_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
+_STEALTH_EXTRA_HEADERS: dict[str, str] = {
+    "sec-ch-ua": (
+        '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"'
+    ),
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+    "Accept-Language": "en-IN,en;q=0.9",
+}
+
 
 # ---------------------------------------------------------------------------
 # Session (batch-friendly)
@@ -120,8 +161,14 @@ class JSFetchSession:
     URL, only the cost of teardown.
     """
 
-    def __init__(self, *, user_agent: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        user_agent: str | None = None,
+        use_stealth: bool = False,
+    ) -> None:
         self._user_agent = user_agent or _DEFAULT_USER_AGENT
+        self._use_stealth = use_stealth
         self._playwright: "Playwright | None" = None
         self._browser: "Browser | None" = None
         self._context: "BrowserContext | None" = None
@@ -137,9 +184,23 @@ class JSFetchSession:
                 "dependencies and run `uv sync`."
             ) from exc
 
+        # Stealth mode: pass realistic Chromium args (disable
+        # ``--enable-automation``, blink AutomationControlled feature),
+        # launch via the ``chrome`` channel (real Google Chrome instead of
+        # the bundled Chromium — Akamai cross-checks the
+        # ``HeadlessChrome`` build string in sec-ch-ua), and build a
+        # realistic context (IN locale + timezone, 1920x1080 viewport,
+        # matching sec-ch-ua headers). Without stealth, keep the
+        # lightweight defaults so the GST flow that already works isn't
+        # slowed down.
+        launch_kwargs: dict = {"headless": True}
+        if self._use_stealth:
+            launch_kwargs["args"] = list(_STEALTH_CHROMIUM_ARGS)
+            launch_kwargs["channel"] = _STEALTH_CHANNEL
+
         try:
             self._playwright = sync_playwright().start()
-            self._browser = self._playwright.chromium.launch(headless=True)
+            self._browser = self._playwright.chromium.launch(**launch_kwargs)
         except Exception as exc:  # noqa: BLE001 — surface every launch error
             self._cleanup()
             msg = str(exc)
@@ -147,10 +208,51 @@ class JSFetchSession:
                 raise JSFetchError(
                     "Playwright browser missing. "
                     "Run: uv run playwright install chromium"
+                    + (
+                        " && uv run playwright install chrome"
+                        if self._use_stealth
+                        else ""
+                    )
                 ) from exc
             raise JSFetchError(f"Failed to launch Chromium: {exc}") from exc
 
-        self._context = self._browser.new_context(user_agent=self._user_agent)
+        if self._use_stealth:
+            # Stealth mode overrides the caller-passed UA with a Chrome
+            # 131 UA that pairs with the sec-ch-ua headers Akamai
+            # cross-references.
+            context_user_agent = _STEALTH_USER_AGENT
+        else:
+            context_user_agent = self._user_agent
+        context_kwargs: dict = {"user_agent": context_user_agent}
+        if self._use_stealth:
+            context_kwargs.update(
+                viewport=_STEALTH_VIEWPORT,
+                locale=_STEALTH_LOCALE,
+                timezone_id=_STEALTH_TIMEZONE_ID,
+                extra_http_headers=dict(_STEALTH_EXTRA_HEADERS),
+            )
+        self._context = self._browser.new_context(**context_kwargs)
+
+        # Apply playwright-stealth evasions to the whole context. This
+        # patches navigator.webdriver, plugins, chrome.runtime, sec-ch-ua,
+        # WebGL vendor, etc. — the common Akamai/Cloudflare fingerprint
+        # signals.
+        if self._use_stealth:
+            try:
+                from playwright_stealth import Stealth
+            except ImportError as exc:  # pragma: no cover — stealth is a hard dep
+                raise JSFetchError(
+                    "playwright-stealth is not installed. Add "
+                    "`playwright-stealth>=2.0.0` to dependencies and run `uv sync`."
+                ) from exc
+            try:
+                Stealth().apply_stealth_sync(self._context)
+            except Exception as exc:  # noqa: BLE001 — stealth init failure
+                logger.warning(
+                    "playwright-stealth apply failed (%s); continuing without",
+                    exc,
+                )
+
         # Block heavy resource types at the routing layer — applied to every
         # page created from this context.
         self._context.route("**/*", _route_block_handler)
@@ -304,6 +406,7 @@ def fetch_rendered_html(
     wait_for_network_idle: bool = True,
     timeout_ms: int = 30_000,
     user_agent: str | None = None,
+    use_stealth: bool = False,
 ) -> str:
     """Fetch ``url`` once, render it with Chromium, return the HTML.
 
@@ -311,12 +414,24 @@ def fetch_rendered_html(
     case of a single URL. Spins up + tears down Chromium each call —
     callers doing >1 fetch should use :class:`JSFetchSession` directly.
 
+    Parameters
+    ----------
+    use_stealth:
+        When ``True``, applies ``playwright-stealth`` evasions to the
+        browser context, uses non-default Chromium args (disables
+        ``--enable-automation`` and the blink ``AutomationControlled``
+        feature), and configures a realistic 1920x1080 / ``en-IN`` /
+        ``Asia/Kolkata`` context. Use this for hostile-bot-blocker
+        targets like BSE behind Akamai. Keep it off for sources that
+        already work (GST press release listings) to avoid the cold-start
+        cost.
+
     Raises
     ------
     JSFetchError
         On missing browser binary, navigation failure, or selector timeout.
     """
-    with JSFetchSession(user_agent=user_agent) as session:
+    with JSFetchSession(user_agent=user_agent, use_stealth=use_stealth) as session:
         return session.fetch(
             url,
             wait_for_selector=wait_for_selector,

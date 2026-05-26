@@ -254,16 +254,41 @@ fronts are Angular/React SPAs that return only a shell to plain `httpx`:
 
 | Source | URL | JS-fetch role |
 |---|---|---|
-| GST live (`gst_client.fetch_month_live`) | `https://www.gst.gov.in/newsandupdates/` | Renders the press-release listing, picks the matching month link, follows it for the PDF URL on `tutorial.gst.gov.in`. **Works end-to-end** — the PDF host serves plain HTTP. |
-| BSE ESM (`surveillance_client.BSESurveillanceClient.fetch_esm`) | `https://www.bseindia.com/markets/equity/EQReports/ESM.html` | Falls back to Playwright if httpx returns the SPA shell. **BSE's Akamai Bot Manager today returns Access-Denied to headless Chromium too** — wiring is ready for the day BSE relaxes the rule or the client runs behind a residential proxy. |
-| BSE SME IPO (`ipo_client.BSEIPOClient.fetch_upcoming_sme`) | `https://www.bseindia.com/markets/PublicIssues/IPOIssues_new.aspx` | Same fallback structure as BSE ESM. Same Akamai constraint. |
+| GST live (`gst_client.fetch_month_live`) | `https://www.gst.gov.in/newsandupdates/` | Renders the press-release listing, picks the matching month link, follows it for the PDF URL on `tutorial.gst.gov.in`. **Works end-to-end** — the PDF host serves plain HTTP. Plain bundled Chromium is fine (no stealth needed). |
+| BSE ESM (`surveillance_client.BSESurveillanceClient.fetch_esm`) | `https://www.bseindia.com/markets/equity/EQReports/ESM.html` | Falls back to Playwright with `use_stealth=True` if httpx returns the SPA shell. **Stealth bypasses Akamai (confirmed 2026-05-26)** but BSE has retired the ESM route in their Angular app — the SPA logs a `beta_404_lookup` to `api.bseindia.com` and never renders the data table. Returns `[]` gracefully until the right URL is rediscovered. NSE ASM+GSM coverage (~231 flags) is the practical answer. |
+| BSE SME IPO (`ipo_client.BSEIPOClient.fetch_upcoming_sme`) | `https://www.bseindia.com/markets/PublicIssues/IPOIssues_new.aspx` | Same fallback structure with `use_stealth=True`. **Works end-to-end (confirmed 2026-05-26)** — page renders, parser extracts rows from the Angular `<table>` (or "No Record Found" when none active). |
+
+**Stealth mode** (`use_stealth=True`) is the path past BSE's Akamai
+Bot Manager. It combines:
+- `channel='chrome'` — launches real Google Chrome instead of the
+  bundled Chromium (Akamai cross-checks the `HeadlessChrome` build
+  string in `sec-ch-ua`)
+- `playwright-stealth` evasions on the context (patches
+  `navigator.webdriver`, plugins, chrome.runtime, sec-ch-ua, WebGL
+  vendor, etc.)
+- `--disable-blink-features=AutomationControlled` Chromium arg
+- Realistic 1920x1080 / `en-IN` / `Asia/Kolkata` context
+- Chrome 131 UA + matching `sec-ch-ua` extra headers
+
+First-time setup also requires the real Chrome channel binary:
+`uv run playwright install chrome` (in addition to the existing
+`uv run playwright install chromium`). Akamai may detect and re-block
+this configuration over time — monitor the daily cron for the warning
+log line `Akamai DEFINITIVELY BLOCKED stealth Chromium`. If that fires,
+the next escalation is residential proxies, which is a paid-service
+decision out of scope for this codebase. For analysts needing SME IPO
+data ad-hoc while BSE is hostile, **<https://chittorgarh.com/> is the
+manual reference** — it aggregates SME IPO calendars from BSE/NSE and
+historically is the analyst-community fallback when BSE's site is
+unscrapable.
 
 The helper itself is a sync wrapper around `sync_playwright`; one-off
-use is `fetch_rendered_html(url, wait_for_selector=...)`, batch use is
-`with JSFetchSession() as s: s.fetch(url, ...)`. Heavyweight resource
-types (images, fonts, media, stylesheets) are blocked at the routing
-layer for speed. Browser-missing surfaces as a clear `JSFetchError`
-pointing at `uv run playwright install chromium`.
+use is `fetch_rendered_html(url, wait_for_selector=..., use_stealth=...)`,
+batch use is `with JSFetchSession(use_stealth=...) as s: s.fetch(url, ...)`.
+Heavyweight resource types (images, fonts, media, stylesheets) are
+blocked at the routing layer for speed. Browser-missing surfaces as a
+clear `JSFetchError` pointing at `uv run playwright install chromium`
+(and `chrome` when stealth is requested).
 
 Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-source-comparison.md`.
 

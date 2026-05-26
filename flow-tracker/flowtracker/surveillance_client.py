@@ -277,6 +277,7 @@ def _try_js_rendered_esm() -> list[SurveillanceFlag] | None:
             _BSE_ESM_HTML,
             wait_for_selector="table",
             timeout_ms=30_000,
+            use_stealth=True,
         )
     except JSFetchError as exc:
         # Common today: Akamai 403 → tiny "Access Denied" body → "table"
@@ -286,8 +287,17 @@ def _try_js_rendered_esm() -> list[SurveillanceFlag] | None:
         return None
 
     if "Access Denied" in html:
-        logger.info(
-            "BSE ESM JS-render: Akamai access-denied (%d bytes)", len(html),
+        # DEFINITIVELY BLOCKED: stealth-enabled headless Chromium is still
+        # served Akamai's Access-Denied shell. Logged at WARNING so this
+        # shows up in the daily cron summary — future runs should not
+        # waste cycles assuming this will start working without an
+        # infrastructure change (residential proxy, etc.).
+        logger.warning(
+            "BSE ESM JS-render: Akamai DEFINITIVELY BLOCKED stealth Chromium "
+            "(%d bytes Access Denied shell). BSE is currently a hostile "
+            "target for automated scraping. See flow-tracker/CLAUDE.md for "
+            "the manual reference (chittorgarh.com).",
+            len(html),
         )
         return []
 

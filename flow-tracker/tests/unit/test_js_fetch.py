@@ -262,6 +262,76 @@ class TestRouteBlockHandler:
 # ---------------------------------------------------------------------------
 
 
+class TestStealthMode:
+    """playwright-stealth integration — verify the right knobs flip when
+    ``use_stealth=True`` is passed."""
+
+    def test_default_does_not_invoke_stealth(self):
+        factory, refs = _build_playwright_mock()
+        with patch("playwright.sync_api.sync_playwright", factory):
+            with patch("playwright_stealth.Stealth") as MockStealth:
+                fetch_rendered_html(
+                    "https://example.com/page",
+                    wait_for_network_idle=False,
+                )
+        # Stealth class must NOT be instantiated when use_stealth=False
+        MockStealth.assert_not_called()
+        # No special launch args / channel either
+        kwargs = refs["chromium"].launch.call_args.kwargs
+        assert "channel" not in kwargs
+        assert "args" not in kwargs
+
+    def test_stealth_passes_chrome_channel_and_args_to_launch(self):
+        factory, refs = _build_playwright_mock()
+        with patch("playwright.sync_api.sync_playwright", factory):
+            with patch("playwright_stealth.Stealth") as MockStealth:
+                fetch_rendered_html(
+                    "https://example.com/page",
+                    wait_for_network_idle=False,
+                    use_stealth=True,
+                )
+        kwargs = refs["chromium"].launch.call_args.kwargs
+        assert kwargs.get("channel") == "chrome"
+        args = kwargs.get("args") or []
+        assert any("AutomationControlled" in a for a in args)
+
+    def test_stealth_applies_to_context(self):
+        factory, refs = _build_playwright_mock()
+        instance = MagicMock(name="stealth_instance")
+        with patch("playwright.sync_api.sync_playwright", factory):
+            with patch(
+                "playwright_stealth.Stealth", return_value=instance,
+            ) as MockStealth:
+                fetch_rendered_html(
+                    "https://example.com/page",
+                    wait_for_network_idle=False,
+                    use_stealth=True,
+                )
+        MockStealth.assert_called_once()
+        instance.apply_stealth_sync.assert_called_once_with(refs["context"])
+
+    def test_stealth_sets_realistic_context_options(self):
+        factory, refs = _build_playwright_mock()
+        with patch("playwright.sync_api.sync_playwright", factory):
+            with patch("playwright_stealth.Stealth"):
+                fetch_rendered_html(
+                    "https://example.com/page",
+                    wait_for_network_idle=False,
+                    use_stealth=True,
+                )
+        ctx_kwargs = refs["browser"].new_context.call_args.kwargs
+        # IN locale + Asia/Kolkata timezone + 1920x1080 viewport + Chrome UA
+        assert ctx_kwargs.get("locale") == "en-IN"
+        assert ctx_kwargs.get("timezone_id") == "Asia/Kolkata"
+        assert ctx_kwargs.get("viewport") == {"width": 1920, "height": 1080}
+        ua = ctx_kwargs.get("user_agent") or ""
+        assert "Chrome/131" in ua
+        # sec-ch-ua extra headers
+        extras = ctx_kwargs.get("extra_http_headers") or {}
+        assert "sec-ch-ua" in extras
+        assert "Google Chrome" in extras["sec-ch-ua"]
+
+
 class TestJSFetchSession:
     def test_batch_fetches_reuse_one_browser(self):
         factory, refs = _build_playwright_mock()
