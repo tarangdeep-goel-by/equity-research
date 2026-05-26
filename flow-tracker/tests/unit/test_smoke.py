@@ -215,6 +215,13 @@ HELP_COMMANDS = [
     ["ipo", "upcoming", "--help"],
     ["ipo", "subscription", "--help"],
     ["ipo", "listings", "--help"],
+
+    # gst (added 2026-05-26)
+    ["gst", "--help"],
+    ["gst", "fetch", "--help"],
+    ["gst", "backfill", "--help"],
+    ["gst", "latest", "--help"],
+    ["gst", "trend", "--help"],
 ]
 # fmt: on
 

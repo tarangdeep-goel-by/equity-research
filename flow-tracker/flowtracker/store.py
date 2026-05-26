@@ -1480,6 +1480,35 @@ CREATE TABLE IF NOT EXISTS ipo_listings (
 );
 CREATE INDEX IF NOT EXISTS idx_ipo_listings_date
     ON ipo_listings(listing_date DESC);
+
+-- Monthly GST (Goods & Services Tax) collections, sourced from the CBIC
+-- monthly press release (mirrored by PIB and the GST Council). One row per
+-- calendar collection month; the headline ``gross_collection_cr`` is the
+-- fastest real-time proxy for nominal GDP / consumption in India and is
+-- consumed by the macro agent for the "GST trend" macro signal. All
+-- monetary fields are in ₹ crore (project-wide unit standard). The
+-- ``period`` is the COLLECTION month (e.g. ``"2025-04"`` for April 2025),
+-- NOT the release month — the April figure is published 1 May.
+-- All numeric columns are nullable so a defensive parser can persist
+-- partial rows when source layout drifts; downstream queries surface gaps
+-- rather than rows being silently dropped.
+CREATE TABLE IF NOT EXISTS gst_collections_monthly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period TEXT NOT NULL,                      -- "YYYY-MM" — collection month, not release month
+    gross_collection_cr REAL,
+    cgst_cr REAL,
+    sgst_cr REAL,
+    igst_cr REAL,
+    cess_cr REAL,
+    domestic_cr REAL,
+    imports_cr REAL,
+    growth_yoy_pct REAL,                       -- headline YoY% as published by CBIC
+    source_url TEXT,                           -- CBIC PDF / PIB / GST Council URL for traceability
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(period)
+);
+CREATE INDEX IF NOT EXISTS idx_gst_collections_period
+    ON gst_collections_monthly(period DESC);
 """
 
 
@@ -6321,6 +6350,114 @@ class FlowStore:
         )
         rows = self._conn.execute(sql, (f"-{int(days)} day",)).fetchall()
         return [IPOListing(**dict(r)) for r in rows]
+
+    # ------------------------------------------------------------------
+    # GST monthly collections (feat/gst-collections, 2026-05-26)
+    # ------------------------------------------------------------------
+
+    def upsert_gst_collections(self, rows: list) -> int:
+        """Insert-or-replace a batch of ``GSTCollectionMonth`` records.
+
+        ``rows`` is typed loosely as ``list`` so this module does not need to
+        import ``gst_models``. Each element must expose the
+        ``GSTCollectionMonth`` attribute surface (period, gross_collection_cr,
+        cgst_cr, sgst_cr, igst_cr, cess_cr, domestic_cr, imports_cr,
+        growth_yoy_pct, source_url). Returns the number of rows touched.
+
+        Idempotent: a re-upsert of the same ``period`` replaces (not
+        duplicates) the row — the table has ``UNIQUE(period)``.
+        """
+        if not rows:
+            return 0
+        cursor = self._conn.cursor()
+        count = 0
+        for r in rows:
+            cursor.execute(
+                "INSERT OR REPLACE INTO gst_collections_monthly "
+                "(period, gross_collection_cr, cgst_cr, sgst_cr, igst_cr, "
+                "cess_cr, domestic_cr, imports_cr, growth_yoy_pct, source_url, "
+                "fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                (
+                    r.period,
+                    r.gross_collection_cr,
+                    r.cgst_cr,
+                    r.sgst_cr,
+                    r.igst_cr,
+                    r.cess_cr,
+                    r.domestic_cr,
+                    r.imports_cr,
+                    r.growth_yoy_pct,
+                    r.source_url,
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_gst_latest(self):
+        """Return the row with the most recent ``period``, as a
+        ``GSTCollectionMonth`` instance, or ``None`` if the table is empty.
+
+        Import is local because the store module deliberately avoids a
+        top-level dependency on every feature's pydantic models — the
+        ``gst_models`` import only fires if the caller actually invokes this
+        method."""
+        from flowtracker.gst_models import GSTCollectionMonth
+
+        row = self._conn.execute(
+            "SELECT period, gross_collection_cr, cgst_cr, sgst_cr, igst_cr, "
+            "cess_cr, domestic_cr, imports_cr, growth_yoy_pct, source_url "
+            "FROM gst_collections_monthly "
+            "ORDER BY period DESC LIMIT 1",
+        ).fetchone()
+        if row is None:
+            return None
+        return GSTCollectionMonth(**dict(row))
+
+    def get_gst_trend(self, months: int) -> list[dict]:
+        """Return the last ``months`` rows as plain dicts, newest first."""
+        if months < 1:
+            return []
+        rows = self._conn.execute(
+            "SELECT period, gross_collection_cr, cgst_cr, sgst_cr, igst_cr, "
+            "cess_cr, domestic_cr, imports_cr, growth_yoy_pct, source_url, "
+            "fetched_at "
+            "FROM gst_collections_monthly "
+            "ORDER BY period DESC LIMIT ?",
+            (int(months),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_gst_yoy_series(self) -> list[dict]:
+        """Compute the YoY% growth series by joining each row to the same
+        month one year prior. Returns dicts ordered by ``period`` ASCENDING.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT cur.period AS period,
+                   cur.gross_collection_cr AS gross_cr,
+                   prior.gross_collection_cr AS prior_year_gross_cr,
+                   CASE
+                       WHEN prior.gross_collection_cr IS NULL
+                            OR prior.gross_collection_cr = 0
+                            OR cur.gross_collection_cr IS NULL
+                       THEN NULL
+                       ELSE ((cur.gross_collection_cr - prior.gross_collection_cr)
+                             * 100.0 / prior.gross_collection_cr)
+                   END AS computed_yoy_pct
+            FROM gst_collections_monthly AS cur
+            LEFT JOIN gst_collections_monthly AS prior
+              ON prior.period = (
+                  printf('%04d-%s',
+                         CAST(substr(cur.period, 1, 4) AS INTEGER) - 1,
+                         substr(cur.period, 6, 2))
+              )
+            WHERE prior.gross_collection_cr IS NOT NULL
+            ORDER BY cur.period ASC
+            """,
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         """Close the database connection."""
