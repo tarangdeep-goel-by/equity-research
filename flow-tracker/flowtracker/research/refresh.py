@@ -117,6 +117,37 @@ def _detect_parent_subsidiary(store, symbol: str, shareholders: list) -> None:
         pass  # don't break refresh for detection failures
 
 
+def _present(store, symbol: str, table: str) -> bool:
+    """True if any row exists for this symbol in the table (presence, not freshness)."""
+    try:
+        row = store._conn.execute(
+            f"SELECT 1 FROM {table} WHERE symbol = ? LIMIT 1", (symbol,)  # noqa: S608
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
+
+
+def _shareholding_needs_fetch(store, symbol: str, max_age_days: int = 110) -> bool:
+    """True if shareholding is missing or its latest quarter is stale.
+
+    Shareholding is quarterly, so this is a quarter-cadence check (not the 6h
+    freshness used for the other sources). A NSE filing for quarter Q lands ~45
+    days after quarter-end, so if our newest quarter_end is older than ~110 days
+    a fresher filing almost certainly exists.
+    """
+    row = store._conn.execute(
+        "SELECT MAX(quarter_end) FROM shareholding WHERE symbol = ?", (symbol,)
+    ).fetchone()
+    latest = row[0] if row else None
+    if not latest:
+        return True
+    try:
+        return (date.today() - date.fromisoformat(latest[:10])).days > max_age_days
+    except (ValueError, TypeError):
+        return True
+
+
 def refresh_for_research(
     symbol: str, console: Console | None = None, max_age_hours: int = 6,
 ) -> dict[str, int]:
@@ -148,11 +179,51 @@ def refresh_for_research(
     from flowtracker.store import FlowStore
 
     with FlowStore() as store:
-        # --- Freshness gate: skip if data is recent ---
+        # --- Shareholding (NSE XBRL) — quarterly cadence, fetched independently of
+        # the 6h gate below so ownership/DII data is present at run time when it is
+        # missing or a new quarter's filing is due. Also upgrades older rows to the
+        # current leaf taxonomy on first access. (The other sources auto-fetch under
+        # the gate; shareholding was the one source not wired into the refresh.)
+        if _shareholding_needs_fetch(store, symbol):
+            try:
+                from flowtracker.holding_client import NSEHoldingClient
+                with NSEHoldingClient() as hc:
+                    sh_records, sh_pledges, sh_breakdowns = hc.fetch_latest_quarters_full(symbol, 8)
+                if sh_records:
+                    store.upsert_shareholding(sh_records)
+                    if sh_pledges:
+                        store.upsert_promoter_pledges(sh_pledges)
+                    if sh_breakdowns:
+                        store.upsert_shareholding_breakdown(sh_breakdowns)
+                    _ok("shareholding", len(sh_records))
+                else:
+                    _skip("shareholding", "no filings")
+            except Exception as e:
+                _skip("shareholding", str(e))
+        else:
+            row = store._conn.execute(
+                "SELECT COUNT(*) FROM shareholding WHERE symbol = ?", (symbol,)
+            ).fetchone()
+            summary["shareholding"] = row[0] if row else 0
+
+        # --- Freshness gate: skip ONLY when the data the agents read is both
+        # recently refreshed AND fully present. Never serve missing data — if any
+        # essential symbol-specific table is absent, fall through and fetch it.
         key_tables = ["quarterly_results", "valuation_snapshot", "company_profiles"]
+        # Symbol-specific tables the research agents depend on. All must be present
+        # to take the skip path (presence, not just the 6h freshness of key tables).
+        # Only tables reliably present for any Screener/yfinance-covered stock —
+        # NOT optional/coverage-dependent ones (consensus_estimates, FMP, insider,
+        # deals) which would force a perpetual refresh on names that legitimately
+        # lack them.
+        essential_tables = [
+            "quarterly_results", "valuation_snapshot", "company_profiles",
+            "screener_ratios", "annual_financials",
+        ]
         fresh_count = sum(1 for t in key_tables if _is_fresh(store, symbol, t, hours=max_age_hours))
-        if fresh_count >= 2:
-            _log(f"\n[dim]Data for {symbol} is fresh (<{max_age_hours}h old across {fresh_count}/{len(key_tables)} key tables). Skipping refresh.[/]")
+        missing = [t for t in essential_tables if not _present(store, symbol, t)]
+        if fresh_count >= 2 and not missing:
+            _log(f"\n[dim]Data for {symbol} is fresh (<{max_age_hours}h old across {fresh_count}/{len(key_tables)} key tables) and all essentials present. Skipping refresh.[/]")
             _log("[dim]Use --force-refresh or wait for data to age to re-fetch.[/]")
             # Return existing counts so caller knows data exists
             for t in key_tables:
@@ -161,6 +232,8 @@ def refresh_for_research(
                 ).fetchone()
                 summary[t] = row[0] if row else 0
             return summary
+        if fresh_count >= 2 and missing:
+            _log(f"\n[dim]{symbol}: key tables fresh but missing essentials {missing} — refreshing to fill gaps.[/]")
 
         # --- 1. Screener.in ---
         _log("\n[bold]Screener.in[/]")
