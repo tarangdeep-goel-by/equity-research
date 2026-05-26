@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     ResultMessage,
     ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
     create_sdk_mcp_server,
     query,
 )
@@ -611,6 +612,10 @@ async def _run_specialist(
         # https://github.com/anthropics/claude-agent-sdk-python/issues/794
         setting_sources=[""],
         plugins=[],  # no external plugins in specialist subprocess
+        # Replay user messages so the stream delivers UserMessage objects, which
+        # carry the ToolResultBlocks (incl. is_error). Without this the result
+        # side of every tool call is invisible and only the call is captured.
+        extra_args={"replay-user-messages": None},
     )
     effort = effort or DEFAULT_EFFORT.get(name)
     if effort:
@@ -800,10 +805,10 @@ async def _run_specialist(
                                     wait_ms=0,
                                     at=call_started,
                                 ))
-                            # Record evidence immediately from ToolUseBlock.
-                            # The Agent SDK processes tool results internally and does NOT
-                            # expose ToolResultBlock through the stream, so we capture
-                            # tool calls here (result_summary/hash stay empty).
+                            # Record the call now from the ToolUseBlock. Its
+                            # result (is_error/result_summary/duration) arrives
+                            # later on a UserMessage and enriches this same entry
+                            # — see the UserMessage handler below.
                             evidence.append(ToolEvidence(
                                 tool=block.name,
                                 args=call_args,
@@ -819,28 +824,40 @@ async def _run_specialist(
                                 "[%s] tool_call: %s(%s)",
                                 name, block.name, json.dumps(compact, default=str),
                             )
-                        elif isinstance(block, ToolResultBlock):
-                            # Agent SDK may expose results in future versions.
-                            # When available, enrich the matching evidence entry.
-                            tool_id = block.tool_use_id
-                            if tool_id in pending_tool_calls:
-                                call = pending_tool_calls.pop(tool_id)
-                                result_str = str(block.content) if block.content else ""
-                                call_duration_ms = int((time.monotonic() - call["start_mono"]) * 1000)
-                                is_err = getattr(block, "is_error", False) or False
-                                # Find and enrich the evidence entry we created above
-                                for ev in reversed(evidence):
-                                    if ev.tool == call["tool"] and ev.started_at == call["started_at"]:
-                                        ev.result_summary = result_str[:500]
-                                        ev.result_hash = hashlib.sha256(result_str.encode()).hexdigest()
-                                        ev.is_error = is_err
-                                        ev.duration_ms = call_duration_ms
-                                        break
-                                status_icon = "ERR" if is_err else "ok"
-                                logger.info(
-                                    "[%s] tool_result: %s → %s %d chars %.1fs",
-                                    name, call["tool"], status_icon, len(result_str), call_duration_ms / 1000,
-                                )
+                elif isinstance(message, UserMessage):
+                    # Tool RESULTS arrive on UserMessage, not AssistantMessage
+                    # (needs extra_args={"replay-user-messages": None}). Match each
+                    # ToolResultBlock back to its pending call via tool_use_id and
+                    # enrich the evidence entry so per-call failures are observable.
+                    content = message.content
+                    if isinstance(content, list):
+                        for block in content:
+                            if not isinstance(block, ToolResultBlock):
+                                continue
+                            call = pending_tool_calls.pop(block.tool_use_id, None)
+                            if call is None:
+                                continue
+                            result_str = str(block.content) if block.content else ""
+                            is_err = bool(getattr(block, "is_error", False) or False)
+                            duration_ms = int((time.monotonic() - call["start_mono"]) * 1000)
+                            completeness = (
+                                "error" if is_err
+                                else "empty" if not result_str
+                                else "full"
+                            )
+                            for ev in reversed(evidence):
+                                if ev.tool == call["tool"] and ev.started_at == call["started_at"]:
+                                    ev.result_summary = result_str[:500]
+                                    ev.result_hash = hashlib.sha256(result_str.encode()).hexdigest()
+                                    ev.is_error = is_err
+                                    ev.duration_ms = duration_ms
+                                    ev.completeness = completeness
+                                    break
+                            logger.info(
+                                "[%s] tool_result: %s → %s %d chars %.1fs",
+                                name, call["tool"], "ERR" if is_err else "ok",
+                                len(result_str), duration_ms / 1000,
+                            )
                 elif isinstance(message, ResultMessage):
                     report_text = message.result or ""
                     total_cost = message.total_cost_usd or 0.0

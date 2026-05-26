@@ -11,6 +11,7 @@ Mocks `claude_agent_sdk.query` so no real SDK subprocess spawns.
 from __future__ import annotations
 
 import pytest
+from claude_agent_sdk import ToolResultBlock, ToolUseBlock, UserMessage
 
 from flowtracker.research import agent as agent_mod
 
@@ -260,3 +261,81 @@ class TestSpecialistOptionsIsolation:
         assert 'setting_sources=[""]' in src
         assert "setting_sources=[]" not in src
         assert "plugins=[]" in src
+
+
+# ---------------------------------------------------------------------------
+# Tool-result capture — ToolResultBlock arrives via UserMessage, not
+# AssistantMessage. The stream loop must enrich the matching ToolEvidence
+# entry so per-call failures (is_error) and results are observable.
+# ---------------------------------------------------------------------------
+
+
+class TestToolResultCapture:
+    @pytest.mark.asyncio
+    async def test_tool_result_error_enriches_evidence(
+        self, patch_sdk_types, stub_heavy_deps, monkeypatch
+    ):
+        """A failing tool call delivered as a UserMessage/ToolResultBlock must
+        set is_error=True + result_summary + completeness='error' on evidence."""
+        call = ToolUseBlock(
+            id="t1", name="mcp__valuation__get_fair_value", input={"symbol": "TESTCO"}
+        )
+        result = ToolResultBlock(
+            tool_use_id="t1", content="ERROR: data unavailable", is_error=True
+        )
+        stream = [
+            _FakeAssistantMessage([call]),
+            UserMessage(content=[result]),
+            _FakeResultMessage("# Report\n\nBody text here."),
+        ]
+        fake_query, _ = _make_query([("yield", stream)])
+        monkeypatch.setattr(agent_mod, "query", fake_query)
+
+        _, trace = await agent_mod._run_specialist(
+            name="valuation", symbol="TESTCO", system_prompt="p",
+            tools=[], max_turns=1, max_budget=0.1, model="claude-sonnet-4-6",
+        )
+
+        assert len(trace.tool_calls) == 1
+        ev = trace.tool_calls[0]
+        assert ev.tool == "mcp__valuation__get_fair_value"
+        assert ev.is_error is True
+        assert "data unavailable" in ev.result_summary
+        assert ev.result_hash  # non-empty sha256
+        assert ev.completeness == "error"
+
+    @pytest.mark.asyncio
+    async def test_tool_result_success_enriches_evidence(
+        self, patch_sdk_types, stub_heavy_deps, monkeypatch
+    ):
+        """A successful tool call populates result_summary + completeness='full'
+        and leaves is_error False."""
+        call = ToolUseBlock(id="t1", name="mcp__valuation__get_fundamentals", input={})
+        result = ToolResultBlock(
+            tool_use_id="t1", content="revenue: 1000\nnet_profit: 200", is_error=False
+        )
+        stream = [
+            _FakeAssistantMessage([call]),
+            UserMessage(content=[result]),
+            _FakeResultMessage("# Report\n\nBody text here."),
+        ]
+        fake_query, _ = _make_query([("yield", stream)])
+        monkeypatch.setattr(agent_mod, "query", fake_query)
+
+        _, trace = await agent_mod._run_specialist(
+            name="valuation", symbol="TESTCO", system_prompt="p",
+            tools=[], max_turns=1, max_budget=0.1, model="claude-sonnet-4-6",
+        )
+
+        ev = trace.tool_calls[0]
+        assert ev.is_error is False
+        assert "revenue: 1000" in ev.result_summary
+        assert ev.completeness == "full"
+
+    def test_options_request_user_message_replay(self):
+        """_run_specialist must enable replay-user-messages so the SDK actually
+        delivers UserMessage (and thus ToolResultBlock) into the stream."""
+        import inspect
+
+        src = inspect.getsource(agent_mod._run_specialist)
+        assert "replay-user-messages" in src
