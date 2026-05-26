@@ -145,7 +145,7 @@ def fetch(
 def deviations(
     category: Annotated[
         str | None,
-        typer.Option("-c", "--category", help="Filter by category: FII, DII, MF, Promoter, Public"),
+        typer.Option("-c", "--category", help="Filter by category: FII, DII, MF, Promoter, Public, Government"),
     ] = None,
     limit: Annotated[
         int,

@@ -44,15 +44,16 @@ def normalize_category(raw: str) -> str:
     return raw.strip()
 
 
-# Domestic-institution buckets in the canonical 6-bucket shareholding model
-# (Promoter/FII/MF/Insurance/AIF/Public). DII is *derived* as their sum, never
-# stored — storing it as a peer category double-counts the NSE
-# InstitutionsDomestic parent. See holding_client._XBRL_CATEGORY_MAP.
-DII_COMPONENTS = ("MF", "Insurance", "AIF")
+# Domestic-institution leaf categories stored in the shareholding table. DII is
+# *derived* as their sum (incl. the OtherDII reconciliation remainder), never
+# stored as a peer category — that would double-count the NSE InstitutionsDomestic
+# parent. The full leaf set makes derived DII == that parent. See
+# holding_client._XBRL_CATEGORY_MAP / _DOMESTIC_LEAF_CATEGORIES.
+DII_COMPONENTS = ("MF", "Insurance", "AIF", "Banks", "OtherFI", "NBFC", "Pension", "VC", "SovereignDomestic", "OtherDII")
 
 
 def derive_dii(by_category: dict[str, float | None]) -> float | None:
-    """Derived DII % = sum of MF + Insurance + AIF present in the mapping.
+    """Derived DII % = sum of the DII_COMPONENTS leaf categories present in the mapping.
 
     Returns None if none of the component categories are present (so a stock
     with no domestic-institution data reads as missing, not 0.0).

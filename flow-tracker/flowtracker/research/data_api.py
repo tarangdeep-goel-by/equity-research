@@ -1934,7 +1934,7 @@ class ResearchDataAPI:
                 return None
             return by_q.get(q, {}).get(cat)
 
-        categories = ["Promoter", "FII", "DII", "MF", "Insurance", "AIF", "Public"]
+        categories = ["Promoter", "FII", "DII", "MF", "Insurance", "AIF", "Public", "Government", "Other"]
         current_ownership = {
             "as_of_quarter": current_q,
             **{cat.lower() + "_pct": pct(current_q, cat) for cat in categories},
@@ -2990,6 +2990,7 @@ class ResearchDataAPI:
         "domestic_institutions": "DII",
         "promoters": "Promoter",
         "public": "Public",
+        "government": "Government",
     }
 
     @classmethod

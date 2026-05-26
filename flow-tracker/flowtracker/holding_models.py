@@ -38,9 +38,14 @@ class ShareholdingSnapshot(BaseModel):
 
     @property
     def dii_pct(self) -> float | None:
-        """Derived DII % (MF + Insurance + AIF) — DII is not stored."""
+        """Derived DII % (sum of domestic-institution leaves) — DII is not stored."""
         from flowtracker.utils import derive_dii
         return derive_dii({r.category: r.percentage for r in self.records})
+
+    @property
+    def government_pct(self) -> float | None:
+        """Government holding percentage."""
+        return next((r.percentage for r in self.records if r.category == "Government"), None)
 
     @property
     def public_pct(self) -> float | None:

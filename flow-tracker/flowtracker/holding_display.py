@@ -61,7 +61,7 @@ def display_shareholding(symbol: str, records: list[ShareholdingRecord]) -> None
         if dii is not None:
             q_vals["DII"] = dii
 
-    categories = ["Promoter", "FII", "DII", "MF", "Insurance", "Public"]
+    categories = ["Promoter", "FII", "DII", "Government", "MF", "Insurance", "Public", "Other"]
 
     table = Table(
         title=f"Shareholding Pattern — {symbol}",

@@ -432,6 +432,17 @@ class TestShareholdingSnapshot:
         s = self._make_snapshot(categories={"MF": 5.0})
         assert s.dii_pct == 5.0
 
+    def test_dii_pct_full_leaf_set(self):
+        s = self._make_snapshot(categories={
+            "MF": 5.0, "Insurance": 4.0, "Banks": 0.5, "Pension": 3.0, "OtherDII": 0.5,
+        })
+        assert s.dii_pct == 13.0
+
+    def test_government_pct(self):
+        s = self._make_snapshot(categories={"Government": 19.5, "MF": 5.0})
+        assert s.government_pct == 19.5
+        assert self._make_snapshot(categories={"MF": 5.0}).government_pct is None
+
     def test_public_pct(self):
         s = self._make_snapshot()
         assert s.public_pct == 10.0

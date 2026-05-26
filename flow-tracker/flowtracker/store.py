@@ -60,7 +60,7 @@ _SHAREHOLDING_WITH_DII = """
     FROM shareholding WHERE category != 'DII'
     UNION ALL
     SELECT symbol, quarter_end, 'DII' AS category, ROUND(SUM(percentage), 2) AS percentage
-    FROM shareholding WHERE category IN ('MF', 'Insurance', 'AIF')
+    FROM shareholding WHERE category IN ('MF', 'Insurance', 'AIF', 'Banks', 'OtherFI', 'NBFC', 'Pension', 'VC', 'SovereignDomestic', 'OtherDII')
     GROUP BY symbol, quarter_end
 """
 

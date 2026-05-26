@@ -262,16 +262,17 @@ def render_shareholding_chart(symbol: str, shareholding_data: list[dict]) -> str
         return ""
 
     quarters = sorted(quarters_map.keys())
-    categories = ["Promoters", "FII", "DII", "Public"]
+    categories = ["Promoters", "FII", "DII", "Government", "Public"]
     cat_aliases = {
         "Promoters": ["Promoters", "Promoter"],
         "FII": ["FII", "Foreign Institutions", "FPI"],
-        "DII": ["DII", "Domestic Institutions", "MF"],
+        "DII": ["DII", "Domestic Institutions", "MF", "Insurance", "AIF", "Banks", "OtherFI", "NBFC", "Pension", "VC", "SovereignDomestic", "OtherDII"],
+        "Government": ["Government"],
         "Public": ["Public", "Retail", "Others"],
     }
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    colors = {"Promoters": _ACCENT_1, "FII": _ACCENT_2, "DII": _GREEN, "Public": _YELLOW}
+    colors = {"Promoters": _ACCENT_1, "FII": _ACCENT_2, "DII": _GREEN, "Government": _RED, "Public": _YELLOW}
 
     for cat in categories:
         vals = []

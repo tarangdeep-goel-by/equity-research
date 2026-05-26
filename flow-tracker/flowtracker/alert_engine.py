@@ -60,7 +60,7 @@ def _get_metric_value(store: FlowStore, symbol: str, condition_type: str) -> flo
             # the latest quarter — it is no longer stored as its own category.
             rows = store._conn.execute(
                 "SELECT category, percentage FROM shareholding "
-                "WHERE symbol = ? AND category IN ('MF', 'Insurance', 'AIF') "
+                "WHERE symbol = ? AND category IN ('MF', 'Insurance', 'AIF', 'Banks', 'OtherFI', 'NBFC', 'Pension', 'VC', 'SovereignDomestic', 'OtherDII') "
                 "AND quarter_end = (SELECT MAX(quarter_end) FROM shareholding WHERE symbol = ?)",
                 (symbol, symbol),
             ).fetchall()
