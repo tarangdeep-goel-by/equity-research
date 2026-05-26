@@ -30,11 +30,18 @@ def fetch(
     date_str: Annotated[
         str | None, typer.Option("--date", help="Date as YYYY-MM-DD (default: today)")
     ] = None,
+    legacy: Annotated[
+        bool,
+        typer.Option(
+            "--legacy",
+            help="Force the pre-2020 legacy archive URL (auto-detected by default)",
+        ),
+    ] = False,
 ) -> None:
     """Fetch bhavcopy for a single trading day."""
     target = _parse_date(date_str) if date_str else date.today()
     with BhavcopyClient() as client, FlowStore() as store:
-        records = client.fetch_day(target)
+        records = client.fetch_day(target, legacy=legacy)
         if not records:
             console.print(f"[yellow]No data for {target.isoformat()} (holiday/weekend?)[/]")
             raise typer.Exit(1)
