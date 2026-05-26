@@ -117,6 +117,26 @@ def _detect_parent_subsidiary(store, symbol: str, shareholders: list) -> None:
         pass  # don't break refresh for detection failures
 
 
+def _shareholding_needs_fetch(store, symbol: str, max_age_days: int = 110) -> bool:
+    """True if shareholding is missing or its latest quarter is stale.
+
+    Shareholding is quarterly, so this is a quarter-cadence check (not the 6h
+    freshness used for the other sources). A NSE filing for quarter Q lands ~45
+    days after quarter-end, so if our newest quarter_end is older than ~110 days
+    a fresher filing almost certainly exists.
+    """
+    row = store._conn.execute(
+        "SELECT MAX(quarter_end) FROM shareholding WHERE symbol = ?", (symbol,)
+    ).fetchone()
+    latest = row[0] if row else None
+    if not latest:
+        return True
+    try:
+        return (date.today() - date.fromisoformat(latest[:10])).days > max_age_days
+    except (ValueError, TypeError):
+        return True
+
+
 def refresh_for_research(
     symbol: str, console: Console | None = None, max_age_hours: int = 6,
 ) -> dict[str, int]:
@@ -148,6 +168,33 @@ def refresh_for_research(
     from flowtracker.store import FlowStore
 
     with FlowStore() as store:
+        # --- Shareholding (NSE XBRL) — quarterly cadence, fetched independently of
+        # the 6h gate below so ownership/DII data is present at run time when it is
+        # missing or a new quarter's filing is due. Also upgrades older rows to the
+        # current leaf taxonomy on first access. (The other sources auto-fetch under
+        # the gate; shareholding was the one source not wired into the refresh.)
+        if _shareholding_needs_fetch(store, symbol):
+            try:
+                from flowtracker.holding_client import NSEHoldingClient
+                with NSEHoldingClient() as hc:
+                    sh_records, sh_pledges, sh_breakdowns = hc.fetch_latest_quarters_full(symbol, 8)
+                if sh_records:
+                    store.upsert_shareholding(sh_records)
+                    if sh_pledges:
+                        store.upsert_promoter_pledges(sh_pledges)
+                    if sh_breakdowns:
+                        store.upsert_shareholding_breakdown(sh_breakdowns)
+                    _ok("shareholding", len(sh_records))
+                else:
+                    _skip("shareholding", "no filings")
+            except Exception as e:
+                _skip("shareholding", str(e))
+        else:
+            row = store._conn.execute(
+                "SELECT COUNT(*) FROM shareholding WHERE symbol = ?", (symbol,)
+            ).fetchone()
+            summary["shareholding"] = row[0] if row else 0
+
         # --- Freshness gate: skip if data is recent ---
         key_tables = ["quarterly_results", "valuation_snapshot", "company_profiles"]
         fresh_count = sum(1 for t in key_tables if _is_fresh(store, symbol, t, hours=max_age_hours))
