@@ -320,6 +320,7 @@ class TestValuationSnapshotShareReconciliation:
         """When valuation_snapshot.shares_outstanding is 2x annual_financials.num_shares,
         the read layer should override with Screener and recompute mcap."""
         import logging
+        from datetime import date
         from flowtracker.fund_models import ValuationSnapshot, AnnualFinancials
         from flowtracker.store import FlowStore
         from flowtracker.research.data_api import ResearchDataAPI
@@ -327,9 +328,10 @@ class TestValuationSnapshotShareReconciliation:
         monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
         with FlowStore(tmp_db) as store:
             # yfinance: 1928M shares, mcap = price × 1928M / 1e7 = 2x correct
+            # Date must fall in get_valuation_snapshot's 7-day lookback window.
             store.upsert_valuation_snapshot(ValuationSnapshot(
                 symbol="NESTLEIND",
-                date="2026-04-25",
+                date=date.today().isoformat(),
                 price=1421.3,
                 market_cap=274071.34,  # buggy yfinance mcap
                 shares_outstanding=1_928_314_320,

@@ -23,10 +23,10 @@ def _populate_mf(store, symbol="TESTCO"):
 
 
 def _populate_delivery(store, symbol="TESTCO"):
-    """Insert daily stock data with delivery."""
+    """Insert daily stock data with delivery, ending today (within 90-day window)."""
     from datetime import date, timedelta
 
-    base = date(2026, 1, 1)
+    base = date.today() - timedelta(days=59)
     for i in range(60):
         d = base + timedelta(days=i)
         if d.weekday() >= 5:

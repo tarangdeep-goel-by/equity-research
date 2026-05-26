@@ -63,10 +63,14 @@ def make_daily_flow(
     )
 
 
-def make_daily_flows(n: int = 5, start: str = "2026-03-24") -> list[DailyFlow]:
-    """N days of FII+DII flows with alternating sentiment."""
+def make_daily_flows(n: int = 5, start: str | None = None) -> list[DailyFlow]:
+    """N days of FII+DII flows with alternating sentiment.
+
+    Defaults to ending today so the data stays inside rolling query windows
+    (e.g. get_flows(days=30)) regardless of when the suite runs.
+    """
     flows = []
-    base = date.fromisoformat(start)
+    base = date.fromisoformat(start) if start else date.today() - timedelta(days=n - 1)
     for i in range(n):
         d = base + timedelta(days=i)
         ds = d.isoformat()
@@ -291,7 +295,8 @@ def make_index_constituents() -> list[IndexConstituent]:
 
 
 def make_daily_stock_data(symbol: str = "SBIN", n: int = 30) -> list[DailyStockData]:
-    base = date.fromisoformat("2026-03-01")
+    # End today so weekday rows fall inside delivery/price 30-day query windows.
+    base = date.today() - timedelta(days=n - 1)
     base_price = 800.0 if symbol == "SBIN" else 1800.0
     records = []
     for i in range(n):
@@ -342,7 +347,8 @@ def make_gold_etf_navs(n: int = 10) -> list[GoldETFNav]:
 
 
 def make_macro_snapshots(n: int = 10) -> list[MacroSnapshot]:
-    base = date.fromisoformat("2026-03-20")
+    # End today so the latest snapshot is current for macro-trend queries.
+    base = date.today() - timedelta(days=n - 1)
     return [
         MacroSnapshot(
             date=(base + timedelta(days=i)).isoformat(),

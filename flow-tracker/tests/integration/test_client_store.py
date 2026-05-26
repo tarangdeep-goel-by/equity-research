@@ -6,7 +6,7 @@ stores the result in FlowStore, then queries and verifies correctness.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -116,7 +116,7 @@ class TestBhavcopyPipeline:
     )
 
     def test_fetch_and_store(self, store: FlowStore):
-        target = date(2026, 3, 28)
+        target = date.today() - timedelta(days=1)  # recent, within get_stock_delivery's 30-day window
         url_date = target.strftime("%d%m%Y")
 
         with respx.mock:
