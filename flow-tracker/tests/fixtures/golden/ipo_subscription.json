@@ -1,0 +1,20 @@
+[
+  {
+    "companyName": "Jio Platforms Limited",
+    "symbol": "JIOPLAT",
+    "qib": 4.50,
+    "nII": 12.30,
+    "rII": 8.75,
+    "employee": 2.10,
+    "total": 7.85
+  },
+  {
+    "companyName": "TestCo SME Solutions Ltd",
+    "symbol": "TESTCO",
+    "qib": 28.0,
+    "nII": 65.5,
+    "rII": 52.3,
+    "employee": null,
+    "total": 48.2
+  }
+]

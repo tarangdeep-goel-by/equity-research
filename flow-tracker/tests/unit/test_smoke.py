@@ -208,6 +208,13 @@ HELP_COMMANDS = [
     ["surveillance", "fetch", "--help"],
     ["surveillance", "list", "--help"],
     ["surveillance", "check", "--help"],
+
+    # ipo (added 2026-05-26)
+    ["ipo", "--help"],
+    ["ipo", "fetch", "--help"],
+    ["ipo", "upcoming", "--help"],
+    ["ipo", "subscription", "--help"],
+    ["ipo", "listings", "--help"],
 ]
 # fmt: on
 
