@@ -29,9 +29,24 @@ _METALS_TICKERS: dict[str, tuple[str, str]] = {
     "COPPER": ("HG=F", "USD/lb"),
 }
 
-# mfapi.in scheme codes
+# mfapi.in scheme codes. Gold BeES has THREE codes for three sponsoring
+# AMCs spanning its full history (the same ETF asset transferred between
+# fund houses): Benchmark MF (2007-2011) → Goldman Sachs MF (2011-2016)
+# → Nippon India MF (2016-present). Each scheme's NAV series is
+# internally consistent; absolute values across the three are NOT
+# directly comparable (Nippon split units 1:100 in mid-2024). For
+# 2007→present continuity, callers should chain the three series by date.
 _ETF_SCHEMES = {
+    # Gold BeES (original Indian gold ETF, full 2007-present history)
+    "105085": "Gold Benchmark Exchange Traded Scheme (Gold BeES)",
+    "115744": "Goldman Sachs Gold Exchange Traded Scheme (GS Gold BeES)",
     "140088": "Nippon India ETF Gold BeES",
+    # Other gold ETFs (added 2026-05-26 for triangulation)
+    "106193": "Kotak Gold ETF",
+    "111954": "SBI Gold ETF",
+    "113049": "HDFC Gold ETF",
+    "113076": "ICICI Prudential Gold ETF",
+    # Silver
     "149758": "Nippon India Silver ETF",
 }
 
@@ -236,6 +251,55 @@ class CommodityClient:
     def fetch_etf_navs_all(self) -> list[GoldETFNav]:
         """Fetch full NAV history for all ETFs."""
         return self.fetch_etf_navs(days=36500)  # ~100 years, effectively all
+
+    def fetch_etf_navs_since(self, start: str) -> list[GoldETFNav]:
+        """Fetch all ETF NAVs on/after ``start`` (YYYY-MM-DD) from mfapi.in.
+
+        Use this for a date-anchored backfill (e.g. Gold BeES inception
+        on 2007-03-08). The ``days``-based ``fetch_etf_navs`` would also
+        work but drifts over time and is hard to reason about for long
+        backfills; this method lets you say "everything from 2007".
+
+        Records older than ``start`` are filtered out. NAV parse failures
+        are skipped silently (same as ``fetch_etf_navs``).
+        """
+        records: list[GoldETFNav] = []
+
+        for scheme_code, scheme_name in _ETF_SCHEMES.items():
+            try:
+                resp = self._http.get(f"https://api.mfapi.in/mf/{scheme_code}")
+                resp.raise_for_status()
+                data = resp.json()
+
+                scheme_count = 0
+                for entry in data.get("data", []):
+                    parts = entry["date"].split("-")
+                    if len(parts) != 3:
+                        continue
+                    d = f"{parts[2]}-{parts[1]}-{parts[0]}"  # YYYY-MM-DD
+
+                    if d < start:
+                        continue
+
+                    try:
+                        nav = float(entry["nav"])
+                    except (ValueError, KeyError):
+                        continue
+
+                    records.append(GoldETFNav(
+                        date=d, scheme_code=scheme_code,
+                        scheme_name=scheme_name, nav=nav,
+                    ))
+                    scheme_count += 1
+
+                logger.info(
+                    "Fetched %d NAVs for %s since %s",
+                    scheme_count, scheme_name, start,
+                )
+            except Exception as e:
+                logger.warning("Failed to fetch NAVs for %s: %s", scheme_name, e)
+
+        return records
 
     def close(self) -> None:
         self._http.close()

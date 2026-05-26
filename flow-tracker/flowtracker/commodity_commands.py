@@ -32,10 +32,28 @@ def fetch(
     days: Annotated[
         int, typer.Option("-d", "--days", help="Days of recent data")
     ] = 30,
+    since: Annotated[
+        str | None,
+        typer.Option(
+            "--since",
+            help="ETF NAV backfill start date (YYYY-MM-DD). Implies --backfill"
+            " for NAVs only. Use for Gold BeES history → '2007-03-08'.",
+        ),
+    ] = None,
 ) -> None:
     """Fetch gold/silver prices and ETF NAVs."""
     with CommodityClient() as client, FlowStore() as store:
-        if backfill:
+        if since:
+            console.print(f"[dim]Fetching ETF NAVs since {since}...[/]")
+            navs = client.fetch_etf_navs_since(since)
+            # Prices: still respect --backfill vs. --days for the
+            # yfinance side (independent of mfapi history).
+            if backfill:
+                console.print("[dim]Fetching full price history...[/]")
+                prices = client.fetch_prices_history()
+            else:
+                prices = client.fetch_prices(days)
+        elif backfill:
             console.print("[dim]Fetching full price history...[/]")
             prices = client.fetch_prices_history()
             console.print("[dim]Fetching full ETF NAV history...[/]")
