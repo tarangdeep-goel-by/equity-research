@@ -511,15 +511,29 @@ class BSEIPOClient:
         non-empty cell as issuer and best-effort extract dates from any cell
         that parses as a date.
         """
-        # Filter header rows
+        # Filter header rows (legacy BSE layout: Company / Open / Close)
         joined = " | ".join(cells).lower()
         if "company" in joined and "open" in joined and "close" in joined:
+            return None
+        # Filter header rows (current Angular BSE layout, 2026-05):
+        # Security Name | Exchange Platform | Start Date | End Date | ...
+        if (
+            "security name" in joined
+            or ("start date" in joined and "end date" in joined)
+            or ("exchange platform" in joined)
+        ):
             return None
         issuer = cells[0]
         if not issuer or len(issuer) < 3:
             return None
-        # Skip rows that are clearly not issues
-        if issuer.lower() in {"company name", "issuer", "name"}:
+        # Skip rows that are clearly not issues (header text variants)
+        if issuer.lower() in {
+            "company name", "issuer", "name", "security name",
+        }:
+            return None
+        # Skip the "No Record Found" placeholder row that BSE renders when
+        # there are no live issues (single-cell row with colspan).
+        if "no record" in issuer.lower():
             return None
         dates: list[str] = []
         non_date_cells: list[str] = []
@@ -602,14 +616,23 @@ def _try_js_rendered_sme() -> list[IPOIssue] | None:
             _BSE_SME_PAGE,
             wait_for_selector="table",
             timeout_ms=30_000,
+            use_stealth=True,
         )
     except JSFetchError as exc:
         logger.info("BSE SME JS-render fallback unavailable: %s", exc)
         return None
 
     if "Access Denied" in html:
-        logger.info(
-            "BSE SME JS-render: Akamai access-denied (%d bytes)", len(html),
+        # DEFINITIVELY BLOCKED: stealth-enabled headless Chromium is still
+        # served Akamai's Access-Denied shell. Logged at WARNING so this
+        # shows up in cron output — see flow-tracker/CLAUDE.md for the
+        # chittorgarh.com manual fallback.
+        logger.warning(
+            "BSE SME JS-render: Akamai DEFINITIVELY BLOCKED stealth Chromium "
+            "(%d bytes Access Denied shell). BSE is currently a hostile "
+            "target for automated scraping. NSE SME IPO coverage continues "
+            "as the practical answer.",
+            len(html),
         )
         return []
 

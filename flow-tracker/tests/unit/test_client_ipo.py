@@ -378,6 +378,9 @@ class TestBSEIPOClient:
         assert mock_fetch.call_args.args[0] == (
             "https://www.bseindia.com/markets/PublicIssues/IPOIssues_new.aspx"
         )
+        # Stealth mode must be enabled for BSE — Akamai bypass requires
+        # playwright-stealth + Chrome channel
+        assert mock_fetch.call_args.kwargs.get("use_stealth") is True
         # Synthetic row extracted
         assert len(rows) == 1
         assert rows[0].issuer_name.startswith("NewSME")

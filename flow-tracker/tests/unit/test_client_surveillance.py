@@ -399,6 +399,9 @@ class TestBSESurveillanceClient:
         assert mock_fetch.call_args.args[0] == (
             "https://www.bseindia.com/markets/equity/EQReports/ESM.html"
         )
+        # Stealth mode must be enabled for BSE — Akamai bypass requires
+        # playwright-stealth + Chrome channel
+        assert mock_fetch.call_args.kwargs.get("use_stealth") is True
         # And the synthetic table fixture's two rows came through
         assert len(flags) == 2
         assert {f.symbol for f in flags} == {"ACMECORP", "WIDGETSLTD"}
