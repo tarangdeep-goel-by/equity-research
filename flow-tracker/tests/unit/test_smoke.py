@@ -194,6 +194,14 @@ HELP_COMMANDS = [
     ["breadth", "backfill", "--help"],
     ["breadth", "latest", "--help"],
     ["breadth", "trend", "--help"],
+
+    # indexpe (added 2026-05-26)
+    ["indexpe", "--help"],
+    ["indexpe", "fetch", "--help"],
+    ["indexpe", "backfill", "--help"],
+    ["indexpe", "current", "--help"],
+    ["indexpe", "trend", "--help"],
+    ["indexpe", "percentile", "--help"],
 ]
 # fmt: on
 

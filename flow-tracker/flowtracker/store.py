@@ -30,6 +30,7 @@ from flowtracker.scan_models import IndexConstituent, ScanSummary
 from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials, ScreenerRatios
 from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit
 from flowtracker.breadth_models import BreadthSnapshot
+from flowtracker.indexpe_models import IndexValuation
 from flowtracker.bhavcopy_models import DailyStockData
 from flowtracker.deals_models import BulkBlockDeal
 from flowtracker.insider_models import InsiderTransaction
@@ -117,6 +118,19 @@ def _validate_row(table: str, row: dict) -> list[str]:
         if val is not None and (val < lo or val > hi):
             errors.append(f"{field}={val} outside [{lo}, {hi}]")
     return errors
+
+
+def _percentile_rank(value: float | None, series: list[float]) -> float | None:
+    """Percentile rank of ``value`` within ``series`` (0-100, inclusive).
+
+    Uses the "<= value" definition: percentile = 100 * (# observations
+    <= value) / N. Returns None when either input is empty/None.
+    """
+    if value is None or not series:
+        return None
+    n = len(series)
+    leq = sum(1 for x in series if x <= value)
+    return round(100.0 * leq / n, 2)
 
 
 _DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "flowtracker"
@@ -385,6 +399,23 @@ CREATE TABLE IF NOT EXISTS macro_daily (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(date)
 );
+
+-- Daily index-level valuation snapshots (PE / PB / Dividend Yield) sourced
+-- from niftyindices.com. Populated by `flowtrack indexpe fetch|backfill`.
+-- Used by the `percentile` command to answer regime questions like
+-- "where does today's Nifty Smallcap 250 PE sit vs the 10-year distribution".
+CREATE TABLE IF NOT EXISTS index_valuation_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    index_name TEXT NOT NULL,
+    pe REAL,
+    pb REAL,
+    dividend_yield REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, index_name)
+);
+CREATE INDEX IF NOT EXISTS idx_index_valuation_idx_date
+    ON index_valuation_daily(index_name, date);
 
 -- Weekly RBI WSS system credit/deposit aggregates. WSS publishes Friday;
 -- Section 4 (SCB Business) is keyed to fortnight-end (15th + last calendar day).
@@ -3124,6 +3155,150 @@ class FlowStore:
         )
         self._conn.commit()
         return cursor.rowcount
+
+    # -- Index-level Valuation (PE / PB / Dividend Yield) --
+
+    def upsert_index_valuations(self, valuations: list[IndexValuation]) -> int:
+        """Insert or replace daily index PE/PB/Div-Yield rows.
+
+        Idempotent on the (date, index_name) UNIQUE constraint; re-running
+        a backfill overwrites prior rows with the latest niftyindices values.
+        """
+        if not valuations:
+            return 0
+        cursor = self._conn.cursor()
+        count = 0
+        for v in valuations:
+            cursor.execute(
+                "INSERT OR REPLACE INTO index_valuation_daily "
+                "(date, index_name, pe, pb, dividend_yield) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (v.date, v.index_name.upper(), v.pe, v.pb, v.dividend_yield),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_index_valuation_history(
+        self,
+        index_name: str,
+        days: int | None = None,
+    ) -> list[IndexValuation]:
+        """Return historical index valuation rows oldest-first.
+
+        ``days``: when set, restricts to the last N days; otherwise returns
+        the full stored history.
+        """
+        canonical = index_name.strip().upper()
+        if days is not None:
+            rows = self._conn.execute(
+                "SELECT date, index_name, pe, pb, dividend_yield "
+                "FROM index_valuation_daily "
+                "WHERE index_name = ? "
+                "AND date >= date('now', ? || ' days') "
+                "ORDER BY date ASC",
+                (canonical, f"-{int(days)}"),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT date, index_name, pe, pb, dividend_yield "
+                "FROM index_valuation_daily "
+                "WHERE index_name = ? "
+                "ORDER BY date ASC",
+                (canonical,),
+            ).fetchall()
+        return [
+            IndexValuation(
+                date=r["date"],
+                index_name=r["index_name"],
+                pe=r["pe"],
+                pb=r["pb"],
+                dividend_yield=r["dividend_yield"],
+            )
+            for r in rows
+        ]
+
+    def get_index_valuation_latest(self, index_name: str) -> IndexValuation | None:
+        """Most recent index-valuation row for ``index_name``."""
+        canonical = index_name.strip().upper()
+        row = self._conn.execute(
+            "SELECT date, index_name, pe, pb, dividend_yield "
+            "FROM index_valuation_daily "
+            "WHERE index_name = ? "
+            "ORDER BY date DESC LIMIT 1",
+            (canonical,),
+        ).fetchone()
+        if not row:
+            return None
+        return IndexValuation(
+            date=row["date"],
+            index_name=row["index_name"],
+            pe=row["pe"],
+            pb=row["pb"],
+            dividend_yield=row["dividend_yield"],
+        )
+
+    def get_index_valuation_percentile(self, index_name: str) -> dict:
+        """Current PE/PB/Div-Yield percentile vs the full stored distribution.
+
+        Returns a dict with current values, 10-year (full-history) medians,
+        percentile ranks (0-100, inclusive of equal-or-lower observations),
+        and the sample size used for ranking. Returns an empty dict when
+        no history is available.
+
+        Used by ``flowtrack indexpe percentile`` to answer regime questions
+        such as "is the current Smallcap 250 PE rich vs the 10-yr median".
+        """
+        canonical = index_name.strip().upper()
+        rows = self._conn.execute(
+            "SELECT pe, pb, dividend_yield "
+            "FROM index_valuation_daily "
+            "WHERE index_name = ? "
+            "ORDER BY date ASC",
+            (canonical,),
+        ).fetchall()
+        if not rows:
+            return {}
+
+        latest = self.get_index_valuation_latest(canonical)
+        if latest is None:
+            return {}
+
+        pe_series = [r["pe"] for r in rows if r["pe"] is not None]
+        pb_series = [r["pb"] for r in rows if r["pb"] is not None]
+        divy_series = [r["dividend_yield"] for r in rows if r["dividend_yield"] is not None]
+
+        first_row = self._conn.execute(
+            "SELECT date FROM index_valuation_daily "
+            "WHERE index_name = ? ORDER BY date ASC LIMIT 1",
+            (canonical,),
+        ).fetchone()
+        last_row = self._conn.execute(
+            "SELECT date FROM index_valuation_daily "
+            "WHERE index_name = ? ORDER BY date DESC LIMIT 1",
+            (canonical,),
+        ).fetchone()
+
+        return {
+            "index_name": canonical,
+            "as_of_date": latest.date,
+            "current": {
+                "pe": latest.pe,
+                "pb": latest.pb,
+                "dividend_yield": latest.dividend_yield,
+            },
+            "median_10y": {
+                "pe": statistics.median(pe_series) if pe_series else None,
+                "pb": statistics.median(pb_series) if pb_series else None,
+                "dividend_yield": statistics.median(divy_series) if divy_series else None,
+            },
+            "pe_percentile": _percentile_rank(latest.pe, pe_series),
+            "pb_percentile": _percentile_rank(latest.pb, pb_series),
+            "divy_percentile": _percentile_rank(latest.dividend_yield, divy_series),
+            "sample_size": len(rows),
+            "history_start": first_row["date"] if first_row else None,
+            "history_end": last_row["date"] if last_row else None,
+        }
 
     # -- RBI WSS System Credit (weekly) --
 
