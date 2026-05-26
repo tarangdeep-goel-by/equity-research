@@ -366,6 +366,75 @@ class TestParseReport:
         assert rows == []
 
 
+# --------------------------------------------------------------------------- #
+# Real-world AMFI XLS golden — May 2025 quirk                                  #
+# --------------------------------------------------------------------------- #
+
+
+from pathlib import Path  # noqa: E402
+
+_AMFI_GOLDEN_DIR = Path(__file__).parent.parent / "fixtures" / "golden"
+
+
+class TestSheetSelection:
+    """Regression: AMFI May-2025 ships with the secondary ``New Schemes`` sheet
+    marked active. The parser previously used ``wb.active`` blindly and
+    returned zero rows. The fix detects the canonical data sheet via the
+    ``Scheme Name`` header marker."""
+
+    @pytest.fixture
+    def may2025_xls(self) -> bytes:
+        return (_AMFI_GOLDEN_DIR / "amfi_may2025.xls").read_bytes()
+
+    def test_may2025_active_sheet_is_wrong(self, may2025_xls):
+        """Sanity: confirm the publisher mis-shipped the file so the
+        regression remains meaningful if AMFI re-uploads later."""
+        wb = openpyxl.load_workbook(io.BytesIO(may2025_xls), read_only=True, data_only=True)
+        # Two sheets: 'May 25' (data) and 'New Schemes' (sidebar).
+        assert "May 25" in wb.sheetnames
+        assert "New Schemes" in wb.sheetnames
+        # The published file has the wrong sheet flagged active.
+        assert wb.active.title == "New Schemes"
+        wb.close()
+
+    def test_may2025_parses_full_row_set(self, may2025_xls):
+        """Despite the wrong-active-sheet quirk, the parser must still
+        recover the ~53 data rows by picking the canonical sheet."""
+        with AMFIClient() as client:
+            rows = client._parse_report(may2025_xls, "2025-05")
+        # AMFI monthly reports for this period carry ~50-55 fund-type rows
+        # across Debt / Equity / Hybrid / Solution / Other.
+        assert len(rows) >= 50, f"expected 50+ rows, got {len(rows)}"
+        categories = {r.category for r in rows}
+        assert categories == {"Debt", "Equity", "Hybrid", "Solution", "Other"}
+        # Spot-check a canonical equity row
+        equity_rows = [r for r in rows if r.category == "Equity"]
+        assert any("Large Cap" in r.sub_category for r in equity_rows)
+        assert any("Small Cap" in r.sub_category for r in equity_rows)
+
+    def test_may2025_summary_has_nonzero_equity_aum(self, may2025_xls):
+        """Smoke: full happy-path pipeline returns sensible aggregates."""
+        with AMFIClient() as client:
+            rows = client._parse_report(may2025_xls, "2025-05")
+            summary = client._build_summary(rows, "2025-05")
+        assert summary.equity_aum > 0
+        assert summary.debt_aum > 0
+        assert summary.total_aum > summary.equity_aum
+
+    def test_pick_xlsx_sheet_prefers_active_when_correct(self):
+        """The selector must not gratuitously switch sheets when the
+        active sheet already has the canonical header — keep behaviour
+        identical for all non-broken AMFI publishes."""
+        content = _build_amfi_xlsx()
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        with AMFIClient() as client:
+            picked = client._pick_xlsx_sheet(wb)
+        # _build_amfi_xlsx creates a single sheet whose active title is "Sheet"
+        # — what matters is the selector returns *that* sheet, not a fallback.
+        assert picked is wb.active
+        wb.close()
+
+
 class TestBuildSummary:
     """_build_summary aggregation logic."""
 

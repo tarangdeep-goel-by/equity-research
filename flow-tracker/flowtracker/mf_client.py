@@ -125,7 +125,10 @@ class AMFIClient:
         import xlrd
 
         wb = xlrd.open_workbook(file_contents=content)
-        ws = wb.sheet_by_index(0)
+        # Pick the canonical monthly-report sheet rather than trusting sheet
+        # index 0 — see ``_pick_data_sheet`` for the rationale.
+        ws_idx = self._pick_xls_sheet_index(wb)
+        ws = wb.sheet_by_index(ws_idx)
 
         rows: list[AMFIReportRow] = []
         current_category: str | None = None
@@ -156,7 +159,14 @@ class AMFIClient:
         import openpyxl
 
         wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        ws = wb.active
+        # AMFI's monthly XLSX usually has two sheets — ``"<Mon YY>"`` (the
+        # monthly report — what we want) and ``"New Schemes"`` (NFOs that
+        # month). ``wb.active`` returns whichever sheet was active when the
+        # workbook was last saved; for May-2025 the publisher left the
+        # "New Schemes" tab active, so the parser silently iterated an
+        # empty/wrong sheet and returned zero rows. Pick the data sheet
+        # explicitly by detecting the canonical header.
+        ws = self._pick_xlsx_sheet(wb)
 
         rows: list[AMFIReportRow] = []
         current_category: str | None = None
@@ -180,6 +190,66 @@ class AMFIClient:
 
         wb.close()
         return rows
+
+    @staticmethod
+    def _is_amfi_data_sheet(rows_preview: list[list[object]]) -> bool:
+        """Heuristic: detect the canonical AMFI monthly-report sheet.
+
+        The data sheet has ``Scheme Name`` somewhere in column index 1 within
+        the first ~10 rows. The ``New Schemes`` sidebar sheet has its own
+        column headers (``Open End``, ``Funds mobilized``) and never carries
+        the ``Scheme Name`` cell that the row-parser keys off.
+        """
+        for row in rows_preview[:10]:
+            for cell in row[:3]:
+                if cell is None:
+                    continue
+                text = str(cell).strip().lower()
+                if "scheme name" in text:
+                    return True
+        return False
+
+    def _pick_xlsx_sheet(self, wb: "object") -> "object":
+        """Choose the AMFI data sheet from an openpyxl workbook."""
+        # 1. Active sheet is correct in the common case.
+        active = wb.active
+        if self._is_amfi_data_sheet(
+            [list(r) for r in active.iter_rows(min_row=1, max_row=10, values_only=True)],
+        ):
+            return active
+        # 2. Fall back to the first sheet whose header looks right.
+        for sn in wb.sheetnames:
+            ws = wb[sn]
+            preview = [list(r) for r in ws.iter_rows(min_row=1, max_row=10, values_only=True)]
+            if self._is_amfi_data_sheet(preview):
+                logger.info(
+                    "AMFI: active sheet %r is not the data sheet; using %r instead",
+                    active.title, sn,
+                )
+                return ws
+        # 3. Nothing matched — return active and let the parser return 0 rows
+        #    (the existing AMFIFetchError path warns the caller).
+        logger.warning(
+            "AMFI: no sheet matched the canonical data header in %s", wb.sheetnames,
+        )
+        return active
+
+    def _pick_xls_sheet_index(self, wb: "object") -> int:
+        """Choose the AMFI data sheet index from an xlrd BIFF workbook."""
+        for idx in range(wb.nsheets):
+            ws = wb.sheet_by_index(idx)
+            preview: list[list[object]] = []
+            for i in range(min(10, ws.nrows)):
+                preview.append([ws.cell_value(i, j) for j in range(min(3, ws.ncols))])
+            if self._is_amfi_data_sheet(preview):
+                if idx != 0:
+                    logger.info(
+                        "AMFI (xls): sheet 0 is not the data sheet; using sheet %d (%r)",
+                        idx, ws.name,
+                    )
+                return idx
+        logger.warning("AMFI (xls): no sheet matched canonical header; defaulting to sheet 0")
+        return 0
 
     def _detect_category(self, cell_text: str) -> str | None:
         """Check if a cell contains a Roman numeral category header.
