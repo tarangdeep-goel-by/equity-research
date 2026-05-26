@@ -339,3 +339,31 @@ class TestToolResultCapture:
 
         src = inspect.getsource(agent_mod._run_specialist)
         assert "replay-user-messages" in src
+
+
+class TestToolNameResolution:
+    @pytest.mark.asyncio
+    async def test_tools_available_uses_clean_names(
+        self, patch_sdk_types, stub_heavy_deps, monkeypatch
+    ):
+        """tool_names must resolve to clean tool names, not SdkMcpTool reprs —
+        otherwise available_set never matches called_tools and the unused-tool
+        log (and trace.tools_available) is garbage."""
+        from claude_agent_sdk import tool
+
+        @tool("smoke_unused_tool", "desc", {})
+        async def smoke_unused_tool(args):  # noqa: ARG001
+            return {"content": [{"type": "text", "text": "x"}]}
+
+        stream = [
+            _FakeAssistantMessage([_FakeTextBlock("# R\n\nbody text here.")]),
+            _FakeResultMessage("# R\n\nbody text here."),
+        ]
+        fake_query, _ = _make_query([("yield", stream)])
+        monkeypatch.setattr(agent_mod, "query", fake_query)
+
+        _, trace = await agent_mod._run_specialist(
+            name="smoke", symbol="TESTCO", system_prompt="p",
+            tools=[smoke_unused_tool], max_turns=1, max_budget=0.1, model="claude-sonnet-4-6",
+        )
+        assert trace.tools_available == ["smoke_unused_tool"]
