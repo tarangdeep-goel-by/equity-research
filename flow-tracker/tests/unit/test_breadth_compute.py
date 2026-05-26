@@ -11,6 +11,7 @@ to keep the test independent of any client.
 
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 
 from flowtracker.breadth_compute import (
@@ -220,4 +221,78 @@ def test_default_indices_contains_expected_names() -> None:
     """Spec lock-in: the 4 standard indices the CLI defaults to."""
     assert DEFAULT_INDICES == (
         "NIFTY 50", "NIFTY 500", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250",
+    )
+
+
+# -- single-pass parity + performance --
+
+
+def _seed_benchmark_universe(
+    store: FlowStore, n_symbols: int, n_days: int,
+) -> list[str]:
+    """Seed `n_symbols` constituents × `n_days` trading days into NIFTY 50.
+
+    Half trend up, half trend down so the rolling-window features
+    (200DMA, 52w hi/lo, A/D) all have non-trivial values to compute.
+    Returns the sorted list of trading-date strings.
+    """
+    up = [f"BUP{i:03d}" for i in range(n_symbols // 2)]
+    dn = [f"BDN{i:03d}" for i in range(n_symbols - n_symbols // 2)]
+    constituents = [
+        IndexConstituent(
+            symbol=s, index_name="NIFTY 50",
+            company_name=f"{s} Bench Co", industry="Bench",
+        ) for s in up + dn
+    ]
+    store.upsert_index_constituents(constituents)
+
+    end = date(2026, 5, 25)
+    dates = _trading_dates(end, n_days)
+    for s in up:
+        _seed_symbol(store, s, dates, start_price=100.0, daily_drift=0.5)
+    for s in dn:
+        _seed_symbol(store, s, dates, start_price=500.0, daily_drift=-0.5)
+    return dates
+
+
+def test_compute_range_matches_per_day_compute_snapshot(store: FlowStore) -> None:
+    """The single-pass bulk path must produce identical snapshots to the
+    one-at-a-time wrapper. Locks in API parity across the rewrite.
+    """
+    dates, _ = _seed_universe(store)
+    # Probe the last 20 trading days — covers the full-history regime.
+    sample = dates[-20:]
+
+    bulk = compute_range(store, sample[0], sample[-1], ["NIFTY 50"])
+    by_date_bulk = {s.date: s for s in bulk}
+
+    for d in sample:
+        single = compute_snapshot(store, d, "NIFTY 50")
+        assert single is not None, f"single-path returned None for {d}"
+        b = by_date_bulk.get(d)
+        assert b is not None, f"bulk path missing snapshot for {d}"
+        assert b.model_dump() == single.model_dump(), (
+            f"divergence on {d}: bulk={b.model_dump()} single={single.model_dump()}"
+        )
+
+
+def test_compute_range_benchmark_under_2s(store: FlowStore) -> None:
+    """Bulk compute over 1000 days × 50 symbols completes in under 2s.
+
+    Guards the single-pass rewrite: the legacy O(N²) implementation
+    took ~30s on this fixture (one SQL fetch per (date, index) pair
+    re-scanning 200 prior days × 50 symbols). The single-pass version
+    issues one fetch per index and folds the rolling-window math in
+    numpy → well under the 2s budget on commodity hardware.
+    """
+    dates = _seed_benchmark_universe(store, n_symbols=50, n_days=1000)
+
+    start = time.perf_counter()
+    snaps = compute_range(store, dates[0], dates[-1], ["NIFTY 50"])
+    elapsed = time.perf_counter() - start
+
+    assert len(snaps) == len(dates)
+    assert elapsed < 2.0, (
+        f"compute_range took {elapsed:.2f}s on 1000d × 50sym × 1 index; "
+        f"budget is 2.0s (legacy impl was ~30s)"
     )
