@@ -19,6 +19,7 @@ dependencies = [
     "matplotlib>=3.9",
     "pdfplumber>=0.11",
     "docling>=2.0",
+    "playwright>=1.40.0",
 ]
 
 [project.optional-dependencies]

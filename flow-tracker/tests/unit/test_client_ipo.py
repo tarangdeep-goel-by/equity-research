@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import respx
 from httpx import Response
@@ -20,6 +21,7 @@ from flowtracker.ipo_client import (
     _parse_date,
     _parse_price_band,
 )
+from flowtracker.js_fetch import JSFetchError
 
 _GOLDEN = Path(__file__).parent.parent / "fixtures" / "golden"
 
@@ -321,22 +323,98 @@ class TestBSEIPOClient:
         assert first.price_band_high == 76.0
 
     def test_spa_shell_returns_empty(self):
-        """When BSE returns the SPA shell (no <table>), parser yields []."""
+        """When BSE returns the SPA shell (no <table>) and JS fallback is
+        unavailable, parser yields ``[]``."""
         spa_shell = "<!DOCTYPE html><html><body><div id='app'></div></body></html>"
         with respx.mock:
             respx.get(url__regex=r"bseindia\.com/markets/PublicIssues").respond(
                 200, text=spa_shell,
             )
-            with BSEIPOClient() as client:
-                rows = client.fetch_upcoming_sme()
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                side_effect=JSFetchError("test: no browser"),
+            ):
+                with BSEIPOClient() as client:
+                    rows = client.fetch_upcoming_sme()
         assert rows == []
 
     def test_http_failure_returns_empty(self):
-        """Network failure is swallowed — caller treats SME as best-effort."""
+        """Network failure is swallowed and JS fallback is also unavailable —
+        caller treats SME as best-effort."""
         with respx.mock:
             respx.get(url__regex=r"bseindia\.com/markets/PublicIssues").respond(
                 503, text="Service Unavailable",
             )
-            with BSEIPOClient() as client:
-                rows = client.fetch_upcoming_sme()
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                side_effect=JSFetchError("test: no browser"),
+            ):
+                with BSEIPOClient() as client:
+                    rows = client.fetch_upcoming_sme()
         assert rows == []
+
+    def test_js_fallback_invoked_when_httpx_returns_spa_shell(self):
+        """When httpx returns a shell, the JS-rendered fallback runs."""
+        spa_shell = "<!DOCTYPE html><html><body><div id='app'></div></body></html>"
+        # Synthetic rendered HTML that looks like a real BSE table.
+        rendered = (
+            "<html><body><table>"
+            "<tr><th>Company</th><th>Open</th><th>Close</th><th>Price</th></tr>"
+            "<tr><td>NewSME Issue Ltd</td><td>05-Jun-2026</td><td>09-Jun-2026</td>"
+            "<td>72-76</td></tr>"
+            "</table></body></html>"
+        )
+        with respx.mock:
+            respx.get(url__regex=r"bseindia\.com/markets/PublicIssues").respond(
+                200, text=spa_shell,
+            )
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                return_value=rendered,
+            ) as mock_fetch:
+                with BSEIPOClient() as client:
+                    rows = client.fetch_upcoming_sme()
+        mock_fetch.assert_called_once()
+        assert mock_fetch.call_args.args[0] == (
+            "https://www.bseindia.com/markets/PublicIssues/IPOIssues_new.aspx"
+        )
+        # Synthetic row extracted
+        assert len(rows) == 1
+        assert rows[0].issuer_name.startswith("NewSME")
+        assert rows[0].exchange == "BSE"
+        assert rows[0].segment == "SME"
+
+    def test_js_fallback_access_denied_returns_empty(self):
+        """Rendered fetch returns Akamai 'Access Denied' → []."""
+        spa_shell = "<!DOCTYPE html><html><body><div id='app'></div></body></html>"
+        access_denied = (
+            "<html><head><title>Access Denied</title></head>"
+            "<body><h1>Access Denied</h1></body></html>"
+        )
+        with respx.mock:
+            respx.get(url__regex=r"bseindia\.com/markets/PublicIssues").respond(
+                200, text=spa_shell,
+            )
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+                return_value=access_denied,
+            ):
+                with BSEIPOClient() as client:
+                    rows = client.fetch_upcoming_sme()
+        assert rows == []
+
+    def test_real_table_in_httpx_skips_js_fallback(self):
+        """If httpx already returns a parseable table, JS fallback is not
+        called — we save the Playwright cold-start cost."""
+        sample = (_GOLDEN / "bse_sme_upcoming.html").read_text()
+        with respx.mock:
+            respx.get(url__regex=r"bseindia\.com/markets/PublicIssues").respond(
+                200, text=sample,
+            )
+            with patch(
+                "flowtracker.js_fetch.fetch_rendered_html",
+            ) as mock_fetch:
+                with BSEIPOClient() as client:
+                    rows = client.fetch_upcoming_sme()
+        mock_fetch.assert_not_called()
+        assert len(rows) == 2

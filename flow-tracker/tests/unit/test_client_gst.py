@@ -16,6 +16,8 @@ is trivial.
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -24,16 +26,22 @@ import respx
 from flowtracker.gst_client import (
     GSTClient,
     GSTClientError,
+    _extract_pdf_url,
+    _find_collection_link,
     _iter_periods,
+    _normalise_gst_url,
     _validate_period,
     is_period_in_future,
+    parse_gst_pdf_table,
     parse_press_release_text,
     period_to_display,
     period_to_release_label,
+    period_to_release_label_short,
     previous_period,
     same_period_prior_year,
 )
 from flowtracker.gst_models import GSTCollectionMonth
+from flowtracker.js_fetch import JSFetchError
 
 
 # ---------------------------------------------------------------------------
@@ -369,3 +377,267 @@ class TestGSTClientLiveFetch:
         assert row.gross_collection_cr is None
         assert row.cgst_cr is None
         assert row.growth_yoy_pct is None
+
+
+# ---------------------------------------------------------------------------
+# Tabular parser (new tutorial.gst.gov.in PDF format)
+# ---------------------------------------------------------------------------
+
+
+_GOLDEN = Path(__file__).parent.parent / "fixtures" / "golden"
+
+
+@pytest.fixture
+def apr2026_pdf_text() -> str:
+    """First 3000 chars of pdfplumber-extracted text from the Apr-2026 PDF.
+
+    Captured from the live ``tutorial.gst.gov.in`` PDF — represents the
+    structured table layout used from FY26 onward.
+    """
+    return (_GOLDEN / "gst_apr2026_pdftext.txt").read_text(encoding="utf-8")
+
+
+class TestTabularParser:
+    def test_apr2026_full_extraction(self, apr2026_pdf_text):
+        """Real Apr-2026 PDF text — must extract gross + CGST/SGST/IGST +
+        domestic + imports + YoY."""
+        out = parse_gst_pdf_table(apr2026_pdf_text)
+        assert out["gross_collection_cr"] == pytest.approx(242702.0)
+        assert out["cgst_cr"] == pytest.approx(52140.0)
+        assert out["sgst_cr"] == pytest.approx(61331.0)
+        assert out["igst_cr"] == pytest.approx(129232.0)
+        assert out["domestic_cr"] == pytest.approx(185122.0)
+        assert out["imports_cr"] == pytest.approx(57580.0)
+        assert out["growth_yoy_pct"] == pytest.approx(8.7)
+        # New PDF format does not break out cess separately
+        assert out["cess_cr"] is None
+
+    def test_empty_text(self):
+        out = parse_gst_pdf_table("")
+        assert all(v is None for v in out.values())
+
+    def test_disambiguates_gross_vs_refunds(self):
+        """The PDF has CGST rows in 4 sub-sections (A.1 / A.3 / B.1 / C.1).
+        We must pick A.3 Gross GST Revenue, not B.1 Domestic Refunds."""
+        text = (
+            "A.1. Domestic CGST 100 200 SGST 100 200 "
+            "A.3. Gross GST Revenue CGST 48,634 52,140 SGST 59,372 61,331 "
+            "IGST 1,15,259 1,29,232 "
+            "Total Gross GST Revenue 2,23,265 2,42,702 8.7% "
+            "B.1. Domestic Refunds CGST 3,231 5,253 "
+        )
+        out = parse_gst_pdf_table(text)
+        assert out["cgst_cr"] == pytest.approx(52140.0)
+        assert out["sgst_cr"] == pytest.approx(61331.0)
+
+
+# ---------------------------------------------------------------------------
+# Release-label-short / link discovery helpers
+# ---------------------------------------------------------------------------
+
+
+class TestReleaseLabelShort:
+    def test_apr_2026(self):
+        assert period_to_release_label_short("2026-04") == "Apr, 2026"
+
+    def test_jan_2025(self):
+        assert period_to_release_label_short("2025-01") == "Jan, 2025"
+
+
+class TestFindCollectionLink:
+    def test_finds_matching_month(self):
+        html = """
+        <ul>
+          <li><a href="/newsandupdates/read/659">Gross and Net GST revenue
+              collections for the month of Apr, 2026</a></li>
+          <li><a href="/newsandupdates/read/658">Introduction of IMS Offline
+              Tool</a></li>
+          <li><a href="/newsandupdates/read/654">Gross and Net GST revenue
+              collections for the month of Mar, 2026</a></li>
+        </ul>
+        """
+        href = _find_collection_link(html, "Apr, 2026")
+        assert href == "/newsandupdates/read/659"
+
+    def test_skips_non_collection_link(self):
+        """The label must coexist with the word 'collection' — random
+        advisory containing 'Apr, 2026' should not match."""
+        html = '<a href="/newsandupdates/read/700">Advisory for Apr, 2026</a>'
+        assert _find_collection_link(html, "Apr, 2026") is None
+
+    def test_returns_none_when_label_missing(self):
+        html = (
+            '<a href="/newsandupdates/read/659">Gross and Net GST revenue '
+            "collections for the month of Apr, 2026</a>"
+        )
+        assert _find_collection_link(html, "Mar, 2026") is None
+
+    def test_handles_absolute_href(self):
+        html = (
+            '<a href="//www.gst.gov.in/newsandupdates/read/659">'
+            "Gross and Net GST revenue collections for the month of Apr, 2026</a>"
+        )
+        href = _find_collection_link(html, "Apr, 2026")
+        assert href == "//www.gst.gov.in/newsandupdates/read/659"
+
+
+class TestExtractPdfUrl:
+    def test_picks_first_pdf(self):
+        html = (
+            "<html>some text "
+            "<a href='https://tutorial.gst.gov.in/downloads/news/for_publishing_"
+            "monthly_gst_data_for_apr_2026.pdf'>PDF</a></html>"
+        )
+        assert _extract_pdf_url(html) == (
+            "https://tutorial.gst.gov.in/downloads/news/"
+            "for_publishing_monthly_gst_data_for_apr_2026.pdf"
+        )
+
+    def test_no_pdf_returns_none(self):
+        assert _extract_pdf_url("<html>no link here</html>") is None
+
+
+class TestNormaliseGstUrl:
+    def test_protocol_relative(self):
+        assert _normalise_gst_url("//www.gst.gov.in/foo") == "https://www.gst.gov.in/foo"
+
+    def test_path_only(self):
+        assert _normalise_gst_url("/foo") == "https://www.gst.gov.in/foo"
+
+    def test_absolute(self):
+        assert _normalise_gst_url("https://example.com/x") == "https://example.com/x"
+
+
+# ---------------------------------------------------------------------------
+# fetch_month_live — Playwright session mocked, PDF download via respx
+# ---------------------------------------------------------------------------
+
+
+_PDF_URL = (
+    "https://tutorial.gst.gov.in/downloads/news/"
+    "for_publishing_monthly_gst_data_for_apr_2026.pdf"
+)
+
+
+def _make_fake_session(*, listing_html: str, detail_html: str):
+    """Build a fake :class:`JSFetchSession` returning canned HTML.
+
+    ``session.fetch(url, ...)`` returns ``listing_html`` for the first call
+    and ``detail_html`` for the second. The fixture is patched into the
+    module that ``fetch_month_live`` imports it from.
+    """
+    fake = MagicMock(name="JSFetchSession")
+    # Make context-manager protocol work: with FakeSession() as s: ...
+    fake.__enter__.return_value = fake
+    fake.__exit__.return_value = False
+    fake.fetch.side_effect = [listing_html, detail_html]
+    return fake
+
+
+class TestFetchMonthLive:
+    """The full live path: Playwright discovers the link + PDF URL, then
+    httpx downloads the PDF. We mock the JSFetchSession and httpx the
+    PDF download via respx."""
+
+    def _good_listing(self) -> str:
+        return (
+            "<ul>"
+            "<li><a href='/newsandupdates/read/659'>"
+            "Gross and Net GST revenue collections for the month of Apr, 2026"
+            "</a></li>"
+            "</ul>"
+        )
+
+    def _good_detail(self) -> str:
+        return f"<html>PDF: <a href='{_PDF_URL}'>download</a></html>"
+
+    @pytest.fixture
+    def pdf_bytes(self) -> bytes:
+        return (_GOLDEN / "gst_apr2026_release.pdf").read_bytes()
+
+    def test_full_live_path(self, pdf_bytes):
+        fake = _make_fake_session(
+            listing_html=self._good_listing(),
+            detail_html=self._good_detail(),
+        )
+        with patch(
+            "flowtracker.js_fetch.JSFetchSession", return_value=fake,
+        ):
+            with respx.mock:
+                respx.get(_PDF_URL).mock(
+                    return_value=httpx.Response(
+                        200,
+                        content=pdf_bytes,
+                        headers={"content-type": "application/pdf"},
+                    ),
+                )
+                with GSTClient(
+                    seed={"_meta": {}, "collections": []},
+                ) as client:
+                    row = client.fetch_month_live("2026-04")
+        assert row is not None
+        assert row.period == "2026-04"
+        assert row.source_url == _PDF_URL
+        assert row.gross_collection_cr == pytest.approx(242702.0)
+        assert row.growth_yoy_pct == pytest.approx(8.7)
+
+    def test_no_link_found_returns_none(self):
+        """Listing has no Apr, 2026 entry — return None gracefully."""
+        fake = _make_fake_session(
+            listing_html="<ul><li>nothing relevant</li></ul>",
+            detail_html="",  # never fetched
+        )
+        with patch(
+            "flowtracker.js_fetch.JSFetchSession", return_value=fake,
+        ):
+            with GSTClient(seed={"_meta": {}, "collections": []}) as client:
+                row = client.fetch_month_live("2026-04")
+        assert row is None
+        # Only listing was fetched (detail page not reached)
+        assert fake.fetch.call_count == 1
+
+    def test_detail_page_missing_pdf_returns_none(self):
+        fake = _make_fake_session(
+            listing_html=self._good_listing(),
+            detail_html="<html>no PDF link here</html>",
+        )
+        with patch(
+            "flowtracker.js_fetch.JSFetchSession", return_value=fake,
+        ):
+            with GSTClient(seed={"_meta": {}, "collections": []}) as client:
+                row = client.fetch_month_live("2026-04")
+        assert row is None
+
+    def test_playwright_failure_returns_none(self):
+        """JSFetchError on the listing fetch → return None, don't raise."""
+        fake = MagicMock(name="JSFetchSession")
+        fake.__enter__.return_value = fake
+        fake.__exit__.return_value = False
+        fake.fetch.side_effect = JSFetchError("browser missing")
+        with patch(
+            "flowtracker.js_fetch.JSFetchSession", return_value=fake,
+        ):
+            with GSTClient(seed={"_meta": {}, "collections": []}) as client:
+                row = client.fetch_month_live("2026-04")
+        assert row is None
+
+    def test_pdf_download_404_returns_none(self):
+        fake = _make_fake_session(
+            listing_html=self._good_listing(),
+            detail_html=self._good_detail(),
+        )
+        with patch(
+            "flowtracker.js_fetch.JSFetchSession", return_value=fake,
+        ):
+            with respx.mock:
+                respx.get(_PDF_URL).mock(
+                    return_value=httpx.Response(404, text="not found"),
+                )
+                with GSTClient(seed={"_meta": {}, "collections": []}) as client:
+                    row = client.fetch_month_live("2026-04")
+        assert row is None
+
+    def test_invalid_period_raises(self):
+        with GSTClient(seed={"_meta": {}, "collections": []}) as client:
+            with pytest.raises(ValueError):
+                client.fetch_month_live("bad-period")

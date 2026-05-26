@@ -20,6 +20,8 @@ is in having the data in the DB, not in elaborate CLI options.
 
 from __future__ import annotations
 
+import logging
+from datetime import date
 from typing import Annotated
 
 import typer
@@ -40,28 +42,62 @@ app = typer.Typer(
 )
 
 console = Console()
+logger = logging.getLogger(__name__)
+
+
+def _previous_month_period() -> str:
+    """Return the previous calendar month as ``YYYY-MM``.
+
+    Used as the default target for ``gst fetch`` when no ``--period`` is
+    supplied — GST collections for month N are published on the 1st of
+    month N+1, so "the previous month" is the freshest live row.
+    """
+    today = date.today()
+    y, m = today.year, today.month - 1
+    if m < 1:
+        m = 12
+        y -= 1
+    return f"{y:04d}-{m:02d}"
 
 
 @app.command("fetch")
 def fetch(
     period: Annotated[
         str | None,
-        typer.Option("--period", "-p", help="Collection month as YYYY-MM (default: latest known)"),
+        typer.Option(
+            "--period", "-p",
+            help="Collection month as YYYY-MM (default: previous calendar month)",
+        ),
     ] = None,
     source_url: Annotated[
         str | None,
         typer.Option(
             "--source-url",
-            help="Bypass the seed and live-parse this CBIC / PIB / GST Council URL",
+            help="Bypass discovery and live-parse this CBIC / PIB / GST Council URL",
         ),
     ] = None,
+    no_live: Annotated[
+        bool,
+        typer.Option(
+            "--no-live",
+            help="Skip Playwright live discovery; serve only from the bundled seed.",
+        ),
+    ] = False,
 ) -> None:
     """Fetch one month of GST collections and upsert into the DB.
 
-    With no flags this stores the freshest known seed row (useful for cron).
-    With ``--period`` it stores exactly that month. With ``--source-url`` it
-    activates the defensive live parser — designed for the analyst hand-feeding
-    a freshly-published CBIC PDF that the seed hasn't been updated for yet.
+    Resolution order:
+
+    1. If ``--source-url`` is given, live-parse that URL (no discovery).
+    2. Otherwise (default) try Playwright live discovery on gst.gov.in
+       for the target period.
+    3. Fall back to the bundled seed JSON if live fetch fails or
+       ``--no-live`` is set.
+    4. If neither path yields data, exit with status 1.
+
+    With no flags this targets the previous calendar month — the freshest
+    one CBIC could realistically have published (released on the 1st of
+    the following month).
     """
     try:
         client = GSTClient()
@@ -70,23 +106,42 @@ def fetch(
         raise typer.Exit(1)
 
     with client:
-        if period is None and source_url is None:
-            row = client.fetch_latest()
-            if row is None:
-                console.print("[yellow]No GST data in seed.[/yellow]")
-                raise typer.Exit(1)
-        elif period is None:
-            console.print("[red]--source-url requires --period to know which month it applies to.[/red]")
-            raise typer.Exit(2)
-        else:
+        if source_url is not None:
+            if period is None:
+                console.print(
+                    "[red]--source-url requires --period to know which month it applies to.[/red]"
+                )
+                raise typer.Exit(2)
             row = client.fetch_month(period, source_url=source_url)
+            path_used = "explicit source-url"
+        else:
+            target_period = period or _previous_month_period()
+            row = None
+
+            if not no_live:
+                try:
+                    row = client.fetch_month_live(target_period)
+                except Exception as exc:  # noqa: BLE001 — fall through to seed
+                    logger.warning("GST live fetch raised; falling back to seed: %s", exc)
+                    row = None
+
+            if row is not None:
+                path_used = "live (Playwright + PDF)"
+            else:
+                row = client.fetch_month(target_period)
+                path_used = "seed (live unavailable)" if not no_live else "seed (forced)"
+
+            period = target_period
 
         if row is None:
             console.print(
                 f"[yellow]No GST data for period {period!r}. "
-                f"Available periods: {', '.join(client.known_periods[-6:])}[/yellow]",
+                f"Available seed periods: {', '.join(client.known_periods[-6:])}[/yellow]",
             )
             raise typer.Exit(1)
+
+        logger.info("GST fetch path: %s; period=%s", path_used, row.period)
+        console.print(f"[dim]Source: {path_used}[/dim]")
 
         with FlowStore() as store:
             upserted = store.upsert_gst_collections([row])

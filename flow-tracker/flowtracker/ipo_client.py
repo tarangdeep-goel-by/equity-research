@@ -447,28 +447,50 @@ class BSEIPOClient:
     def fetch_upcoming_sme(self) -> list[IPOIssue]:
         """Best-effort fetch of BSE SME upcoming issues.
 
-        Returns an empty list (with a warning log) if the BSE SPA shell is
-        returned instead of the rendered table — that is expected behaviour
-        when no SME IPO is currently open.
+        Tries plain ``httpx`` first, then a Playwright JS-rendered fetch if
+        the httpx response is the SPA shell. Returns ``[]`` if neither
+        path yields rows.
+
+        Note: BSE serves ``Access Denied`` to headless Chromium too (Akamai
+        Bot Manager), so the Playwright fallback usually returns the same
+        empty shell on a clean dev machine. The wiring is intentional —
+        the parsing path is now ready for the day BSE relaxes the rule or
+        the client runs behind a residential proxy.
         """
+        # Path 1: plain httpx
+        httpx_html: str | None = None
         try:
             resp = self._client.get(_BSE_SME_PAGE)
             resp.raise_for_status()
+            httpx_html = resp.text or ""
         except Exception as e:
-            logger.warning("BSE SME page fetch failed: %s", e)
-            return []
+            logger.warning("BSE SME page httpx fetch failed: %s", e)
 
-        html = resp.text or ""
-        # The SPA shell is ~12.5 KB and contains no <table>. Real rendered
-        # pages would have one. This is a quick negative gate.
-        if "<table" not in html.lower():
+        if httpx_html and "<table" in httpx_html.lower():
+            rows = self._parse_sme_html(httpx_html)
+            if rows:
+                return rows
+
+        # Path 2: Playwright fallback
+        rendered = _try_js_rendered_sme()
+        if rendered is not None:
+            if rendered:
+                logger.info(
+                    "BSE SME: %d issue(s) extracted via Playwright fallback",
+                    len(rendered),
+                )
+            return rendered
+
+        if httpx_html is not None:
             logger.info(
-                "BSE SME page returned SPA shell (no <table> tag) — "
-                "likely no live SME IPO. (%d bytes)",
-                len(html),
+                "BSE SME page returned SPA shell and JS-render fallback also "
+                "yielded nothing — likely no live SME IPO. (%d bytes httpx)",
+                len(httpx_html),
             )
-            return []
+        return []
 
+    def _parse_sme_html(self, html: str) -> list[IPOIssue]:
+        """Parse BSE SME HTML (httpx or rendered) for IPO rows."""
         out: list[IPOIssue] = []
         for tr in _BSE_TABLE_ROW_RE.findall(html):
             cells = [_strip_html(c) for c in _BSE_TABLE_CELL_RE.findall(tr)]
@@ -547,6 +569,64 @@ class BSEIPOClient:
 
     def __exit__(self, *args: object) -> None:
         self.close()
+
+
+# ---------------------------------------------------------------------------
+# Playwright fallback (BSE SME SPA-shell rescue)
+
+
+def _try_js_rendered_sme() -> list[IPOIssue] | None:
+    """Render the BSE SME IPO page with Playwright and parse the result.
+
+    Returns the parsed issue list (possibly empty), or ``None`` if the
+    Playwright fetch itself failed (browser missing, navigation timeout,
+    or Akamai 403). The caller treats ``None`` as "JS path unavailable;
+    fall through to graceful-empty".
+
+    BSE's Akamai Bot Manager today returns a tiny "Access Denied" body to
+    headless Chromium just as it does to plain httpx — so this path
+    usually returns ``[]`` on a stock dev machine. The wiring exists so
+    that any future relaxation (or use behind a residential proxy)
+    immediately produces data.
+    """
+    try:
+        # Lazy import — keep js_fetch / Playwright out of the happy httpx
+        # path. Falls back to None on any browser-init / nav failure.
+        from flowtracker.js_fetch import JSFetchError, fetch_rendered_html
+    except ImportError as exc:  # pragma: no cover — js_fetch is a sibling
+        logger.warning("BSE SME: js_fetch not importable (%s)", exc)
+        return None
+
+    try:
+        html = fetch_rendered_html(
+            _BSE_SME_PAGE,
+            wait_for_selector="table",
+            timeout_ms=30_000,
+        )
+    except JSFetchError as exc:
+        logger.info("BSE SME JS-render fallback unavailable: %s", exc)
+        return None
+
+    if "Access Denied" in html:
+        logger.info(
+            "BSE SME JS-render: Akamai access-denied (%d bytes)", len(html),
+        )
+        return []
+
+    # Parse via the same module-level table regex used by httpx path.
+    out: list[IPOIssue] = []
+    bse_client = BSEIPOClient.__new__(BSEIPOClient)  # parse-only (no httpx)
+    for tr in _BSE_TABLE_ROW_RE.findall(html):
+        cells = [_strip_html(c) for c in _BSE_TABLE_CELL_RE.findall(tr)]
+        if len(cells) < 4:
+            continue
+        issue = bse_client._parse_sme_row(cells)
+        if issue is not None:
+            out.append(issue)
+    logger.info(
+        "BSE SME JS-render: parsed %d issue(s) from %d bytes", len(out), len(html),
+    )
+    return out
 
 
 # ---------------------------------------------------------------------------

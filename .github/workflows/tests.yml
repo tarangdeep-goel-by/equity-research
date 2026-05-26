@@ -21,6 +21,9 @@ jobs:
       - name: Install Python + deps
         run: uv sync --extra test
 
+      - name: Install Playwright Chromium (for js_fetch fallback tests)
+        run: uv run playwright install --with-deps chromium
+
       - name: Fast suite with branch coverage
         run: |
           uv run pytest -m "not slow" \
