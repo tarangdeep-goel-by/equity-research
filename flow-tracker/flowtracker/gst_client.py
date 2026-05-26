@@ -343,15 +343,82 @@ _TABULAR_GROSS_SECTION_RE = re.compile(
     r"A\.3\.\s*Gross\s+GST\s+Revenue.*?(?=B\.1\.)",
     re.IGNORECASE | re.DOTALL,
 )
+
+# Per-tax rows: capture every number on the line (we'll pick the right column
+# in post-processing). pdfplumber sometimes splits a leading 5-digit value
+# (no thousands separator inside the leading triplet) into "<digit> <comma-num>"
+# tokens, e.g. ``31,422`` → ``3 1,422``. We compensate in
+# ``_normalise_split_numbers`` rather than complicating the regex.
 _TABULAR_GROSS_CGST_RE = re.compile(
-    r"\bCGST\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER, re.IGNORECASE,
+    r"\bCGST\b([\s\d,.]+?)(?=\n|\bSGST\b|\bIGST\b|\bCESS\b|\bTotal\b|$)",
+    re.IGNORECASE,
 )
 _TABULAR_GROSS_SGST_RE = re.compile(
-    r"\bSGST\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER, re.IGNORECASE,
+    r"\bSGST\b([\s\d,.]+?)(?=\n|\bCGST\b|\bIGST\b|\bCESS\b|\bTotal\b|$)",
+    re.IGNORECASE,
 )
 _TABULAR_GROSS_IGST_RE = re.compile(
-    r"\bIGST\s+" + _TABULAR_NUMBER + r"\s+" + _TABULAR_NUMBER, re.IGNORECASE,
+    r"\bIGST\b([\s\d,.]+?)(?=\n|\bCGST\b|\bSGST\b|\bCESS\b|\bTotal\b|$)",
+    re.IGNORECASE,
 )
+
+# Token regex for per-tax row number extraction (post-split-normalisation).
+_NUMBER_TOKEN_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _normalise_split_numbers(tokens: list[str]) -> list[str]:
+    """Glue pdfplumber's leading-digit split artefacts back together.
+
+    pdfplumber occasionally splits a 5-digit value with no thousands separator
+    inside its leading triplet (``31,422``) into two tokens (``3 1,422``).
+    Heuristic: a 1-digit token immediately followed by an Indian-comma-formatted
+    token starting with one or two digits + comma is a split — concatenate.
+    Conservative: only single-digit prefix + ``\\d{1,2},`` follow-up.
+    """
+    if not tokens:
+        return tokens
+    merged: list[str] = []
+    i = 0
+    while i < len(tokens):
+        cur = tokens[i]
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        if (
+            len(cur) == 1
+            and cur.isdigit()
+            and nxt is not None
+            and re.match(r"^\d{1,2},", nxt)
+        ):
+            merged.append(cur + nxt)
+            i += 2
+        else:
+            merged.append(cur)
+            i += 1
+    return merged
+
+
+def _extract_tax_row_monthly_current(section_text: str, tax_re: re.Pattern[str]) -> float | None:
+    """Pick the 'monthly current year' column from an A.3 per-tax row.
+
+    Layout (after normalising the leading-digit split artefact):
+
+    * FY-M1 / new format: ``CGST <prior> <current> <prior> <current>`` —
+      monthly current = 2nd token (yearly half is a duplicate).
+    * Older format with sufficient months elapsed: ``CGST <m_prior> <m_curr>
+      <y_prior> <y_curr>`` — monthly current = 2nd token.
+
+    Both layouts expose the desired value at index 1 (0-based). We pick that
+    deterministically rather than trying to triangulate via yearly vs monthly
+    distinction.
+    """
+    m = tax_re.search(section_text)
+    if not m:
+        return None
+    body = m.group(1)
+    tokens = _NUMBER_TOKEN_RE.findall(body)
+    tokens = _normalise_split_numbers(tokens)
+    if len(tokens) < 2:
+        return None
+    return _to_float(tokens[1])
 
 # YoY growth: pick the percentage on the "Total Gross GST Revenue" row.
 _TABULAR_GROWTH_RE = re.compile(
@@ -393,7 +460,10 @@ def parse_gst_pdf_table(text: str) -> dict[str, float | None]:
             out[field] = _to_float(m.group(2))
 
     # Per-tax rows — restrict to the A.3 Gross GST Revenue subsection to
-    # disambiguate from A.1 Domestic / B Refunds / C Net.
+    # disambiguate from A.1 Domestic / B Refunds / C Net. Use the row-aware
+    # extractor so pdfplumber's leading-digit split artefact
+    # (e.g. ``CGST 3 1,422`` for ``31,422``) is glued back before picking
+    # the monthly-current column.
     section_match = _TABULAR_GROSS_SECTION_RE.search(flat)
     section = section_match.group(0) if section_match else flat
     for field, pat in (
@@ -401,9 +471,9 @@ def parse_gst_pdf_table(text: str) -> dict[str, float | None]:
         ("sgst_cr", _TABULAR_GROSS_SGST_RE),
         ("igst_cr", _TABULAR_GROSS_IGST_RE),
     ):
-        m = pat.search(section)
-        if m:
-            out[field] = _to_float(m.group(2))
+        val = _extract_tax_row_monthly_current(section, pat)
+        if val is not None:
+            out[field] = val
 
     # YoY growth from Total Gross row
     growth_m = _TABULAR_GROWTH_RE.search(flat)
@@ -707,15 +777,27 @@ class GSTClient:
 
         body = resp.content
         ct = (resp.headers.get("content-type") or "").lower()
-        if "pdf" in ct or url.lower().endswith(".pdf"):
+        is_pdf = "pdf" in ct or url.lower().endswith(".pdf")
+        if is_pdf:
             text = _pdf_to_text(body)
         else:
             text = _html_to_text(body)
 
-        parsed = parse_press_release_text(text)
+        # PDFs (CBIC / tutorial.gst.gov.in) ship the tabular layout from
+        # mid-2024 onwards (state-wise table + A.1/A.3/B.1/C.1 structure).
+        # Try the tabular parser first; only fall back to the prose parser
+        # for legacy press-release HTML / PDFs that pre-date the table.
+        if is_pdf:
+            parsed = parse_gst_pdf_table(text)
+            if all(v is None for v in parsed.values()):
+                parsed = parse_press_release_text(text)
+        else:
+            parsed = parse_press_release_text(text)
+            if all(v is None for v in parsed.values()):
+                parsed = parse_gst_pdf_table(text)
         if all(v is None for v in parsed.values()):
-            # Already warned inside parse_press_release_text; persist a row
-            # with everything-None so the analyst can see that we attempted
+            # Already warned inside the parsers; persist a row with
+            # everything-None so the analyst can see that we attempted
             # this period and failed.
             return GSTCollectionMonth(period=period, source_url=url)
 

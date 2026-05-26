@@ -431,6 +431,84 @@ class TestTabularParser:
         assert out["sgst_cr"] == pytest.approx(61331.0)
 
 
+@pytest.fixture
+def sep2025_pdf_text() -> str:
+    """Pre-FY26 PDF layout (Sep-2025) with monthly + yearly side-by-side
+    columns. Exercises both the column-selection logic and pdfplumber's
+    leading-digit split artefact recovery."""
+    return (_GOLDEN / "gst_sep2025_pdftext.txt").read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def jan2026_pdf_text() -> str:
+    """Mid-FY26 PDF (Jan-2026) — same multi-column layout as Sep-2025 but
+    different CGST/SGST/IGST magnitudes; second historical golden so a
+    layout-revert regression catches both."""
+    return (_GOLDEN / "gst_jan2026_pdftext.txt").read_text(encoding="utf-8")
+
+
+class TestTabularParserHistorical:
+    """Regression tests for the pre-FY26 tabular layout (4-column
+    Monthly + Yearly side-by-side, with pdfplumber's leading-digit
+    split artefact like ``CGST 3 1,422`` for ``CGST 31,422``).
+
+    Before the fix these PDFs lost CGST/SGST/IGST entirely and the prose
+    parser misread the column header ``Sep-25 % Growth`` as a 25.0 YoY%.
+    """
+
+    def test_sep2025_full_extraction(self, sep2025_pdf_text):
+        out = parse_gst_pdf_table(sep2025_pdf_text)
+        assert out["gross_collection_cr"] == pytest.approx(189017.0)
+        assert out["growth_yoy_pct"] == pytest.approx(9.1)
+        # Per-tax rows — these are where the split artefact bites
+        assert out["cgst_cr"] == pytest.approx(33645.0)
+        assert out["sgst_cr"] == pytest.approx(41836.0)
+        assert out["igst_cr"] == pytest.approx(101883.0)
+        assert out["domestic_cr"] == pytest.approx(136525.0)
+        assert out["imports_cr"] == pytest.approx(52492.0)
+
+    def test_jan2026_full_extraction(self, jan2026_pdf_text):
+        out = parse_gst_pdf_table(jan2026_pdf_text)
+        assert out["gross_collection_cr"] == pytest.approx(193384.0)
+        assert out["growth_yoy_pct"] == pytest.approx(6.2)
+        assert out["cgst_cr"] == pytest.approx(38792.0)
+        assert out["sgst_cr"] == pytest.approx(47817.0)
+        assert out["igst_cr"] == pytest.approx(106775.0)
+        assert out["domestic_cr"] == pytest.approx(141132.0)
+        assert out["imports_cr"] == pytest.approx(52253.0)
+
+    def test_pdf_source_url_path_uses_tabular_parser(self, sep2025_pdf_text):
+        """The CLI ``--source-url`` path must reach the tabular parser when
+        served a PDF, not silently fall back to the prose parser (which
+        previously misread the ``Sep-25 % Growth`` header as 25.0% YoY)."""
+        # Build a tiny PDF on the fly so we don't ship a real PDF for this
+        # path test — but the parser only sees text, so we can short-circuit
+        # via the same _fetch_from_url path using the text fixture.
+        pdf_url = "https://tutorial.gst.gov.in/downloads/news/sep_2025.pdf"
+        # Encode the extracted text into a synthetic PDF using reportlab if
+        # available; otherwise mock _pdf_to_text directly.
+        from unittest.mock import patch
+        with GSTClient(seed={"_meta": {}, "collections": []}) as client:
+            with respx.mock:
+                respx.get(pdf_url).mock(
+                    return_value=httpx.Response(
+                        200,
+                        content=b"%PDF-1.4 fake bytes",
+                        headers={"content-type": "application/pdf"},
+                    ),
+                )
+                with patch(
+                    "flowtracker.gst_client._pdf_to_text",
+                    return_value=sep2025_pdf_text,
+                ):
+                    row = client.fetch_month("2025-09", source_url=pdf_url)
+        assert row is not None
+        assert row.gross_collection_cr == pytest.approx(189017.0)
+        # The original bug surfaced as growth_yoy_pct = 25.0 — the year as %
+        assert row.growth_yoy_pct == pytest.approx(9.1)
+        assert row.cgst_cr == pytest.approx(33645.0)
+
+
 # ---------------------------------------------------------------------------
 # Release-label-short / link discovery helpers
 # ---------------------------------------------------------------------------
