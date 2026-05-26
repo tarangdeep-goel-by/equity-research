@@ -27,8 +27,8 @@ from tests.fixtures.factories import (
 class TestUpsertFlows:
     def test_upsert_two_flows_returns_count_2(self, store: FlowStore):
         flows = [
-            make_daily_flow(dt="2026-03-28", category="FII"),
-            make_daily_flow(dt="2026-03-28", category="DII", buy=8000, sell=7000),
+            make_daily_flow(category="FII"),
+            make_daily_flow(category="DII", buy=8000, sell=7000),
         ]
         count = store.upsert_flows(flows)
         assert count == 2
@@ -47,7 +47,7 @@ class TestUpsertFlows:
         assert symbols == {"FII", "DII"}
 
     def test_upsert_changed_net_creates_audit_entry(self, store: FlowStore):
-        dt = "2026-03-28"
+        dt = date.today().isoformat()
         store.upsert_flows([make_daily_flow(dt=dt, category="FII", net=-1500)])
         # Now update with different net_value
         store.upsert_flows([make_daily_flow(dt=dt, category="FII", net=-2000)])
@@ -59,7 +59,7 @@ class TestUpsertFlows:
         assert rows[0]["new_value"] == "-2000.0"
 
     def test_upsert_idempotent_no_audit(self, store: FlowStore):
-        dt = "2026-03-28"
+        dt = date.today().isoformat()
         flow = make_daily_flow(dt=dt, category="FII", net=-1500)
         store.upsert_flows([flow])
         store.upsert_flows([flow])  # same data again
@@ -71,7 +71,7 @@ class TestUpsertFlows:
 
 class TestGetLatest:
     def test_returns_pair_after_insert(self, store: FlowStore):
-        dt = "2026-03-28"
+        dt = date.today().isoformat()
         store.upsert_flows([
             make_daily_flow(dt=dt, category="FII"),
             make_daily_flow(dt=dt, category="DII", buy=8000, sell=7000),
