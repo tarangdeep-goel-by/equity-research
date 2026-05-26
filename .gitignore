@@ -20,3 +20,5 @@ equity-research-*/
 !/flow-tracker/flowtracker/research/autoeval/run_logs/.gitkeep
 /flow-tracker/flowtracker/research/autoeval/last_run.json
 /flow-tracker/flowtracker/research/autoeval/results.tsv
+/flow-tracker/flowtracker/research/autoeval/results_macro.tsv
+/flow-tracker/flowtracker/research/autoeval/backtest_results_analog.tsv
