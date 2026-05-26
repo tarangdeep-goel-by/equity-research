@@ -39,3 +39,17 @@ Flat `shareholding` holds a complete, non-overlapping leaf set summing to 100:
   Institutions, CentralGovernmentOrStateGovernment(S).
 - `InstitutionsDomestic` present every period → authoritative DII for reconciliation.
 - Backup DB with pre-migration stored DII: `~/.local/share/flowtracker/flows.db.bak-20260526-165106`.
+
+## Status (2026-05-26): code DONE + verified; backfill DEFERRED
+Tasks #5–#11 complete and committed (parser + derivation + consumers + tests). Verified on a
+12-stock sample: Σ=100, derived DII == old stored DII ±0.01, IOC/PSU reconcile.
+Backfill (#12) **paused at ~60/533** symbols — NSE rate-limits after ~50 sustained fetches
+(read timeouts, pace collapses to ~4 min/symbol). DB is in a mixed state: re-fetched symbols
+use the new leaf taxonomy (Σ=100); the rest still hold old 6-bucket data (<100 for PSUs).
+
+### To resume the backfill later
+- Symbol list: `/tmp/backfill_syms.txt` (533 syms); script: `/tmp/backfill_holdings.py` (q=12).
+- Re-run gently: batches of ~30 with 2–3s sleep + pauses, OR just let `quarterly-scan.sh` cron
+  repopulate over its normal schedule (uses the new parser automatically once merged).
+- After backfill, run the universe reconciliation sweep: every (symbol,quarter) Σtop=100±0.5,
+  derived DII vs backup stored DII ±0.05, `Other`<2% for ≥95%.
