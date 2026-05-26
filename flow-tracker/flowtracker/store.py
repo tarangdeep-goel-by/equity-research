@@ -29,6 +29,7 @@ from flowtracker.commodity_models import CommodityPrice, GoldETFNav, GoldCorrela
 from flowtracker.scan_models import IndexConstituent, ScanSummary
 from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, ValuationBand, AnnualFinancials, ScreenerRatios
 from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit
+from flowtracker.breadth_models import BreadthSnapshot
 from flowtracker.bhavcopy_models import DailyStockData
 from flowtracker.deals_models import BulkBlockDeal
 from flowtracker.insider_models import InsiderTransaction
@@ -403,6 +404,27 @@ CREATE TABLE IF NOT EXISTS macro_system_credit (
     fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_macro_system_credit_as_of ON macro_system_credit(as_of_date);
+
+-- Daily market-breadth metrics per index. Computed from `daily_stock_data`
+-- + `index_constituents` (no external HTTP). Each row is one (date, index)
+-- pair. See `breadth_compute.py` for the math.
+CREATE TABLE IF NOT EXISTS market_breadth_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    index_name TEXT NOT NULL,
+    total INTEGER NOT NULL,
+    pct_above_200dma REAL,
+    advance INTEGER NOT NULL,
+    decline INTEGER NOT NULL,
+    unchanged INTEGER NOT NULL,
+    new_52w_highs INTEGER NOT NULL,
+    new_52w_lows INTEGER NOT NULL,
+    ad_ratio REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, index_name)
+);
+CREATE INDEX IF NOT EXISTS idx_market_breadth_date ON market_breadth_daily(date);
+CREATE INDEX IF NOT EXISTS idx_market_breadth_index ON market_breadth_daily(index_name);
 
 CREATE TABLE IF NOT EXISTS index_daily_prices (
     date TEXT NOT NULL,
@@ -3168,6 +3190,63 @@ class FlowStore:
             source=r["source"] or "RBI_WSS",
         ) for r in rows]
 
+    # -- Market Breadth --
+
+    def upsert_breadth_snapshots(self, snapshots: list[BreadthSnapshot]) -> int:
+        """Insert or replace market-breadth snapshots.
+
+        UNIQUE(date, index_name) — re-running for the same date overwrites
+        (idempotent recompute).
+        """
+        cursor = self._conn.cursor()
+        count = 0
+        for s in snapshots:
+            cursor.execute(
+                "INSERT OR REPLACE INTO market_breadth_daily "
+                "(date, index_name, total, pct_above_200dma, advance, decline, "
+                " unchanged, new_52w_highs, new_52w_lows, ad_ratio) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    s.date, s.index_name, s.total, s.pct_above_200dma,
+                    s.advance, s.decline, s.unchanged,
+                    s.new_52w_highs, s.new_52w_lows, s.ad_ratio,
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_breadth_latest(self, index_name: str) -> BreadthSnapshot | None:
+        """Most recent breadth snapshot for an index."""
+        row = self._conn.execute(
+            "SELECT * FROM market_breadth_daily WHERE index_name = ? "
+            "ORDER BY date DESC LIMIT 1",
+            (index_name,),
+        ).fetchone()
+        if not row:
+            return None
+        return _row_to_breadth(row)
+
+    def get_breadth_trend(
+        self, index_name: str, days: int = 30,
+    ) -> list[BreadthSnapshot]:
+        """Last N days of breadth for an index, most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM market_breadth_daily WHERE index_name = ? "
+            "ORDER BY date DESC LIMIT ?",
+            (index_name, days),
+        ).fetchall()
+        return [_row_to_breadth(r) for r in rows]
+
+    def get_breadth_for_date(self, date_str: str) -> list[BreadthSnapshot]:
+        """All indices' breadth snapshots for one date."""
+        rows = self._conn.execute(
+            "SELECT * FROM market_breadth_daily WHERE date = ? "
+            "ORDER BY index_name",
+            (date_str,),
+        ).fetchall()
+        return [_row_to_breadth(r) for r in rows]
+
     # -- Bhavcopy + Delivery --
 
     def upsert_daily_stock_data(self, records: list[DailyStockData]) -> int:
@@ -5793,3 +5872,19 @@ def _rows_to_pair(rows: list[sqlite3.Row]) -> DailyFlowPair | None:
         return None
 
     return DailyFlowPair(date=fii.date, fii=fii, dii=dii)
+
+
+def _row_to_breadth(row: sqlite3.Row) -> BreadthSnapshot:
+    """Convert a market_breadth_daily row to a BreadthSnapshot."""
+    return BreadthSnapshot(
+        date=row["date"],
+        index_name=row["index_name"],
+        total=row["total"],
+        pct_above_200dma=row["pct_above_200dma"],
+        advance=row["advance"],
+        decline=row["decline"],
+        unchanged=row["unchanged"],
+        new_52w_highs=row["new_52w_highs"],
+        new_52w_lows=row["new_52w_lows"],
+        ad_ratio=row["ad_ratio"],
+    )

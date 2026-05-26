@@ -187,6 +187,13 @@ HELP_COMMANDS = [
     ["adr", "--help"],
     ["adr", "refresh", "--help"],
     ["adr", "list", "--help"],
+
+    # breadth (added 2026-05-26)
+    ["breadth", "--help"],
+    ["breadth", "recompute", "--help"],
+    ["breadth", "backfill", "--help"],
+    ["breadth", "latest", "--help"],
+    ["breadth", "trend", "--help"],
 ]
 # fmt: on
 
