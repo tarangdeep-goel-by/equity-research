@@ -121,7 +121,8 @@ Every feature module follows:
 | *(core)* | `fetch`, `summary`, `flows`, `streak`, `backfill` | NSE FII/DII API |
 | `mf_` | `mf` | AMFI monthly reports |
 | `holding_` | `holding` | NSE XBRL shareholding filings |
-| `scan_` | `scan` | NSE index constituents + batch shareholding |
+| `scan_` | `scan` | NSE index constituents + batch shareholding (28 indices: 4 broad + 12 sectoral + 12 thematic — see `breadth_compute.DEFAULT_INDICES`) |
+| `breadth_` | `breadth` | Market breadth — % above 200DMA, advance/decline, 52w hi/lo, A/D ratio across 28 indices |
 | `fund_` | `fund` | yfinance + Screener.in (fundamentals, charts, peers, schedules) |
 | `commodity_` | `gold` | yfinance (gold/silver) + mfapi.in (ETF NAVs) |
 | `macro_` | `macro` | VIX, USD/INR, Brent crude, 10Y G-sec |

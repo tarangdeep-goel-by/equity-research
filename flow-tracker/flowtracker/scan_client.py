@@ -81,6 +81,49 @@ _SECTORAL_INDICES = [
     "NIFTY FINANCIAL SERVICES",
 ]
 
+# 12 sectoral + thematic indices added for sector-rotation tracking
+# (PR feat/breadth-themes, 2026-05-26). NSE's JSON API
+# `/api/equity-stockIndices?index=<name>` returned 404 for ALL indices
+# (including NIFTY 50) when probed 2026-05-26 — Akamai 404 page.
+# The reliable source is the CSV archives at
+# `nsearchives.nseindia.com/content/indices/ind_<slug>list.csv` (or
+# `ind_<slug>_list.csv` for some thematics). Slugs are NOT a uniform
+# transformation of the display name — we hard-code them here from
+# probing each URL. Display name == the canonical key written into
+# `index_constituents.index_name`; cross-listed with
+# `breadth_compute.THEME_INDICES`.
+_THEME_INDEX_CSV_FILES: list[tuple[str, str]] = [
+    # -- Sectoral (6) --
+    # Alok's underweight call: private banks vs PSU + financial services
+    ("NIFTY PRIVATE BANK", "ind_nifty_privatebanklist.csv"),
+    # Sandeep's HOO hospitals/diagnostics + Baid's CDMO — broader than Pharma
+    ("NIFTY HEALTHCARE INDEX", "ind_niftyhealthcarelist.csv"),
+    # Energy split: pure oil & gas (separate from broad Energy index)
+    ("NIFTY OIL & GAS", "ind_niftyoilgaslist.csv"),
+    # Robin / Equitree explicit negative
+    ("NIFTY MEDIA", "ind_niftymedialist.csv"),
+    # Consumption-discretionary play
+    ("NIFTY CONSUMER DURABLES", "ind_niftyconsumerdurableslist.csv"),
+    # Government-owned PSU theme
+    ("NIFTY CPSE", "ind_niftycpselist.csv"),
+    # -- Thematic (6) --
+    # Equitree's defense-exports 35% CAGR thesis
+    ("NIFTY INDIA DEFENCE", "ind_niftyindiadefence_list.csv"),
+    # Baid's triple-cut consumption boom
+    ("NIFTY INDIA CONSUMPTION", "ind_niftyconsumptionlist.csv"),
+    # Equitree's Europe+1 + Baid's precision-engineering thesis
+    ("NIFTY INDIA MANUFACTURING", "ind_niftyindiamanufacturing_list.csv"),
+    # Sandeep's HOO infrastructure
+    ("NIFTY INFRASTRUCTURE", "ind_niftyinfralist.csv"),
+    # Sandeep's HOO #1 hotels thesis
+    ("NIFTY INDIA TOURISM", "ind_niftyindiatourism_list.csv"),
+    # Multinational subsidiaries (export beneficiaries)
+    ("NIFTY MNC", "ind_niftymnclist.csv"),
+]
+
+_ARCHIVES_BASE = "https://nsearchives.nseindia.com/content/indices"
+
+
 
 class NSEIndexError(Exception):
     """Raised when an index constituent fetch permanently fails."""
@@ -220,6 +263,90 @@ class NSEIndexClient:
                 logger.warning("Sectoral fetch failed for %s: %s", name, e)
                 out[name] = []
         return out
+
+    def fetch_constituents_from_archives(
+        self, display_name: str, csv_filename: str,
+    ) -> list[IndexConstituent]:
+        """Fetch index constituents from the NSE archives CSV.
+
+        The JSON `/api/equity-stockIndices` endpoint returned 404 for
+        all indices when probed 2026-05-26; the CSV at
+        ``nsearchives.nseindia.com/content/indices/<csv_filename>`` is
+        the reliable lightweight source. Each CSV has columns:
+        ``Company Name, Industry, Symbol, Series, ISIN Code``.
+
+        Raises ``NSEIndexError`` on HTTP failure or empty CSV.
+        """
+        url = f"{_ARCHIVES_BASE}/{csv_filename}"
+        try:
+            resp = self._client.get(url)
+            resp.raise_for_status()
+        except Exception as e:
+            raise NSEIndexError(
+                f"Archives fetch failed for {display_name} "
+                f"({csv_filename}): {e}"
+            )
+
+        reader = csv.DictReader(io.StringIO(resp.text))
+        constituents: list[IndexConstituent] = []
+        for row in reader:
+            sym = (row.get("Symbol") or "").strip()
+            if not sym:
+                continue
+            constituents.append(IndexConstituent(
+                symbol=sym,
+                index_name=display_name,
+                company_name=(row.get("Company Name") or "").strip() or None,
+                industry=(row.get("Industry") or "").strip() or None,
+            ))
+
+        if not constituents:
+            raise NSEIndexError(
+                f"Empty constituent list for {display_name} ({csv_filename})"
+            )
+        return constituents
+
+    def fetch_theme_indices(
+        self,
+    ) -> tuple[list[IndexConstituent], list[str]]:
+        """Fetch the 12 sectoral + thematic indices defined in ``_THEME_INDEX_CSV_FILES``.
+
+        Uses the NSE archives CSV path (not the `/api/equity-stockIndices`
+        JSON endpoint, which 404s for all indices as of 2026-05-26).
+        Sleeps 1s between fetches to match ``fetch_all_nifty250`` pacing.
+        Returns ``(all_constituents, failed_display_names)`` — per-index
+        fetch errors are logged and the failed display name is added to
+        the second tuple element so one bad CSV doesn't block the rest.
+        """
+        all_constituents: list[IndexConstituent] = []
+        failed: list[str] = []
+
+        for i, (display_name, csv_filename) in enumerate(_THEME_INDEX_CSV_FILES):
+            if i > 0:
+                time.sleep(1)
+            try:
+                batch = self.fetch_constituents_from_archives(
+                    display_name, csv_filename,
+                )
+            except NSEIndexError as e:
+                logger.warning(
+                    "Skipping '%s' — %s", display_name, e,
+                )
+                failed.append(display_name)
+                continue
+            except Exception as e:  # noqa: BLE001 — log+continue per spec
+                logger.warning(
+                    "Skipping '%s' — unexpected: %s", display_name, e,
+                )
+                failed.append(display_name)
+                continue
+            logger.info(
+                "Fetched %d constituents for '%s'",
+                len(batch), display_name,
+            )
+            all_constituents.extend(batch)
+
+        return all_constituents, failed
 
     def close(self) -> None:
         """Close the underlying HTTP client."""

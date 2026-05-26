@@ -57,6 +57,7 @@ HELP_COMMANDS = [
     # scan
     ["scan", "--help"],
     ["scan", "refresh", "--help"],
+    ["scan", "refresh-themes", "--help"],
     ["scan", "constituents", "--help"],
     ["scan", "fetch", "--help"],
     ["scan", "deviations", "--help"],

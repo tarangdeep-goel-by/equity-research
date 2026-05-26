@@ -37,8 +37,30 @@ import numpy as np
 from flowtracker.breadth_models import BreadthSnapshot
 from flowtracker.store import FlowStore
 
+# 12 sectoral + thematic indices added 2026-05-26 (PR feat/breadth-themes)
+# for sector-rotation tracking. Names are the canonical display names — see
+# `scan_client._THEME_INDEX_CSV_FILES` for the NSE archive CSV filenames
+# we fetch each one from.
+THEME_INDICES: tuple[str, ...] = (
+    # Sectoral
+    "NIFTY PRIVATE BANK",
+    "NIFTY HEALTHCARE INDEX",
+    "NIFTY OIL & GAS",
+    "NIFTY MEDIA",
+    "NIFTY CONSUMER DURABLES",
+    "NIFTY CPSE",
+    # Thematic
+    "NIFTY INDIA DEFENCE",
+    "NIFTY INDIA CONSUMPTION",
+    "NIFTY INDIA MANUFACTURING",
+    "NIFTY INFRASTRUCTURE",
+    "NIFTY INDIA TOURISM",
+    "NIFTY MNC",
+)
+
 # Indices we compute breadth for. Order = display order in `breadth latest`:
-# broad-market first (large→small), then sectoral (alphabetical for stability).
+# broad-market first (large→small), then sectoral (alphabetical for stability),
+# then thematic.
 DEFAULT_INDICES: tuple[str, ...] = (
     # Broad market (6)
     "NIFTY 50",
@@ -58,6 +80,8 @@ DEFAULT_INDICES: tuple[str, ...] = (
     "NIFTY PHARMA",
     "NIFTY PSU BANK",
     "NIFTY REALTY",
+    # Sectoral + thematic (12) — added 2026-05-26 for sector-rotation tracking
+    *THEME_INDICES,
 )
 
 # Component indices used to synthesize NIFTY 500 when the index isn't
