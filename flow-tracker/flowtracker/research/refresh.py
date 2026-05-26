@@ -117,6 +117,17 @@ def _detect_parent_subsidiary(store, symbol: str, shareholders: list) -> None:
         pass  # don't break refresh for detection failures
 
 
+def _present(store, symbol: str, table: str) -> bool:
+    """True if any row exists for this symbol in the table (presence, not freshness)."""
+    try:
+        row = store._conn.execute(
+            f"SELECT 1 FROM {table} WHERE symbol = ? LIMIT 1", (symbol,)  # noqa: S608
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
+
+
 def _shareholding_needs_fetch(store, symbol: str, max_age_days: int = 110) -> bool:
     """True if shareholding is missing or its latest quarter is stale.
 
@@ -195,11 +206,24 @@ def refresh_for_research(
             ).fetchone()
             summary["shareholding"] = row[0] if row else 0
 
-        # --- Freshness gate: skip if data is recent ---
+        # --- Freshness gate: skip ONLY when the data the agents read is both
+        # recently refreshed AND fully present. Never serve missing data — if any
+        # essential symbol-specific table is absent, fall through and fetch it.
         key_tables = ["quarterly_results", "valuation_snapshot", "company_profiles"]
+        # Symbol-specific tables the research agents depend on. All must be present
+        # to take the skip path (presence, not just the 6h freshness of key tables).
+        # Only tables reliably present for any Screener/yfinance-covered stock —
+        # NOT optional/coverage-dependent ones (consensus_estimates, FMP, insider,
+        # deals) which would force a perpetual refresh on names that legitimately
+        # lack them.
+        essential_tables = [
+            "quarterly_results", "valuation_snapshot", "company_profiles",
+            "screener_ratios", "annual_financials",
+        ]
         fresh_count = sum(1 for t in key_tables if _is_fresh(store, symbol, t, hours=max_age_hours))
-        if fresh_count >= 2:
-            _log(f"\n[dim]Data for {symbol} is fresh (<{max_age_hours}h old across {fresh_count}/{len(key_tables)} key tables). Skipping refresh.[/]")
+        missing = [t for t in essential_tables if not _present(store, symbol, t)]
+        if fresh_count >= 2 and not missing:
+            _log(f"\n[dim]Data for {symbol} is fresh (<{max_age_hours}h old across {fresh_count}/{len(key_tables)} key tables) and all essentials present. Skipping refresh.[/]")
             _log("[dim]Use --force-refresh or wait for data to age to re-fetch.[/]")
             # Return existing counts so caller knows data exists
             for t in key_tables:
@@ -208,6 +232,8 @@ def refresh_for_research(
                 ).fetchone()
                 summary[t] = row[0] if row else 0
             return summary
+        if fresh_count >= 2 and missing:
+            _log(f"\n[dim]{symbol}: key tables fresh but missing essentials {missing} — refreshing to fill gaps.[/]")
 
         # --- 1. Screener.in ---
         _log("\n[bold]Screener.in[/]")

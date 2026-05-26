@@ -398,25 +398,31 @@ class TestRefreshForResearch:
     def test_freshness_gate_short_circuits(
         self, tmp_db, monkeypatch: pytest.MonkeyPatch,
     ):
-        """If key tables are fresh, refresh returns early with existing counts."""
+        """Skip only when key tables are fresh AND all essential tables are present."""
         self._pin_db(monkeypatch, tmp_db)
-        # Seed fresh rows in 2 of the 3 key tables → short-circuit triggers.
+        from datetime import date, timedelta
+        from tests.fixtures.factories import make_screener_ratios, make_annual_financials
+        from flowtracker.holding_models import ShareholdingRecord
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         today = datetime.now().strftime("%Y-%m-%d")
         with FlowStore(db_path=tmp_db) as s:
+            # 2 key tables fresh (fetched_at = now)
             s._conn.execute(
                 "INSERT INTO quarterly_results (symbol, quarter_end, revenue, fetched_at) "
-                "VALUES (?, ?, ?, ?)",
-                ("FRESH", "2025-03-31", 100.0, now),
-            )
+                "VALUES (?, ?, ?, ?)", ("FRESH", "2025-03-31", 100.0, now))
             s._conn.execute(
                 "INSERT INTO valuation_snapshot (symbol, date, price, fetched_at) "
-                "VALUES (?, ?, ?, ?)",
-                ("FRESH", today, 100.0, now),
-            )
+                "VALUES (?, ?, ?, ?)", ("FRESH", today, 100.0, now))
+            # remaining essentials present
+            s.upsert_screener_ratios(make_screener_ratios("FRESH"))
+            s.upsert_annual_financials(make_annual_financials("FRESH"))
+            s.upsert_company_profile("FRESH", {"about_text": "An issuer."})
+            # recent shareholding so the pre-gate quarterly fetch is skipped too
+            recent = (date.today() - timedelta(days=20)).isoformat()
+            s.upsert_shareholding([ShareholdingRecord(
+                symbol="FRESH", quarter_end=recent, category="FII", percentage=10.0)])
             s._conn.commit()
 
-        # Patch ScreenerClient to assert it was NOT called.
         screener_ctor = MagicMock()
         with (
             patch("flowtracker.screener_client.ScreenerClient", screener_ctor),
@@ -424,11 +430,47 @@ class TestRefreshForResearch:
         ):
             summary = refresh_for_research("FRESH", max_age_hours=6)
 
-        screener_ctor.assert_not_called()
-        # Short-circuit returns existing counts for each key table
+        screener_ctor.assert_not_called()  # skipped: fresh + all essentials present
         assert summary.get("quarterly_results") == 1
-        assert summary.get("valuation_snapshot") == 1
-        assert summary.get("company_profiles") == 0
+
+    def test_missing_essential_forces_refresh(
+        self, tmp_db, monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Key tables fresh but an essential table missing → refresh still runs.
+
+        Guards the "never serve missing data" rule: the old binary gate would
+        skip everything once 2 key tables were fresh, leaving gaps unfilled.
+        """
+        self._pin_db(monkeypatch, tmp_db)
+        from datetime import date, timedelta
+        from flowtracker.holding_models import ShareholdingRecord
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        today = datetime.now().strftime("%Y-%m-%d")
+        with FlowStore(db_path=tmp_db) as s:
+            s._conn.execute(
+                "INSERT INTO quarterly_results (symbol, quarter_end, revenue, fetched_at) "
+                "VALUES (?, ?, ?, ?)", ("GAP", "2025-03-31", 100.0, now))
+            s._conn.execute(
+                "INSERT INTO valuation_snapshot (symbol, date, price, fetched_at) "
+                "VALUES (?, ?, ?, ?)", ("GAP", today, 100.0, now))
+            # company_profiles / screener_ratios / annual_financials intentionally absent
+            recent = (date.today() - timedelta(days=20)).isoformat()
+            s.upsert_shareholding([ShareholdingRecord(
+                symbol="GAP", quarter_end=recent, category="FII", percentage=10.0)])
+            s._conn.commit()
+
+        screener_cm = _make_screener_client_mock()
+        inner_sc = screener_cm.__enter__.return_value
+        patches = self._patches(screener_cm=screener_cm)
+        for p in patches:
+            p.start()
+        try:
+            refresh_for_research("GAP", max_age_hours=6)
+        finally:
+            for p in patches:
+                p.stop()
+        # Did NOT skip — refresh ran and fetched from Screener to fill the gap.
+        inner_sc.fetch_company_page.assert_called_once_with("GAP")
 
     def test_screener_failure_does_not_stop_pipeline(
         self, tmp_db, monkeypatch: pytest.MonkeyPatch,
