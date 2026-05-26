@@ -89,6 +89,7 @@ HELP_COMMANDS = [
     # deals
     ["deals", "--help"],
     ["deals", "fetch", "--help"],
+    ["deals", "backfill", "--help"],
     ["deals", "summary", "--help"],
     ["deals", "stock", "--help"],
     ["deals", "top", "--help"],

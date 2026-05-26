@@ -127,7 +127,7 @@ Every feature module follows:
 | `commodity_` | `gold` | yfinance (gold/silver) + mfapi.in (ETF NAVs) |
 | `macro_` | `macro` | VIX, USD/INR, Brent crude, 10Y G-sec |
 | `bhavcopy_` | `bhavcopy` | NSE daily OHLCV + delivery % |
-| `deals_` | `deals` | NSE bulk/block deals |
+| `deals_` | `deals` | NSE bulk/block deals (`fetch` for today; `backfill --from --to` for the historical archive, paged by day) |
 | `insider_` | `insider` | NSE SAST insider transactions |
 | `estimates_` | `estimates` | yfinance analyst consensus + earnings surprises |
 | `fmp_` | `fmp` | FMP API — DCF, technicals, key metrics, growth, analyst grades, price targets |
@@ -311,7 +311,7 @@ Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-sou
 - `monthly-macro-eval.sh` — Macro autoeval over rolling last-3 dates from `eval_matrix_macro.yaml` (2nd & 17th of each month, 14:00 IST)
 - `setup-crons.sh` — Registers all LaunchAgent plists
 
-Ad-hoc scripts (not scheduled): `backfill_fii_dii.py`, `backfill_fundamentals.py`, `backfill_quarterly_nse.py`, `backfill-index-prices.py`, `backfill-nifty250.py`, `batch-download-filings.py`, `check-freshness.py`, `migrate-pct.py`, `migrate-units.py`.
+Ad-hoc scripts (not scheduled): `backfill_fii_dii.py`, `backfill_fundamentals.py`, `backfill_quarterly_nse.py`, `backfill_universe_fundamentals.py` (Screener.in fundamentals for every liquid NSE EQ symbol beyond Nifty 500), `backfill_universe_corporate_actions.py` (yfinance splits/bonuses/dividends across all symbols with price history, then `recompute_adj_close`), `backfill-index-prices.py`, `backfill-nifty250.py`, `batch-download-filings.py`, `check-freshness.py`, `migrate-pct.py`, `migrate-units.py`.
 
 ## Key Patterns
 
