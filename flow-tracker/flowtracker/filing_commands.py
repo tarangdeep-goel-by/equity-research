@@ -217,7 +217,7 @@ def extract_concalls_cmd(
 @app.command(name="download-ar")
 def download_ar_cmd(
     symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol")],
-    years: Annotated[int, typer.Option("--years", "-y", help="Number of recent fiscal years to download")] = 3,
+    years: Annotated[int, typer.Option("--years", "-y", help="Number of most-recent fiscal years to download")] = 2,
 ) -> None:
     """Download annual report PDFs for the last N FYs to the vault.
 

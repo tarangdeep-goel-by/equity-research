@@ -944,3 +944,47 @@ class TestSectionPromptSchemas:
         assert "depositary" in prompt.lower()
         assert "ADR" in prompt
         assert "GDR" in prompt
+
+
+# --- Resilience: pruned/missing PDFs must not crash extraction ---------------
+# Retention deletes older AR PDFs; a PDF can also vanish mid-run (race between
+# find_ar_pdfs and _extract_single_ar). Neither should crash the whole extraction.
+
+
+@pytest.mark.asyncio
+async def test_extract_single_ar_skips_missing_pdf(tmp_path):
+    """A vanished/pruned AR PDF is skipped with a clear status, not a crash."""
+    from flowtracker.research import annual_report_extractor as are
+
+    missing = tmp_path / "stocks" / "FOO" / "filings" / "FY24" / "annual_report.pdf"
+    # deliberately do NOT create the file
+    result = await are._extract_single_ar(
+        missing, "FOO", "claude-sonnet-4-6", ("mdna",), None
+    )
+    assert result["extraction_status"] == "skipped_missing_pdf"
+    assert result["fiscal_year"] == "FY24"
+
+
+@pytest.mark.asyncio
+async def test_ensure_ar_survives_one_year_failing(tmp_path, monkeypatch):
+    """If one AR year raises mid-extraction, the others still return (gather
+    must not propagate the exception and nuke sibling years)."""
+    from flowtracker.research import annual_report_extractor as are
+
+    monkeypatch.setattr(are.Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(are, "_VAULT_BASE", tmp_path / "vault" / "stocks")
+    p_bad = tmp_path / "vault" / "stocks" / "FOO" / "filings" / "FY24" / "annual_report.pdf"
+    p_good = tmp_path / "vault" / "stocks" / "FOO" / "filings" / "FY25" / "annual_report.pdf"
+    monkeypatch.setattr(are, "find_ar_pdfs", lambda symbol, max_years=2: [p_bad, p_good])
+
+    async def fake_single(ar_pdf, symbol, model, sections, industry=None, force=False):
+        if ar_pdf == p_bad:
+            raise FileNotFoundError(2, "No such file or directory", str(ar_pdf))
+        return {"symbol": symbol, "fiscal_year": "FY25", "extraction_status": "complete"}
+
+    monkeypatch.setattr(are, "_extract_single_ar", fake_single)
+
+    result = await are.ensure_annual_report_data("FOO", years=2)
+    assert result is not None
+    fys = [y.get("fiscal_year") for y in result["per_year"]]
+    assert "FY25" in fys  # good year survived
