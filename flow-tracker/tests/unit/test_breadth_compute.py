@@ -218,9 +218,26 @@ def test_compute_range_emits_one_snapshot_per_trading_day(
 
 
 def test_default_indices_contains_expected_names() -> None:
-    """Spec lock-in: the 4 standard indices the CLI defaults to."""
+    """Spec lock-in: the 16 indices the CLI defaults to (broad + sectoral)."""
     assert DEFAULT_INDICES == (
-        "NIFTY 50", "NIFTY 500", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250",
+        # Broad market (6)
+        "NIFTY 50",
+        "NIFTY NEXT 50",
+        "NIFTY 500",
+        "NIFTY MIDCAP 100",
+        "NIFTY MIDCAP 150",
+        "NIFTY SMALLCAP 250",
+        # Sectoral (10) — alphabetical
+        "NIFTY AUTO",
+        "NIFTY BANK",
+        "NIFTY ENERGY",
+        "NIFTY FINANCIAL SERVICES",
+        "NIFTY FMCG",
+        "NIFTY IT",
+        "NIFTY METAL",
+        "NIFTY PHARMA",
+        "NIFTY PSU BANK",
+        "NIFTY REALTY",
     )
 
 
@@ -296,3 +313,9 @@ def test_compute_range_benchmark_under_2s(store: FlowStore) -> None:
         f"compute_range took {elapsed:.2f}s on 1000d × 50sym × 1 index; "
         f"budget is 2.0s (legacy impl was ~30s)"
     )
+
+
+def test_default_indices_total_count_is_16() -> None:
+    """Guards against accidental drops/additions when reorganizing the tuple."""
+    assert len(DEFAULT_INDICES) == 16
+    assert len(set(DEFAULT_INDICES)) == 16  # no duplicates

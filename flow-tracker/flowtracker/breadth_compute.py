@@ -3,12 +3,17 @@
 Pure Python — no external HTTP. Reads `daily_stock_data` +
 `index_constituents` via FlowStore, produces `BreadthSnapshot`s.
 
-Indices supported:
-    NIFTY 50, NIFTY MIDCAP 150, NIFTY SMALLCAP 250 — direct lookup.
+Indices supported (16):
+    Broad-market: NIFTY 50, NIFTY NEXT 50, NIFTY MIDCAP 100,
+                  NIFTY MIDCAP 150, NIFTY SMALLCAP 250 — direct lookup.
     NIFTY 500 — composed from (NIFTY 50 + NIFTY NEXT 50 + NIFTY MIDCAP 150
                 + NIFTY SMALLCAP 250); we don't currently store NIFTY 500
                 as a single row in `index_constituents`. If `NIFTY 500`
                 is ever added there, this fallback becomes unreachable.
+    Sectoral: NIFTY BANK, NIFTY IT, NIFTY PHARMA, NIFTY AUTO, NIFTY FMCG,
+              NIFTY METAL, NIFTY ENERGY, NIFTY REALTY, NIFTY PSU BANK,
+              NIFTY FINANCIAL SERVICES — direct lookup (populated via
+              `flowtrack scan refresh-sectoral`).
 
 Definitions used here:
     200DMA  — simple mean of `adj_close` over the last 200 trading days
@@ -32,12 +37,27 @@ import numpy as np
 from flowtracker.breadth_models import BreadthSnapshot
 from flowtracker.store import FlowStore
 
-# Indices we compute breadth for. Order = display order in `breadth latest`.
+# Indices we compute breadth for. Order = display order in `breadth latest`:
+# broad-market first (large→small), then sectoral (alphabetical for stability).
 DEFAULT_INDICES: tuple[str, ...] = (
+    # Broad market (6)
     "NIFTY 50",
+    "NIFTY NEXT 50",
     "NIFTY 500",
+    "NIFTY MIDCAP 100",
     "NIFTY MIDCAP 150",
     "NIFTY SMALLCAP 250",
+    # Sectoral (10) — alphabetical
+    "NIFTY AUTO",
+    "NIFTY BANK",
+    "NIFTY ENERGY",
+    "NIFTY FINANCIAL SERVICES",
+    "NIFTY FMCG",
+    "NIFTY IT",
+    "NIFTY METAL",
+    "NIFTY PHARMA",
+    "NIFTY PSU BANK",
+    "NIFTY REALTY",
 )
 
 # Component indices used to synthesize NIFTY 500 when the index isn't

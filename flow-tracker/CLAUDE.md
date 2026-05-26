@@ -137,6 +137,7 @@ Every feature module follows:
 | `portfolio_` | `portfolio` | Portfolio tracking — holdings, P&L, sector concentration |
 | `alert_` | `alert` | Condition-based alerts — price, PE, RSI, ownership, pledge |
 | `catalyst_` | `catalyst` | Upcoming stock catalyst events |
+| `breadth_` | `breadth` | Market breadth (% above 200DMA, advance/decline, 52w hi/lo) across 16 indices — 6 broad-market (NIFTY 50, NEXT 50, 500, MIDCAP 100/150, SMALLCAP 250) + 10 sectoral (BANK, IT, PHARMA, AUTO, FMCG, METAL, ENERGY, REALTY, PSU BANK, FINANCIAL SERVICES) |
 | `research_` | `research` | Multi-agent research (7 specialists + verify + synthesis + explainer) + thesis tracker |
 
 ### Research Layer (multi-agent architecture)
