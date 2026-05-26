@@ -41,7 +41,7 @@ def recompute(
     ] = None,
     index_name: Annotated[
         str | None,
-        typer.Option("--index", help="Index name; default = all 16 (6 broad + 10 sectoral)"),
+        typer.Option("--index", help="Index name; default = all 28 (6 broad + 10 sectoral + 12 thematic)"),
     ] = None,
 ) -> None:
     """Recompute breadth for a single date across one or all indices."""
@@ -88,7 +88,7 @@ def backfill(
     ] = None,
     index_name: Annotated[
         str | None,
-        typer.Option("--index", help="Index name; default = all 16 (6 broad + 10 sectoral)"),
+        typer.Option("--index", help="Index name; default = all 28 (6 broad + 10 sectoral + 12 thematic)"),
     ] = None,
 ) -> None:
     """Recompute breadth for every trading day in [from, to]."""
@@ -115,7 +115,7 @@ def backfill(
 
 @app.command()
 def latest() -> None:
-    """Show today's breadth for all 16 indices (6 broad + 10 sectoral)."""
+    """Show today's breadth for all 28 indices (6 broad + 10 sectoral + 12 thematic)."""
     with FlowStore() as store:
         snapshots = [
             snap for idx in DEFAULT_INDICES

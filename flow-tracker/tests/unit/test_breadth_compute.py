@@ -16,6 +16,7 @@ from datetime import date, timedelta
 
 from flowtracker.breadth_compute import (
     DEFAULT_INDICES,
+    THEME_INDICES,
     compute_range,
     compute_snapshot,
 )
@@ -218,7 +219,7 @@ def test_compute_range_emits_one_snapshot_per_trading_day(
 
 
 def test_default_indices_contains_expected_names() -> None:
-    """Spec lock-in: the 16 indices the CLI defaults to (broad + sectoral)."""
+    """Spec lock-in: 28 indices total (6 broad + 10 sectoral + 12 theme)."""
     assert DEFAULT_INDICES == (
         # Broad market (6)
         "NIFTY 50",
@@ -238,7 +239,37 @@ def test_default_indices_contains_expected_names() -> None:
         "NIFTY PHARMA",
         "NIFTY PSU BANK",
         "NIFTY REALTY",
+        # Sectoral + thematic (12) — see THEME_INDICES
+        *THEME_INDICES,
     )
+    assert len(THEME_INDICES) == 12
+    assert len(DEFAULT_INDICES) == 28
+
+
+def test_theme_indices_cover_sectoral_and_thematic_buckets() -> None:
+    """Spec lock-in: the 12 theme indices added 2026-05-26 are all present.
+
+    Sectoral (6): Private Bank, Healthcare, Oil & Gas, Media, Consumer
+    Durables, CPSE. Thematic (6): Defence, Consumption, Manufacturing,
+    Infrastructure, Tourism, MNC.
+    """
+    expected = {
+        # Sectoral
+        "NIFTY PRIVATE BANK",
+        "NIFTY HEALTHCARE INDEX",
+        "NIFTY OIL & GAS",
+        "NIFTY MEDIA",
+        "NIFTY CONSUMER DURABLES",
+        "NIFTY CPSE",
+        # Thematic
+        "NIFTY INDIA DEFENCE",
+        "NIFTY INDIA CONSUMPTION",
+        "NIFTY INDIA MANUFACTURING",
+        "NIFTY INFRASTRUCTURE",
+        "NIFTY INDIA TOURISM",
+        "NIFTY MNC",
+    }
+    assert set(THEME_INDICES) == expected
 
 
 # -- single-pass parity + performance --
@@ -315,7 +346,7 @@ def test_compute_range_benchmark_under_2s(store: FlowStore) -> None:
     )
 
 
-def test_default_indices_total_count_is_16() -> None:
+def test_default_indices_total_count_is_28() -> None:
     """Guards against accidental drops/additions when reorganizing the tuple."""
-    assert len(DEFAULT_INDICES) == 16
-    assert len(set(DEFAULT_INDICES)) == 16  # no duplicates
+    assert len(DEFAULT_INDICES) == 28
+    assert len(set(DEFAULT_INDICES)) == 28  # no duplicates

@@ -94,6 +94,40 @@ def refresh_sectoral() -> None:
     )
 
 
+@app.command("refresh-themes")
+def refresh_themes() -> None:
+    """Fetch 12 sectoral + thematic NSE indices and upsert into store.
+
+    Populates ``index_constituents`` for the indices powering
+    ``breadth_compute.THEME_INDICES`` (added 2026-05-26 in PR
+    feat/breadth-themes for sector-rotation tracking). Names that
+    fail every variant are listed at the end as a warning — the
+    rest of the indices still land.
+    """
+    try:
+        with NSEIndexClient() as client:
+            constituents, failed = client.fetch_theme_indices()
+    except NSEIndexError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)
+
+    if constituents:
+        with FlowStore() as store:
+            store.upsert_index_constituents(constituents)
+
+    unique = len({c.symbol for c in constituents})
+    indices = len({c.index_name for c in constituents})
+    console.print(
+        f"[green]Refreshed {len(constituents)} symbols "
+        f"({unique} unique across {indices} indices).[/]"
+    )
+    if failed:
+        console.print(
+            f"[yellow]Failed (all variants exhausted): "
+            f"{', '.join(failed)}[/]"
+        )
+
+
 @app.command()
 def constituents(
     index: Annotated[
