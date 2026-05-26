@@ -51,6 +51,7 @@ from flowtracker.fda_commands import app as fda_app
 from flowtracker.share_count_commands import app as share_count_app
 from flowtracker.adr_commands import app as adr_app
 from flowtracker.breadth_commands import app as breadth_app
+from flowtracker.indexpe_commands import app as indexpe_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -84,6 +85,7 @@ app.add_typer(fda_app)
 app.add_typer(share_count_app, name="share_count")
 app.add_typer(adr_app)
 app.add_typer(breadth_app)
+app.add_typer(indexpe_app)
 console = Console()
 
 

@@ -621,6 +621,15 @@
       'fetched_at',
       'index_ticker',
     ]),
+    'index_valuation_daily': list([
+      'date',
+      'dividend_yield',
+      'fetched_at',
+      'id',
+      'index_name',
+      'pb',
+      'pe',
+    ]),
     'insider_transactions': list([
       'date',
       'fetched_at',
@@ -1016,6 +1025,7 @@
     'historical_states',
     'index_constituents',
     'index_daily_prices',
+    'index_valuation_daily',
     'insider_transactions',
     'listed_subsidiaries',
     'macro_daily',
