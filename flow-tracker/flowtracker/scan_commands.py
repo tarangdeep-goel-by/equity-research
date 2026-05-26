@@ -16,7 +16,7 @@ from rich.progress import (
 )
 
 from flowtracker.holding_client import NSEHoldingClient, NSEHoldingError
-from flowtracker.scan_client import NSEIndexClient, NSEIndexError
+from flowtracker.scan_client import _SECTORAL_INDICES, NSEIndexClient, NSEIndexError
 from flowtracker.scan_display import (
     display_batch_result,
     display_constituents,
@@ -52,6 +52,45 @@ def refresh() -> None:
     unique = len({c.symbol for c in constituents})
     console.print(
         f"[green]Refreshed {len(constituents)} symbols ({unique} unique across 3 indices)[/]"
+    )
+
+
+@app.command("refresh-sectoral")
+def refresh_sectoral() -> None:
+    """Fetch sectoral + extra broad-market index constituents from NSE.
+
+    Targets the 11 indices used by the breadth module for sector-rotation
+    tracking (NIFTY MIDCAP 100 + 10 sectoral). Partial failures are tolerated:
+    indices that NSE refuses are logged + skipped, the rest are persisted.
+    """
+    try:
+        with NSEIndexClient() as client:
+            by_index = client.fetch_sectoral_indices()
+    except NSEIndexError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)
+
+    total = 0
+    empty_indices: list[str] = []
+    with FlowStore() as store:
+        for index_name, constituents in by_index.items():
+            if not constituents:
+                empty_indices.append(index_name)
+                continue
+            store.upsert_index_constituents(constituents)
+            total += len(constituents)
+            console.print(
+                f"  [green]{index_name}[/]: {len(constituents)} symbols"
+            )
+
+    if empty_indices:
+        console.print(
+            f"[yellow]Warning: {len(empty_indices)} index(es) returned 0 "
+            f"constituents: {', '.join(empty_indices)}[/]"
+        )
+    console.print(
+        f"[green]Refreshed {total} constituent rows across "
+        f"{len(by_index) - len(empty_indices)} sectoral/broad indices[/]"
     )
 
 
