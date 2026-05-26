@@ -423,9 +423,14 @@ class TestShareholdingSnapshot:
         s = self._make_snapshot()
         assert s.fii_pct == 20.0
 
-    def test_dii_pct(self):
-        s = self._make_snapshot()
-        assert s.dii_pct == 15.0
+    def test_dii_pct_derived(self):
+        # DII is derived = MF + Insurance + AIF, ignoring any stored 'DII' row.
+        s = self._make_snapshot(categories={"MF": 7.0, "Insurance": 4.0, "AIF": 1.5, "DII": 99.0})
+        assert s.dii_pct == 12.5
+
+    def test_dii_pct_partial_components(self):
+        s = self._make_snapshot(categories={"MF": 5.0})
+        assert s.dii_pct == 5.0
 
     def test_public_pct(self):
         s = self._make_snapshot()

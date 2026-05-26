@@ -248,10 +248,14 @@ def make_valuation_snapshots(symbol: str = "SBIN", n: int = 30) -> list[Valuatio
 
 
 def make_shareholding(symbol: str = "SBIN", n: int = 4) -> list[ShareholdingRecord]:
-    """N quarters of shareholding, categories sum to ~100%."""
+    """N quarters of shareholding, categories sum to ~100%.
+
+    DII is intentionally NOT seeded — it is derived (MF + Insurance + AIF) on
+    read, never stored. See flowtracker.utils.derive_dii.
+    """
     records = []
     quarters = ["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"]
-    base = {"Promoter": 57.5, "FII": 11.2, "DII": 8.5, "MF": 7.8, "Insurance": 5.2, "Public": 9.8}
+    base = {"Promoter": 57.5, "FII": 11.2, "MF": 7.8, "Insurance": 5.2, "AIF": 1.5, "Public": 16.8}
     for i in range(min(n, len(quarters))):
         for cat, pct in base.items():
             # Slight drift each quarter

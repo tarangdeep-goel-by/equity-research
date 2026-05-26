@@ -9,6 +9,7 @@ import pytest
 
 from flowtracker.utils import (
     _clean,
+    derive_dii,
     fmt_crores,
     fmt_crores_label,
     normalize_category,
@@ -156,6 +157,29 @@ class TestNormalizeCategory:
 
     def test_lowercase_dii(self):
         assert normalize_category("dii") == "DII"
+
+
+# ---------------------------------------------------------------------------
+# derive_dii — DII = MF + Insurance + AIF (derived, never stored)
+# ---------------------------------------------------------------------------
+class TestDeriveDii:
+    def test_sums_three_components(self):
+        assert derive_dii({"MF": 7.0, "Insurance": 4.0, "AIF": 1.5}) == 12.5
+
+    def test_ignores_other_categories(self):
+        assert derive_dii({"MF": 5.0, "FII": 20.0, "Promoter": 50.0, "DII": 99.0}) == 5.0
+
+    def test_partial_components(self):
+        assert derive_dii({"MF": 6.0, "Insurance": 2.0}) == 8.0
+
+    def test_none_when_no_components(self):
+        assert derive_dii({"Promoter": 50.0, "FII": 20.0}) is None
+
+    def test_empty_mapping(self):
+        assert derive_dii({}) is None
+
+    def test_skips_none_values(self):
+        assert derive_dii({"MF": 5.0, "Insurance": None, "AIF": None}) == 5.0
 
 
 # ---------------------------------------------------------------------------

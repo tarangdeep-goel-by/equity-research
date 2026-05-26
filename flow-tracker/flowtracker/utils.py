@@ -44,6 +44,23 @@ def normalize_category(raw: str) -> str:
     return raw.strip()
 
 
+# Domestic-institution buckets in the canonical 6-bucket shareholding model
+# (Promoter/FII/MF/Insurance/AIF/Public). DII is *derived* as their sum, never
+# stored — storing it as a peer category double-counts the NSE
+# InstitutionsDomestic parent. See holding_client._XBRL_CATEGORY_MAP.
+DII_COMPONENTS = ("MF", "Insurance", "AIF")
+
+
+def derive_dii(by_category: dict[str, float | None]) -> float | None:
+    """Derived DII % = sum of MF + Insurance + AIF present in the mapping.
+
+    Returns None if none of the component categories are present (so a stock
+    with no domestic-institution data reads as missing, not 0.0).
+    """
+    vals = [v for c in DII_COMPONENTS if (v := by_category.get(c)) is not None]
+    return round(sum(vals), 2) if vals else None
+
+
 def parse_nse_date(date_str: str) -> date:
     """Parse NSE date format: '17-Mar-2026' → date object."""
     return datetime.strptime(date_str.strip(), "%d-%b-%Y").date()

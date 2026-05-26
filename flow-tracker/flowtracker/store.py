@@ -51,6 +51,19 @@ import logging
 _val_logger = logging.getLogger("flowtracker.validation")
 _logger = logging.getLogger("flowtracker.store")
 
+# Shareholding rows with a derived DII category (MF + Insurance + AIF) synthesized
+# on the fly. DII is never stored — this CTE body lets ownership-trend queries
+# reference a 'DII' category without double-counting. Any legacy stored DII rows
+# are filtered out so pre/post-migration results match.
+_SHAREHOLDING_WITH_DII = """
+    SELECT symbol, quarter_end, category, percentage
+    FROM shareholding WHERE category != 'DII'
+    UNION ALL
+    SELECT symbol, quarter_end, 'DII' AS category, ROUND(SUM(percentage), 2) AS percentage
+    FROM shareholding WHERE category IN ('MF', 'Insurance', 'AIF')
+    GROUP BY symbol, quarter_end
+"""
+
 # Ranges designed to catch unit errors (rupees stored as crores).
 # A ₹500 Cr company in rupees = 5,000,000,000 — must exceed upper bound.
 # Lower bounds catch reverse errors or nonsense values.
@@ -3809,7 +3822,8 @@ class FlowStore:
         Returns list of dicts with industry, num_stocks, avg changes per category,
         avg delivery %, avg price change %.
         """
-        rows = self._conn.execute("""
+        rows = self._conn.execute(f"""
+            WITH sh AS ({_SHAREHOLDING_WITH_DII})
             SELECT
                 ic.industry,
                 COUNT(DISTINCT ic.symbol) as num_stocks,
@@ -3820,11 +3834,11 @@ class FlowStore:
                 del_stats.avg_delivery_pct,
                 del_stats.avg_price_change_pct
             FROM index_constituents ic
-            INNER JOIN shareholding s1 ON ic.symbol = s1.symbol
-            INNER JOIN shareholding s2 ON s1.symbol = s2.symbol
+            INNER JOIN sh s1 ON ic.symbol = s1.symbol
+            INNER JOIN sh s2 ON s1.symbol = s2.symbol
                 AND s1.category = s2.category
                 AND s2.quarter_end = (
-                    SELECT MAX(s3.quarter_end) FROM shareholding s3
+                    SELECT MAX(s3.quarter_end) FROM sh s3
                     WHERE s3.symbol = s1.symbol AND s3.category = s1.category
                     AND s3.quarter_end < s1.quarter_end
                 )
@@ -3844,7 +3858,7 @@ class FlowStore:
             ) del_stats ON ic.industry = del_stats.industry
             WHERE ic.industry IS NOT NULL
                 AND s1.quarter_end = (
-                    SELECT MAX(s4.quarter_end) FROM shareholding s4
+                    SELECT MAX(s4.quarter_end) FROM sh s4
                     WHERE s4.symbol = s1.symbol
                 )
                 AND s1.category IN ('FII', 'MF', 'DII', 'Promoter')
@@ -3856,7 +3870,8 @@ class FlowStore:
 
     def get_sector_detail(self, industry: str) -> list[dict]:
         """Get stock-level ownership + delivery + price data for a sector."""
-        rows = self._conn.execute("""
+        rows = self._conn.execute(f"""
+            WITH sh AS ({_SHAREHOLDING_WITH_DII})
             SELECT
                 ic.symbol,
                 MAX(CASE WHEN s1.category = 'FII' THEN s1.percentage END) as curr_fii,
@@ -3869,11 +3884,11 @@ class FlowStore:
                 del_stats.avg_delivery_pct,
                 del_stats.avg_price_change_pct
             FROM index_constituents ic
-            INNER JOIN shareholding s1 ON ic.symbol = s1.symbol
-            INNER JOIN shareholding s2 ON s1.symbol = s2.symbol
+            INNER JOIN sh s1 ON ic.symbol = s1.symbol
+            INNER JOIN sh s2 ON s1.symbol = s2.symbol
                 AND s1.category = s2.category
                 AND s2.quarter_end = (
-                    SELECT MAX(s3.quarter_end) FROM shareholding s3
+                    SELECT MAX(s3.quarter_end) FROM sh s3
                     WHERE s3.symbol = s1.symbol AND s3.category = s1.category
                     AND s3.quarter_end < s1.quarter_end
                 )
@@ -3896,7 +3911,7 @@ class FlowStore:
             ) del_stats ON ic.symbol = del_stats.symbol
             WHERE ic.industry = ?
                 AND s1.quarter_end = (
-                    SELECT MAX(s4.quarter_end) FROM shareholding s4
+                    SELECT MAX(s4.quarter_end) FROM sh s4
                     WHERE s4.symbol = s1.symbol
                 )
                 AND s1.category IN ('FII', 'MF', 'DII', 'Promoter')

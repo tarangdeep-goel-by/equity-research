@@ -82,3 +82,20 @@ def test_get_sector_list(populated_store: FlowStore):
     assert len(result) >= 1
     assert "Banks" in result
     assert "IT - Software" in result
+
+
+def test_sector_detail_derives_dii_ignoring_legacy(populated_store: FlowStore):
+    """get_sector_detail synthesizes DII (MF+Insurance+AIF) and ignores stored DII rows."""
+    base = populated_store.get_sector_detail("Banks")
+    sbin = next(r for r in base if r["symbol"] == "SBIN")
+    # DII is derived, so a change is computed even though no DII row is stored.
+    assert sbin["dii_change"] is not None
+
+    # Inserting a bogus legacy DII row must not affect the derived value.
+    populated_store._conn.execute(
+        "INSERT OR REPLACE INTO shareholding (symbol, quarter_end, category, percentage) "
+        "VALUES ('SBIN', '2025-12-31', 'DII', 999.0)"
+    )
+    populated_store._conn.commit()
+    after = next(r for r in populated_store.get_sector_detail("Banks") if r["symbol"] == "SBIN")
+    assert after["dii_change"] == sbin["dii_change"]

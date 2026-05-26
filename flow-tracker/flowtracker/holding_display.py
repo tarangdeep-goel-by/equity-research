@@ -10,6 +10,7 @@ from rich.table import Table
 from rich.text import Text
 
 from flowtracker.holding_models import ShareholdingChange, ShareholdingRecord, WatchlistEntry
+from flowtracker.utils import derive_dii
 
 console = Console()
 
@@ -53,6 +54,12 @@ def display_shareholding(symbol: str, records: list[ShareholdingRecord]) -> None
             quarters.append(r.quarter_end)
             by_quarter[r.quarter_end] = {}
         by_quarter[r.quarter_end][r.category] = r.percentage
+
+    # DII is derived (MF + Insurance + AIF), not stored — synthesize it per quarter.
+    for q_vals in by_quarter.values():
+        dii = derive_dii(q_vals)
+        if dii is not None:
+            q_vals["DII"] = dii
 
     categories = ["Promoter", "FII", "DII", "MF", "Insurance", "Public"]
 
