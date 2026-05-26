@@ -9,6 +9,7 @@ import pytest
 
 from flowtracker.utils import (
     _clean,
+    derive_dii,
     fmt_crores,
     fmt_crores_label,
     normalize_category,
@@ -156,6 +157,40 @@ class TestNormalizeCategory:
 
     def test_lowercase_dii(self):
         assert normalize_category("dii") == "DII"
+
+
+# ---------------------------------------------------------------------------
+# derive_dii — DII = MF + Insurance + AIF (derived, never stored)
+# ---------------------------------------------------------------------------
+class TestDeriveDii:
+    def test_sums_three_components(self):
+        assert derive_dii({"MF": 7.0, "Insurance": 4.0, "AIF": 1.5}) == 12.5
+
+    def test_sums_full_domestic_leaf_set(self):
+        # All domestic-institution leaves + the OtherDII remainder.
+        assert derive_dii({
+            "MF": 5.0, "Insurance": 4.0, "AIF": 1.0, "Banks": 0.5, "OtherFI": 0.2,
+            "NBFC": 0.3, "Pension": 3.0, "VC": 0.1, "SovereignDomestic": 0.2, "OtherDII": 0.7,
+        }) == 15.0
+
+    def test_government_not_part_of_dii(self):
+        # Government is a separate top-level bucket, never folded into DII.
+        assert derive_dii({"MF": 5.0, "Government": 19.5}) == 5.0
+
+    def test_ignores_other_categories(self):
+        assert derive_dii({"MF": 5.0, "FII": 20.0, "Promoter": 50.0, "DII": 99.0}) == 5.0
+
+    def test_partial_components(self):
+        assert derive_dii({"MF": 6.0, "Insurance": 2.0}) == 8.0
+
+    def test_none_when_no_components(self):
+        assert derive_dii({"Promoter": 50.0, "FII": 20.0}) is None
+
+    def test_empty_mapping(self):
+        assert derive_dii({}) is None
+
+    def test_skips_none_values(self):
+        assert derive_dii({"MF": 5.0, "Insurance": None, "AIF": None}) == 5.0
 
 
 # ---------------------------------------------------------------------------

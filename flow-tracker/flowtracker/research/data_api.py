@@ -13,7 +13,7 @@ from email.utils import parsedate_to_datetime
 import httpx
 
 from flowtracker.store import FlowStore
-from flowtracker.utils import _clean
+from flowtracker.utils import _clean, derive_dii
 
 
 logger = logging.getLogger(__name__)
@@ -1920,6 +1920,11 @@ class ResearchDataAPI:
         for r in sh_rows:
             q = r.get("quarter_end", "")
             by_q.setdefault(q, {})[r.get("category", "")] = r.get("percentage", 0.0)
+        # DII is derived (MF + Insurance + AIF), not stored — synthesize per quarter.
+        for qv in by_q.values():
+            dii = derive_dii(qv)
+            if dii is not None:
+                qv["DII"] = dii
         quarters_sorted = sorted(by_q.keys(), reverse=True)
         current_q = quarters_sorted[0] if quarters_sorted else None
         prev_q = quarters_sorted[1] if len(quarters_sorted) > 1 else None
@@ -1929,7 +1934,7 @@ class ResearchDataAPI:
                 return None
             return by_q.get(q, {}).get(cat)
 
-        categories = ["Promoter", "FII", "DII", "MF", "Insurance", "AIF", "Public"]
+        categories = ["Promoter", "FII", "DII", "MF", "Insurance", "AIF", "Public", "Government", "Other"]
         current_ownership = {
             "as_of_quarter": current_q,
             **{cat.lower() + "_pct": pct(current_q, cat) for cat in categories},
@@ -2985,6 +2990,7 @@ class ResearchDataAPI:
         "domestic_institutions": "DII",
         "promoters": "Promoter",
         "public": "Public",
+        "government": "Government",
     }
 
     @classmethod

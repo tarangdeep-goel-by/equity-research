@@ -108,7 +108,7 @@ def show(
 
 @app.command()
 def changes(
-    category: Annotated[str | None, typer.Option("-c", "--category", help="Filter by category: FII, DII, MF, Promoter, Public")] = None,
+    category: Annotated[str | None, typer.Option("-c", "--category", help="Filter by category: FII, DII, MF, Promoter, Public, Government")] = None,
     limit: Annotated[int, typer.Option("-n", "--limit", help="Number of results")] = 10,
 ) -> None:
     """Show biggest shareholding changes across watchlist stocks."""

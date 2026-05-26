@@ -12,38 +12,50 @@ from flowtracker.research.data_api import ResearchDataAPI
 
 
 # --- Sample fixtures ---
+# pubDates are relative to "now" so the 90-day news window never ages them out
+# as real time advances. Offsets preserve the original newest→oldest ordering.
+_NOW = datetime.now(timezone.utc)
 
-GOOGLE_RSS_XML = """<?xml version="1.0" encoding="UTF-8"?>
+
+def _rss_date(days_ago: int) -> str:
+    return (_NOW - timedelta(days=days_ago)).strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+
+def _iso_date(days_ago: int) -> str:
+    return (_NOW - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+GOOGLE_RSS_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
     <item>
       <title>Infosys Acquires Optimum Healthcare IT for $465M</title>
       <link>https://example.com/article1</link>
-      <pubDate>Sat, 01 Mar 2026 10:00:00 GMT</pubDate>
+      <pubDate>{_rss_date(2)}</pubDate>
       <source url="https://mint.com">Mint</source>
     </item>
     <item>
       <title>SEBI Imposes Penalty on Infosys Director for Insider Trading</title>
       <link>https://example.com/article2</link>
-      <pubDate>Thu, 20 Feb 2026 08:30:00 GMT</pubDate>
+      <pubDate>{_rss_date(10)}</pubDate>
       <source url="https://et.com">Economic Times</source>
     </item>
     <item>
       <title>Stocks to Watch Today: Infosys, TCS, Wipro in Focus</title>
       <link>https://example.com/article3</link>
-      <pubDate>Wed, 19 Feb 2026 06:00:00 GMT</pubDate>
+      <pubDate>{_rss_date(12)}</pubDate>
       <source url="https://zeebiz.com">Zee Business</source>
     </item>
     <item>
       <title>5 Stocks to Buy for Long Term Including Infosys</title>
       <link>https://example.com/article4</link>
-      <pubDate>Tue, 18 Feb 2026 07:00:00 GMT</pubDate>
+      <pubDate>{_rss_date(14)}</pubDate>
       <source url="https://moneycontrol.com">Moneycontrol</source>
     </item>
     <item>
       <title>Infosys Board Approves Special Dividend of Rs 8 Per Share</title>
       <link>https://example.com/article5</link>
-      <pubDate>Mon, 17 Feb 2026 09:00:00 GMT</pubDate>
+      <pubDate>{_rss_date(16)}</pubDate>
       <source url="https://bstandard.com">Business Standard</source>
     </item>
   </channel>
@@ -54,7 +66,7 @@ YFINANCE_NEWS = [
         "content": {
             "title": "Infosys Acquires Optimum Healthcare IT for Up to $465M",
             "summary": "Infosys announced acquisition of Optimum Healthcare IT...",
-            "pubDate": "2026-03-01T11:41:18Z",
+            "pubDate": _iso_date(2),
             "provider": {"displayName": "Insider Monkey"},
             "canonicalUrl": {"url": "https://yahoo.com/article1"},
         }
@@ -63,7 +75,7 @@ YFINANCE_NEWS = [
         "content": {
             "title": "Infosys Q3 Results: Revenue Up 5% YoY",
             "summary": "Infosys reported strong Q3 numbers...",
-            "pubDate": "2026-02-15T09:00:00Z",
+            "pubDate": _iso_date(20),
             "provider": {"displayName": "Yahoo Finance"},
             "canonicalUrl": {"url": "https://yahoo.com/article2"},
         }

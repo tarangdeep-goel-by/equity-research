@@ -80,6 +80,90 @@ _XBRL_NO_DATE = b"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+def _shp(ctx, val):
+    return (f'<in-shp:ShareholdingAsAPercentageOfTotalNumberOfShares '
+            f'contextRef="{ctx}_ContextI">{val}</in-shp:ShareholdingAsAPercentageOfTotalNumberOfShares>')
+
+
+# Full taxonomy, decimal format, PSU-like: has Government + an InstitutionsDomestic
+# parent that exceeds the captured leaves (MF+Insurance) → triggers OtherDII.
+_XBRL_FULL = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" '
+    'xmlns:in-shp="http://www.example.com/shareholding">\n'
+    '<xbrli:context id="ShareholdingPattern_ContextI"><xbrli:period>'
+    '<xbrli:instant>2026-03-31</xbrli:instant></xbrli:period></xbrli:context>\n'
+    + _shp("ShareholdingPattern", "1.0000")
+    + _shp("ShareholdingOfPromoterAndPromoterGroup", "0.5150")
+    + _shp("InstitutionsForeign", "0.0985")
+    + _shp("InstitutionsDomestic", "0.0921")   # DII parent
+    + _shp("MutualFundsOrUTI", "0.0252")
+    + _shp("InsuranceCompanies", "0.0658")     # MF+Ins = 9.10 < parent 9.21 → OtherDII 0.11
+    + _shp("Governments", "0.1948")
+    + _shp("NonInstitutions", "0.0997")
+    + "</xbrli:xbrl>\n"
+).encode()
+
+
+# Old format with drifted spellings (typos) — percent format. Normalization must
+# still map MutualFundsOrUti→MF and Goverments→Government.
+_XBRL_OLD_TYPOS = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" '
+    'xmlns:in-shp="http://www.example.com/shareholding">\n'
+    '<xbrli:context id="ShareholdingPattern_ContextI"><xbrli:period>'
+    '<xbrli:instant>2023-03-31</xbrli:instant></xbrli:period></xbrli:context>\n'
+    + _shp("ShareholdingPattern", "100.00")
+    + _shp("ShareholdingOfPromoterAndPromoterGroup", "51.50")
+    + _shp("InstitutionsForeign", "8.50")
+    + _shp("InstitutionsDomestic", "10.33")
+    + _shp("MutualFundsOrUti", "3.00")          # typo → MF
+    + _shp("InsuranceCompanies", "7.33")        # MF+Ins = 10.33 == parent → no OtherDII
+    + _shp("Goverments", "19.48")               # typo → Government
+    + _shp("NonInstitutions", "10.19")
+    + "</xbrli:xbrl>\n"
+).encode()
+
+
+class TestParseXbrlTaxonomy:
+    """Leaf taxonomy + reconciliation (DII derived, Government, OtherDII, Other)."""
+
+    def _cats(self, content):
+        c = NSEHoldingClient()
+        records, _ = c._parse_xbrl(content, "TESTCO")
+        c.close()
+        return {r.category: r.percentage for r in records}
+
+    def test_full_taxonomy_reconciles_to_100(self):
+        cat = self._cats(_XBRL_FULL)
+        assert abs(sum(cat.values()) - 100.0) < 0.1
+
+    def test_dii_is_not_stored_as_a_row(self):
+        cat = self._cats(_XBRL_FULL)
+        assert "DII" not in cat
+        assert "InstitutionsDomestic" not in cat
+
+    def test_government_captured(self):
+        assert self._cats(_XBRL_FULL)["Government"] == 19.48
+
+    def test_other_dii_remainder_reconciles_dii_to_parent(self):
+        cat = self._cats(_XBRL_FULL)
+        assert cat["OtherDII"] == 0.11  # 9.21 parent - 9.10 leaves
+        derived_dii = sum(cat.get(c, 0) for c in ("MF", "Insurance", "AIF", "OtherDII"))
+        assert abs(derived_dii - 9.21) < 0.02  # == InstitutionsDomestic parent
+
+    def test_leaves_stored(self):
+        cat = self._cats(_XBRL_FULL)
+        assert cat["MF"] == 2.52
+        assert cat["Insurance"] == 6.58
+
+    def test_old_format_typos_normalized(self):
+        cat = self._cats(_XBRL_OLD_TYPOS)
+        assert cat["MF"] == 3.00          # MutualFundsOrUti normalized
+        assert cat["Government"] == 19.48  # Goverments normalized
+        assert abs(sum(cat.values()) - 100.0) < 0.1
+
+
 class TestLocalName:
     """Test _local_name namespace stripping."""
 
@@ -135,12 +219,15 @@ class TestParseXbrl:
         client = NSEHoldingClient()
         records, pledge = client._parse_xbrl(_XBRL_DECIMAL, "RELIANCE")
 
-        assert len(records) == 2
         promoter = next(r for r in records if r.category == "Promoter")
         assert promoter.percentage == 50.01  # 0.5001 * 100
 
         fii = next(r for r in records if r.category == "FII")
         assert fii.percentage == 20.50  # 0.2050 * 100
+
+        # Fixture only carries Promoter+FII, so the reconciliation 'Other' remainder
+        # fills the rest and the stored rows sum to ~100.
+        assert abs(sum(r.percentage for r in records) - 100.0) < 0.5
 
         client.close()
 

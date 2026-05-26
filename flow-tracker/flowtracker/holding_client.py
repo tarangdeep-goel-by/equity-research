@@ -35,18 +35,43 @@ BACKOFF_BASE = 1
 # XBRL context ref mapping: category key -> normalized category
 # Newer format: "InstitutionsForeign_ContextI" (suffix _ContextI)
 # Older format: "InstitutionsForeignI" (suffix I only)
+# Context-key spelling normalization across XBRL format generations. NSE drifts
+# spellings/typos over the years; normalize to the canonical key before mapping
+# so historical filings parse with the same maps as recent ones.
+_KEY_ALIASES = {
+    "Goverments": "Governments",                       # typo in older filings
+    "MutualFundsOrUti": "MutualFundsOrUTI",             # older lowercase 'ti'
+    "NBFCsRegisteredWithRbi": "NBFCsRegisteredWithRBI",
+    "InstitutionsForeignPortfolioInvestorCatergoryOne": "InstitutionsForeignPortfolioInvestorCategoryOne",
+    "InstitutionsForeignPortfolioInvestorCatergoryTwo": "InstitutionsForeignPortfolioInvestorCategoryTwo",
+}
+
 _XBRL_CATEGORY_MAP = {
     "ShareholdingOfPromoterAndPromoterGroup": "Promoter",
     "InstitutionsForeign": "FII",
     "InstitutionsForeignPortfolioInvestor": "FII",  # older XBRL format
+    "NonInstitutions": "Public",
+    "Governments": "Government",                    # govt/PSU cross-holdings (PSUs)
+    # Domestic-institution leaves. DII is NOT stored — it is derived as the sum of
+    # these (+ an OtherDII reconciliation remainder); see _DOMESTIC_LEAF_CATEGORIES.
     "MutualFundsOrUTI": "MF",
-    "MutualFundsOrUti": "MF",  # older format uses lowercase 'ti'
     "InsuranceCompanies": "Insurance",
     "AlternativeInvestmentFunds": "AIF",
-    "NonInstitutions": "Public",
-    # NOTE: InstitutionsDomestic (DII) deliberately excluded —
-    # it's a parent of MF + Insurance + AIF and would double-count.
+    "Banks": "Banks",
+    "OtherFinancialInstitutions": "OtherFI",
+    "NBFCsRegisteredWithRBI": "NBFC",
+    "ProvidentFundsOrPensionFunds": "Pension",
+    "VentureCapitalFunds": "VC",
+    "SovereignWealthFundsDomestic": "SovereignDomestic",
+    # InstitutionsDomestic (the DII parent) is captured for reconciliation only
+    # (_DII_PARENT_KEY) — never stored as a row, which would double-count leaves.
 }
+
+# Domestic-institution leaf categories: their sum (+ OtherDII remainder) == DII.
+_DOMESTIC_LEAF_CATEGORIES = (
+    "MF", "Insurance", "AIF", "Banks", "OtherFI", "NBFC", "Pension", "VC", "SovereignDomestic",
+)
+_DII_PARENT_KEY = "InstitutionsDomestic"
 
 # The XBRL element name we look for shareholding percentage
 _PERCENTAGE_TAG = "ShareholdingAsAPercentageOfTotalNumberOfShares"
@@ -312,6 +337,9 @@ class NSEHoldingClient:
         raw_values: list[tuple[str, float]] = []
         # Sub-category raw values, keyed by canonical context key (no _ContextI suffix).
         sub_raw: dict[str, float] = {}
+        # InstitutionsDomestic (DII parent) raw value — captured for reconciliation,
+        # never stored as a row.
+        dii_parent_raw: float | None = None
 
         for elem in root.iter():
             local = _local_name(elem.tag)
@@ -330,6 +358,9 @@ class NSEHoldingClient:
             else:
                 continue
 
+            # Normalize spelling drift (typos/case) so all periods map uniformly.
+            ctx_key = _KEY_ALIASES.get(ctx_key, ctx_key)
+
             try:
                 val = float(elem.text.strip()) if elem.text else None
             except (ValueError, AttributeError):
@@ -341,6 +372,11 @@ class NSEHoldingClient:
             # Check the total to detect format
             if ctx_key == "ShareholdingPattern":
                 is_decimal = val <= 2.0  # ~1.0 for decimal, ~100 for percentage
+                continue
+
+            # DII parent — keep for reconciliation, do not emit as a category row.
+            if ctx_key == _DII_PARENT_KEY:
+                dii_parent_raw = val
                 continue
 
             if ctx_key in _XBRL_CATEGORY_MAP:
@@ -359,6 +395,40 @@ class NSEHoldingClient:
                 quarter_end=quarter_end,
                 category=category,
                 percentage=pct,
+            ))
+
+        # Reconciliation remainders so the stored rows always add up:
+        #  - OtherDII = InstitutionsDomestic(parent) - Σ(domestic leaves captured),
+        #    so derived DII (= Σ domestic leaves incl OtherDII) == the XBRL parent
+        #    even when an older filing exposes fewer leaves.
+        #  - Other = 100 - Σ(top-level), absorbing any holding not mapped to a bucket
+        #    (e.g. government/PSU chunks on filings that lack the Governments context).
+        cat_pct: dict[str, float] = {}
+        for r in records:
+            cat_pct[r.category] = cat_pct.get(r.category, 0.0) + r.percentage
+
+        dom_leaves = sum(cat_pct.get(c, 0.0) for c in _DOMESTIC_LEAF_CATEGORIES)
+        if dii_parent_raw is not None:
+            dii_total = round(dii_parent_raw * 100, 2) if is_decimal else round(dii_parent_raw, 2)
+            other_dii = round(dii_total - dom_leaves, 2)
+            if other_dii > 0.01:
+                records.append(ShareholdingRecord(
+                    symbol=symbol.upper(), quarter_end=quarter_end,
+                    category="OtherDII", percentage=other_dii,
+                ))
+                cat_pct["OtherDII"] = other_dii
+        else:
+            dii_total = dom_leaves
+
+        top_level = (
+            cat_pct.get("Promoter", 0.0) + cat_pct.get("FII", 0.0)
+            + dii_total + cat_pct.get("Government", 0.0) + cat_pct.get("Public", 0.0)
+        )
+        other = round(100.0 - top_level, 2)
+        if other > 0.01:
+            records.append(ShareholdingRecord(
+                symbol=symbol.upper(), quarter_end=quarter_end,
+                category="Other", percentage=other,
             ))
 
         # Extract promoter pledge/encumbrance data

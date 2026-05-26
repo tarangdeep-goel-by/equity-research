@@ -44,6 +44,24 @@ def normalize_category(raw: str) -> str:
     return raw.strip()
 
 
+# Domestic-institution leaf categories stored in the shareholding table. DII is
+# *derived* as their sum (incl. the OtherDII reconciliation remainder), never
+# stored as a peer category — that would double-count the NSE InstitutionsDomestic
+# parent. The full leaf set makes derived DII == that parent. See
+# holding_client._XBRL_CATEGORY_MAP / _DOMESTIC_LEAF_CATEGORIES.
+DII_COMPONENTS = ("MF", "Insurance", "AIF", "Banks", "OtherFI", "NBFC", "Pension", "VC", "SovereignDomestic", "OtherDII")
+
+
+def derive_dii(by_category: dict[str, float | None]) -> float | None:
+    """Derived DII % = sum of the DII_COMPONENTS leaf categories present in the mapping.
+
+    Returns None if none of the component categories are present (so a stock
+    with no domestic-institution data reads as missing, not 0.0).
+    """
+    vals = [v for c in DII_COMPONENTS if (v := by_category.get(c)) is not None]
+    return round(sum(vals), 2) if vals else None
+
+
 def parse_nse_date(date_str: str) -> date:
     """Parse NSE date format: '17-Mar-2026' → date object."""
     return datetime.strptime(date_str.strip(), "%d-%b-%Y").date()

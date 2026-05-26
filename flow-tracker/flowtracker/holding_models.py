@@ -16,7 +16,7 @@ class ShareholdingRecord(BaseModel):
     """Single category for one quarter."""
     symbol: str  # "RELIANCE"
     quarter_end: str  # "2025-12-31"
-    category: str  # "Promoter", "FII", "DII", "MF", "Insurance", "Public"
+    category: str  # "Promoter", "FII", "MF", "Insurance", "AIF", "Public" (DII is derived, never stored)
     percentage: float  # 50.30
 
 
@@ -38,8 +38,14 @@ class ShareholdingSnapshot(BaseModel):
 
     @property
     def dii_pct(self) -> float | None:
-        """DII holding percentage."""
-        return next((r.percentage for r in self.records if r.category == "DII"), None)
+        """Derived DII % (sum of domestic-institution leaves) — DII is not stored."""
+        from flowtracker.utils import derive_dii
+        return derive_dii({r.category: r.percentage for r in self.records})
+
+    @property
+    def government_pct(self) -> float | None:
+        """Government holding percentage."""
+        return next((r.percentage for r in self.records if r.category == "Government"), None)
 
     @property
     def public_pct(self) -> float | None:

@@ -46,12 +46,14 @@ from flowtracker.scan_models import IndexConstituent
 # ---------------------------------------------------------------------------
 
 def make_daily_flow(
-    dt: str = "2026-03-28",
+    dt: str | None = None,
     category: str = "FII",
     buy: float = 12000.0,
     sell: float = 13500.0,
     net: float | None = None,
 ) -> DailyFlow:
+    if dt is None:
+        dt = date.today().isoformat()  # default to today so rolling-window queries see it
     if net is None:
         net = buy - sell
     return DailyFlow(
@@ -63,10 +65,14 @@ def make_daily_flow(
     )
 
 
-def make_daily_flows(n: int = 5, start: str = "2026-03-24") -> list[DailyFlow]:
-    """N days of FII+DII flows with alternating sentiment."""
+def make_daily_flows(n: int = 5, start: str | None = None) -> list[DailyFlow]:
+    """N days of FII+DII flows with alternating sentiment.
+
+    Defaults to ending today so the data stays inside rolling query windows
+    (e.g. get_flows(days=30)) regardless of when the suite runs.
+    """
     flows = []
-    base = date.fromisoformat(start)
+    base = date.fromisoformat(start) if start else date.today() - timedelta(days=n - 1)
     for i in range(n):
         d = base + timedelta(days=i)
         ds = d.isoformat()
@@ -190,10 +196,12 @@ def make_screener_ratios(symbol: str = "SBIN", n: int = 5) -> list[ScreenerRatio
 
 def make_valuation_snapshot(
     symbol: str = "SBIN",
-    dt: str = "2026-03-28",
+    dt: str | None = None,
     price: float = 820.0,
     pe: float = 9.5,
 ) -> ValuationSnapshot:
+    if dt is None:
+        dt = date.today().isoformat()  # default to today so recency-window reads see it
     return ValuationSnapshot(
         symbol=symbol,
         date=dt,
@@ -248,10 +256,14 @@ def make_valuation_snapshots(symbol: str = "SBIN", n: int = 30) -> list[Valuatio
 
 
 def make_shareholding(symbol: str = "SBIN", n: int = 4) -> list[ShareholdingRecord]:
-    """N quarters of shareholding, categories sum to ~100%."""
+    """N quarters of shareholding, categories sum to ~100%.
+
+    DII is intentionally NOT seeded — it is derived (MF + Insurance + AIF) on
+    read, never stored. See flowtracker.utils.derive_dii.
+    """
     records = []
     quarters = ["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"]
-    base = {"Promoter": 57.5, "FII": 11.2, "DII": 8.5, "MF": 7.8, "Insurance": 5.2, "Public": 9.8}
+    base = {"Promoter": 57.5, "FII": 11.2, "MF": 7.8, "Insurance": 5.2, "AIF": 1.5, "Public": 16.8}
     for i in range(min(n, len(quarters))):
         for cat, pct in base.items():
             # Slight drift each quarter
@@ -287,7 +299,8 @@ def make_index_constituents() -> list[IndexConstituent]:
 
 
 def make_daily_stock_data(symbol: str = "SBIN", n: int = 30) -> list[DailyStockData]:
-    base = date.fromisoformat("2026-03-01")
+    # End today so weekday rows fall inside delivery/price 30-day query windows.
+    base = date.today() - timedelta(days=n - 1)
     base_price = 800.0 if symbol == "SBIN" else 1800.0
     records = []
     for i in range(n):
@@ -312,7 +325,7 @@ def make_daily_stock_data(symbol: str = "SBIN", n: int = 30) -> list[DailyStockD
 
 
 def make_commodity_prices(n: int = 10) -> list[CommodityPrice]:
-    base = date.fromisoformat("2026-03-20")
+    base = date.today() - timedelta(days=n - 1)  # end today, stay in rolling windows
     return [
         CommodityPrice(
             date=(base + timedelta(days=i)).isoformat(),
@@ -325,7 +338,7 @@ def make_commodity_prices(n: int = 10) -> list[CommodityPrice]:
 
 
 def make_gold_etf_navs(n: int = 10) -> list[GoldETFNav]:
-    base = date.fromisoformat("2026-03-20")
+    base = date.today() - timedelta(days=n - 1)  # end today, stay in rolling windows
     return [
         GoldETFNav(
             date=(base + timedelta(days=i)).isoformat(),
@@ -338,7 +351,8 @@ def make_gold_etf_navs(n: int = 10) -> list[GoldETFNav]:
 
 
 def make_macro_snapshots(n: int = 10) -> list[MacroSnapshot]:
-    base = date.fromisoformat("2026-03-20")
+    # End today so the latest snapshot is current for macro-trend queries.
+    base = date.today() - timedelta(days=n - 1)
     return [
         MacroSnapshot(
             date=(base + timedelta(days=i)).isoformat(),
@@ -352,17 +366,22 @@ def make_macro_snapshots(n: int = 10) -> list[MacroSnapshot]:
 
 
 def make_deals() -> list[BulkBlockDeal]:
+    d = (date.today() - timedelta(days=1)).isoformat()  # recent, within deal query windows
     return [
-        BulkBlockDeal(date="2026-03-28", deal_type="BLOCK", symbol="SBIN", client_name="Goldman Sachs", buy_sell="BUY", quantity=5000000, price=820.0),
-        BulkBlockDeal(date="2026-03-28", deal_type="BULK", symbol="INFY", client_name="Axis MF", buy_sell="SELL", quantity=2000000, price=1850.0),
+        BulkBlockDeal(date=d, deal_type="BLOCK", symbol="SBIN", client_name="Goldman Sachs", buy_sell="BUY", quantity=5000000, price=820.0),
+        BulkBlockDeal(date=d, deal_type="BULK", symbol="INFY", client_name="Axis MF", buy_sell="SELL", quantity=2000000, price=1850.0),
     ]
 
 
 def make_insider_transactions(symbol: str = "SBIN") -> list[InsiderTransaction]:
+    today = date.today()
+    d1 = (today - timedelta(days=5)).isoformat()
+    d2 = (today - timedelta(days=10)).isoformat()
+    d3 = (today - timedelta(days=15)).isoformat()
     return [
-        InsiderTransaction(date="2026-03-20", symbol=symbol, person_name="Rajesh Kumar", person_category="Promoters", transaction_type="Buy", quantity=100000, value=82000000.0, mode="Market Purchase", holding_before_pct=57.5, holding_after_pct=57.6),
-        InsiderTransaction(date="2026-03-15", symbol=symbol, person_name="Amit Shah", person_category="Director", transaction_type="Buy", quantity=50000, value=40000000.0, mode="Market Purchase", holding_before_pct=0.01, holding_after_pct=0.02),
-        InsiderTransaction(date="2026-03-10", symbol=symbol, person_name="Priya Singh", person_category="KMP", transaction_type="Sell", quantity=10000, value=8200000.0, mode="Market Purchase", holding_before_pct=0.005, holding_after_pct=0.004),
+        InsiderTransaction(date=d1, symbol=symbol, person_name="Rajesh Kumar", person_category="Promoters", transaction_type="Buy", quantity=100000, value=82000000.0, mode="Market Purchase", holding_before_pct=57.5, holding_after_pct=57.6),
+        InsiderTransaction(date=d2, symbol=symbol, person_name="Amit Shah", person_category="Director", transaction_type="Buy", quantity=50000, value=40000000.0, mode="Market Purchase", holding_before_pct=0.01, holding_after_pct=0.02),
+        InsiderTransaction(date=d3, symbol=symbol, person_name="Priya Singh", person_category="KMP", transaction_type="Sell", quantity=10000, value=8200000.0, mode="Market Purchase", holding_before_pct=0.005, holding_after_pct=0.004),
     ]
 
 
@@ -429,7 +448,7 @@ def make_mf_aum_summary(n: int = 3) -> list[MFAUMSummary]:
 
 
 def make_mf_daily_flows(n: int = 5) -> list[MFDailyFlow]:
-    base = date.fromisoformat("2026-03-24")
+    base = date.today() - timedelta(days=n - 1)  # end today, stay in rolling windows
     flows = []
     for i in range(n):
         d = (base + timedelta(days=i)).isoformat()

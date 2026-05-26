@@ -6,6 +6,7 @@ import logging
 
 from flowtracker.alert_models import Alert, TriggeredAlert
 from flowtracker.store import FlowStore
+from flowtracker.utils import derive_dii
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +56,15 @@ def _get_metric_value(store: FlowStore, symbol: str, condition_type: str) -> flo
             return row["percentage"] if row else None
 
         elif condition_type == "mf_pct_above":
-            row = store._conn.execute(
-                "SELECT percentage FROM shareholding WHERE symbol = ? AND category = 'DII' "
-                "ORDER BY quarter_end DESC LIMIT 1",
-                (symbol,),
-            ).fetchone()
-            return row["percentage"] if row else None
+            # DII (domestic institutions) is derived = MF + Insurance + AIF for
+            # the latest quarter — it is no longer stored as its own category.
+            rows = store._conn.execute(
+                "SELECT category, percentage FROM shareholding "
+                "WHERE symbol = ? AND category IN ('MF', 'Insurance', 'AIF', 'Banks', 'OtherFI', 'NBFC', 'Pension', 'VC', 'SovereignDomestic', 'OtherDII') "
+                "AND quarter_end = (SELECT MAX(quarter_end) FROM shareholding WHERE symbol = ?)",
+                (symbol, symbol),
+            ).fetchall()
+            return derive_dii({r["category"]: r["percentage"] for r in rows})
 
         elif condition_type in ("rsi_below", "rsi_above"):
             row = store._conn.execute(
