@@ -377,6 +377,8 @@ CREATE TABLE IF NOT EXISTS macro_daily (
     date TEXT NOT NULL,
     india_vix REAL,
     usd_inr REAL,
+    eur_inr REAL,
+    gbp_inr REAL,
     brent_crude REAL,
     gsec_10y REAL,
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1372,6 +1374,7 @@ class FlowStore:
         self._migrate_historical_states()
         self._migrate_fno_tables()
         self._migrate_survivorship_tables()
+        self._migrate_macro_daily()
 
     def _migrate_analytical_snapshot(self) -> None:
         """Add new columns to analytical_snapshot if they don't exist."""
@@ -1473,6 +1476,23 @@ class FlowStore:
             if col_name not in existing:
                 self._conn.execute(
                     f"ALTER TABLE daily_stock_data ADD COLUMN {col_name} {col_type}"
+                )
+        self._conn.commit()
+
+    def _migrate_macro_daily(self) -> None:
+        """Add eur_inr + gbp_inr columns to macro_daily for additional FX pairs.
+
+        Used to verify INR cross-currency moves (e.g. INR vs EUR/GBP) that
+        USD/INR alone can't show. Idempotent — guarded by PRAGMA table_info.
+        """
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(macro_daily)").fetchall()
+        }
+        for col_name, col_type in [("eur_inr", "REAL"), ("gbp_inr", "REAL")]:
+            if col_name not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE macro_daily ADD COLUMN {col_name} {col_type}"
                 )
         self._conn.commit()
 
@@ -3012,9 +3032,10 @@ class FlowStore:
         for s in snapshots:
             cursor.execute(
                 "INSERT OR REPLACE INTO macro_daily "
-                "(date, india_vix, usd_inr, brent_crude, gsec_10y) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (s.date, s.india_vix, s.usd_inr, s.brent_crude, s.gsec_10y),
+                "(date, india_vix, usd_inr, eur_inr, gbp_inr, brent_crude, gsec_10y) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (s.date, s.india_vix, s.usd_inr, s.eur_inr, s.gbp_inr,
+                 s.brent_crude, s.gsec_10y),
             )
             count += cursor.rowcount
         self._conn.commit()
@@ -3029,7 +3050,8 @@ class FlowStore:
             return None
         return MacroSnapshot(
             date=row["date"], india_vix=row["india_vix"],
-            usd_inr=row["usd_inr"], brent_crude=row["brent_crude"],
+            usd_inr=row["usd_inr"], eur_inr=row["eur_inr"],
+            gbp_inr=row["gbp_inr"], brent_crude=row["brent_crude"],
             gsec_10y=row["gsec_10y"],
         )
 
@@ -3042,7 +3064,8 @@ class FlowStore:
             return None
         return MacroSnapshot(
             date=row["date"], india_vix=row["india_vix"],
-            usd_inr=row["usd_inr"], brent_crude=row["brent_crude"],
+            usd_inr=row["usd_inr"], eur_inr=row["eur_inr"],
+            gbp_inr=row["gbp_inr"], brent_crude=row["brent_crude"],
             gsec_10y=row["gsec_10y"],
         )
 
@@ -3056,7 +3079,8 @@ class FlowStore:
         ).fetchall()
         return [MacroSnapshot(
             date=r["date"], india_vix=r["india_vix"],
-            usd_inr=r["usd_inr"], brent_crude=r["brent_crude"],
+            usd_inr=r["usd_inr"], eur_inr=r["eur_inr"],
+            gbp_inr=r["gbp_inr"], brent_crude=r["brent_crude"],
             gsec_10y=r["gsec_10y"],
         ) for r in rows]
 

@@ -23,6 +23,8 @@ class TestFetchSnapshot:
     def test_basic_snapshot(self):
         vix_hist = _make_hist([14.5], ["2026-03-20"])
         usdinr_hist = _make_hist([85.23], ["2026-03-20"])
+        eurinr_hist = _make_hist([92.10], ["2026-03-20"])
+        gbpinr_hist = _make_hist([108.45], ["2026-03-20"])
         brent_hist = _make_hist([72.50], ["2026-03-20"])
 
         call_count = {"n": 0}
@@ -33,6 +35,10 @@ class TestFetchSnapshot:
                 t.history.return_value = vix_hist
             elif symbol == "USDINR=X":
                 t.history.return_value = usdinr_hist
+            elif symbol == "EURINR=X":
+                t.history.return_value = eurinr_hist
+            elif symbol == "GBPINR=X":
+                t.history.return_value = gbpinr_hist
             elif symbol == "BZ=F":
                 t.history.return_value = brent_hist
             return t
@@ -48,6 +54,8 @@ class TestFetchSnapshot:
         assert s.date == "2026-03-20"
         assert s.india_vix == 14.5
         assert s.usd_inr == 85.23
+        assert s.eur_inr == 92.10
+        assert s.gbp_inr == 108.45
         assert s.brent_crude == 72.5
 
     def test_empty_histories(self):
@@ -160,6 +168,8 @@ class TestSnapshotGsecCarryForward:
         dates = ["2026-04-14", "2026-04-15", "2026-04-16"]
         vix_hist = _make_hist([14.1, 14.2, 14.3], dates)
         usdinr_hist = _make_hist([85.0, 85.1, 85.2], dates)
+        eurinr_hist = _make_hist([92.0, 92.1, 92.2], dates)
+        gbpinr_hist = _make_hist([108.0, 108.1, 108.2], dates)
         brent_hist = _make_hist([72.0, 72.5, 73.0], dates)
 
         def mock_ticker(symbol):
@@ -168,6 +178,10 @@ class TestSnapshotGsecCarryForward:
                 t.history.return_value = vix_hist
             elif symbol == "USDINR=X":
                 t.history.return_value = usdinr_hist
+            elif symbol == "EURINR=X":
+                t.history.return_value = eurinr_hist
+            elif symbol == "GBPINR=X":
+                t.history.return_value = gbpinr_hist
             elif symbol == "BZ=F":
                 t.history.return_value = brent_hist
             return t
@@ -183,12 +197,18 @@ class TestSnapshotGsecCarryForward:
         # Every snapshot should have the scraped gsec value, not just today
         for s in snapshots:
             assert s.gsec_10y == 6.48, f"{s.date} missing gsec carry-forward"
+        # EUR/GBP-INR populated on every day
+        for s in snapshots:
+            assert s.eur_inr is not None
+            assert s.gbp_inr is not None
 
     def test_gsec_none_when_scrape_fails(self):
         """If CCIL scrape fails, all snapshots have gsec_10y=None (no fabrication)."""
         dates = ["2026-04-15", "2026-04-16"]
         vix_hist = _make_hist([14.1, 14.2], dates)
         usdinr_hist = _make_hist([85.0, 85.1], dates)
+        eurinr_hist = _make_hist([92.0, 92.1], dates)
+        gbpinr_hist = _make_hist([108.0, 108.1], dates)
         brent_hist = _make_hist([72.0, 72.5], dates)
 
         def mock_ticker(symbol):
@@ -197,6 +217,10 @@ class TestSnapshotGsecCarryForward:
                 t.history.return_value = vix_hist
             elif symbol == "USDINR=X":
                 t.history.return_value = usdinr_hist
+            elif symbol == "EURINR=X":
+                t.history.return_value = eurinr_hist
+            elif symbol == "GBPINR=X":
+                t.history.return_value = gbpinr_hist
             elif symbol == "BZ=F":
                 t.history.return_value = brent_hist
             return t
@@ -219,6 +243,8 @@ class TestFetchHistoryGsec:
         dates = ["2024-01-02", "2024-01-03", "2026-04-16"]
         vix_hist = _make_hist([14.0, 14.1, 14.3], dates)
         usdinr_hist = _make_hist([83.0, 83.1, 85.2], dates)
+        eurinr_hist = _make_hist([90.0, 90.1, 92.2], dates)
+        gbpinr_hist = _make_hist([105.0, 105.1, 108.2], dates)
         brent_hist = _make_hist([70.0, 70.5, 73.0], dates)
 
         def mock_ticker(symbol):
@@ -227,6 +253,10 @@ class TestFetchHistoryGsec:
                 t.history.return_value = vix_hist
             elif symbol == "USDINR=X":
                 t.history.return_value = usdinr_hist
+            elif symbol == "EURINR=X":
+                t.history.return_value = eurinr_hist
+            elif symbol == "GBPINR=X":
+                t.history.return_value = gbpinr_hist
             elif symbol == "BZ=F":
                 t.history.return_value = brent_hist
             return t
@@ -243,6 +273,11 @@ class TestFetchHistoryGsec:
         assert snapshots[-1].gsec_10y == 6.48
         assert snapshots[0].gsec_10y is None
         assert snapshots[1].gsec_10y is None
+        # EUR/GBP-INR populated on every row (full history)
+        assert snapshots[-1].eur_inr == 92.2
+        assert snapshots[-1].gbp_inr == 108.2
+        assert snapshots[0].eur_inr == 90.0
+        assert snapshots[0].gbp_inr == 105.0
 
 
 # WSS HTML fixture mimicking the post-tag-strip / whitespace-collapse output of

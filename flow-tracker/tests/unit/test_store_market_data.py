@@ -151,9 +151,11 @@ class TestMacroDaily:
         today = date.today()
         snapshots = [
             MacroSnapshot(date=today.isoformat(), india_vix=14.5,
-                          usd_inr=83.5, brent_crude=82.0, gsec_10y=7.15),
+                          usd_inr=83.5, eur_inr=92.1, gbp_inr=108.4,
+                          brent_crude=82.0, gsec_10y=7.15),
             MacroSnapshot(date=(today - timedelta(days=1)).isoformat(),
-                          india_vix=14.2, usd_inr=83.4, brent_crude=81.5, gsec_10y=7.14),
+                          india_vix=14.2, usd_inr=83.4, eur_inr=92.0,
+                          gbp_inr=108.3, brent_crude=81.5, gsec_10y=7.14),
         ]
         count = store.upsert_macro_snapshots(snapshots)
         assert count == 2
@@ -161,6 +163,27 @@ class TestMacroDaily:
         assert latest is not None
         assert latest.date == today.isoformat()
         assert latest.india_vix == pytest.approx(14.5)
+        assert latest.eur_inr == pytest.approx(92.1)
+        assert latest.gbp_inr == pytest.approx(108.4)
+
+    def test_eur_gbp_round_trip_via_trend(self, store: FlowStore):
+        """EUR/INR and GBP/INR persist + round-trip through get_macro_trend."""
+        today = date.today()
+        snapshots = [
+            MacroSnapshot(
+                date=(today - timedelta(days=i)).isoformat(),
+                india_vix=14.0, usd_inr=83.0,
+                eur_inr=92.0 + i * 0.1, gbp_inr=108.0 + i * 0.2,
+                brent_crude=80.0, gsec_10y=7.1,
+            )
+            for i in range(3)
+        ]
+        store.upsert_macro_snapshots(snapshots)
+        trend = store.get_macro_trend(days=10)
+        assert len(trend) == 3
+        for s in trend:
+            assert s.eur_inr is not None
+            assert s.gbp_inr is not None
 
     def test_get_macro_previous(self, store: FlowStore):
         today = date.today()

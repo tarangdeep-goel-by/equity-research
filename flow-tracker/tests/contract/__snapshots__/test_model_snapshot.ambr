@@ -254,6 +254,8 @@
     'MacroSnapshot': list([
       'brent_crude',
       'date',
+      'eur_inr',
+      'gbp_inr',
       'gsec_10y',
       'india_vix',
       'usd_inr',
