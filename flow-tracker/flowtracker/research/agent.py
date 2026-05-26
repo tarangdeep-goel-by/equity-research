@@ -582,7 +582,13 @@ async def _run_specialist(
     """Run a single specialist agent. Returns (BriefingEnvelope, AgentTrace)."""
 
     tools = tools if tools is not None else AGENT_TOOLS.get(name, [])
-    tool_names = [getattr(t, "__name__", str(t)) for t in tools] if tools else []
+    # SdkMcpTool instances expose `.name`; plain functions expose `__name__`.
+    # Resolve to the clean tool name so unused-tool tracking and
+    # trace.tools_available match the (prefix-stripped) call names.
+    tool_names = [
+        getattr(t, "name", None) or getattr(t, "__name__", None) or str(t)
+        for t in tools
+    ] if tools else []
     max_turns = max_turns or AGENT_MAX_TURNS.get(name, 20)
     max_budget = max_budget or AGENT_MAX_BUDGET.get(name, 0.50)
     model = model or DEFAULT_MODELS.get(name, "claude-sonnet-4-6")
