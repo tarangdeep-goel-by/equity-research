@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Monthly GST collections fetch. CBIC publishes the previous month's
+  collection on the 1st of each month; this job runs on the 2nd at 12:00 IST
+  to give the publisher a buffer. `flowtrack gst fetch` with no flags defaults
+  to the previous calendar month, which is the freshest data available.
+
+  This is a template: __HOME__ is substituted with $HOME by
+  scripts/install-launch-agents.sh at install time. Do not copy this file
+  to ~/Library/LaunchAgents/ directly — run the install script instead.
+
+  Install:
+      bash scripts/install-launch-agents.sh
+
+  Verify:
+      launchctl list | grep flowtracker.monthly-gst
+
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.flowtracker.monthly-gst.plist
+      rm ~/Library/LaunchAgents/com.flowtracker.monthly-gst.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowtracker.monthly-gst</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__HOME__/.local/share/flowtracker/scripts/monthly-gst.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Day</key><integer>2</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
+</dict>
+</plist>

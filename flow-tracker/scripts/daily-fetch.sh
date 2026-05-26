@@ -55,4 +55,14 @@ run_with_retry "flowtrack deals fetch" "Bulk/block deals"
 run_with_retry "flowtrack insider fetch" "Insider transactions"
 run_with_retry "python -m flowtracker fund fetch --valuation-only" "Valuation snapshots"
 
+# --- New daily fetchers (PRs #143-#148, #151) ------------------------------
+# Each runs independently; one failure must not abort the rest. run_with_retry
+# already returns non-zero on terminal failure but the script does not `set -e`,
+# so subsequent calls proceed regardless. `breadth recompute` MUST run AFTER
+# `bhavcopy fetch` because it consumes today's prices that bhavcopy just landed.
+run_with_retry "flowtrack surveillance fetch" "Surveillance flags (ASM/GSM/ESM)"
+run_with_retry "flowtrack indexpe fetch" "Index PE/PB/Yield (4 indices)"
+run_with_retry "flowtrack ipo fetch" "IPO pipeline (upcoming/current/listings)"
+run_with_retry "flowtrack breadth recompute" "Market breadth (post-bhavcopy)"
+
 echo "=== $(date) === Daily complete ===" >> "$LOG"
