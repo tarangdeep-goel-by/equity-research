@@ -46,6 +46,7 @@ from flowtracker.research.autoeval.evaluate import (
     EvalIssue,
     ParameterGrade,
     _extract_json,
+    grade_with_gemini_sdk,
 )
 
 
@@ -258,8 +259,6 @@ async def eval_macro_report(
     anchors: list[str],
 ) -> AgentEvalResult:
     """Grade a macro report with the macro-specific rubric."""
-    from claude_agent_sdk import query, ClaudeAgentOptions
-
     anchor_list = ", ".join(anchors) if anchors else "(catalog returned no complete anchors — fall back to coverage of: Economic Survey, RBI Annual Report, RBI MPR, Union Budget)"
     system_prompt = MACRO_EVAL_SYSTEM.format(
         anchor_list=anchor_list, as_of_date=as_of_date,
@@ -267,22 +266,10 @@ async def eval_macro_report(
     user_prompt = f"## Report to Grade (macro, as-of {as_of_date})\n\n{report_md}"
 
     t0 = time.monotonic()
-    opts = ClaudeAgentOptions(
-        system_prompt=system_prompt,
-        model="gemini-3.1-pro-preview",
-        # [""] workaround for SDK #794 — see extractors for full rationale.
-        setting_sources=[""],
-        plugins=[],
-    )
 
     async def _one_attempt() -> str:
-        raw_local = ""
-        async for msg in query(prompt=user_prompt, options=opts):
-            text = getattr(msg, "content", None) or getattr(msg, "text", "") or ""
-            if isinstance(text, list):
-                text = "".join(str(c) for c in text)
-            raw_local += str(text)
-        return raw_local
+        # Same google-genai SDK path as the specialist grader (eval_with_gemini).
+        return await grade_with_gemini_sdk(system_prompt, user_prompt)
 
     try:
         raw = await _gemini_with_retry(

@@ -594,18 +594,10 @@ def read_agent_evidence(agent: str, stock: str) -> str:
     )
 
 
-async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: str, evidence_context: str = "") -> AgentEvalResult:
-    """Send report to Gemini for grading. Returns structured eval result."""
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError:
-        print("ERROR: google-genai not installed. Run: uv sync --extra autoeval", file=sys.stderr)
-        sys.exit(1)
-
+def _load_gemini_api_key() -> str:
+    """Resolve the Gemini API key from env or ~/.config/flowtracker/gemini.env."""
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        # Try loading from .env file
         env_path = Path.home() / ".config" / "flowtracker" / "gemini.env"
         if env_path.exists():
             for line in env_path.read_text().splitlines():
@@ -613,11 +605,49 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
                     api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
                     break
     if not api_key:
-        print("ERROR: No Gemini API key found. Set GEMINI_API_KEY env var or create ~/.config/flowtracker/gemini.env", file=sys.stderr)
+        print(
+            "ERROR: No Gemini API key found. Set GEMINI_API_KEY env var or "
+            "create ~/.config/flowtracker/gemini.env",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return api_key
+
+
+async def grade_with_gemini_sdk(system_prompt: str, user_prompt: str) -> str:
+    """Grade a report via the google-genai SDK (gemini-3.1-pro-preview).
+
+    The single Gemini path shared by the specialist grader (``eval_with_gemini``)
+    and the macro grader (``eval_macro_report``) so grading is consistent and
+    key-driven (no claude-CLI bridge). Returns the raw response text.
+    """
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        print("ERROR: google-genai not installed. Run: uv sync --extra autoeval", file=sys.stderr)
         sys.exit(1)
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=_load_gemini_api_key())
 
+    # Truncate very long reports to stay within limits
+    if len(user_prompt) > 100_000:
+        user_prompt = user_prompt[:100_000] + "\n\n[Report truncated at 100K chars]"
+
+    response = await client.aio.models.generate_content(
+        model="gemini-3.1-pro-preview",
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            thinking_config=types.ThinkingConfig(thinking_budget=65_535),
+            temperature=0.1,  # near-deterministic grading
+        ),
+    )
+    return response.text or ""
+
+
+async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: str, evidence_context: str = "") -> AgentEvalResult:
+    """Send report to Gemini for grading. Returns structured eval result."""
     system_prompt = EVAL_SYSTEM_TEMPLATE.format(
         sector_type=sector_type,
         agent=agent,
@@ -634,23 +664,10 @@ async def eval_with_gemini(agent: str, stock: str, sector_type: str, report_md: 
     if evidence_context:
         user_prompt += f"\n\n---\n\n{evidence_context}"
 
-    # Truncate very long reports to stay within limits
-    if len(user_prompt) > 100_000:
-        user_prompt = user_prompt[:100_000] + "\n\n[Report truncated at 100K chars]"
-
     start = time.monotonic()
     try:
-        response = await client.aio.models.generate_content(
-            model="gemini-3.1-pro-preview",
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                thinking_config=types.ThinkingConfig(thinking_budget=65_535),
-                temperature=0.1,  # near-deterministic grading
-            ),
-        )
+        raw_text = await grade_with_gemini_sdk(system_prompt, user_prompt)
         eval_duration = time.monotonic() - start
-        raw_text = response.text or ""
     except Exception as exc:
         eval_duration = time.monotonic() - start
         print(f"  [ERROR] Gemini eval failed for {agent}/{stock}: {exc}", file=sys.stderr)

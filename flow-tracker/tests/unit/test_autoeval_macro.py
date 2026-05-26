@@ -107,23 +107,44 @@ def test_eval_macro_report_retries_on_gemini_failure(monkeypatch):
 
 def test_eval_macro_report_gives_up_after_attempts(monkeypatch):
     monkeypatch.setattr(em, "GEMINI_RETRY_BACKOFF_S", 0)
-    fake_sdk = type(sys)("claude_agent_sdk")
 
-    class _Opts:
-        def __init__(self, **kw): self.kw = kw
-
-    async def _query_always_raises(prompt=None, options=None):
+    async def _always_raises(system_prompt, user_prompt):
         raise RuntimeError("gemini 503 boom")
-        yield  # pragma: no cover
 
-    fake_sdk.ClaudeAgentOptions = _Opts
-    fake_sdk.query = _query_always_raises
-    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+    monkeypatch.setattr(em, "grade_with_gemini_sdk", _always_raises)
 
     result = asyncio.run(em.eval_macro_report("2025-11-01", "fake report", ["A1"]))
     assert result.grade == "ERR"
     assert result.grade_numeric == 0
     assert "boom" in result.summary.lower()
+
+
+def test_eval_macro_report_grades_via_genai_sdk(monkeypatch):
+    """Macro grader uses the shared google-genai SDK path (not the claude-CLI
+    bridge) and parses the returned JSON into an AgentEvalResult."""
+    payload = {
+        "grade": "A-", "grade_numeric": 90,
+        "parameters": {"anchor_coverage": {"grade": "A", "numeric": 92, "rationale": "ok"}},
+        "issues": [{"type": "DATA_GAP", "section": "rates", "issue": "x", "suggestion": "y"}],
+        "strengths": ["clear narrative"], "summary": "solid macro read",
+    }
+    captured = {}
+
+    async def _fake_sdk(system_prompt, user_prompt):
+        captured["system"] = system_prompt
+        captured["user"] = user_prompt
+        return json.dumps(payload)
+
+    monkeypatch.setattr(em, "grade_with_gemini_sdk", _fake_sdk)
+    result = asyncio.run(em.eval_macro_report("2025-11-01", "# macro body", ["ES FY24"]))
+
+    assert result.grade == "A-"
+    assert result.grade_numeric == 90
+    assert result.agent == "macro"
+    assert result.parameters["anchor_coverage"].numeric == 92
+    assert result.issues[0].type == "DATA_GAP"
+    assert "Report to Grade" in captured["user"]
+    assert "ES FY24" in captured["system"]
 
 
 def test_archive_eval_run_writes_json_with_as_of_and_note(monkeypatch, tmp_path):
