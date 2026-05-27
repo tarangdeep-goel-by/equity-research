@@ -1271,6 +1271,7 @@ def tool_audit(
     since: Annotated[str | None, typer.Option("--since", help="Only include traces dated on/after YYYY-MM-DD")] = None,
     agent: Annotated[str | None, typer.Option("--agent", help="Filter the scorecard to a single agent (e.g. valuation)")] = None,
     symbol: Annotated[str | None, typer.Option("--symbol", "-s", help="Only audit traces for this stock symbol")] = None,
+    gaps: Annotated[bool, typer.Option("--gaps", help="Show the data-gap catalog + section-consumption (Lever 1) instead of the scorecard")] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Dump the raw audit dict as JSON instead of a table")] = False,
 ) -> None:
     """Tool-use trace-audit (read-only): per-agent scorecard from pipeline traces.
@@ -1303,6 +1304,61 @@ def tool_audit(
         scope = f" for {symbol.upper()}" if symbol else ""
         console.print(f"[yellow]No trace files found{scope} in ~/vault/stocks/*/traces/[/]")
         raise typer.Exit(0)
+
+    if gaps:
+        from rich.table import Table
+
+        from flowtracker.research.tool_audit import data_coverage_files
+
+        cov = data_coverage_files(paths)
+        if as_json:
+            print(json.dumps(cov, indent=2, default=str))
+            return
+
+        n = cov["meta"]["trace_count"]
+        # 1) Data-gap catalog — the "what's missing in the data layer" backlog.
+        gt = Table(
+            title=f"Data-Gap Catalog  ({n} traces) — tool ran, returned nothing usable",
+            show_header=True, header_style="bold red",
+        )
+        gt.add_column("Tool")
+        gt.add_column("Section")
+        gt.add_column("Hits", justify="right")
+        gt.add_column("Stocks affected")
+        for g in cov["data_gaps"][:40]:
+            stocks = ", ".join(g["stocks"][:8]) + (" …" if len(g["stocks"]) > 8 else "")
+            gt.add_row(g["tool"], g["section"], str(g["count"]), stocks)
+        if not cov["data_gaps"]:
+            gt.add_row("[dim]none[/]", "-", "-", "-")
+        console.print(gt)
+
+        # 2) Section consumption — under-consumption: available vs drilled.
+        ct = Table(
+            title="Section Consumption — of each tool's enum, what did agents drill?",
+            show_header=True, header_style="bold cyan",
+        )
+        ct.add_column("Tool")
+        ct.add_column("Drilled/Avail", justify="right")
+        ct.add_column("Never drilled (left on the table)")
+        ct.add_column("Drilled-but-empty (gaps)")
+        for tool in sorted(cov["section_consumption"]):
+            c = cov["section_consumption"][tool]
+            never = ", ".join(c["never_drilled"][:10]) + (" …" if len(c["never_drilled"]) > 10 else "")
+            gapsec = ", ".join(c["gap_sections"][:8])
+            ratio = f"{c['drilled_count']}/{c['available']}"
+            ratio_str = f"[red]{ratio}[/]" if c["drilled_count"] * 2 < c["available"] else ratio
+            ct.add_row(tool, ratio_str, never or "[dim]—[/]", gapsec or "[dim]—[/]")
+        console.print(ct)
+
+        console.print(
+            "\n[dim]Data gaps = empty/error returns that are NOT invalid-arg rejections or "
+            "hallucinations (the tool ran, the data layer had nothing). 'Never drilled' = "
+            "available sections agents never pulled (under-consumption). Both computed from "
+            "Phase-0 is_error/completeness instrumentation.[/]"
+        )
+        if cov["meta"].get("unreadable"):
+            console.print(f"[dim]Skipped {len(cov['meta']['unreadable'])} unreadable trace file(s).[/]")
+        return
 
     result = audit_traces(paths)
     agents = result["agents"]

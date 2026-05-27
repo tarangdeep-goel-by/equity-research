@@ -264,3 +264,61 @@ def test_live_registry_map_has_known_agents():
     # macro agent has a distinct, smaller registry
     assert "macro" in mapping
     assert "get_market_context" in mapping["macro"]
+
+
+# --------------------------------------------------------------------------- #
+# Lever 1 — data_coverage (section coverage + data-gap catalog)
+# --------------------------------------------------------------------------- #
+def _mcp(name, args=None, **kw):
+    return _call(f"mcp__valuation__{name}", args, **kw)
+
+
+def test_data_coverage_gaps_and_consumption():
+    trace = {
+        "symbol": "ACME",
+        "agents": {
+            "valuation": {"tool_calls": [
+                # list section → both credited as drilled
+                _mcp("get_fundamentals", {"section": ["ratios", "growth_rates"]}),
+                # array-STRING section → parsed + split + drilled
+                _mcp("get_fundamentals", {"section": '["cash_flow_quality"]'}),
+                # data gap: errored, NOT invalid-arg, NOT unknown
+                _mcp("get_deck_insights", {"sub_section": "outlook_and_guidance"},
+                     is_error=True, completeness="error",
+                     result_summary='{"error": "No deck extraction found for ACME"}'),
+                # invalid-arg rejection → must NOT count as a data gap
+                _mcp("get_annual_report", {"section": "toc"}, is_error=True,
+                     completeness="error",
+                     result_summary='{"error": "Invalid section toc", "valid_values": [], "suggestion": "x"}'),
+                # empty result → data gap
+                _mcp("get_peer_sector", {"section": "benchmarks"},
+                     completeness="empty", result_summary="[]"),
+            ]}
+        },
+    }
+    cov = TA.data_coverage([trace])
+    gaps = {(g["tool"], g["section"]): g for g in cov["data_gaps"]}
+
+    # Genuine data gaps surfaced; invalid-arg rejection excluded.
+    assert ("get_deck_insights", "outlook_and_guidance") in gaps
+    assert gaps[("get_deck_insights", "outlook_and_guidance")]["stocks"] == ["ACME"]
+    assert ("get_peer_sector", "benchmarks") in gaps
+    assert ("get_annual_report", "toc") not in gaps
+
+    # Consumption: list + array-string sections both credited as drilled.
+    fc = cov["section_consumption"]["get_fundamentals"]
+    assert {"ratios", "growth_rates", "cash_flow_quality"} <= set(fc["drilled"])
+    assert fc["drilled_count"] == 3
+    assert "quarterly_results" in fc["never_drilled"]  # an offered section never pulled
+
+
+def test_data_coverage_toc_only_not_a_drill():
+    # A no-section (TOC) call is not a section drill and not a gap.
+    trace = {"symbol": "X", "agents": {"valuation": {"tool_calls": [
+        _mcp("get_valuation", {}),  # TOC
+    ]}}}
+    cov = TA.data_coverage([trace])
+    vc = cov["section_consumption"]["get_valuation"]
+    assert vc["drilled_count"] == 0
+    assert vc["toc_only"] is True
+    assert cov["data_gaps"] == []

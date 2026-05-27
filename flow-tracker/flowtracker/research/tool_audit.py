@@ -50,7 +50,7 @@ used for hallucination / misroute detection, falling back to the per-trace
 from __future__ import annotations
 
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -109,6 +109,42 @@ def _build_agent_registry_map() -> dict[str, set[str]]:
         if names:
             mapping[agent] = names  # type: ignore[assignment]
     return mapping
+
+
+def _section_enum_map() -> dict[str, tuple[str, ...]]:
+    """Map dispatcher tool name -> its full registered section/sub_section enum.
+
+    Imports the ``_<TOOL>_SECTIONS`` constants from
+    :mod:`flowtracker.research.tools` (the Phase-1 enum vocab). Used as the
+    denominator for section-consumption: which of a tool's available sections
+    did agents actually drill, vs leave on the table. Best-effort — missing
+    constants are skipped.
+    """
+    try:
+        from flowtracker.research import tools as T
+    except Exception:  # noqa: BLE001 — advisory
+        return {}
+    by_tool = {
+        "get_fundamentals": "_FUNDAMENTALS_SECTIONS",
+        "get_quality_scores": "_QUALITY_SCORES_SECTIONS",
+        "get_ownership": "_OWNERSHIP_SECTIONS",
+        "get_valuation": "_VALUATION_SECTIONS",
+        "get_fair_value_analysis": "_FAIR_VALUE_SECTIONS",
+        "get_peer_sector": "_PEER_SECTOR_SECTIONS",
+        "get_estimates": "_ESTIMATES_SECTIONS",
+        "get_market_context": "_MARKET_CONTEXT_SECTIONS",
+        "get_company_context": "_COMPANY_CONTEXT_SECTIONS",
+        "get_events_actions": "_EVENTS_ACTIONS_SECTIONS",
+        "get_concall_insights": "_CONCALL_SUB_SECTIONS",
+        "get_deck_insights": "_DECK_SUB_SECTIONS",
+        "get_annual_report": "_ANNUAL_REPORT_SECTIONS",
+    }
+    out: dict[str, tuple[str, ...]] = {}
+    for tool, attr in by_tool.items():
+        val = getattr(T, attr, None)
+        if val:
+            out[tool] = tuple(val)
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -227,6 +263,50 @@ def _is_empty(call: dict[str, Any]) -> bool:
     # captured text is an empty container counts as empty. Missing text => unknown.
     text = str(call.get("result_summary") or "").strip()
     return text in ("[]", "{}")
+
+
+def _sections_of(call: dict[str, Any]) -> list[str]:
+    """The section(s)/sub_section(s) a call drilled.
+
+    A no-section / toc / summary call is the table-of-contents call → ``["(toc)"]``.
+    A list ``section=['a','b']`` drills both → ``["a", "b"]``.
+    """
+    a = call.get("args") or {}
+    sec = a.get("section")
+    if sec is None:
+        sec = a.get("sub_section")
+    # Agents sometimes pass a JSON-array *string* (e.g. '["a","b"]') — the tool
+    # parses it via _parse_section, but the trace records the raw arg. Split it
+    # so each section is attributed individually.
+    if isinstance(sec, str) and sec.strip().startswith("["):
+        try:
+            parsed = json.loads(sec)
+            if isinstance(parsed, list):
+                sec = parsed
+        except ValueError:
+            pass
+    if isinstance(sec, list):
+        return [str(s) for s in sec] if sec else ["(toc)"]
+    if sec in (None, "", "toc", "summary"):
+        return ["(toc)"]
+    return [str(sec)]
+
+
+def _is_data_gap(call: dict[str, Any], is_unknown: bool) -> bool:
+    """A genuine data-layer gap: the tool RAN but returned nothing usable.
+
+    True when the call returned empty, or errored for a reason that is neither
+    an invalid-arg rejection (a model mistake) nor a hallucinated/unknown tool
+    (a routing mistake). What remains — "no AR extraction found", "no market
+    cap", "schema_valid_but_unavailable", an empty section — is the data layer
+    not carrying something the analysis wanted. These are the signals to mine
+    into a "what to build/ingest next" backlog.
+    """
+    if is_unknown or _is_invalid_arg(call):
+        return False
+    if _is_empty(call):
+        return True
+    return bool(call.get("is_error"))
 
 
 # --------------------------------------------------------------------------- #
@@ -490,6 +570,116 @@ def audit_traces(
             unreadable.append(str(p))
 
     result = audit_trace_dicts(loaded, agent_registry=agent_registry)
+    result["meta"]["file_count"] = len(trace_paths)
+    result["meta"]["unreadable"] = unreadable
+    return result
+
+
+# --------------------------------------------------------------------------- #
+# Lever 1 — section coverage & data-gap catalog
+# --------------------------------------------------------------------------- #
+def data_coverage(
+    traces: list[dict[str, Any]],
+    *,
+    agent_registry: dict[str, set[str]] | None = None,
+) -> dict[str, Any]:
+    """Section-level coverage + data-gap catalog over loaded trace dicts.
+
+    Two outputs, both from the Phase-0 instrumentation (is_error / completeness),
+    not fragile text parsing:
+
+    * ``data_gaps`` — ranked ``[{tool, section, count, stocks}]`` where the tool
+      RAN but returned nothing usable (empty / data-absence error, excluding
+      invalid-arg rejections and hallucinated tools). This is the
+      "what's missing in the data layer" backlog: the model asked for it, we
+      didn't have it.
+    * ``section_consumption`` — per section-routed dispatcher: of the sections
+      its enum offers, which did agents actually drill vs leave untouched
+      (``never_drilled``), and which drilled sections hit a gap
+      (``gap_sections``). This surfaces UNDER-CONSUMPTION — available data the
+      model never pulled.
+
+    Pure function: no filesystem access.
+    """
+    registry = agent_registry if agent_registry is not None else _build_agent_registry_map()
+    enum_map = _section_enum_map()
+
+    gap_count: Counter = Counter()
+    gap_stocks: dict[tuple[str, str], set[str]] = defaultdict(set)
+    drilled: dict[str, set[str]] = defaultdict(set)   # tool -> sections drilled
+    gapped: dict[str, set[str]] = defaultdict(set)    # tool -> sections that gapped
+    n_traces = 0
+
+    for trace in traces:
+        if not isinstance(trace, dict):
+            continue
+        agents = trace.get("agents")
+        if not isinstance(agents, dict):
+            continue
+        n_traces += 1
+        symbol = str(trace.get("symbol") or "?")
+        for agent, info in agents.items():
+            if not isinstance(info, dict):
+                continue
+            registered = registry.get(agent) or set()
+            for call in info.get("tool_calls") or []:
+                if not isinstance(call, dict):
+                    continue
+                raw = str(call.get("tool") or "")
+                if not _is_mcp_tool(raw):
+                    continue
+                bare = _strip_prefix(raw)
+                is_unknown = bool(registered and bare not in registered)
+                secs = _sections_of(call)
+                for s in secs:
+                    drilled[bare].add(s)
+                if _is_data_gap(call, is_unknown):
+                    for s in secs:
+                        gap_count[(bare, s)] += 1
+                        gap_stocks[(bare, s)].add(symbol)
+                        gapped[bare].add(s)
+
+    data_gaps = [
+        {"tool": t, "section": s, "count": c, "stocks": sorted(gap_stocks[(t, s)])}
+        for (t, s), c in gap_count.most_common()
+    ]
+
+    section_consumption: dict[str, Any] = {}
+    for tool, enum in sorted(enum_map.items()):
+        enum_set = set(enum)
+        drilled_real = {s for s in drilled.get(tool, set()) if s != "(toc)"} & enum_set
+        section_consumption[tool] = {
+            "available": len(enum_set),
+            "drilled_count": len(drilled_real),
+            "drilled": sorted(drilled_real),
+            "never_drilled": sorted(enum_set - drilled_real),
+            "gap_sections": sorted(gapped.get(tool, set()) & enum_set),
+            "toc_only": bool(
+                "(toc)" in drilled.get(tool, set()) and not drilled_real
+            ),
+        }
+
+    return {
+        "data_gaps": data_gaps,
+        "section_consumption": section_consumption,
+        "meta": {"trace_count": n_traces},
+    }
+
+
+def data_coverage_files(
+    trace_paths: list[Path],
+    *,
+    agent_registry: dict[str, set[str]] | None = None,
+) -> dict[str, Any]:
+    """Load trace files and run :func:`data_coverage`."""
+    loaded: list[dict[str, Any]] = []
+    unreadable: list[str] = []
+    for p in trace_paths:
+        try:
+            loaded.append(json.loads(Path(p).read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            unreadable.append(str(p))
+    result = data_coverage(loaded, agent_registry=agent_registry)
     result["meta"]["file_count"] = len(trace_paths)
     result["meta"]["unreadable"] = unreadable
     return result
