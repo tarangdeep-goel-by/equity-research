@@ -225,6 +225,7 @@ def backfill(
     total_quarters = 0
     total_annual = 0
     total_ratios = 0
+    total_qcf = 0
     total_pe_snapshots = 0
     errors: list[str] = []
 
@@ -296,6 +297,15 @@ def backfill(
                                     if npe is not None:
                                         q.net_premium_earned = npe
 
+                            # 7. Cash flow (fiscal year cadence) from the
+                            # same Excel — Screener is the only reliable
+                            # source for Indian smallcap CF (yfinance is
+                            # empty for ~97% of NSE EQ symbols).
+                            try:
+                                qcf_rows = sc.parse_quarterly_cash_flow_screener(sym, excel_bytes)
+                            except Exception:
+                                qcf_rows = []
+
                             with FlowStore() as store:
                                 if quarters:
                                     store.upsert_quarterly_results(quarters)
@@ -306,6 +316,9 @@ def backfill(
                                 if ratios:
                                     store.upsert_screener_ratios(ratios)
                                     total_ratios += len(ratios)
+                                if qcf_rows:
+                                    store.upsert_quarterly_cash_flow(sym, qcf_rows)
+                                    total_qcf += len(qcf_rows)
 
                                 annual_eps_cache[sym] = annual
 
@@ -322,6 +335,7 @@ def backfill(
         console.print(f"  Quarterly results: [green]{total_quarters}[/] records for {len(symbols)} stocks")
         console.print(f"  Annual financials: [green]{total_annual}[/] records")
         console.print(f"  Screener ratios: [green]{total_ratios}[/] records")
+        console.print(f"  Cash flow (FY): [green]{total_qcf}[/] records")
     else:
         # Still need annual EPS for P/E computation — load from Screener.in
         annual_eps_cache = {}

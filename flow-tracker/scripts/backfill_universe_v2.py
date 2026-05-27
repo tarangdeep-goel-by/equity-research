@@ -11,7 +11,10 @@ to the full ``daily_stock_data`` universe (~2,000 liquid NSE EQ symbols):
     promoter_pledge           -- promoter pledge % (same XBRL pass)
     screener_charts           -- 21yr PE + price history (Screener Chart API)
     quarterly_balance_sheet   -- yfinance quarterly BS (crores)
-    quarterly_cash_flow       -- yfinance quarterly CF (crores)
+    quarterly_cash_flow       -- Screener Excel fiscal-year CF (crores) —
+                                 yfinance only covered ~49/1700 symbols, so
+                                 we now pull annual CF rows from Screener
+                                 (source='screener') for full coverage.
     estimate_revisions        -- yfinance analyst EPS trend + revisions
 
 Behavior:
@@ -202,15 +205,35 @@ def _fetch_charts(
 def _fetch_quarterly_bs_cf(
     fc: FundClient, store: FlowStore, symbol: str
 ) -> dict:
-    """yfinance → quarterly_balance_sheet + quarterly_cash_flow (crores)."""
+    """yfinance → quarterly_balance_sheet only (crores).
+
+    Cash flow rows are NOT populated here — yfinance returns nothing for
+    ~97% of Indian smallcaps. The CF backfill is delegated to
+    ``_fetch_screener_cash_flow`` below, which pulls fiscal-year CF from
+    Screener (the only reliable source for the full universe).
+    """
     payload = fc.fetch_quarterly_bs_cf(symbol)
     stats = {"qbs_rows": 0, "qcf_rows": 0}
     bs_rows = payload.get("balance_sheet", []) if isinstance(payload, dict) else []
-    cf_rows = payload.get("cash_flow", []) if isinstance(payload, dict) else []
     if bs_rows:
         stats["qbs_rows"] = store.upsert_quarterly_balance_sheet(symbol, bs_rows)
-    if cf_rows:
-        stats["qcf_rows"] = store.upsert_quarterly_cash_flow(symbol, cf_rows)
+    return stats
+
+
+def _fetch_screener_cash_flow(
+    sc: ScreenerClient, store: FlowStore, symbol: str
+) -> dict:
+    """Screener Excel → quarterly_cash_flow (fiscal-year cadence, crores).
+
+    Replaces the yfinance qCF path which only covered ~49 of ~1,700
+    symbols. Screener has CFO/CFI/CFF for every listed Indian company.
+    Cadence is annual (FY end) — see
+    ``ScreenerClient.parse_quarterly_cash_flow_screener`` for the caveat.
+    """
+    rows = sc.fetch_quarterly_cash_flow_screener(symbol)
+    stats = {"scf_rows": 0}
+    if rows:
+        stats["scf_rows"] = store.upsert_quarterly_cash_flow(symbol, rows)
     return stats
 
 
@@ -243,7 +266,8 @@ def backfill_symbol(
     """
     stats: dict = {
         "sh_rows": 0, "pledge_rows": 0, "breakdown_rows": 0,
-        "chart_points": 0, "qbs_rows": 0, "qcf_rows": 0, "est_rev_rows": 0,
+        "chart_points": 0, "qbs_rows": 0, "qcf_rows": 0,
+        "scf_rows": 0, "est_rev_rows": 0,
     }
     errors: list[str] = []
 
@@ -265,6 +289,13 @@ def backfill_symbol(
         stats.update(_fetch_quarterly_bs_cf(fc, store, symbol))
     except Exception as e:  # pragma: no cover - defensive
         errors.append(f"qbs_cf!: {e}")
+
+    try:
+        stats.update(_fetch_screener_cash_flow(sc, store, symbol))
+    except ScreenerError as e:
+        errors.append(f"scf: {e}")
+    except Exception as e:  # pragma: no cover - defensive
+        errors.append(f"scf!: {e}")
 
     try:
         stats.update(_fetch_estimate_revisions(ec, store, symbol))

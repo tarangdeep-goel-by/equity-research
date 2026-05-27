@@ -1041,8 +1041,11 @@ class ResearchDataAPI:
         return _clean(rows)
 
     def get_quarterly_cash_flow(self, symbol: str, quarters: int = 8) -> list[dict]:
-        """Quarterly cash flow: OCF, FCF, capex, working capital changes (from yfinance).
-        Note: not available for all stocks (banks typically missing)."""
+        """Cash flow rows, most recent first. Two cadences mixed by source:
+            * source='screener' — fiscal-year CFO/CFI/CFF (covers full universe)
+            * source='yfinance' — true quarterly OCF/FCF/capex/WC (~49 symbols only)
+        Inspect the ``source`` field on each row before comparing across symbols.
+        """
         rows = self._store.get_quarterly_cash_flow(symbol, limit=quarters)
         return _clean(rows)
 

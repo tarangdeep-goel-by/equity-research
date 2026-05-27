@@ -710,6 +710,120 @@ class ScreenerClient:
         annual_fin = self.parse_annual_financials(symbol, excel_bytes)
         return quarters, annual_eps, annual_fin
 
+    def parse_quarterly_cash_flow_screener(
+        self, symbol: str, excel_bytes: bytes
+    ) -> list[dict]:
+        """Parse fiscal-year cash flow from Screener.in Excel into qCF rows.
+
+        Screener's Excel ``Data Sheet`` CASH FLOW: section gives **annual**
+        (fiscal year-end) cash flow only — Indian companies don't publish
+        quarterly cash flow under SEBI. Each row returned uses the FY end
+        (e.g. ``2025-03-31``) as ``quarter_end`` and is marked
+        ``source='screener'`` so callers can distinguish from the
+        yfinance-sourced true-quarterly rows that already live in
+        ``quarterly_cash_flow``.
+
+        Returns dict rows suitable for ``FlowStore.upsert_quarterly_cash_flow``.
+        Empty list on parse failure or missing CASH FLOW: section.
+        """
+        wb = openpyxl.load_workbook(io.BytesIO(excel_bytes), data_only=False)
+        if "Data Sheet" not in wb.sheetnames:
+            wb.close()
+            return []
+        ws = wb["Data Sheet"]
+        all_rows = list(ws.iter_rows(values_only=True))
+        wb.close()
+
+        # Locate CASH FLOW: section
+        cf_start = None
+        cf_end = len(all_rows)
+        for i, row in enumerate(all_rows):
+            if not row or not isinstance(row[0], str):
+                continue
+            label = row[0].strip().upper()
+            if label == "CASH FLOW:":
+                cf_start = i
+            elif cf_start is not None and label in ("PRICE:", "DERIVED:"):
+                cf_end = i
+                break
+        if cf_start is None:
+            return []
+
+        # CF section has its own Report Date row immediately after the header.
+        date_row = all_rows[cf_start + 1] if cf_start + 1 < cf_end else None
+        if not date_row or not (isinstance(date_row[0], str) and date_row[0].strip() == "Report Date"):
+            return []
+
+        date_cols: list[tuple[int, str]] = []
+        for col_idx in range(1, len(date_row)):
+            val = date_row[col_idx]
+            if val is None:
+                continue
+            if isinstance(val, datetime):
+                date_cols.append((col_idx, val.strftime("%Y-%m-%d")))
+            elif isinstance(val, str):
+                val_str = val.strip()
+                if not val_str or val_str.lower() in ("ttm", "report date"):
+                    continue
+                try:
+                    date_cols.append((col_idx, _parse_screener_date(val_str)))
+                except ScreenerError:
+                    continue
+        if not date_cols:
+            return []
+
+        def _extract(label_match: str) -> list[float | None]:
+            for row in all_rows[cf_start:cf_end]:
+                if row and isinstance(row[0], str) and row[0].strip().lower() == label_match.lower():
+                    out: list[float | None] = []
+                    for col_idx, _ in date_cols:
+                        v = row[col_idx] if col_idx < len(row) else None
+                        if v is not None:
+                            try:
+                                v = float(v)
+                            except (ValueError, TypeError):
+                                v = None
+                        out.append(v)
+                    return out
+            return [None] * len(date_cols)
+
+        cfo_vals = _extract("Cash from Operating Activity")
+        cfi_vals = _extract("Cash from Investing Activity")
+        cff_vals = _extract("Cash from Financing Activity")
+
+        rows: list[dict] = []
+        for i, (_, fy_end) in enumerate(date_cols):
+            cfo = cfo_vals[i] if i < len(cfo_vals) else None
+            cfi = cfi_vals[i] if i < len(cfi_vals) else None
+            cff = cff_vals[i] if i < len(cff_vals) else None
+            # Skip rows where every CF line is null — Screener pads forward years.
+            if cfo is None and cfi is None and cff is None:
+                continue
+            rows.append({
+                "quarter_end": fy_end,
+                "operating_cash_flow": cfo,
+                "investing_cash_flow": cfi,
+                "financing_cash_flow": cff,
+                "source": "screener",
+                # Screener Data Sheet does not split capex from CFI, so we leave
+                # capital_expenditure / free_cash_flow / change_in_working_capital /
+                # depreciation / dividends_paid / net_income null. The
+                # cash-flow schedules API (sub-items) does have "Fixed assets
+                # purchased" but it's expensive to call per symbol; skip for
+                # the bulk path. CFO alone is the field downstream consumers
+                # (DuPont, fair-value, screener_engine) actually read.
+            })
+        return rows
+
+    def fetch_quarterly_cash_flow_screener(self, symbol: str) -> list[dict]:
+        """Download Screener Excel and return fiscal-year cash flow rows.
+
+        See ``parse_quarterly_cash_flow_screener`` for the data shape and
+        cadence caveat (annual, not true-quarterly).
+        """
+        excel_bytes = self.download_excel(symbol)
+        return self.parse_quarterly_cash_flow_screener(symbol, excel_bytes)
+
     def download_standalone_excel(self, symbol: str) -> bytes | None:
         """Download the standalone (non-consolidated) Excel export.
 
