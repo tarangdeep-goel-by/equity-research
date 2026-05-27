@@ -250,6 +250,21 @@ class TestResearchToolAudit:
         assert result.exit_code == 0
         assert "No trace files found" in result.output
 
+    def test_tool_audit_gaps(self, tmp_path, monkeypatch):
+        self._seed_vault(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["research", "tool-audit", "--gaps"])
+        assert result.exit_code == 0
+        assert "Data-Gap Catalog" in result.output
+        assert "Section Consumption" in result.output
+
+    def test_tool_audit_gaps_json(self, tmp_path, monkeypatch):
+        self._seed_vault(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["research", "tool-audit", "--gaps", "--json"])
+        assert result.exit_code == 0
+        import json as _json
+        data = _json.loads(result.output)
+        assert "data_gaps" in data and "section_consumption" in data
+
 
 # ---------------------------------------------------------------------------
 # Bhavcopy commands
