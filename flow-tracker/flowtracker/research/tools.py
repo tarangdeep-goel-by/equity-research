@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 from typing import Any, Literal
 
@@ -117,6 +118,40 @@ def _with_dedup(tool_name: str, result: dict, args: dict) -> dict:
     return result
 
 
+def _wrap_handler_is_error(tool):
+    """Set `is_error` on the result envelope when the payload classifies as an error.
+
+    The agent harness reads `is_error` off the tool-result block, but no tool
+    handler sets it today, so failures are invisible. This wrapper decodes the
+    envelope's JSON text payload, reuses `classify_completeness`, and flags the
+    envelope when the payload is an error dict.
+
+    Rides on the envelope dict only — never touches `content[0]["text"]`, so the
+    dedup hash (`_with_dedup`) is preserved. Idempotent: wraps each unique tool's
+    handler exactly once via a sentinel attribute.
+    """
+    orig = tool.handler
+    if getattr(orig, "_is_error_wrapped", False):
+        return tool
+
+    async def wrapped(args):
+        result = await orig(args)
+        try:
+            if isinstance(result, dict) and "is_error" not in result:
+                text = result.get("content", [{}])[0].get("text", "")
+                payload = json.loads(text)
+                comp, _ = classify_completeness(payload)
+                if comp == "error":
+                    result["is_error"] = True
+        except Exception:
+            pass  # non-JSON text (dedup stub, bare strings) → leave unflagged
+        return result
+
+    wrapped._is_error_wrapped = True
+    tool.handler = wrapped
+    return tool
+
+
 def _parse_section(section: str | list) -> str | list:
     """Normalize section parameter — parse JSON array strings into lists.
 
@@ -135,353 +170,210 @@ def _parse_section(section: str | list) -> str | list:
     return section
 
 
-# --- Core Financials ---
+def _invalid_enum_error(tool_name: str, param: str, value, valid, args: dict) -> dict:
+    """Return a 'did-you-mean' error envelope for an out-of-vocab enum value.
+
+    The Phase 0 wrapper (`_wrap_handler_is_error`) decodes the payload and flags
+    `is_error=True` because the payload carries a truthy `"error"` key — so this
+    helper only has to RETURN the error dict in the normal envelope shape.
+    `valid` may be any iterable of strings (frozenset/tuple/list).
+    """
+    valid_list = list(valid)
+    sugg = difflib.get_close_matches(str(value), valid_list, n=3, cutoff=0.3)
+    err = {
+        "error": f"Invalid {param} '{value}' for {tool_name}.",
+        "valid_values": sorted(valid_list),
+        "suggestion": (
+            f"Did you mean {sugg}?" if sugg
+            else f"Call {tool_name} with no {param} to see the TOC."
+        ),
+    }
+    # Phase 3b: error envelopes carry a `_meta` sidecar (status="error") too.
+    # Exception-safe — never break the error path for metadata.
+    try:
+        from datetime import date
+        err["_meta"] = {
+            "as_of_date": str(date.today()),
+            "status": "error",
+            "count": None,
+            "data_freshness": None,
+        }
+    except Exception:
+        pass
+    return _with_dedup(
+        tool_name,
+        {"content": [{"type": "text", "text": json.dumps(err, default=str)}]},
+        args,
+    )
 
 
-@tool(
-    "get_quarterly_results",
-    "Get quarterly P&L: revenue, expenses, operating profit, net income, EPS, margins. Returns up to 12 quarters.",
-    {"symbol": str, "quarters": int},
-    annotations=READ_ONLY,
+# ---------------------------------------------------------------------------
+# Section vocabularies — single source of truth shared by the @tool schema enum
+# and the handler-side validation guard (`_validate_sections`). Each tuple lists
+# the routable sections; the trailing sentinels (toc/summary/all) are added
+# per-tool to match exactly what that handler special-cases. Derived from the
+# routing functions (`_get_<name>_section`) below — the handler is ground truth.
+# Defined here (before any tool) so the schema dicts can reference them at
+# module-import time.
+# ---------------------------------------------------------------------------
+_FUNDAMENTALS_SECTIONS = (
+    "quarterly_results", "annual_financials", "ratios", "quarterly_balance_sheet",
+    "quarterly_cash_flow", "expense_breakdown", "growth_rates", "capital_allocation",
+    "rate_sensitivity", "cagr_table", "cost_structure", "balance_sheet_detail",
+    "cash_flow_quality", "working_capital",
 )
-async def get_quarterly_results(args):
-    with ResearchDataAPI() as api:
-        data = api.get_quarterly_results(args["symbol"], args.get("quarters", 12))
-    return _with_dedup("get_quarterly_results", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_FUNDAMENTALS_SENTINELS = ("toc", "summary", "all")
 
-
-@tool(
-    "get_annual_financials",
-    "Get 10 years of annual financials. P&L: revenue, expenses, operating profit, net income, EPS. "
-    "Balance Sheet: equity capital, reserves, borrowings, total assets, net block, CWIP, investments, receivables, inventory, cash. "
-    "Cash Flow: CFO, CFI, CFF, net cash flow. Also includes: expense breakdown (raw material, employee, power, selling costs), shares outstanding, dividend, and price.",
-    {"symbol": str, "years": int},
-    annotations=READ_ONLY,
+_QUALITY_SCORES_SECTIONS = (
+    "earnings_quality", "piotroski", "beneish", "dupont", "common_size", "capex_cycle",
+    "bfsi", "subsidiary", "insurance", "metals", "realestate", "telecom", "power",
+    "sector_health", "risk_flags", "forensic_checks", "improvement_metrics",
+    "capital_discipline", "incremental_roce", "altman_zscore", "working_capital",
+    "operating_leverage", "fcf_yield", "tax_rate_analysis", "receivables_quality",
 )
-async def get_annual_financials(args):
-    with ResearchDataAPI() as api:
-        data = api.get_annual_financials(args["symbol"], args.get("years", 10))
-    return _with_dedup("get_annual_financials", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_QUALITY_SCORES_SENTINELS = ("all",)
 
-
-@tool(
-    "get_efficiency_ratios",
-    "Get efficiency ratios: debtor days, inventory days, cash conversion cycle, working capital days, ROCE%. Up to 10 years.",
-    {"symbol": str, "years": int},
-    annotations=READ_ONLY,
+_OWNERSHIP_SECTIONS = (
+    "shareholding", "changes", "insider", "bulk_block", "mf_holdings", "mf_changes",
+    "shareholder_detail", "promoter_pledge", "mf_conviction", "adr_gdr",
+    "public_breakdown", "esop",
 )
-async def get_efficiency_ratios(args):
-    with ResearchDataAPI() as api:
-        data = api.get_screener_ratios(args["symbol"], args.get("years", 10))
-    return _with_dedup("get_efficiency_ratios", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_OWNERSHIP_SENTINELS = ("toc", "summary", "all")
 
+_VALUATION_SECTIONS = ("snapshot", "band", "pe_history", "key_metrics", "wacc", "sotp")
+_VALUATION_SENTINELS = ("all",)
 
-@tool(
-    "get_quarterly_balance_sheet",
-    "Get quarterly balance sheet from yfinance: total assets, debt, equity, cash, investments, shares outstanding. "
-    "Up to 8 quarters. Values in crores. Not available for all stocks (some return empty).",
-    {"symbol": str, "quarters": int},
-    annotations=READ_ONLY,
+_FAIR_VALUE_SECTIONS = ("combined", "dcf", "dcf_history", "reverse_dcf", "projections")
+_FAIR_VALUE_SENTINELS = ("all",)
+
+_PEER_SECTOR_SECTIONS = (
+    "peer_table", "peer_metrics", "peer_growth", "valuation_matrix", "benchmarks",
+    "sector_overview", "sector_flows", "sector_valuations", "yahoo_peers",
+    "sector_index_valuation", "sector_performance",
 )
-async def get_quarterly_balance_sheet(args):
-    with ResearchDataAPI() as api:
-        data = api.get_quarterly_balance_sheet(args["symbol"], args.get("quarters", 8))
-    return _with_dedup("get_quarterly_balance_sheet", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_PEER_SECTOR_SENTINELS = ("toc", "summary", "all")
 
-
-@tool(
-    "get_quarterly_cash_flow",
-    "Get quarterly cash flow from yfinance: operating CF, free CF, capex, investing CF, financing CF, working capital changes. "
-    "Up to 8 quarters. Values in crores. NOT available for banks or many Indian stocks — if empty, use annual CF from get_annual_financials.",
-    {"symbol": str, "quarters": int},
-    annotations=READ_ONLY,
+_ESTIMATES_SECTIONS = (
+    "consensus", "surprises", "revisions", "momentum", "revenue", "growth",
+    "analyst_grades", "price_targets",
 )
-async def get_quarterly_cash_flow(args):
-    with ResearchDataAPI() as api:
-        data = api.get_quarterly_cash_flow(args["symbol"], args.get("quarters", 8))
-    return _with_dedup("get_quarterly_cash_flow", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_ESTIMATES_SENTINELS = ("all",)
 
-
-# --- Valuation ---
-
-
-@tool(
-    "get_valuation_snapshot",
-    "Get latest valuation snapshot: price, PE, PB, EV/EBITDA, dividend yield, margins, market cap — 50+ fields.",
-    {"symbol": str},
-    annotations=READ_ONLY,
+_MARKET_CONTEXT_SECTIONS = (
+    "delivery", "macro", "fii_dii_streak", "fii_dii_flows", "technicals",
+    "price_performance", "delivery_analysis", "commodities", "institutional_consensus",
 )
-async def get_valuation_snapshot(args):
-    with ResearchDataAPI() as api:
-        data = api.get_valuation_snapshot(args["symbol"])
-    return _with_dedup("get_valuation_snapshot", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_MARKET_CONTEXT_SENTINELS = ("all",)
 
-
-@tool(
-    "get_valuation_band",
-    "Get PE (or other metric) percentile band over historical period. Shows where current valuation sits vs history.",
-    {"symbol": str, "metric": str, "days": int},
-    annotations=READ_ONLY,
+_COMPANY_CONTEXT_SECTIONS = (
+    "info", "profile", "documents", "business_profile", "concall_insights",
+    "deck_insights", "annual_report", "sector_kpis", "filings",
 )
-async def get_valuation_band(args):
-    with ResearchDataAPI() as api:
-        data = api.get_valuation_band(
-            args["symbol"],
-            args.get("metric", "pe_trailing"),
-            args.get("days", 2500),
-        )
-    return _with_dedup("get_valuation_band", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_COMPANY_CONTEXT_SENTINELS = ("all",)
 
-
-@tool(
-    "get_pe_history",
-    "Get historical PE and price time series for charting. Up to ~7 years of daily data.",
-    {"symbol": str, "days": int},
-    annotations=READ_ONLY,
+# Nested sub_section vocabularies for get_company_context (validated conditionally
+# on the parent section). sector_kpis sub_section is free-text (canonical KPI key)
+# and is intentionally NOT enumerated/validated.
+_CONCALL_SUB_SECTIONS = (
+    "operational_metrics", "financial_metrics", "management_commentary", "subsidiaries",
+    "qa_session", "flags", "opening_remarks", "comparable_growth_metrics",
 )
-async def get_pe_history(args):
-    with ResearchDataAPI() as api:
-        data = api.get_pe_history(args["symbol"], args.get("days", 2500))
-    return _with_dedup("get_pe_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_wacc_params",
-    "Get WACC parameters for a stock: risk-free rate, equity risk premium, beta (Nifty regression), "
-    "cost of equity (CAPM), cost of debt, debt/equity mix, and final WACC%. Used as discount rate for DCF.",
-    {"symbol": str},
-    annotations=READ_ONLY,
+_DECK_SUB_SECTIONS = (
+    "highlights", "segment_performance", "strategic_priorities", "outlook_and_guidance",
+    "new_initiatives", "charts_described",
 )
-async def get_wacc_params(args):
-    with ResearchDataAPI() as api:
-        data = api.get_wacc_params(args["symbol"])
-    return _with_dedup("get_wacc_params", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-# --- Ownership & Institutional ---
-
-
-@tool(
-    "get_shareholding",
-    "Get quarterly ownership breakdown: FII%, DII%, MF%, Promoter%, Public%. Defaults to 20 quarters (5 years); pass quarters to widen/narrow.",
-    {"symbol": str, "quarters": int},
-    annotations=READ_ONLY,
+_ANNUAL_REPORT_SUB_SECTIONS = (
+    "chairman_letter", "mdna", "risk_management", "auditor_report",
+    "corporate_governance", "brsr", "related_party", "segmental",
+    "notes_to_financials", "financial_statements",
 )
-async def get_shareholding(args):
-    with ResearchDataAPI() as api:
-        data = api.get_shareholding(args["symbol"], args.get("quarters", 20))
-    return _with_dedup("get_shareholding", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_COMPANY_CONTEXT_SUB_SECTION_VOCAB = {
+    "concall_insights": _CONCALL_SUB_SECTIONS,
+    "deck_insights": _DECK_SUB_SECTIONS,
+    "annual_report": _ANNUAL_REPORT_SUB_SECTIONS,
+}
 
-
-@tool(
-    "get_shareholding_changes",
-    "Get latest quarter-over-quarter ownership changes by category (FII, DII, Promoter, etc.).",
-    {"symbol": str},
-    annotations=READ_ONLY,
+_EVENTS_ACTIONS_SECTIONS = (
+    "events", "dividends", "corporate_actions", "adjusted_eps", "catalysts",
+    "material_events", "dividend_policy",
 )
-async def get_shareholding_changes(args):
-    with ResearchDataAPI() as api:
-        data = api.get_shareholding_changes(args["symbol"])
-    return _with_dedup("get_shareholding_changes", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+_EVENTS_ACTIONS_SENTINELS = ("all",)
 
+# Standalone get_annual_report — same AR sections as the nested vocab. NO 'toc'
+# sentinel (the handler treats a missing section as the TOC; 'toc' is a notorious
+# wrong guess and must be rejected with a did-you-mean).
+_ANNUAL_REPORT_SECTIONS = _ANNUAL_REPORT_SUB_SECTIONS
 
-@tool(
-    "get_insider_transactions",
-    "Get SAST insider buy/sell trades: person name, category, quantity, value. Up to 1 year.",
-    {"symbol": str, "days": int},
-    annotations=READ_ONLY,
+# get_macro_anchor doc_type enum. `section` stays free-text (fuzzy heading match).
+_MACRO_ANCHOR_DOC_TYPES = (
+    "economic_survey", "budget_speech", "budget_at_a_glance", "rbi_mpr",
+    "rbi_mpc_statement", "rbi_ar_assessment", "rbi_ar_economic", "rbi_ar_monetary",
+    "irdai_annual_report",
 )
-async def get_insider_transactions(args):
-    with ResearchDataAPI() as api:
-        data = api.get_insider_transactions(args["symbol"], args.get("days", 1825))
-    return _with_dedup("get_insider_transactions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
+# ---------------------------------------------------------------------------
+# Phase 1-B: standalone vocab tools — same single-source-of-truth pattern as the
+# section dispatchers above. Each tuple is the EXACT vocab the handler accepts
+# (derived from the handler / charts.py / data_api / store — the handler is
+# ground truth), referenced by BOTH the @tool schema enum and the handler guard.
+# ---------------------------------------------------------------------------
 
-@tool(
-    "get_bulk_block_deals",
-    "Get BSE bulk/block deals — large institutional trades with buyer/seller, qty, price.",
-    {"symbol": str},
-    annotations=READ_ONLY,
+# render_chart: PNG renderer. Exact set = charts._AVAILABLE_CHARTS (25 types).
+# NOTE: distinct from _CHART_DATA_TYPES below (rendered PNG vs raw Screener series).
+_RENDER_CHART_TYPES = (
+    "price", "pe", "delivery", "revenue_profit", "shareholding",
+    "quarterly", "margin_trend", "roce_trend", "dupont", "cashflow",
+    "fair_value_range", "expense_pie", "composite_radar",
+    "sector_mcap", "sector_valuation_scatter", "sector_ownership_flow",
+    "sector_growth_bars", "sector_profitability_bars", "sector_pe_distribution",
+    "comparison_revenue", "comparison_pe", "comparison_shareholding",
+    "comparison_radar", "comparison_margins",
+    "dividend_history",
 )
-async def get_bulk_block_deals(args):
-    with ResearchDataAPI() as api:
-        data = api.get_bulk_block_deals(args["symbol"])
-    return _with_dedup("get_bulk_block_deals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
+# get_chart_data: raw Screener chart series (NOT the render_chart vocab).
+_CHART_DATA_TYPES = ("price", "pe", "sales_margin", "ev_ebitda", "pbv", "mcap_sales")
 
-@tool(
-    "get_mf_holdings",
-    "Get MF scheme holdings — which mutual fund schemes hold this stock, quantity, % of NAV.",
-    {"symbol": str},
-    annotations=READ_ONLY,
+# calculate: named operations + 'expr' fallback. Mirrors the if/elif chain.
+_CALCULATE_OPERATIONS = (
+    "shares_to_value_cr", "per_share_to_total_cr", "total_cr_to_per_share",
+    "pe_from_price_eps", "eps_from_pat_shares", "fair_value", "growth_rate",
+    "cagr", "mcap_cr", "margin_of_safety", "annualize_quarterly", "pct_of",
+    "ratio", "expr",
 )
-async def get_mf_holdings(args):
-    with ResearchDataAPI() as api:
-        data = api.get_mf_holdings(args["symbol"])
-    return _with_dedup("get_mf_holdings", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
+# get_data_quality_flags: severity tier filter (store sev_rank keys; uppercase).
+_DATA_QUALITY_SEVERITIES = ("LOW", "MEDIUM", "HIGH")
 
-@tool(
-    "get_mf_holding_changes",
-    "Get MF holding changes for this stock (latest month). Shows scheme-level additions/reductions.",
-    {"symbol": str},
-    annotations=READ_ONLY,
+# get_shareholder_detail: classification filter (screener_client tokens).
+_SHAREHOLDER_CLASSIFICATIONS = (
+    "foreign_institutions", "domestic_institutions", "promoters", "public",
 )
-async def get_mf_holding_changes(args):
-    with ResearchDataAPI() as api:
-        data = api.get_mf_holding_changes(args["symbol"])
-    return _with_dedup("get_mf_holding_changes", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
-
-# --- Market Signals ---
-
-
-@tool(
-    "get_delivery_trend",
-    "Get delivery % trend — weekly data up to 20 years from Screener charts. High delivery signals accumulation, low signals speculative churn. Default 90 days, set days=9999 for full history.",
-    {"symbol": str, "days": int},
-    annotations=READ_ONLY,
+# get_company_documents: doc_type filter (store upsert_documents tokens).
+# NOTE: includes 'concall_recording' (the 3-value reference list was stale).
+_COMPANY_DOC_TYPES = (
+    "concall_transcript", "concall_ppt", "concall_recording", "annual_report",
 )
-async def get_delivery_trend(args):
-    with ResearchDataAPI() as api:
-        data = api.get_delivery_trend(args["symbol"], args.get("days", 30))
-    return _with_dedup("get_delivery_trend", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
-
-@tool(
-    "get_promoter_pledge",
-    "Get quarterly promoter pledge % history. Rising pledge = risk signal.",
-    {"symbol": str},
-    annotations=READ_ONLY,
+# get_sector_benchmarks: metric vocab = peer_refresh._BENCHMARK_METRICS (closed
+# set — only producer). Enum'd.
+_SECTOR_BENCHMARK_METRICS = (
+    "pe_trailing", "pe_forward", "pb", "ev_ebitda", "peg",
+    "market_cap", "div_yield",
+    "operating_margin", "net_margin", "roe", "roa", "roce", "roic",
+    "revenue_growth", "earnings_growth",
+    "beta", "debt_to_equity",
 )
-async def get_promoter_pledge(args):
-    with ResearchDataAPI() as api:
-        data = api.get_promoter_pledge(args["symbol"])
-    return _with_dedup("get_promoter_pledge", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
-
-# --- Consensus ---
-
-
-@tool(
-    "get_consensus_estimate",
-    "Get latest analyst consensus: target price, recommendation, forward PE, earnings growth estimate.",
-    {"symbol": str},
-    annotations=READ_ONLY,
+# get_valuation_band: metric vocab = store.get_valuation_band valid_metrics
+# (closed set; SQL-injection-guarded) + the 'pb'/'pe' aliases the prompt docs use.
+_VALUATION_BAND_METRICS = (
+    "pe_trailing", "pe_forward", "pb_ratio", "ev_ebitda", "ev_revenue",
+    "ps_ratio", "peg_ratio", "dividend_yield", "beta",
+    "gross_margin", "operating_margin", "net_margin", "roe", "roa",
+    "pb", "pe",
 )
-async def get_consensus_estimate(args):
-    with ResearchDataAPI() as api:
-        data = api.get_consensus_estimate(args["symbol"])
-    return _with_dedup("get_consensus_estimate", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_earnings_surprises",
-    "Get quarterly earnings surprises: actual vs estimate EPS, surprise %. Shows beat/miss history.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_earnings_surprises(args):
-    with ResearchDataAPI() as api:
-        data = api.get_earnings_surprises(args["symbol"])
-    return _with_dedup("get_earnings_surprises", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_estimate_revisions",
-    "Get EPS estimate revision trends: current vs 7/30/60/90 day ago estimates, plus analyst upgrade/downgrade counts. "
-    "Shows if consensus is moving up or down for current quarter, next quarter, current FY, and next FY.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_estimate_revisions(args):
-    with ResearchDataAPI() as api:
-        data = api.get_estimate_revisions(args["symbol"])
-    return _with_dedup("get_estimate_revisions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_estimate_momentum",
-    "Get computed estimate momentum signal: score (0-1), direction (positive/neutral/negative), "
-    "and narrative summary of revision trends. Rising estimates = fundamental momentum.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_estimate_momentum(args):
-    with ResearchDataAPI() as api:
-        data = api.get_estimate_momentum(args["symbol"])
-    return _with_dedup("get_estimate_momentum", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-# --- Events & Calendar ---
-
-
-@tool(
-    "get_events_calendar",
-    "Get upcoming events: next earnings date (with days until), ex-dividend date, consensus EPS and revenue estimates. "
-    "Live fetch — always current. Check before any research to set temporal context.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_events_calendar(args):
-    with ResearchDataAPI() as api:
-        data = api.get_events_calendar(args["symbol"])
-    return _with_dedup("get_events_calendar", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-# --- Dividend History ---
-
-
-@tool(
-    "get_dividend_history",
-    "Get annual dividend per share, payout ratio, and yield history (up to 10 years). "
-    "Computed from corporate actions + annual financials. Shows dividend growth trends.",
-    {"symbol": str, "years": int},
-    annotations=READ_ONLY,
-)
-async def get_dividend_history(args):
-    with ResearchDataAPI() as api:
-        data = api.get_dividend_history(args["symbol"], args.get("years", 10))
-    return _with_dedup("get_dividend_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-# --- Macro Context ---
-
-
-@tool(
-    "get_macro_snapshot",
-    "Get current macro indicators: VIX, USD/INR, Brent crude, 10Y G-sec yield.",
-    {},
-    annotations=READ_ONLY,
-)
-async def get_macro_snapshot(args):
-    with ResearchDataAPI() as api:
-        data = api.get_macro_snapshot()
-    return _with_dedup("get_macro_snapshot", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_fii_dii_streak",
-    "Get current FII/DII buying/selling streak — consecutive days of net buy or sell.",
-    {},
-    annotations=READ_ONLY,
-)
-async def get_fii_dii_streak(args):
-    with ResearchDataAPI() as api:
-        data = api.get_fii_dii_streak()
-    return _with_dedup("get_fii_dii_streak", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_fii_dii_flows",
-    "Get daily FII/DII net flows (in crores) for recent period. Up to 30 days.",
-    {"days": int},
-    annotations=READ_ONLY,
-)
-async def get_fii_dii_flows(args):
-    with ResearchDataAPI() as api:
-        data = api.get_fii_dii_flows(args.get("days", 30))
-    return _with_dedup("get_fii_dii_flows", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 # --- Screener APIs (Phase 2) ---
@@ -489,26 +381,35 @@ async def get_fii_dii_flows(args):
 
 @tool(
     "get_chart_data",
-    "Get Screener chart time series. chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'.",
-    {"symbol": str, "chart_type": str},
+    "Get raw Screener chart time series (the underlying numeric series, NOT a rendered "
+    "image). chart_type: 'price', 'pe', 'sales_margin', 'ev_ebitda', 'pbv', 'mcap_sales'. "
+    "NOTE: this vocab is DIFFERENT from render_chart's chart_type (which produces PNGs and "
+    "uses names like 'revenue_profit', 'dupont', 'fair_value_range'). Use get_chart_data for "
+    "the numbers, render_chart for an embeddable chart image.",
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "chart_type": {
+                "type": "string",
+                "description": (
+                    "Raw Screener series to fetch: price; pe; sales_margin; ev_ebitda; "
+                    "pbv; mcap_sales. DISTINCT from render_chart's PNG chart_type vocab."
+                ),
+                "enum": list(_CHART_DATA_TYPES),
+            },
+        },
+        "required": ["symbol", "chart_type"],
+    },
     annotations=READ_ONLY,
 )
 async def get_chart_data(args):
+    chart_type = args["chart_type"]
+    if chart_type not in _CHART_DATA_TYPES:
+        return _invalid_enum_error("get_chart_data", "chart_type", chart_type, _CHART_DATA_TYPES, args)
     with ResearchDataAPI() as api:
-        data = api.get_chart_data(args["symbol"], args["chart_type"])
+        data = api.get_chart_data(args["symbol"], chart_type)
     return _with_dedup("get_chart_data", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_peer_comparison",
-    "Get peer comparison table: CMP, P/E, MCap, ROCE%, etc. for sector peers of the given stock.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_peer_comparison(args):
-    with ResearchDataAPI() as api:
-        data = api.get_peer_comparison(args["symbol"])
-    return _with_dedup("get_peer_comparison", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -543,105 +444,7 @@ async def get_screener_peers(args):
     return _with_dedup("get_screener_peers", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-@tool(
-    "get_shareholder_detail",
-    "Get individual shareholder names and quarterly %: e.g. Vanguard, LIC, etc. Optionally filter by classification.",
-    {"symbol": str, "classification": str},
-    annotations=READ_ONLY,
-)
-async def get_shareholder_detail(args):
-    with ResearchDataAPI() as api:
-        data = api.get_shareholder_detail(
-            args["symbol"], args.get("classification")
-        )
-    return _with_dedup("get_shareholder_detail", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_expense_breakdown",
-    "Get raw schedule sub-item breakdowns from financial_schedules table (e.g., Expenses -> Employee Cost, Raw Material). section: 'profit-loss', 'balance-sheet', 'quarters', 'cash-flow'. For structured/analyzed views, use get_fundamentals with section: 'cost_structure', 'balance_sheet_detail', 'cash_flow_quality', or 'working_capital'.",
-    {"symbol": str, "section": str},
-    annotations=READ_ONLY,
-)
-async def get_expense_breakdown(args):
-    with ResearchDataAPI() as api:
-        data = api.get_expense_breakdown(
-            args["symbol"], args.get("section", "profit-loss")
-        )
-    return _with_dedup("get_expense_breakdown", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-# --- Filings & Info ---
-
-
-@tool(
-    "get_recent_filings",
-    "Get recent BSE corporate filings for a stock. Returns filing type, date, subject, PDF link.",
-    {"symbol": str, "limit": int},
-    annotations=READ_ONLY,
-)
-async def get_recent_filings(args):
-    with ResearchDataAPI() as api:
-        data = api.get_recent_filings(args["symbol"], args.get("limit", 10))
-    return _with_dedup("get_recent_filings", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_company_info",
-    "Get basic company info: symbol, company name, and industry classification.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_company_info(args):
-    with ResearchDataAPI() as api:
-        data = api.get_company_info(args["symbol"])
-    return _with_dedup("get_company_info", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-# --- Company Profile & Documents ---
-
-
-@tool(
-    "get_company_profile",
-    "Get company business description, key points, and Screener URL. Use to understand what the company does.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_company_profile(args):
-    with ResearchDataAPI() as api:
-        data = api.get_company_profile(args["symbol"])
-    return _with_dedup("get_company_profile", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_company_documents",
-    "Get concall transcript/PPT/recording URLs and annual report URLs. Optionally filter by doc_type: 'concall_transcript', 'concall_ppt', 'annual_report'.",
-    {"symbol": str, "doc_type": str},
-    annotations=READ_ONLY,
-)
-async def get_company_documents(args):
-    with ResearchDataAPI() as api:
-        data = api.get_company_documents(args["symbol"], args.get("doc_type"))
-    return _with_dedup("get_company_documents", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
 # --- Business Profile (Vault) ---
-
-
-@tool(
-    "get_business_profile",
-    "Read cached business profile from vault. Returns markdown content if exists, empty if not. Check this BEFORE doing web research.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_business_profile(args):
-    from pathlib import Path
-    symbol = args["symbol"].upper()
-    path = Path.home() / "vault" / "stocks" / symbol / "profile.md"
-    if path.exists():
-        content = path.read_text()
-        return _with_dedup("get_business_profile", {"content": [{"type": "text", "text": content}]}, args)
-    return _with_dedup("get_business_profile", {"content": [{"type": "text", "text": ""}]}, args)
 
 
 @tool(
@@ -662,55 +465,6 @@ async def save_business_profile(args):
 
 
 @tool(
-    "get_dcf_valuation",
-    "Get DCF intrinsic value and margin of safety for a stock. Shows how much the stock is over/under-valued according to discounted cash flow model.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_dcf_valuation(args):
-    with ResearchDataAPI() as api:
-        data = api.get_dcf_valuation(args["symbol"])
-    return _with_dedup("get_dcf_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_dcf_history",
-    "Get historical DCF intrinsic value trajectory. Shows how fair value has changed over time.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_dcf_history(args):
-    with ResearchDataAPI() as api:
-        data = api.get_dcf_history(args["symbol"])
-    return _with_dedup("get_dcf_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_technical_indicators",
-    "Get latest RSI, SMA-50, SMA-200, MACD, ADX. Use for entry timing context — NOT for buy/sell decisions alone.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_technical_indicators(args):
-    with ResearchDataAPI() as api:
-        data = api.get_technical_indicators(args["symbol"])
-    return _with_dedup("get_technical_indicators", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_dupont_decomposition",
-    "Decompose ROE into Net Profit Margin × Asset Turnover × Equity Multiplier (10yr history). Shows what's driving ROE — margin, efficiency, or leverage. "
-    "Returns `effective_window` showing which years were actually used; if MEDIUM+ data_quality_flags overlap the requested 10yr range, the result is computed only on the longest unbroken segment and the dropped boundary is reported in `effective_window.narrowed_due_to`.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_dupont_decomposition(args):
-    with ResearchDataAPI() as api:
-        data = api.get_dupont_decomposition(args["symbol"])
-    return _with_dedup("get_dupont_decomposition", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
     "get_data_quality_flags",
     "Get reclassification breaks in Screener annual_financials for this symbol. "
     "Call BEFORE computing any multi-year ratio (DuPont, F-score, margin walk, CAGR, leverage trend) — "
@@ -718,61 +472,31 @@ async def get_dupont_decomposition(args):
     "(Schedule III amendments, Ind-AS 116 lease transition, mergers/demergers, sector regulator mandates). "
     "Each flag has prior_fy, curr_fy, line, prior_val, curr_val, jump_pct, flag_type (RECLASS|SIGN_FLIP), severity (HIGH|MEDIUM|LOW). "
     "Default min_severity=MEDIUM. Empty list = no breaks in the stored history.",
-    {"symbol": str, "min_severity": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "min_severity": {
+                "type": "string",
+                "description": (
+                    "Minimum severity tier to return. LOW returns everything; MEDIUM "
+                    "(default) filters the noisy 100-200% band; HIGH returns only sign "
+                    "flips and >500% jumps."
+                ),
+                "enum": list(_DATA_QUALITY_SEVERITIES),
+            },
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_data_quality_flags(args):
+    min_severity = args.get("min_severity")
+    if min_severity is not None and min_severity not in _DATA_QUALITY_SEVERITIES:
+        return _invalid_enum_error("get_data_quality_flags", "min_severity", min_severity, _DATA_QUALITY_SEVERITIES, args)
     with ResearchDataAPI() as api:
-        data = api.get_data_quality_flags(args["symbol"], args.get("min_severity", "MEDIUM"))
+        data = api.get_data_quality_flags(args["symbol"], min_severity or "MEDIUM")
     return _with_dedup("get_data_quality_flags", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_key_metrics_history",
-    "Get comprehensive per-share metrics and valuation ratios history (up to 10 years). Includes PE, PB, EV/EBITDA, ROE, ROIC, FCF yield, etc.",
-    {"symbol": str, "years": int},
-    annotations=READ_ONLY,
-)
-async def get_key_metrics_history(args):
-    with ResearchDataAPI() as api:
-        data = api.get_key_metrics_history(args["symbol"], args.get("years", 10))
-    return _with_dedup("get_key_metrics_history", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_financial_growth_rates",
-    "Get pre-computed annual growth rates: revenue, EBITDA, net income, EPS, FCF. Includes 3yr, 5yr, 10yr CAGRs.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_financial_growth_rates(args):
-    with ResearchDataAPI() as api:
-        data = api.get_financial_growth_rates(args["symbol"])
-    return _with_dedup("get_financial_growth_rates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_analyst_grades",
-    "Get analyst upgrade/downgrade history. Shows which firms are changing ratings and the direction — useful for sell-side sentiment momentum.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_analyst_grades(args):
-    with ResearchDataAPI() as api:
-        data = api.get_analyst_grades(args["symbol"])
-    return _with_dedup("get_analyst_grades", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_price_targets",
-    "Get individual analyst price targets with consensus mean, high, low. Shows analyst dispersion and conviction.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_price_targets(args):
-    with ResearchDataAPI() as api:
-        data = api.get_price_targets(args["symbol"])
-    return _with_dedup("get_price_targets", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -819,54 +543,6 @@ async def get_composite_score(args):
 # --- Peer Benchmarking ---
 
 
-@tool(
-    "get_peer_metrics",
-    "Get FMP key financial metrics (PE, PB, EV/EBITDA, ROE, ROIC, FCF yield, debt/equity, margins) for the subject company and all its peers. Returns subject data, individual peer data, and peer count.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_peer_metrics(args):
-    with ResearchDataAPI() as api:
-        data = api.get_peer_metrics(args["symbol"])
-    return _with_dedup("get_peer_metrics", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_peer_growth",
-    "Get FMP growth rates (revenue, EBITDA, net income, EPS, FCF growth + 3yr/5yr CAGRs) for the subject company and all its peers.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_peer_growth(args):
-    with ResearchDataAPI() as api:
-        data = api.get_peer_growth(args["symbol"])
-    return _with_dedup("get_peer_growth", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_valuation_matrix",
-    "Get multi-metric valuation comparison matrix for a stock vs all its peers. Returns PE, PB, EV/EBITDA, EV/Sales, margins, ROE, growth for subject + all peers, with sector medians and subject percentile ranks. Use this for relative valuation analysis.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_valuation_matrix(args):
-    with ResearchDataAPI() as api:
-        data = api.get_valuation_matrix(args["symbol"])
-    return _with_dedup("get_valuation_matrix", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_sector_benchmarks",
-    "Get computed sector benchmark statistics for a metric: subject value, sector median, P25/P75, min/max, and the subject's percentile rank. If no metric specified, returns all benchmarks.",
-    {"symbol": str, "metric": str},
-    annotations=READ_ONLY,
-)
-async def get_sector_benchmarks(args):
-    with ResearchDataAPI() as api:
-        data = api.get_sector_benchmarks(args["symbol"], args.get("metric"))
-    return _with_dedup("get_sector_benchmarks", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
 get_concall_insights = tool(
     "get_concall_insights",
     "Get pre-extracted concall insights from the vault: 4 quarters of operational metrics, financial metrics, management commentary, subsidiary updates, risk flags, comparable-basis growth statements, and cross-quarter narrative themes. First call returns a compact table of contents (quarters + populated sections + qa_topics_by_quarter when Q&A carries topic tags). Pass sub_section to drill into one section across all quarters ('operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks' | 'comparable_growth_metrics' — the last is management's like-for-like / ex-merger / constant-currency growth statements; use it when a data_quality_flag corrupts the structured CAGR/trend). Pass quarter (e.g. 'FY26-Q3') to narrow to a single quarter. Pass qa_topics (e.g. ['margins','guidance']) to return only Q&A exchanges tagged with those topics — implies sub_section='qa_session'.",
@@ -911,18 +587,38 @@ async def get_deck_insights(args):
 get_annual_report = tool(
     "get_annual_report",
     "Get pre-extracted annual-report insights from the vault: up to 2 recent fiscal years, plus a cross-year evolution narrative (YoY changes in risks, auditor KAMs, governance, RPTs, strategic framing). Covers chairman_letter, mdna, risk_management, auditor_report, corporate_governance, brsr, related_party, segmental, notes_to_financials, financial_statements. Annual reports unlock data NOT in concalls or decks — auditor opinions & KAMs, contingent liabilities, board composition, related-party scrutiny, BRSR/ESG disclosures, detailed notes to accounts, segmental accounting. First call returns a compact TOC (years_on_file + sections_populated + cross_year_narrative). Pass section='auditor_report' (or any other) to drill into that section across years. Pass year='FY25' to narrow to one year.",
-    {"symbol": str, "year": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "type": "string",
+                "description": (
+                    "AR section to drill into. Omit for a compact TOC (do NOT pass 'toc'). "
+                    "chairman_letter; mdna; risk_management; auditor_report; "
+                    "corporate_governance; brsr; related_party; segmental; "
+                    "notes_to_financials; financial_statements."
+                ),
+                "enum": list(_ANNUAL_REPORT_SECTIONS),
+            },
+            "year": {"type": "string", "description": "FY filter, e.g. 'FY25' (omit for all years on file)."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 
 
 @get_annual_report
 async def get_annual_report(args):
+    section = args.get("section")
+    if section is not None and section not in _ANNUAL_REPORT_SECTIONS:
+        return _invalid_enum_error("get_annual_report", "section", section, _ANNUAL_REPORT_SECTIONS, args)
     with ResearchDataAPI() as api:
         data = api.get_annual_report(
             args["symbol"],
             year=args.get("year"),
-            section=args.get("section"),
+            section=section,
         )
     return _with_dedup("get_annual_report", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
@@ -946,7 +642,27 @@ get_macro_anchor = tool(
     "('I.2', '3.'), em/en-dashes, trailing punctuation, and word-order swaps. If no heading "
     "matches, falls back to a body-text anchor (slice anchored on the first body occurrence "
     "of the query). If a doc_type is unavailable, returns status='unavailable' with fallback hint.",
-    {"doc_type": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "doc_type": {
+                "description": (
+                    "Which anchor document. economic_survey; budget_speech; "
+                    "budget_at_a_glance; rbi_mpr; rbi_mpc_statement; rbi_ar_assessment; "
+                    "rbi_ar_economic; rbi_ar_monetary; irdai_annual_report."
+                ),
+                "enum": list(_MACRO_ANCHOR_DOC_TYPES),
+            },
+            "section": {
+                "type": "string",
+                "description": (
+                    "Free-text heading substring to drill into (fuzzy match). Omit for a "
+                    "compact TOC of available headings."
+                ),
+            },
+        },
+        "required": ["doc_type"],
+    },
     annotations=READ_ONLY,
 )
 
@@ -954,6 +670,8 @@ get_macro_anchor = tool(
 @get_macro_anchor
 async def get_macro_anchor(args):
     doc_type = args["doc_type"]
+    if doc_type not in _MACRO_ANCHOR_DOC_TYPES:
+        return _invalid_enum_error("get_macro_anchor", "doc_type", doc_type, _MACRO_ANCHOR_DOC_TYPES, args)
     section = args.get("section")
     data = get_anchor_content(doc_type, section)
     return _with_dedup(
@@ -1051,254 +769,45 @@ async def get_macro_indicators(args):
     "'comparison_radar' (quality score radars overlaid), "
     "'comparison_margins' (OPM/NPM trends overlay). "
     "Returns: {path, embed_markdown}.",
-    {"symbol": str, "chart_type": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {
+                "type": "string",
+                "description": (
+                    "NSE symbol, uppercase. For comparison_* charts pass comma-"
+                    "separated symbols (e.g. 'HDFCBANK,ICICIBANK')."
+                ),
+            },
+            "chart_type": {
+                "type": "string",
+                "description": (
+                    "Which PNG to render. STOCK: price; pe; delivery; revenue_profit; "
+                    "quarterly; margin_trend; roce_trend; dupont; cashflow; shareholding; "
+                    "fair_value_range; expense_pie; composite_radar; dividend_history. "
+                    "SECTOR: sector_mcap; sector_growth_bars; sector_profitability_bars; "
+                    "sector_pe_distribution; sector_valuation_scatter; sector_ownership_flow. "
+                    "COMPARISON (comma-separated symbols): comparison_revenue; comparison_pe; "
+                    "comparison_shareholding; comparison_radar; comparison_margins. "
+                    "These are RENDERED PNGs — distinct from get_chart_data's raw-series "
+                    "chart_type vocab (price/pe/sales_margin/ev_ebitda/pbv/mcap_sales)."
+                ),
+                "enum": list(_RENDER_CHART_TYPES),
+            },
+        },
+        "required": ["symbol", "chart_type"],
+    },
 )
 async def render_chart(args):
     from flowtracker.research.charts import render_chart as _render
-    result = _render(args["symbol"], args["chart_type"])
+    chart_type = args["chart_type"]
+    if chart_type not in _RENDER_CHART_TYPES:
+        return _invalid_enum_error("render_chart", "chart_type", chart_type, _RENDER_CHART_TYPES, args)
+    result = _render(args["symbol"], chart_type)
     return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
 
 
-@tool(
-    "get_corporate_actions",
-    "Get all corporate actions (bonuses, stock splits, dividends, spinoffs, buybacks) for a stock. Shows action type, date, ratio/multiplier, and source. Use to understand share capital changes and adjust historical per-share metrics.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_corporate_actions(args):
-    with ResearchDataAPI() as api:
-        data = api.get_corporate_actions(args["symbol"])
-    return _with_dedup("get_corporate_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_adjusted_eps",
-    "Get quarterly EPS adjusted for all stock splits and bonuses. Returns both raw and adjusted EPS so you can see the true earnings trend without per-share discontinuities. Essential for any stock that has had a split or bonus.",
-    {"symbol": str, "quarters": int},
-    annotations=READ_ONLY,
-)
-async def get_adjusted_eps(args):
-    with ResearchDataAPI() as api:
-        data = api.get_adjusted_eps(args["symbol"], args.get("quarters", 12))
-    return _with_dedup("get_adjusted_eps", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_financial_projections",
-    "Get 3-year bear/base/bull financial projections. Projects revenue, EBITDA, net income, and EPS "
-    "based on historical growth trends and margin patterns. Returns assumptions, projections for 3 scenarios, "
-    "and implied fair values at different PE multiples. The agent should refine assumptions using concall "
-    "guidance and sector context — these are starting estimates, not final answers.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_financial_projections(args):
-    with ResearchDataAPI() as api:
-        data = api.get_financial_projections(args["symbol"])
-    return _with_dedup("get_financial_projections", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
 # --- Sector Analysis ---
-
-
-@tool(
-    "get_sector_overview_metrics",
-    "Get industry-level overview: stock count, total market cap, median PE/PB/ROCE, "
-    "valuation range, top stocks. Looks up the industry from the given stock's classification.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_sector_overview_metrics(args):
-    with ResearchDataAPI() as api:
-        data = api.get_sector_overview_metrics(args["symbol"])
-    return _with_dedup("get_sector_overview_metrics", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_sector_flows",
-    "Get aggregate institutional ownership changes across all stocks in the subject's industry. "
-    "Shows which stocks MFs are accumulating, which they're exiting, and net sector flow direction.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_sector_flows(args):
-    with ResearchDataAPI() as api:
-        data = api.get_sector_flows(args["symbol"])
-    return _with_dedup("get_sector_flows", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_sector_valuations",
-    "Get all stocks in the subject's industry ranked by market cap, with key metrics: "
-    "PE, ROCE, FII%, MF%, price change. Shows where the subject ranks among peers.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_sector_valuations(args):
-    with ResearchDataAPI() as api:
-        data = api.get_sector_valuations(args["symbol"])
-    return _with_dedup("get_sector_valuations", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_upcoming_catalysts",
-    "Get upcoming events that could move the stock: earnings dates, board meetings, "
-    "ex-dividend, RBI policy, estimated results dates. Returns events within the next "
-    "N days sorted by date.",
-    {"symbol": str, "days": int},
-    annotations=READ_ONLY,
-)
-async def get_upcoming_catalysts(args):
-    with ResearchDataAPI() as api:
-        data = api.get_upcoming_catalysts(args["symbol"], args.get("days", 90))
-    return _with_dedup("get_upcoming_catalysts", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_earnings_quality",
-    "Earnings quality analysis: CFO/PAT ratio, CFO/EBITDA ratio, accrual ratio (5-10Y trend). "
-    "Signals high/low cash conversion quality. NOT available for banks/NBFCs (requires NPA data).",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_earnings_quality(args):
-    with ResearchDataAPI() as api:
-        data = api.get_earnings_quality(args["symbol"])
-    return _with_dedup("get_earnings_quality", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_piotroski_score",
-    "Piotroski F-Score (0-9): profitability, leverage, operating efficiency. Adapted for BFSI (NIM proxy for gross margin). Uses split/bonus-adjusted shares for dilution check.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_piotroski_score(args):
-    with ResearchDataAPI() as api:
-        data = api.get_piotroski_score(args["symbol"])
-    return _with_dedup("get_piotroski_score", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_beneish_score",
-    "Beneish M-Score: earnings manipulation probability. 8-variable model. Skipped for BFSI. Returns null if any variable can't be computed (no defaults).",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_beneish_score(args):
-    with ResearchDataAPI() as api:
-        data = api.get_beneish_score(args["symbol"])
-    return _with_dedup("get_beneish_score", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_reverse_dcf",
-    "Reverse DCF: solve for implied growth rate that justifies current market cap. "
-    "Uses FCFF model (WACC) for non-BFSI, FCFE model (Ke) for banks. "
-    "Compares implied growth with historical 3Y/5Y revenue CAGR.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_reverse_dcf(args):
-    with ResearchDataAPI() as api:
-        data = api.get_reverse_dcf(args["symbol"])
-    return _with_dedup("get_reverse_dcf", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_capex_cycle",
-    "CWIP/Capex tracking with phase detection (Investing/Commissioning/Harvesting/Mature). "
-    "10Y trend of CWIP/NetBlock, asset turnover, capex intensity. Not applicable to BFSI.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_capex_cycle(args):
-    with ResearchDataAPI() as api:
-        data = api.get_capex_cycle(args["symbol"])
-    return _with_dedup("get_capex_cycle", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_common_size_pl",
-    "Common Size P&L: all expense items as %% of revenue (10Y trend). "
-    "For BFSI, denominator is Total Income (interest earned + other income). "
-    "Highlights biggest cost and fastest-growing cost category.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_common_size_pl(args):
-    with ResearchDataAPI() as api:
-        data = api.get_common_size_pl(args["symbol"])
-    return _with_dedup("get_common_size_pl", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_revenue_estimates",
-    "Consensus revenue estimates: avg/low/high for current and next quarter/year. "
-    "Values in crores. Coverage limited to ~Nifty 100-150 stocks.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_revenue_estimates(args):
-    with ResearchDataAPI() as api:
-        data = api.get_revenue_estimates(args["symbol"])
-    return _with_dedup("get_revenue_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_growth_estimates",
-    "Growth estimates: stock growth vs index growth for current/next quarter and year. "
-    "Includes long-term growth (LTG) estimate. Coverage limited to ~Nifty 100-150 stocks.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_growth_estimates(args):
-    with ResearchDataAPI() as api:
-        data = api.get_growth_estimates(args["symbol"])
-    return _with_dedup("get_growth_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_price_performance",
-    "Price return vs Nifty 50 and sector index (1M/3M/6M/1Y). "
-    "Price return only — excludes dividends. Uses local DB for stock prices, live yfinance for index.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_price_performance(args):
-    with ResearchDataAPI() as api:
-        data = api.get_price_performance(args["symbol"])
-    return _with_dedup("get_price_performance", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_sector_kpis",
-    "Sector-specific operational KPIs extracted from concall transcripts. "
-    "Uses canonical field names per sector (14 sectors covered: banks, NBFCs, insurance, IT, pharma, "
-    "FMCG, auto, cement, metals, real estate, telecom, chemicals, power, oil & gas). "
-    "First call returns a table of contents (available KPI keys + coverage + latest values). "
-    "Pass sub_section='<kpi_key>' to drill into one KPI's full per-quarter timeline with context. "
-    "Example canonical keys: 'gross_npa_pct', 'casa_ratio_pct', 'r_and_d_spend_pct', 'anda_filed_number'.",
-    {"symbol": str, "sub_section": str},
-    annotations=READ_ONLY,
-)
-async def get_sector_kpis(args):
-    with ResearchDataAPI() as api:
-        data = api.get_sector_kpis(args["symbol"], kpi_key=args.get("sub_section"))
-    return _with_dedup("get_sector_kpis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
-
-
-@tool(
-    "get_bfsi_metrics",
-    "Bank/NBFC-specific metrics: NIM, ROA, Cost-to-Income, P/B, equity multiplier (5Y trend). "
-    "Only for BFSI stocks — returns skipped for non-BFSI and insurance.",
-    {"symbol": str},
-    annotations=READ_ONLY,
-)
-async def get_bfsi_metrics(args):
-    with ResearchDataAPI() as api:
-        data = api.get_bfsi_metrics(args["symbol"])
-    return _with_dedup("get_bfsi_metrics", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
 @tool(
@@ -1340,6 +849,21 @@ async def screen_stocks(args):
 # --- Macro Tools (V2 consolidated) ---
 
 
+def _validate_sections(tool_name, section, valid, args):
+    """Validate a resolved section value (str or list) against `valid`.
+
+    Returns an `_invalid_enum_error` envelope on the first out-of-vocab value,
+    or None if everything is valid. `valid` is the full accepted set INCLUDING
+    sentinels the handler supports.
+    """
+    candidates = section if isinstance(section, list) else [section]
+    valid_set = set(valid)
+    for s in candidates:
+        if s not in valid_set:
+            return _invalid_enum_error(tool_name, "section", s, valid, args)
+    return None
+
+
 def _add_freshness_meta(data: dict, api, symbol: str) -> dict:
     """Add freshness metadata to tool return payloads."""
     if not isinstance(data, dict):
@@ -1354,6 +878,70 @@ def _add_freshness_meta(data: dict, api, symbol: str) -> dict:
     except Exception:
         pass  # Don't break tool calls for metadata failures
     return data
+
+
+# Phase 3b: completeness label → wire status. "full" reads as "ok"; "truncated"
+# normalizes to "partial" (both mean "data present but capped"). empty/partial/
+# error pass through. None (unclassifiable) → None so the status key still rides.
+_COMPLETENESS_TO_STATUS = {
+    "full": "ok",
+    "truncated": "partial",
+    "partial": "partial",
+    "empty": "empty",
+    "error": "error",
+}
+
+
+def _stamp_meta(data, api, symbol: str):
+    """Standardize a `_meta` sidecar on a dict payload (Phase 3b).
+
+    Rides ALONGSIDE the existing data dict — does NOT restructure the payload —
+    so the dedup hash, `classify_completeness`, and agent.py parsing are all
+    preserved. Derives status + count from `classify_completeness(data)`, then
+    appends freshness (best-effort). Applied on TOC, per-section success, AND
+    error paths of the 10 section dispatchers.
+
+    Bare LISTS can't carry a sidecar key, so they pass through untouched (the
+    agent layer already captures row_count for lists). Always exception-safe —
+    never break a tool call for metadata.
+    """
+    if not isinstance(data, dict):
+        return data  # bare list / str — leave as-is
+    try:
+        from datetime import date
+        comp, count = classify_completeness(data)
+        status = _COMPLETENESS_TO_STATUS.get(comp, comp)
+        freshness = None
+        if status != "error":
+            try:
+                freshness = api.get_data_freshness(symbol)
+            except Exception:
+                freshness = None
+        data["_meta"] = {
+            "as_of_date": str(date.today()),
+            "status": status,
+            "count": count,
+            "data_freshness": freshness,
+        }
+    except Exception:
+        pass  # Don't break tool calls for metadata failures
+    return data
+
+
+def _enum_toc(sections) -> dict:
+    """Build a lightweight TOC from a Phase-1 section enum constant (Phase 3a).
+
+    Used by the seven dispatchers that have no dedicated `get_<x>_toc` data_api
+    method. Mirrors the compact-TOC-then-drill contract so a no-section call
+    never falls through to the truncation-prone 'all' payload.
+    """
+    return {
+        "_toc": list(sections),
+        "hint": (
+            "Call with section='<one>' or section=['a','b'] for specific data; "
+            "section='all' returns everything (may be truncated)."
+        ),
+    }
 
 
 def _get_fundamentals_section(api, symbol, section, args):
@@ -1393,7 +981,30 @@ def _get_fundamentals_section(api, symbol, section, args):
 @tool(
     "get_fundamentals",
     "Unified financial data. First call with NO section (or section='toc') returns a compact ~1-2KB table of contents listing the 14 available sections + 4 recommended wave-call compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'quarterly_results' | 'annual_financials' | 'ratios' | 'quarterly_balance_sheet' | 'quarterly_cash_flow' | 'expense_breakdown' | 'growth_rates' | 'capital_allocation' | 'rate_sensitivity' | 'cagr_table' | 'cost_structure' | 'balance_sheet_detail' | 'cash_flow_quality' | 'working_capital'. Do NOT call section='all' — the 70+KB response is truncated mid-payload by the MCP transport. Optional: quarters (default 12), years (default 10), sub_section.",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Which fundamentals section(s). Omit (or 'toc') for a compact TOC. "
+                    "Pass one value or a list. quarterly_results/annual_financials = P&L; "
+                    "ratios; quarterly_balance_sheet/quarterly_cash_flow; expense_breakdown "
+                    "(needs sub_section); growth_rates/cagr_table; capital_allocation; "
+                    "rate_sensitivity; cost_structure; balance_sheet_detail; "
+                    "cash_flow_quality; working_capital. Avoid 'all' (truncates)."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_FUNDAMENTALS_SECTIONS + _FUNDAMENTALS_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_FUNDAMENTALS_SECTIONS + _FUNDAMENTALS_SENTINELS)}},
+                ],
+            },
+            "quarters": {"type": "integer", "description": "Quarters of history (default 12)."},
+            "years": {"type": "integer", "description": "Years of history (default 10)."},
+            "sub_section": {"type": "string", "description": "For expense_breakdown: 'profit-loss' etc."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_fundamentals(args):
@@ -1405,11 +1016,13 @@ async def get_fundamentals(args):
         # by the MCP transport, the same failure mode ownership fixed earlier.
         if not section_raw or section_raw in ("toc", "summary"):
             data = api.get_fundamentals_toc(symbol)
-            if isinstance(data, dict) and "error" not in data:
-                data = _add_freshness_meta(data, api, symbol)
+            data = _stamp_meta(data, api, symbol)
             return _with_dedup("get_fundamentals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
         section = _parse_section(section_raw)
+        err = _validate_sections("get_fundamentals", section, _FUNDAMENTALS_SECTIONS + _FUNDAMENTALS_SENTINELS, args)
+        if err is not None:
+            return err
         if isinstance(section, list):
             data = {s: _get_fundamentals_section(api, symbol, s, args) for s in section}
         elif section == "all":
@@ -1437,8 +1050,7 @@ async def get_fundamentals(args):
             }
         else:
             data = _get_fundamentals_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_fundamentals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1507,12 +1119,43 @@ def _get_quality_scores_section(api, symbol, section, args):
     "BFSI routing: 'all' auto-skips non-applicable. "
     "'incremental_roce' = marginal return on new capital. 'altman_zscore' = EM distress predictor. 'working_capital' = CCC trend + channel stuffing flags. "
     "'operating_leverage' = DOL earnings sensitivity. 'fcf_yield' = FCF/EV vs risk-free. 'tax_rate_analysis' = ETR anomalies. 'receivables_quality' = revenue recognition risk.",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Accounting/quality section(s). Pass one value or a list. Omit to get "
+                    "'all' (BFSI auto-skips non-applicable). Core: earnings_quality, "
+                    "piotroski, beneish, dupont, common_size, capex_cycle, forensic_checks, "
+                    "improvement_metrics, capital_discipline, incremental_roce, altman_zscore, "
+                    "working_capital, operating_leverage, fcf_yield, tax_rate_analysis, "
+                    "receivables_quality, subsidiary. Sector: bfsi, insurance, metals, "
+                    "realestate, telecom, power, sector_health."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_QUALITY_SCORES_SECTIONS + _QUALITY_SCORES_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_QUALITY_SCORES_SECTIONS + _QUALITY_SCORES_SENTINELS)}},
+                ],
+            },
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_quality_scores(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    # Default behavior when no section specified: return a compact TOC instead
+    # of the heavy 'all' payload (truncation-prone). 'all' stays an explicit opt-in.
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_QUALITY_SCORES_SECTIONS), api, symbol)
+        return _with_dedup("get_quality_scores", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
+    err = _validate_sections("get_quality_scores", section, _QUALITY_SCORES_SECTIONS + _QUALITY_SCORES_SENTINELS, args)
+    if err is not None:
+        return err
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_quality_scores_section(api, symbol, s, args) for s in section}
@@ -1561,8 +1204,7 @@ async def get_quality_scores(args):
                 }
         else:
             data = _get_quality_scores_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_quality_scores", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1603,7 +1245,30 @@ def _get_ownership_section(api, symbol, section, args):
 @tool(
     "get_ownership",
     "Ownership & stakeholder data. First call without section returns a compact TOC (~3-5KB) with current ownership snapshot, QoQ changes, top-10 holders brief, MF/pledge/insider/bulk-block summaries, public-breakdown brief (retail/HNI/bodies-corporate/NRI), and ESOP brief — enough to decide what to drill into. Then call with section='<name>' or section=['s1','s2'] to drill in. Sections: 'shareholding' | 'changes' | 'insider' | 'bulk_block' | 'mf_holdings' | 'mf_changes' | 'shareholder_detail' | 'promoter_pledge' | 'mf_conviction' | 'adr_gdr' | 'public_breakdown' | 'esop'. shareholder_detail returns top-20 named holders (pivoted per-holder, >=1% latest quarter) with holder_type in {FII, DII, Promoter, Public}. adr_gdr surfaces ADR/GDR outstanding live from XBRL CustodianOrDRHolder context (definitive — no scraping needed) with manual-seed override + AR-notes fallback. public_breakdown drills into the Public bucket with retail/HNI/bodies-corporate/NRI sub-cats, FPI Cat-I/II breakdown, and ADR/GDR-attributable foreign holding (Wave 5 P2). esop returns ESOP pool size + per-plan detail from AR Schedule III disclosure (critical for new-economy dilution analysis). Heavy sections are capped (mf_holdings top 30 by value + tail summary) to stay under MCP tool-result transport limits. Avoid section='all' — payloads of 80-150K can get truncated. Optional: quarters (default 12), days (default 1825), classification (for shareholder_detail filter), fiscal_years (default 5, for esop).",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Ownership section(s). Omit (or 'toc') for a compact TOC. Pass one value "
+                    "or a list. shareholding; changes (QoQ); insider; bulk_block; mf_holdings; "
+                    "mf_changes; shareholder_detail (top-20 named holders); promoter_pledge; "
+                    "mf_conviction; adr_gdr; public_breakdown (retail/HNI/bodies-corp/NRI); "
+                    "esop. Avoid 'all' (truncates)."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_OWNERSHIP_SECTIONS + _OWNERSHIP_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_OWNERSHIP_SECTIONS + _OWNERSHIP_SENTINELS)}},
+                ],
+            },
+            "quarters": {"type": "integer", "description": "Quarters of history (default 12)."},
+            "days": {"type": "integer", "description": "Lookback days for insider (default 1825)."},
+            "classification": {"type": "string", "description": "Holder-type filter for shareholder_detail."},
+            "fiscal_years": {"type": "integer", "description": "Years for esop (default 5)."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_ownership(args):
@@ -1619,6 +1284,9 @@ async def get_ownership(args):
             data = api.get_ownership_toc(symbol)
         else:
             section = _parse_section(section_raw)
+            err = _validate_sections("get_ownership", section, _OWNERSHIP_SECTIONS + _OWNERSHIP_SENTINELS, args)
+            if err is not None:
+                return err
             if isinstance(section, list):
                 data = {s: _get_ownership_section(api, symbol, s, args) for s in section}
             elif section == "all":
@@ -1643,8 +1311,7 @@ async def get_ownership(args):
                 }
             else:
                 data = _get_ownership_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1669,12 +1336,41 @@ def _get_valuation_section(api, symbol, section, args):
 @tool(
     "get_valuation",
     "Valuation metrics & history. section: 'snapshot' | 'band' | 'pe_history' | 'key_metrics' | 'wacc' (WACC params: beta, cost of equity/debt, discount rate) | 'sotp' (listed subsidiaries for SOTP valuation) | ['section1', 'section2']. Optional: metric (for band, default 'pe_trailing'), days (default 2500), years (default 10).",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Valuation section(s). Pass one value or a list. Omit to get 'all'. "
+                    "snapshot (live multiples); band (valuation band over time); pe_history; "
+                    "key_metrics (10yr); wacc (beta, cost of equity/debt, discount rate); "
+                    "sotp (listed subsidiaries)."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_VALUATION_SECTIONS + _VALUATION_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_VALUATION_SECTIONS + _VALUATION_SENTINELS)}},
+                ],
+            },
+            "metric": {"type": "string", "description": "Valuation metric for band (default 'pe_trailing')."},
+            "days": {"type": "integer", "description": "Lookback days for band/pe_history (default 2500)."},
+            "years": {"type": "integer", "description": "Years for key_metrics (default 10)."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_valuation(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_VALUATION_SECTIONS), api, symbol)
+        return _with_dedup("get_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
+    err = _validate_sections("get_valuation", section, _VALUATION_SECTIONS + _VALUATION_SENTINELS, args)
+    if err is not None:
+        return err
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_valuation_section(api, symbol, s, args) for s in section}
@@ -1687,8 +1383,7 @@ async def get_valuation(args):
             }
         else:
             data = _get_valuation_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1711,12 +1406,37 @@ def _get_fair_value_analysis_section(api, symbol, section, args):
 @tool(
     "get_fair_value_analysis",
     "Fair value & DCF models. section: 'combined' | 'dcf' | 'dcf_history' | 'reverse_dcf' | 'projections' | ['section1', 'section2']",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Fair-value section(s). Pass one value or a list. Omit to get 'all'. "
+                    "combined (blended fair value); dcf; dcf_history; reverse_dcf "
+                    "(implied growth); projections (revenue/earnings model)."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_FAIR_VALUE_SECTIONS + _FAIR_VALUE_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_FAIR_VALUE_SECTIONS + _FAIR_VALUE_SENTINELS)}},
+                ],
+            },
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_fair_value_analysis(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_FAIR_VALUE_SECTIONS), api, symbol)
+        return _with_dedup("get_fair_value_analysis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
+    err = _validate_sections("get_fair_value_analysis", section, _FAIR_VALUE_SECTIONS + _FAIR_VALUE_SENTINELS, args)
+    if err is not None:
+        return err
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_fair_value_analysis_section(api, symbol, s, args) for s in section}
@@ -1730,8 +1450,7 @@ async def get_fair_value_analysis(args):
             }
         else:
             data = _get_fair_value_analysis_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_fair_value_analysis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1766,7 +1485,27 @@ def _get_peer_sector_section(api, symbol, section, args):
 @tool(
     "get_peer_sector",
     "Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the sections + recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers' | 'sector_index_valuation' (the stock's sector index PE/PB vs its own 10yr median + percentile) | 'sector_performance' (1M/3M/6M/1Y returns across all broad+sectoral indices, ranked — sector rotation). Do NOT call section='all' — the large payload may truncate. Optional: metric (for specific valuation metric).",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Peer/sector section(s). Omit (or 'toc') for a compact TOC. Pass one value "
+                    "or a list. peer_table; peer_metrics; peer_growth; valuation_matrix; "
+                    "benchmarks; sector_overview; sector_flows; sector_valuations; yahoo_peers; "
+                    "sector_index_valuation (sector index PE/PB vs 10yr median); "
+                    "sector_performance (index returns, ranked). Avoid 'all' (truncates)."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_PEER_SECTOR_SECTIONS + _PEER_SECTOR_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_PEER_SECTOR_SECTIONS + _PEER_SECTOR_SENTINELS)}},
+                ],
+            },
+            "metric": {"type": "string", "description": "Specific valuation metric for benchmarks."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_peer_sector(args):
@@ -1777,11 +1516,13 @@ async def get_peer_sector(args):
         # Same TOC-then-drill pattern as get_fundamentals / get_ownership.
         if not section_raw or section_raw in ("toc", "summary"):
             data = api.get_peer_sector_toc(symbol)
-            if isinstance(data, dict) and "error" not in data:
-                data = _add_freshness_meta(data, api, symbol)
+            data = _stamp_meta(data, api, symbol)
             return _with_dedup("get_peer_sector", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
         section = _parse_section(section_raw)
+        err = _validate_sections("get_peer_sector", section, _PEER_SECTOR_SECTIONS + _PEER_SECTOR_SENTINELS, args)
+        if err is not None:
+            return err
         if isinstance(section, list):
             data = {s: _get_peer_sector_section(api, symbol, s, args) for s in section}
         elif section == "all":
@@ -1804,8 +1545,7 @@ async def get_peer_sector(args):
             }
         else:
             data = _get_peer_sector_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_peer_sector", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1834,12 +1574,37 @@ def _get_estimates_section(api, symbol, section, args):
 @tool(
     "get_estimates",
     "Analyst estimates & targets. section: 'consensus' | 'surprises' | 'revisions' | 'momentum' | 'revenue' | 'growth' | 'analyst_grades' | 'price_targets' | ['section1', 'section2']",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Estimates section(s). Pass one value or a list. Omit to get 'all'. "
+                    "consensus; surprises (beat/miss history); revisions; momentum; revenue; "
+                    "growth; analyst_grades; price_targets."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_ESTIMATES_SECTIONS + _ESTIMATES_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_ESTIMATES_SECTIONS + _ESTIMATES_SENTINELS)}},
+                ],
+            },
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_estimates(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_ESTIMATES_SECTIONS), api, symbol)
+        return _with_dedup("get_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
+    err = _validate_sections("get_estimates", section, _ESTIMATES_SECTIONS + _ESTIMATES_SENTINELS, args)
+    if err is not None:
+        return err
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_estimates_section(api, symbol, s, args) for s in section}
@@ -1856,8 +1621,7 @@ async def get_estimates(args):
             }
         else:
             data = _get_estimates_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1888,12 +1652,39 @@ def _get_market_context_section(api, symbol, section, args):
 @tool(
     "get_market_context",
     "Market signals & macro. section: 'delivery' | 'macro' | 'fii_dii_streak' | 'fii_dii_flows' | 'technicals' | 'price_performance' | 'delivery_analysis' | 'commodities' | 'institutional_consensus' | ['section1', 'section2']. Optional: days (default 90).",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Market-context section(s). Pass one value or a list. Omit to get 'all'. "
+                    "delivery; macro (VIX/USDINR/Brent/G-sec); fii_dii_streak; fii_dii_flows; "
+                    "technicals; price_performance; delivery_analysis; commodities; "
+                    "institutional_consensus."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_MARKET_CONTEXT_SECTIONS + _MARKET_CONTEXT_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_MARKET_CONTEXT_SECTIONS + _MARKET_CONTEXT_SENTINELS)}},
+                ],
+            },
+            "days": {"type": "integer", "description": "Lookback days (default 90; delivery/flows default 30)."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_market_context(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_MARKET_CONTEXT_SECTIONS), api, symbol)
+        return _with_dedup("get_market_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
+    err = _validate_sections("get_market_context", section, _MARKET_CONTEXT_SECTIONS + _MARKET_CONTEXT_SENTINELS, args)
+    if err is not None:
+        return err
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_market_context_section(api, symbol, s, args) for s in section}
@@ -1923,8 +1714,7 @@ async def get_market_context(args):
             }
         else:
             data = _get_market_context_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_market_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1972,12 +1762,66 @@ def _get_company_context_section(api, symbol, section, args):
 @tool(
     "get_company_context",
     "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'deck_insights' | 'annual_report' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks' | 'comparable_growth_metrics' (management's like-for-like / ex-merger / constant-currency statements); for deck_insights: 'highlights' | 'segment_performance' | 'key_metrics' (non-segment KPIs — debt, capex, order book, NIM/GNPA/CASA, multi-period financials — returns a cross-quarter time series per metric) | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'; for annual_report: 'chairman_letter' | 'mdna' | 'risk_management' | 'auditor_report' | 'corporate_governance' | 'brsr' | 'related_party' | 'segmental' | 'notes_to_financials' | 'financial_statements' — optional 'year' param to narrow to one FY like FY25; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
-    {"symbol": str, "section": str, "doc_type": str, "limit": int, "sub_section": str, "year": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Company-context section(s). Pass one value or a list. Omit to get 'all'. "
+                    "info; profile; documents; business_profile; concall_insights; "
+                    "deck_insights; annual_report; sector_kpis; filings."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_COMPANY_CONTEXT_SECTIONS + _COMPANY_CONTEXT_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_COMPANY_CONTEXT_SECTIONS + _COMPANY_CONTEXT_SENTINELS)}},
+                ],
+            },
+            "sub_section": {
+                "type": "string",
+                "description": (
+                    "Drill-in within section. For concall_insights: operational_metrics, "
+                    "financial_metrics, management_commentary, subsidiaries, qa_session, flags, "
+                    "opening_remarks, comparable_growth_metrics. For deck_insights: highlights, "
+                    "segment_performance, key_metrics (non-segment KPIs + cross-quarter series), "
+                    "strategic_priorities, outlook_and_guidance, "
+                    "new_initiatives, charts_described. For annual_report: chairman_letter, mdna, "
+                    "risk_management, auditor_report, corporate_governance, brsr, related_party, "
+                    "segmental, notes_to_financials, financial_statements. For sector_kpis: a "
+                    "canonical KPI key (free-text; call without sub_section to see keys)."
+                ),
+            },
+            "doc_type": {"type": "string", "description": "Filter for documents section."},
+            "year": {"type": "string", "description": "FY filter for annual_report (e.g. 'FY25')."},
+            "quarter": {"type": "string", "description": "Quarter filter for concall/deck (e.g. 'FY26-Q3')."},
+            "limit": {"type": "integer", "description": "Row cap for filings (default 10)."},
+            "qa_topics": {"type": "array", "items": {"type": "string"}, "description": "Q&A topic tags for concall_insights."},
+            "slide_topics": {"type": "array", "items": {"type": "string"}, "description": "Slide topic tags for deck_insights."},
+            "full": {"type": "boolean", "description": "deck_insights: return a whole deck's complete record in one call."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_company_context(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_COMPANY_CONTEXT_SECTIONS), api, symbol)
+        return _with_dedup("get_company_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
+    err = _validate_sections("get_company_context", section, _COMPANY_CONTEXT_SECTIONS + _COMPANY_CONTEXT_SENTINELS, args)
+    if err is not None:
+        return err
+    # Conditional sub_section validation: only when drilling into a single section
+    # whose sub_section vocab is enumerable (concall/deck/AR). sector_kpis sub_section
+    # is a free-text canonical KPI key and is intentionally not validated.
+    sub_section = args.get("sub_section")
+    if isinstance(section, str) and sub_section and section in _COMPANY_CONTEXT_SUB_SECTION_VOCAB:
+        sub_vocab = _COMPANY_CONTEXT_SUB_SECTION_VOCAB[section]
+        if sub_section not in sub_vocab:
+            return _invalid_enum_error("get_company_context", "sub_section", sub_section, sub_vocab, args)
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_company_context_section(api, symbol, s, args) for s in section}
@@ -2009,8 +1853,7 @@ async def get_company_context(args):
             }
         else:
             data = _get_company_context_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_company_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2037,12 +1880,40 @@ def _get_events_actions_section(api, symbol, section, args):
 @tool(
     "get_events_actions",
     "Events, dividends & corporate actions. section: 'events' | 'dividends' | 'corporate_actions' | 'adjusted_eps' | 'catalysts' | 'material_events' | 'dividend_policy' | ['section1', 'section2']. Optional: years (default 10), quarters (default 12), days (default 90).",
-    {"symbol": str, "section": str},
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "NSE symbol, uppercase."},
+            "section": {
+                "description": (
+                    "Events/actions section(s). Pass one value or a list. Omit to get 'all'. "
+                    "events (calendar); dividends; corporate_actions (splits/bonuses); "
+                    "adjusted_eps; catalysts (upcoming); material_events; dividend_policy."
+                ),
+                "anyOf": [
+                    {"type": "string", "enum": list(_EVENTS_ACTIONS_SECTIONS + _EVENTS_ACTIONS_SENTINELS)},
+                    {"type": "array", "items": {"type": "string", "enum": list(_EVENTS_ACTIONS_SECTIONS + _EVENTS_ACTIONS_SENTINELS)}},
+                ],
+            },
+            "years": {"type": "integer", "description": "Years for dividends (default 10)."},
+            "quarters": {"type": "integer", "description": "Quarters for adjusted_eps (default 12)."},
+            "days": {"type": "integer", "description": "Lookback days for catalysts/material_events (default 90/365)."},
+        },
+        "required": ["symbol"],
+    },
     annotations=READ_ONLY,
 )
 async def get_events_actions(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_EVENTS_ACTIONS_SECTIONS), api, symbol)
+        return _with_dedup("get_events_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
+    err = _validate_sections("get_events_actions", section, _EVENTS_ACTIONS_SECTIONS + _EVENTS_ACTIONS_SENTINELS, args)
+    if err is not None:
+        return err
     with ResearchDataAPI() as api:
         if isinstance(section, list):
             data = {s: _get_events_actions_section(api, symbol, s, args) for s in section}
@@ -2058,8 +1929,7 @@ async def get_events_actions(args):
             }
         else:
             data = _get_events_actions_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_events_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2128,12 +1998,36 @@ async def get_stock_news(args):
     # inputs_as_of / mcap_as_of are optional timestamp strings for historical-flow
     # discipline; see Tenet 16 (OWNERSHIP_SYSTEM_V2).
     # years: optional kwarg for cagr operation.
-    {"operation": str, "a": str, "b": str, "inputs_as_of": str, "mcap_as_of": str, "years": str},
+    {
+        "type": "object",
+        "properties": {
+            "operation": {
+                "type": "string",
+                "description": (
+                    "Which calculation to run. Named ops (preferred — unit-aware): "
+                    "shares_to_value_cr; per_share_to_total_cr; total_cr_to_per_share; "
+                    "pe_from_price_eps; eps_from_pat_shares; fair_value; growth_rate; cagr; "
+                    "mcap_cr; margin_of_safety; annualize_quarterly; pct_of; ratio. "
+                    "'expr' = arbitrary arithmetic (pass the expression as `a`, b='0'). "
+                    "See the tool description for each op's a/b contract."
+                ),
+                "enum": list(_CALCULATE_OPERATIONS),
+            },
+            "a": {"type": "string", "description": "First operand as a numeric string (or the expression string for operation='expr')."},
+            "b": {"type": "string", "description": "Second operand as a numeric string. Pass '0' when an op ignores b (annualize_quarterly, expr)."},
+            "inputs_as_of": {"type": "string", "description": "ISO quarter/date of the %pt input context (historical-flow discipline; Tenet 16). Also accepts 'years:N' for cagr."},
+            "mcap_as_of": {"type": "string", "description": "ISO quarter/date of the market-cap context. If it differs from inputs_as_of, the result carries a HISTORICAL_MCAP_MISMATCH caveat."},
+            "years": {"type": "string", "description": "Number of periods for the 'cagr' operation (numeric string)."},
+        },
+        "required": ["operation"],
+    },
     annotations=READ_ONLY,
 )
 async def calculate(args):
     import math
     op = args["operation"]
+    if op not in _CALCULATE_OPERATIONS:
+        return _invalid_enum_error("calculate", "operation", op, _CALCULATE_OPERATIONS, args)
     raw_a = args.get("a")
     raw_b = args.get("b")
 
@@ -2312,65 +2206,6 @@ RESEARCH_TOOLS_V2 = [
     get_annual_report, get_deck_insights,
 ]
 
-# Individual tools kept for CLI `flowtrack research data <tool_name>` and monolith agent
-RESEARCH_TOOLS = [
-    get_quarterly_results,
-    get_annual_financials,
-    get_efficiency_ratios,
-    get_quarterly_balance_sheet,
-    get_quarterly_cash_flow,
-    get_valuation_snapshot,
-    get_valuation_band,
-    get_pe_history,
-    get_shareholding,
-    get_shareholding_changes,
-    get_insider_transactions,
-    get_bulk_block_deals,
-    get_mf_holdings,
-    get_mf_holding_changes,
-    get_delivery_trend,
-    get_promoter_pledge,
-    get_consensus_estimate,
-    get_earnings_surprises,
-    get_estimate_momentum,
-    get_macro_snapshot,
-    get_fii_dii_streak,
-    get_fii_dii_flows,
-    get_chart_data,
-    get_peer_comparison,
-    get_shareholder_detail,
-    get_expense_breakdown,
-    get_recent_filings,
-    get_company_info,
-    get_composite_score,
-    get_company_profile,
-    get_company_documents,
-    get_business_profile,
-    save_business_profile,
-    get_dcf_valuation,
-    get_dcf_history,
-    get_technical_indicators,
-    get_dupont_decomposition,
-    get_key_metrics_history,
-    get_financial_growth_rates,
-    get_analyst_grades,
-    get_price_targets,
-    get_fair_value,
-    get_valuation_matrix,
-    get_corporate_actions,
-    get_adjusted_eps,
-    get_financial_projections,
-    get_piotroski_score,
-    get_reverse_dcf, get_capex_cycle, get_common_size_pl,
-    get_revenue_estimates, get_growth_estimates, get_price_performance,
-    get_sector_kpis,
-    get_analytical_profile, screen_stocks,
-    get_wacc_params,
-    get_yahoo_peers,
-    get_screener_peers,
-    get_data_quality_flags,
-]
-
 # V1 agent registries (BUSINESS_TOOLS, *_AGENT_TOOLS, _PEER_TOOLS) removed — see *_AGENT_TOOLS_V2 below
 
 # --- V2 Agent Tool Registries (macro-tools) ---
@@ -2413,11 +2248,13 @@ RISK_AGENT_TOOLS_V2 = [
     get_peer_sector, get_company_context, get_events_actions,
     get_estimates, render_chart, calculate,
     get_annual_report,
+    get_fair_value_analysis,  # reverse-DCF for bear-case downside stress
 ]
 
 TECHNICAL_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_market_context, get_valuation,
     get_ownership, get_peer_sector, get_chart_data, render_chart, calculate,
+    get_events_actions,  # earnings / ex-div / corporate-action timing
 ]
 
 SECTOR_AGENT_TOOLS_V2 = [
@@ -2435,6 +2272,7 @@ MACRO_AGENT_TOOLS_V2 = [
     get_macro_catalog,     # lists available anchors + their heading counts
     get_macro_anchor,      # TOC + section drill for a specific anchor
     get_macro_indicators,  # local-DB CPI/IIP/PMI trend + full G-sec yield curve
+    get_market_context,    # live VIX / USD-INR / Brent / 10Y G-sec + FII-DII flows
 ]
 
 
@@ -2617,3 +2455,32 @@ FNO_POSITIONING_AGENT_TOOLS_V2 = [
     # Plus shared context for cross-referencing cash-segment positioning
     get_company_context, get_ownership, get_market_context,
 ]
+
+
+# --- is_error envelope flagging (Phase 0-A) ---
+#
+# Wrap every registered tool's handler exactly once so an error payload sets
+# `is_error: True` on the result envelope (which the agent harness already
+# reads). The same SdkMcpTool object can appear in multiple registries, so we
+# dedup by id() and rely on the `_is_error_wrapped` sentinel for idempotency.
+_ALL_TOOL_REGISTRIES = [
+    RESEARCH_TOOLS_V2,
+    BUSINESS_AGENT_TOOLS_V2,
+    FINANCIAL_AGENT_TOOLS_V2,
+    OWNERSHIP_AGENT_TOOLS_V2,
+    VALUATION_AGENT_TOOLS_V2,
+    RISK_AGENT_TOOLS_V2,
+    TECHNICAL_AGENT_TOOLS_V2,
+    SECTOR_AGENT_TOOLS_V2,
+    NEWS_AGENT_TOOLS_V2,
+    MACRO_AGENT_TOOLS_V2,
+    HISTORICAL_ANALOG_AGENT_TOOLS_V2,
+    FNO_POSITIONING_AGENT_TOOLS_V2,
+]
+
+_seen_tool_ids: set[int] = set()
+for _registry in _ALL_TOOL_REGISTRIES:
+    for _tool in _registry:
+        if id(_tool) not in _seen_tool_ids:
+            _seen_tool_ids.add(id(_tool))
+            _wrap_handler_is_error(_tool)

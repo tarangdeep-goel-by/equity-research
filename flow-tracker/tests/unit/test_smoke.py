@@ -175,6 +175,7 @@ HELP_COMMANDS = [
     ["research", "verify", "--help"],
     ["research", "autoeval-macro", "--help"],
     ["research", "analog-backtest", "--help"],
+    ["research", "tool-audit", "--help"],
 
     # share_count (added 2026-04-29)
     ["share_count", "--help"],

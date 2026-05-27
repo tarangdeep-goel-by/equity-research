@@ -40,147 +40,14 @@ def _parse_tool_result(result: dict) -> list | dict:
 
 
 # ---------------------------------------------------------------------------
-# Core Financials
-# ---------------------------------------------------------------------------
-
-class TestGetQuarterlyResults:
-    @pytest.mark.asyncio
-    async def test_returns_data_for_sbin(self, db_env):
-        from flowtracker.research.tools import get_quarterly_results
-        result = await get_quarterly_results.handler({"symbol": "SBIN", "quarters": 4})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-        assert "revenue" in data[0]
-
-    @pytest.mark.asyncio
-    async def test_unknown_symbol_returns_empty(self, db_env):
-        from flowtracker.research.tools import get_quarterly_results
-        result = await get_quarterly_results.handler({"symbol": "NONEXIST", "quarters": 4})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) == 0
-
-
-class TestGetAnnualFinancials:
-    @pytest.mark.asyncio
-    async def test_returns_data(self, db_env):
-        from flowtracker.research.tools import get_annual_financials
-        result = await get_annual_financials.handler({"symbol": "SBIN", "years": 5})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-        assert "revenue" in data[0]
-        assert "net_income" in data[0]
-
-
-# ---------------------------------------------------------------------------
-# Valuation
-# ---------------------------------------------------------------------------
-
-class TestGetValuationSnapshot:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_valuation_snapshot
-        result = await get_valuation_snapshot.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-        assert "price" in data or "pe_trailing" in data
-
-
-# ---------------------------------------------------------------------------
-# Ownership
-# ---------------------------------------------------------------------------
-
-class TestGetShareholding:
-    @pytest.mark.asyncio
-    async def test_returns_list(self, db_env):
-        from flowtracker.research.tools import get_shareholding
-        result = await get_shareholding.handler({"symbol": "SBIN", "quarters": 4})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-
-
-class TestGetInsiderTransactions:
-    @pytest.mark.asyncio
-    async def test_returns_list(self, db_env):
-        from flowtracker.research.tools import get_insider_transactions
-        result = await get_insider_transactions.handler({"symbol": "SBIN", "days": 365})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-
-
-# ---------------------------------------------------------------------------
-# Market Signals
-# ---------------------------------------------------------------------------
-
-class TestGetDeliveryTrend:
-    @pytest.mark.asyncio
-    async def test_returns_list(self, db_env):
-        from flowtracker.research.tools import get_delivery_trend
-        result = await get_delivery_trend.handler({"symbol": "SBIN", "days": 30})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-
-
-# ---------------------------------------------------------------------------
-# Consensus
-# ---------------------------------------------------------------------------
-
-class TestGetConsensusEstimate:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_consensus_estimate
-        result = await get_consensus_estimate.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-        assert "target_mean" in data or "recommendation" in data
-
-
-# ---------------------------------------------------------------------------
 # FMP Tools
 # ---------------------------------------------------------------------------
-
-class TestGetDupontDecomposition:
-    @pytest.mark.asyncio
-    async def test_returns_data(self, db_env):
-        from flowtracker.research.tools import get_dupont_decomposition
-        result = await get_dupont_decomposition.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        # May be dict with "years" key or a list
-        assert isinstance(data, (list, dict))
-
 
 class TestGetFairValue:
     @pytest.mark.asyncio
     async def test_returns_dict(self, db_env):
         from flowtracker.research.tools import get_fair_value
         result = await get_fair_value.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-
-
-# ---------------------------------------------------------------------------
-# Macro (no symbol required)
-# ---------------------------------------------------------------------------
-
-class TestGetMacroSnapshot:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_macro_snapshot
-        result = await get_macro_snapshot.handler({})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-
-
-class TestGetFiiDiiStreak:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_fii_dii_streak
-        result = await get_fii_dii_streak.handler({})
         data = _parse_tool_result(result)
         assert isinstance(data, dict)
 
@@ -388,6 +255,153 @@ class TestGetEventsActions:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3 — uniform TOC default (3a) + standardized _meta sidecar (3b)
+# ---------------------------------------------------------------------------
+
+
+def _reset_dedup_cache():
+    """Clear the _with_dedup ContextVar so a fresh payload is never replaced by
+    the '[Identical to previous call...]' stub from an earlier test in-process."""
+    from flowtracker.research.tools import _tool_result_cache
+    _tool_result_cache.set({})
+
+
+class TestTocDefaultsAndMeta:
+    """Phase 3a: the seven dispatchers that used to default to the heavy 'all'
+    payload now return a compact enum-constant TOC when called with no section,
+    while section='all' STILL returns the full multi-section payload.
+    Phase 3b: every return path carries a `_meta` sidecar with a `status` key.
+    """
+
+    # --- 3a: no-section default is a TOC, not the full 'all' payload ---
+
+    @pytest.mark.asyncio
+    async def test_quality_scores_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import (
+            _QUALITY_SCORES_SECTIONS,
+            get_quality_scores,
+        )
+        result = await get_quality_scores.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        # TOC shape — has the _toc enum listing, NOT the full 'all' payload.
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_QUALITY_SCORES_SECTIONS)
+        # Must NOT have routed any data section (e.g. piotroski/dupont).
+        assert "piotroski" not in data
+        assert "dupont" not in data
+        # 3b: _meta sidecar present with a status key on the TOC path.
+        assert "_meta" in data
+        assert "status" in data["_meta"]
+
+    @pytest.mark.asyncio
+    async def test_valuation_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import _VALUATION_SECTIONS, get_valuation
+        result = await get_valuation.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_VALUATION_SECTIONS)
+        assert "snapshot" not in data  # not the full payload
+        assert "band" not in data
+        assert "_meta" in data and "status" in data["_meta"]
+
+    @pytest.mark.asyncio
+    async def test_estimates_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import _ESTIMATES_SECTIONS, get_estimates
+        result = await get_estimates.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_ESTIMATES_SECTIONS)
+        assert "consensus" not in data
+        assert "_meta" in data and "status" in data["_meta"]
+
+    @pytest.mark.asyncio
+    async def test_events_actions_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import (
+            _EVENTS_ACTIONS_SECTIONS,
+            get_events_actions,
+        )
+        result = await get_events_actions.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_EVENTS_ACTIONS_SECTIONS)
+        assert "events" not in data
+        assert "_meta" in data and "status" in data["_meta"]
+
+    # --- 3a: section='all' STILL returns the full multi-section payload ---
+
+    @pytest.mark.asyncio
+    async def test_valuation_all_still_full_payload(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_valuation
+        result = await get_valuation.handler({"symbol": "INFY", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" not in data
+        for key in ("snapshot", "band", "pe_history", "key_metrics"):
+            assert key in data
+
+    @pytest.mark.asyncio
+    async def test_estimates_all_still_full_payload(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_estimates
+        result = await get_estimates.handler({"symbol": "INFY", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" not in data
+        for key in ("consensus", "surprises", "revisions", "momentum"):
+            assert key in data
+
+    @pytest.mark.asyncio
+    async def test_quality_scores_all_still_full_payload(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_quality_scores
+        result = await get_quality_scores.handler({"symbol": "INFY", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" not in data
+        for key in ("piotroski", "dupont", "common_size"):
+            assert key in data
+
+    # --- 3b: _meta on a per-section success path (dict payload) ---
+
+    @pytest.mark.asyncio
+    async def test_meta_on_success_dict_path(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_valuation
+        # snapshot returns a dict — _meta should ride alongside it.
+        result = await get_valuation.handler({"symbol": "SBIN", "section": "snapshot"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_meta" in data
+        meta = data["_meta"]
+        assert "status" in meta and "count" in meta and "as_of_date" in meta
+        assert meta["status"] in ("ok", "empty", "partial", "error")
+
+    # --- 3b: _meta with status='error' on the invalid-section error path ---
+
+    @pytest.mark.asyncio
+    async def test_meta_status_error_on_invalid_section(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_valuation
+        result = await get_valuation.handler({"symbol": "SBIN", "section": "bogus_xyz"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "error" in data
+        # Error envelope carries a did-you-mean suggestion AND a _meta status.
+        assert "suggestion" in data
+        assert "_meta" in data
+        assert data["_meta"]["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
 # News
 # ---------------------------------------------------------------------------
 
@@ -467,23 +481,6 @@ class TestGetMacroIndicators:
         assert data["cpi"]["latest"]["yoy_pct"] == 3.16
         assert len(data["cpi"]["trend"]) == 2
         assert data["pmi"]["latest"]["services_pmi"] == 58.7
-
-
-class TestMacroSnapshotEnriched:
-    @pytest.mark.asyncio
-    async def test_includes_cpi_and_yield(self, db_env, populated_store):
-        from flowtracker.cpi_models import CPIMonth
-        from flowtracker.research.tools import get_macro_snapshot
-
-        populated_store.upsert_cpi_monthly([
-            CPIMonth(period="2025-04", cpi_index=194.5, yoy_pct=3.16),
-        ])
-        result = await get_macro_snapshot.handler({})
-        data = _parse_tool_result(result)
-        # gsec_10y seeded by make_macro_snapshots; cpi_inflation from our row.
-        assert "gsec_10y" in data
-        assert data["cpi_inflation"]["yoy_pct"] == 3.16
-        assert data["cpi_inflation"]["as_of_month"] == "2025-04"
 
 
 class TestSectorIndexValuation:
@@ -606,3 +603,242 @@ class TestValuationAgentCanReachCashFlow:
         # Regression: the valuation prompt (step 4) calls get_fundamentals for
         # cash_flow_quality/capital_allocation; it must be in the allow-list.
         assert get_fundamentals in VALUATION_AGENT_TOOLS_V2
+
+
+# ---------------------------------------------------------------------------
+# Phase 1-A: section-enum schema + did-you-mean validation on dispatchers.
+#
+# An invalid `section`/`doc_type` must return an `{error, suggestion}` payload
+# that the Phase 0 wrapper (`_wrap_handler_is_error`) flags `is_error=True`,
+# while a valid section still routes normally. We also assert one built schema
+# actually carries an `enum` on `section`.
+# ---------------------------------------------------------------------------
+
+class TestSectionEnumValidation:
+    @pytest.mark.asyncio
+    async def test_annual_report_toc_is_rejected(self, db_env):
+        # 'toc' is a notorious wrong guess for get_annual_report (not a section).
+        from flowtracker.research.tools import get_annual_report
+        result = await get_annual_report.handler({"symbol": "SBIN", "section": "toc"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_annual_report_valid_section_routes(self, db_env):
+        from flowtracker.research.tools import get_annual_report
+        result = await get_annual_report.handler({"symbol": "SBIN", "section": "auditor_report"})
+        data = _parse_tool_result(result)
+        # A valid section must NOT be rejected as an invalid-enum value (no
+        # did-you-mean validation envelope). It MAY still return a data-absence
+        # error ("No AR extractions found…") when the vault has no AR for this
+        # symbol — that is correct Phase-0 behavior (is_error=True is right), and
+        # CI has no vault data, so we don't assert is_error here.
+        assert not (isinstance(data, dict) and "valid_values" in data)
+        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid section"))
+
+    @pytest.mark.asyncio
+    async def test_fundamentals_invalid_section_is_rejected(self, db_env):
+        from flowtracker.research.tools import get_fundamentals
+        result = await get_fundamentals.handler({"symbol": "SBIN", "section": "nonsense"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert "valid_values" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_fundamentals_valid_section_still_routes(self, db_env):
+        from flowtracker.research.tools import get_fundamentals
+        # quarters=3 keeps this arg-tuple distinct from the quarters=4 call in
+        # TestGetFundamentals so the session-level _with_dedup cache (a ContextVar
+        # shared across handler calls in this process) does not return a stub.
+        result = await get_fundamentals.handler(
+            {"symbol": "SBIN", "section": "quarterly_results", "quarters": 3}
+        )
+        data = _parse_tool_result(result)
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert "revenue" in data[0]
+
+    @pytest.mark.asyncio
+    async def test_fundamentals_invalid_section_in_list_is_rejected(self, db_env):
+        from flowtracker.research.tools import get_fundamentals
+        result = await get_fundamentals.handler(
+            {"symbol": "SBIN", "section": ["quarterly_results", "bogus"]}
+        )
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_ownership_invalid_section_is_rejected(self, db_env):
+        from flowtracker.research.tools import get_ownership
+        result = await get_ownership.handler({"symbol": "SBIN", "section": "shareholdings"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        # 'shareholdings' is close to 'shareholding' → fuzzy match offered.
+        assert "Did you mean" in data["suggestion"]
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_macro_anchor_invalid_doc_type_is_rejected(self, db_env):
+        from flowtracker.research.tools import get_macro_anchor
+        result = await get_macro_anchor.handler({"doc_type": "budget"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_company_context_bad_sub_section_is_rejected(self, db_env):
+        from flowtracker.research.tools import get_company_context
+        result = await get_company_context.handler(
+            {"symbol": "SBIN", "section": "annual_report", "sub_section": "not_a_section"}
+        )
+        data = _parse_tool_result(result)
+        assert data["error"].startswith("Invalid sub_section")
+        assert "suggestion" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_company_context_sector_kpis_sub_section_not_validated(self, db_env):
+        # sector_kpis sub_section is a free-text canonical KPI key — must NOT be
+        # rejected as an invalid enum value.
+        from flowtracker.research.tools import get_company_context
+        result = await get_company_context.handler(
+            {"symbol": "SBIN", "section": "sector_kpis", "sub_section": "any_free_text_key"}
+        )
+        data = _parse_tool_result(result)
+        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid sub_section"))
+
+    def test_built_schema_section_has_enum(self):
+        from flowtracker.research.tools import get_fundamentals
+        schema = get_fundamentals.input_schema
+        assert schema["type"] == "object"
+        assert schema["required"] == ["symbol"]
+        section_schema = schema["properties"]["section"]
+        # anyOf form: first branch is a plain string enum.
+        enum = section_schema["anyOf"][0]["enum"]
+        assert "quarterly_results" in enum
+        assert "toc" in enum  # sentinel handler supports
+
+    def test_built_schema_macro_anchor_doc_type_enum(self):
+        from flowtracker.research.tools import get_macro_anchor
+        schema = get_macro_anchor.input_schema
+        assert schema["required"] == ["doc_type"]
+        assert "enum" in schema["properties"]["doc_type"]
+        # `section` is free-text heading match — must NOT be an enum.
+        assert "enum" not in schema["properties"]["section"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 1-B: standalone vocab tools — enum schema + did-you-mean validation on
+# render_chart / get_chart_data / calculate / get_data_quality_flags /
+# get_shareholder_detail / get_company_documents / get_sector_benchmarks /
+# get_valuation_band. Same envelope contract as Phase 1-A (error+suggestion+
+# is_error on a miss; valid value still routes). Args are varied per call to
+# dodge the session-level _with_dedup ContextVar cache.
+# ---------------------------------------------------------------------------
+
+class TestStandaloneVocabValidation:
+    @pytest.mark.asyncio
+    async def test_render_chart_pbv_is_rejected(self, db_env):
+        # 'pbv' is a get_chart_data type, NOT a render_chart type — must reject.
+        from flowtracker.research.tools import render_chart
+        result = await render_chart.handler({"symbol": "SBIN", "chart_type": "pbv"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert "valid_values" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_render_chart_valid_type_routes(self, db_env, monkeypatch):
+        # A valid chart_type must NOT hit the enum guard. Stub the renderer so we
+        # don't depend on matplotlib output / data presence.
+        import flowtracker.research.charts as charts_mod
+        from flowtracker.research import tools as tools_mod
+        monkeypatch.setattr(
+            charts_mod, "render_chart",
+            lambda symbol, chart_type, *a, **k: {"path": "/tmp/x.png", "embed_markdown": "![](x)"},
+        )
+        result = await tools_mod.render_chart.handler({"symbol": "INFY", "chart_type": "price"})
+        data = _parse_tool_result(result)
+        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid chart_type"))
+        assert result.get("is_error") is not True
+
+    @pytest.mark.asyncio
+    async def test_get_chart_data_invalid_type_is_rejected(self, db_env):
+        from flowtracker.research.tools import get_chart_data
+        result = await get_chart_data.handler({"symbol": "SBIN", "chart_type": "dupont"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_calculate_margin_is_rejected(self, db_env):
+        # 'margin' is not a named op — must reject with a did-you-mean.
+        from flowtracker.research.tools import calculate
+        result = await calculate.handler({"operation": "margin", "a": "1", "b": "2"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_calculate_valid_operation_still_works(self, db_env):
+        from flowtracker.research.tools import calculate
+        # Vary args from any earlier calculate call to dodge the dedup cache.
+        result = await calculate.handler({"operation": "ratio", "a": "10", "b": "4"})
+        data = _parse_tool_result(result)
+        assert data.get("ratio") == 2.5
+        assert result.get("is_error") is not True
+
+    @pytest.mark.asyncio
+    async def test_calculate_expr_still_works(self, db_env):
+        from flowtracker.research.tools import calculate
+        result = await calculate.handler({"operation": "expr", "a": "(74 - 47.67) / 2", "b": "0"})
+        data = _parse_tool_result(result)
+        assert "result" in data
+        assert result.get("is_error") is not True
+
+    @pytest.mark.asyncio
+    async def test_data_quality_flags_invalid_severity_is_rejected(self, db_env):
+        from flowtracker.research.tools import get_data_quality_flags
+        result = await get_data_quality_flags.handler({"symbol": "SBIN", "min_severity": "CRITICAL"})
+        data = _parse_tool_result(result)
+        assert "error" in data and "suggestion" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_data_quality_flags_default_severity_routes(self, db_env):
+        # No min_severity passed → default MEDIUM, must NOT be rejected.
+        from flowtracker.research.tools import get_data_quality_flags
+        result = await get_data_quality_flags.handler({"symbol": "INFY"})
+        data = _parse_tool_result(result)
+        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid min_severity"))
+
+    def test_built_schema_render_chart_has_enum(self):
+        from flowtracker.research.tools import render_chart
+        schema = render_chart.input_schema
+        assert schema["type"] == "object"
+        assert schema["required"] == ["symbol", "chart_type"]
+        ct = schema["properties"]["chart_type"]
+        assert "enum" in ct
+        assert "price" in ct["enum"]
+        assert "pbv" not in ct["enum"]  # pbv is a get_chart_data type, not here
+
+    def test_built_schema_calculate_operation_has_enum(self):
+        from flowtracker.research.tools import calculate
+        schema = calculate.input_schema
+        assert schema["required"] == ["operation"]
+        op = schema["properties"]["operation"]
+        assert "enum" in op
+        assert "expr" in op["enum"]
+        assert "ratio" in op["enum"]
+
+    def test_built_schema_chart_data_type_has_enum(self):
+        from flowtracker.research.tools import get_chart_data
+        schema = get_chart_data.input_schema
+        assert schema["required"] == ["symbol", "chart_type"]
+        ct = schema["properties"]["chart_type"]
+        assert "enum" in ct
+        assert "pbv" in ct["enum"]
+        assert "dupont" not in ct["enum"]  # dupont is a render_chart type

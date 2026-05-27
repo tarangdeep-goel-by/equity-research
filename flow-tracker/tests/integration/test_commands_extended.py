@@ -195,6 +195,77 @@ class TestResearchDataCommands:
         assert "revenue" in result.output.lower() or "quarter" in result.output.lower() or "{" in result.output
 
 
+class TestResearchToolAudit:
+    """Read-only tool-use trace-audit CLI (Phase 6)."""
+
+    def _seed_vault(self, tmp_path, monkeypatch):
+        import json as _json
+
+        from flowtracker.research import tool_audit as _ta
+
+        stocks = tmp_path / "stocks"
+        traces = stocks / "TESTCO" / "traces"
+        traces.mkdir(parents=True)
+        trace = {
+            "symbol": "TESTCO",
+            "started_at": "2026-05-20T10:00:00+00:00",
+            "agents": {
+                "valuation": {
+                    "tools_available": ["get_valuation", "calculate"],
+                    "tool_calls": [
+                        {"tool": "mcp__valuation__get_valuation", "args": {"symbol": "TESTCO"},
+                         "is_error": False, "completeness": "full", "duration_ms": 50},
+                        {"tool": "mcp__valuation__get_totally_fake_tool", "args": {},
+                         "is_error": True, "completeness": "error", "duration_ms": 5,
+                         "result_summary": "No such tool available"},
+                    ],
+                }
+            },
+        }
+        (traces / "20260520T100000.json").write_text(_json.dumps(trace), encoding="utf-8")
+        monkeypatch.setattr(_ta, "_VAULT_STOCKS", stocks)
+
+    def test_tool_audit_table(self, tmp_path, monkeypatch):
+        self._seed_vault(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["research", "tool-audit"])
+        assert result.exit_code == 0
+        assert "valuation" in result.output
+        assert "Trace Audit" in result.output
+
+    def test_tool_audit_json(self, tmp_path, monkeypatch):
+        self._seed_vault(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["research", "tool-audit", "--json"])
+        assert result.exit_code == 0
+        import json as _json
+        data = _json.loads(result.output)
+        assert data["agents"]["valuation"]["total_calls"] == 2
+        # get_fundamentals is not in this agent's tools_available -> hallucination
+        assert data["agents"]["valuation"]["unknown_tool_count"] == 1
+
+    def test_tool_audit_no_traces(self, tmp_path, monkeypatch):
+        from flowtracker.research import tool_audit as _ta
+
+        monkeypatch.setattr(_ta, "_VAULT_STOCKS", tmp_path / "empty")
+        result = runner.invoke(app, ["research", "tool-audit"])
+        assert result.exit_code == 0
+        assert "No trace files found" in result.output
+
+    def test_tool_audit_gaps(self, tmp_path, monkeypatch):
+        self._seed_vault(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["research", "tool-audit", "--gaps"])
+        assert result.exit_code == 0
+        assert "Data-Gap Catalog" in result.output
+        assert "Section Consumption" in result.output
+
+    def test_tool_audit_gaps_json(self, tmp_path, monkeypatch):
+        self._seed_vault(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["research", "tool-audit", "--gaps", "--json"])
+        assert result.exit_code == 0
+        import json as _json
+        data = _json.loads(result.output)
+        assert "data_gaps" in data and "section_consumption" in data
+
+
 # ---------------------------------------------------------------------------
 # Bhavcopy commands
 # ---------------------------------------------------------------------------

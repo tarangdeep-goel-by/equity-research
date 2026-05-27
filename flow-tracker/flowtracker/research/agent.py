@@ -40,6 +40,7 @@ from flowtracker.research.briefing import (
 )
 from flowtracker.research.tools import (
     _tool_result_cache,
+    classify_completeness,
     BUSINESS_AGENT_TOOLS_V2,
     FINANCIAL_AGENT_TOOLS_V2,
     FNO_POSITIONING_AGENT_TOOLS_V2,
@@ -843,14 +844,39 @@ async def _run_specialist(
                             call = pending_tool_calls.pop(block.tool_use_id, None)
                             if call is None:
                                 continue
-                            result_str = str(block.content) if block.content else ""
+                            # block.content is str | list[{"type","text"}] | None.
+                            # Extract the inner text so classify/summary/hash see the
+                            # real JSON payload, not a Python list-repr.
+                            raw_content = block.content
+                            if isinstance(raw_content, list):
+                                result_str = "".join(
+                                    item.get("text", "")
+                                    for item in raw_content
+                                    if isinstance(item, dict) and item.get("type") == "text"
+                                )
+                            elif raw_content:
+                                result_str = str(raw_content)
+                            else:
+                                result_str = ""
                             is_err = bool(getattr(block, "is_error", False) or False)
                             duration_ms = int((time.monotonic() - call["start_mono"]) * 1000)
-                            completeness = (
+                            # Derive completeness + row_count from the decoded payload
+                            # via the shared classifier; fall back to the crude
+                            # classification only when JSON decode failed.
+                            comp, row_count = None, None
+                            try:
+                                payload = json.loads(result_str)
+                                comp, row_count = classify_completeness(payload)
+                            except Exception:
+                                pass
+                            completeness = comp or (
                                 "error" if is_err
                                 else "empty" if not result_str
                                 else "full"
                             )
+                            # An error block is authoritative — keep it "error".
+                            if is_err:
+                                completeness = "error"
                             for ev in reversed(evidence):
                                 if ev.tool == call["tool"] and ev.started_at == call["started_at"]:
                                     ev.result_summary = result_str[:500]
@@ -858,6 +884,8 @@ async def _run_specialist(
                                     ev.is_error = is_err
                                     ev.duration_ms = duration_ms
                                     ev.completeness = completeness
+                                    ev.row_count = row_count
+                                    ev.payload_len = len(result_str)
                                     break
                             logger.info(
                                 "[%s] tool_result: %s → %s %d chars %.1fs",
@@ -1792,7 +1820,7 @@ async def run_synthesis_agent(
     """Run the synthesis agent on existing briefings."""
     from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2 as SYNTHESIS_AGENT_PROMPT
     from flowtracker.research.briefing import load_all_briefings
-    from flowtracker.research.tools import get_composite_score, get_fair_value
+    from flowtracker.research.tools import get_composite_score, get_fair_value, get_concall_insights
 
     symbol = symbol.upper()
     briefings = load_all_briefings(symbol)
@@ -1835,7 +1863,7 @@ async def run_synthesis_agent(
     signals_analysis = _analyze_briefing_signals(briefings)
 
     # Synthesis tools: just composite_score and fair_value
-    synthesis_tools = [get_composite_score, get_fair_value]
+    synthesis_tools = [get_composite_score, get_fair_value, get_concall_insights]
 
     model = model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-6")
 

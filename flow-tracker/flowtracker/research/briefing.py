@@ -72,6 +72,7 @@ class ToolEvidence(BaseModel, extra="ignore"):
     turn_index: int | None = None
     completeness: Literal["full", "partial", "empty", "truncated", "error"] | None = None
     row_count: int | None = None
+    payload_len: int | None = None  # full untruncated length of result text
     extraction_meta: dict | None = None
 
 
