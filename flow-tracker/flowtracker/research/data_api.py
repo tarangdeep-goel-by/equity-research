@@ -5018,6 +5018,7 @@ class ResearchDataAPI:
     _DECK_SECTIONS = (
         "highlights",
         "segment_performance",
+        "key_metrics",
         "strategic_priorities",
         "outlook_and_guidance",
         "new_initiatives",
@@ -5030,6 +5031,7 @@ class ResearchDataAPI:
         section_filter: str | None = None,
         quarter: str | None = None,
         slide_topics: list[str] | None = None,
+        full: bool = False,
     ) -> dict:
         """Get pre-extracted investor-deck insights from the vault.
 
@@ -5041,8 +5043,14 @@ class ResearchDataAPI:
         populated sections + slide_topics_by_quarter when tagged). <4KB.
 
         With section_filter: returns that deck section across all quarters. Valid:
-        'highlights', 'segment_performance', 'strategic_priorities',
+        'highlights', 'segment_performance', 'key_metrics', 'strategic_priorities',
         'outlook_and_guidance', 'new_initiatives', 'charts_described'.
+
+        With full=True: returns the complete record (all sections) for the selected
+        scope — one quarter if `quarter` is given, else every quarter. Use after the
+        TOC when you want to read a whole deck in one call instead of N section
+        drills. Internal bookkeeping keys (_*) are stripped. Takes precedence over
+        section_filter.
 
         Optional narrowing:
           - quarter='FY26-Q3' narrows every path to one quarter.
@@ -5115,6 +5123,24 @@ class ResearchDataAPI:
             "missing_periods": missing_periods,
             "degraded_quality": meta_status == "partial",
         }
+
+        # Full read: complete record(s) for the selected scope, internal
+        # bookkeeping keys (_*) stripped. Lets an agent read a whole deck in one
+        # call instead of drilling each section. Takes precedence over section_filter.
+        if full:
+            full_quarters = [
+                {k: v for k, v in q.items() if not k.startswith("_")}
+                for q in data.get("quarters", [])
+            ]
+            result = {
+                "symbol": symbol.upper(),
+                "mode": "full",
+                "quarters": full_quarters,
+            }
+            if extraction_quality_warning:
+                result["_extraction_quality_warning"] = extraction_quality_warning
+            result["_meta"] = meta
+            return result
 
         # slide_topics filter — narrow to quarters whose slide_topics intersect,
         # implies agent wants the charts_described section from those quarters.
