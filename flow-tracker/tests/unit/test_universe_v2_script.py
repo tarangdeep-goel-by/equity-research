@@ -205,19 +205,28 @@ def _mock_screener_client_ok():
             {"metric": "PE", "values": [["2024-01-01", 15.0], ["2024-02-01", 16.0]]}
         ]
     }
+    sc.fetch_quarterly_cash_flow_screener.return_value = [
+        {
+            "quarter_end": "2025-03-31",
+            "operating_cash_flow": 48486.29,
+            "investing_cash_flow": -3386.58,
+            "financing_cash_flow": -13739.08,
+            "source": "screener",
+        }
+    ]
     return sc
 
 
 def _mock_fund_client_ok():
     fc = MagicMock()
+    # qBS is still yfinance-sourced. qCF moved to Screener — yfinance CF
+    # rows are ignored by the universe-v2 helper.
     fc.fetch_quarterly_bs_cf.return_value = {
         "symbol": "SBIN",
         "balance_sheet": [
             {"quarter_end": "2025-03-31", "total_assets": 100.0}
         ],
-        "cash_flow": [
-            {"quarter_end": "2025-03-31", "operating_cash_flow": 10.0}
-        ],
+        "cash_flow": [],
     }
     return fc
 
@@ -248,7 +257,10 @@ def test_backfill_symbol_happy_path(script, store):
     # 'pe' + 'price' both fetched and each returns the same 2-point dataset.
     assert stats["chart_points"] == 4
     assert stats["qbs_rows"] == 1
-    assert stats["qcf_rows"] == 1
+    # qcf_rows stays 0 — the yfinance helper no longer writes CF.
+    # scf_rows tracks the new Screener-sourced CF path.
+    assert stats["qcf_rows"] == 0
+    assert stats["scf_rows"] == 1
     assert stats["est_rev_rows"] >= 1
 
     # Verify the rows actually landed in the DB.
@@ -277,6 +289,8 @@ def test_backfill_symbol_isolates_charts_failure(script, store):
     sc = MagicMock()
     sc.fetch_company_page.side_effect = ScreenerError("login expired")
     sc._get_both_ids.return_value = ("", "")
+    # CF helper also needs Excel download — same login failure surface.
+    sc.fetch_quarterly_cash_flow_screener.side_effect = ScreenerError("login expired")
     hc = _mock_holding_client_ok("SBIN")
     fc = _mock_fund_client_ok()
     ec = _mock_estimates_client_ok()
@@ -284,6 +298,8 @@ def test_backfill_symbol_isolates_charts_failure(script, store):
     stats, errors = script.backfill_symbol(sc, hc, fc, ec, store, "SBIN")
 
     assert any("charts" in e for e in errors)
+    assert any("scf" in e for e in errors)
     assert stats["sh_rows"] == 1
     assert stats["chart_points"] == 0
     assert stats["qbs_rows"] == 1
+    assert stats["scf_rows"] == 0

@@ -200,6 +200,72 @@ class TestParseAnnualFinancials:
         assert result == []
 
 
+class TestParseQuarterlyCashFlowScreener:
+    """parse_quarterly_cash_flow_screener: fiscal-year CF rows from Data Sheet."""
+
+    def test_returns_list_of_dicts(self, screener_client, golden_excel):
+        rows = screener_client.parse_quarterly_cash_flow_screener("SBIN", golden_excel)
+        assert isinstance(rows, list)
+        assert rows, "expected at least one CF row from golden Excel"
+        assert all(isinstance(r, dict) for r in rows)
+
+    def test_quarter_end_is_iso_fy_date(self, screener_client, golden_excel):
+        rows = screener_client.parse_quarterly_cash_flow_screener("SBIN", golden_excel)
+        # SBIN Excel CASH FLOW section ends each year on Mar 31.
+        assert all(re.match(r"\d{4}-03-31", r["quarter_end"]) for r in rows)
+
+    def test_source_marked_screener(self, screener_client, golden_excel):
+        rows = screener_client.parse_quarterly_cash_flow_screener("SBIN", golden_excel)
+        assert all(r["source"] == "screener" for r in rows)
+
+    def test_cfo_cfi_cff_populated(self, screener_client, golden_excel):
+        rows = screener_client.parse_quarterly_cash_flow_screener("SBIN", golden_excel)
+        # Every row should have at least one of CFO/CFI/CFF populated
+        # (rows where all three are None are filtered out by the parser).
+        for r in rows:
+            assert any(
+                r.get(k) is not None
+                for k in ("operating_cash_flow", "investing_cash_flow", "financing_cash_flow")
+            )
+
+    def test_matches_golden_fy25_values(self, screener_client, golden_excel):
+        """Golden fixture FY25 (2025-03-31): CFO=48486.29, CFI=-3386.58, CFF=-13739.08."""
+        rows = screener_client.parse_quarterly_cash_flow_screener("SBIN", golden_excel)
+        by_q = {r["quarter_end"]: r for r in rows}
+        assert "2025-03-31" in by_q
+        fy25 = by_q["2025-03-31"]
+        assert fy25["operating_cash_flow"] == pytest.approx(48486.29)
+        assert fy25["investing_cash_flow"] == pytest.approx(-3386.58)
+        assert fy25["financing_cash_flow"] == pytest.approx(-13739.08)
+
+    def test_no_data_sheet_returns_empty(self, screener_client):
+        import io
+        import openpyxl
+        wb = openpyxl.Workbook()
+        wb.active.title = "Wrong Sheet"
+        buf = io.BytesIO()
+        wb.save(buf)
+        wb.close()
+        assert screener_client.parse_quarterly_cash_flow_screener("SBIN", buf.getvalue()) == []
+
+    def test_round_trip_with_store(self, screener_client, golden_excel, tmp_path):
+        """parse → upsert_quarterly_cash_flow → get round-trip preserves source='screener'."""
+        from flowtracker.store import FlowStore
+
+        rows = screener_client.parse_quarterly_cash_flow_screener("SBIN", golden_excel)
+        assert rows
+        db = tmp_path / "test.db"
+        with FlowStore(db_path=db) as store:
+            n = store.upsert_quarterly_cash_flow("SBIN", rows)
+            assert n == len(rows)
+            stored = store._conn.execute(
+                "SELECT quarter_end, operating_cash_flow, source FROM quarterly_cash_flow "
+                "WHERE symbol='SBIN' ORDER BY quarter_end DESC LIMIT 1"
+            ).fetchone()
+            assert stored["source"] == "screener"
+            assert stored["operating_cash_flow"] == pytest.approx(48486.29)
+
+
 class TestOperatingProfitAndExpensesDerivation:
     """
     Regression — Screener's Data Sheet tab has NO 'Operating Profit' or

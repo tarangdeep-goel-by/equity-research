@@ -5694,7 +5694,13 @@ class FlowStore:
         return count
 
     def upsert_quarterly_cash_flow(self, symbol: str, rows: list[dict]) -> int:
-        """Upsert quarterly cash flow data."""
+        """Upsert quarterly cash flow data.
+
+        Each row may carry an explicit ``source`` field — used to mark rows
+        sourced from Screener (fiscal-year cadence) vs yfinance (true
+        quarterly). Defaults to ``'yfinance'`` for backward compatibility
+        with callers that don't pass it.
+        """
         count = 0
         for row in rows:
             warnings = _validate_row("quarterly_cash_flow", row)
@@ -5704,19 +5710,20 @@ class FlowStore:
                 """INSERT INTO quarterly_cash_flow
                    (symbol, quarter_end, operating_cash_flow, free_cash_flow, capital_expenditure,
                     investing_cash_flow, financing_cash_flow, change_in_working_capital,
-                    depreciation, dividends_paid, net_income)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    depreciation, dividends_paid, net_income, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(symbol, quarter_end) DO UPDATE SET
                     operating_cash_flow=excluded.operating_cash_flow, free_cash_flow=excluded.free_cash_flow,
                     capital_expenditure=excluded.capital_expenditure, investing_cash_flow=excluded.investing_cash_flow,
                     financing_cash_flow=excluded.financing_cash_flow, change_in_working_capital=excluded.change_in_working_capital,
                     depreciation=excluded.depreciation, dividends_paid=excluded.dividends_paid,
-                    net_income=excluded.net_income, fetched_at=datetime('now')""",
+                    net_income=excluded.net_income, source=excluded.source, fetched_at=datetime('now')""",
                 (symbol.upper(), row["quarter_end"],
                  row.get("operating_cash_flow"), row.get("free_cash_flow"),
                  row.get("capital_expenditure"), row.get("investing_cash_flow"),
                  row.get("financing_cash_flow"), row.get("change_in_working_capital"),
-                 row.get("depreciation"), row.get("dividends_paid"), row.get("net_income")),
+                 row.get("depreciation"), row.get("dividends_paid"), row.get("net_income"),
+                 row.get("source", "yfinance")),
             )
             count += 1
         self._conn.commit()
