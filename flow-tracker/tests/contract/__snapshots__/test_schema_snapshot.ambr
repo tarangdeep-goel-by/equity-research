@@ -809,6 +809,13 @@
       'scheme_name',
       'stock_name',
     ]),
+    'mf_scheme_nav_daily': list([
+      'date',
+      'fetched_at',
+      'nav',
+      'scheme_code',
+      'scheme_name',
+    ]),
     'peer_comparison': list([
       'cmp',
       'div_yield',
@@ -1131,6 +1138,7 @@
     'mf_daily_flows',
     'mf_monthly_flows',
     'mf_scheme_holdings',
+    'mf_scheme_nav_daily',
     'peer_comparison',
     'peer_links',
     'pmi_monthly',

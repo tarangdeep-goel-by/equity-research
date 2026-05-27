@@ -10,8 +10,11 @@ import typer
 from rich.console import Console
 
 from flowtracker.indexpe_client import (
+    BROAD_INDICES,
     INDEX_NAME_MAP,
+    SECTORAL_INDICES,
     SUPPORTED_INDICES,
+    THEMATIC_INDICES,
     IndexValuationClient,
     IndexValuationFetchError,
 )
@@ -62,8 +65,27 @@ def _normalise_index(name: str) -> str:
     return canonical
 
 
-def _indices_iter(index: str | None) -> list[str]:
-    """Resolve the --index flag (or 'all') to a list of canonical names."""
+_GROUPS: dict[str, list[str]] = {
+    "broad": BROAD_INDICES,
+    "sectoral": SECTORAL_INDICES,
+    "thematic": THEMATIC_INDICES,
+    "all": SUPPORTED_INDICES,
+}
+
+
+def _indices_iter(index: str | None, group: str | None = None) -> list[str]:
+    """Resolve the --index / --group flags to a list of canonical names.
+
+    Precedence: --group wins over --index. ``--index all`` is treated as
+    ``--group all``. Returns indices in deterministic order.
+    """
+    if group is not None:
+        key = group.strip().lower()
+        if key not in _GROUPS:
+            raise typer.BadParameter(
+                f"Unknown group {group!r}. Choose one of: {list(_GROUPS)}"
+            )
+        return list(_GROUPS[key])
     if index is None or index.lower() == "all":
         return list(SUPPORTED_INDICES)
     return [_normalise_index(index)]
@@ -77,8 +99,15 @@ def fetch(
             "--index", "-i",
             help=(
                 "Index display name (e.g. 'NIFTY 50'). Omit or use 'all' to "
-                "fetch all four supported broad-market indices."
+                "fetch every supported index (broad + sectoral + thematic)."
             ),
+        ),
+    ] = None,
+    group: Annotated[
+        str | None,
+        typer.Option(
+            "--group", "-g",
+            help="Index group: broad | sectoral | thematic | all. Overrides --index.",
         ),
     ] = None,
     days: Annotated[
@@ -88,7 +117,7 @@ def fetch(
     """Fetch recent PE/PB/Div-Yield rows for one or all supported indices."""
     end = date.today()
     start = end - timedelta(days=days)
-    targets = _indices_iter(index)
+    targets = _indices_iter(index, group)
 
     with IndexValuationClient() as client, FlowStore() as store:
         for target in targets:
@@ -110,7 +139,17 @@ def backfill(
         str | None,
         typer.Option(
             "--index", "-i",
-            help="Index display name. Omit / 'all' to backfill all four.",
+            help=(
+                "Index display name. Omit / 'all' to backfill every "
+                "supported index (broad + sectoral + thematic)."
+            ),
+        ),
+    ] = None,
+    group: Annotated[
+        str | None,
+        typer.Option(
+            "--group", "-g",
+            help="Index group: broad | sectoral | thematic | all. Overrides --index.",
         ),
     ] = None,
 ) -> None:
@@ -118,7 +157,7 @@ def backfill(
     days = _parse_period_to_days(period)
     end = date.today()
     start = end - timedelta(days=days)
-    targets = _indices_iter(index)
+    targets = _indices_iter(index, group)
 
     with IndexValuationClient() as client, FlowStore() as store:
         for target in targets:

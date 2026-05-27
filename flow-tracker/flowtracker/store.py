@@ -31,6 +31,7 @@ from flowtracker.fund_models import QuarterlyResult, ValuationSnapshot, Valuatio
 from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit
 from flowtracker.breadth_models import BreadthSnapshot
 from flowtracker.indexpe_models import IndexValuation
+from flowtracker.mf_nav_models import MFSchemeNav
 from flowtracker.bhavcopy_models import DailyStockData
 from flowtracker.deals_models import BulkBlockDeal
 from flowtracker.insider_models import InsiderTransaction
@@ -578,6 +579,21 @@ CREATE TABLE IF NOT EXISTS mf_scheme_holdings (
 
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_isin ON mf_scheme_holdings(isin);
 CREATE INDEX IF NOT EXISTS idx_mf_holdings_month ON mf_scheme_holdings(month);
+
+-- Daily per-scheme NAV history sourced from mfapi.in. The curated
+-- universe (~30 equity schemes, see ``flowtracker.mf_nav_client``)
+-- covers large/mid/small/flexi/multi/focused/ELSS/value/contra/index/
+-- sectoral categories. NAVs are per-unit rupee values; ``scheme_name``
+-- is denormalised so a single-table query suffices for display.
+CREATE TABLE IF NOT EXISTS mf_scheme_nav_daily (
+    scheme_code INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    scheme_name TEXT NOT NULL,
+    nav REAL NOT NULL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (scheme_code, date)
+);
+CREATE INDEX IF NOT EXISTS idx_mf_nav_date ON mf_scheme_nav_daily(date);
 
 CREATE TABLE IF NOT EXISTS corporate_filings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3534,6 +3550,109 @@ class FlowStore:
             "history_start": first_row["date"] if first_row else None,
             "history_end": last_row["date"] if last_row else None,
         }
+
+    # -- MF Scheme Daily NAVs (mfapi.in) --
+
+    def upsert_mf_scheme_navs(self, navs: list[MFSchemeNav]) -> int:
+        """Insert or replace daily NAV rows for one or many schemes.
+
+        Idempotent on the (scheme_code, date) PK; re-running a backfill
+        overwrites prior rows so corrected mfapi values propagate. Each
+        row also refreshes ``scheme_name`` (in case mfapi renames a
+        scheme, e.g. "Bluechip" → "Large Cap").
+        """
+        if not navs:
+            return 0
+        cursor = self._conn.cursor()
+        count = 0
+        for n in navs:
+            cursor.execute(
+                "INSERT OR REPLACE INTO mf_scheme_nav_daily "
+                "(scheme_code, date, scheme_name, nav) "
+                "VALUES (?, ?, ?, ?)",
+                (n.scheme_code, n.date, n.scheme_name, n.nav),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_mf_scheme_nav_latest(self, scheme_code: int) -> MFSchemeNav | None:
+        """Most recent NAV row for a scheme; ``None`` if not stored."""
+        row = self._conn.execute(
+            "SELECT scheme_code, date, scheme_name, nav "
+            "FROM mf_scheme_nav_daily "
+            "WHERE scheme_code = ? "
+            "ORDER BY date DESC LIMIT 1",
+            (scheme_code,),
+        ).fetchone()
+        if not row:
+            return None
+        return MFSchemeNav(
+            scheme_code=row["scheme_code"],
+            date=row["date"],
+            scheme_name=row["scheme_name"],
+            nav=row["nav"],
+        )
+
+    def get_mf_scheme_nav_history(
+        self,
+        scheme_code: int,
+        days: int | None = None,
+    ) -> list[MFSchemeNav]:
+        """Historical NAV rows for a scheme (oldest-first).
+
+        ``days``: when set, restricts to the last N days; otherwise
+        returns the full stored history.
+        """
+        if days is not None:
+            rows = self._conn.execute(
+                "SELECT scheme_code, date, scheme_name, nav "
+                "FROM mf_scheme_nav_daily "
+                "WHERE scheme_code = ? "
+                "AND date >= date('now', ? || ' days') "
+                "ORDER BY date ASC",
+                (scheme_code, f"-{int(days)}"),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT scheme_code, date, scheme_name, nav "
+                "FROM mf_scheme_nav_daily "
+                "WHERE scheme_code = ? "
+                "ORDER BY date ASC",
+                (scheme_code,),
+            ).fetchall()
+        return [
+            MFSchemeNav(
+                scheme_code=r["scheme_code"],
+                date=r["date"],
+                scheme_name=r["scheme_name"],
+                nav=r["nav"],
+            )
+            for r in rows
+        ]
+
+    def get_mf_scheme_nav_universe(self) -> list[tuple[int, str, str, str, int]]:
+        """List every stored scheme with coverage summary.
+
+        Returns rows of (scheme_code, scheme_name, first_date,
+        last_date, row_count) ordered by scheme_code. Used by
+        ``flowtrack mf nav coverage`` to verify backfill health at a
+        glance.
+        """
+        rows = self._conn.execute(
+            "SELECT scheme_code, "
+            "       MIN(scheme_name) AS scheme_name, "
+            "       MIN(date) AS first_date, "
+            "       MAX(date) AS last_date, "
+            "       COUNT(*) AS n "
+            "FROM mf_scheme_nav_daily "
+            "GROUP BY scheme_code "
+            "ORDER BY scheme_code"
+        ).fetchall()
+        return [
+            (r["scheme_code"], r["scheme_name"], r["first_date"], r["last_date"], r["n"])
+            for r in rows
+        ]
 
     # -- RBI WSS System Credit (weekly) --
 

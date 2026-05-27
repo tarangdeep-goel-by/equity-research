@@ -18,7 +18,11 @@ import pytest
 import respx
 
 from flowtracker.indexpe_client import (
+    BROAD_INDICES,
     INDEX_NAME_MAP,
+    SECTORAL_INDICES,
+    SUPPORTED_INDICES,
+    THEMATIC_INDICES,
     IndexValuationClient,
     IndexValuationFetchError,
     parse_pepb_response,
@@ -170,3 +174,143 @@ def test_index_name_map_covers_required_indices():
     """Lock the spec: these four broad-market indices must always be supported."""
     required = {"NIFTY 50", "NIFTY 500", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250"}
     assert required.issubset(INDEX_NAME_MAP.keys())
+
+
+# ----- Sectoral / thematic slug coverage -------------------------------------
+
+
+class TestSectoralCoverage:
+    """Lock the trading-name slugs we probed against niftyindices.com.
+
+    These mappings were verified live (2026-05-27) — each candidate
+    trading-name returned >0 rows for a 10-day Jan 2025 window. The
+    cases below assert the canonical-name → posted-name resolution so
+    a future refactor can't silently break the live fetch.
+    """
+
+    def test_sectoral_10_indices_present(self):
+        expected = {
+            "NIFTY BANK", "NIFTY IT", "NIFTY PHARMA", "NIFTY AUTO",
+            "NIFTY FMCG", "NIFTY METAL", "NIFTY ENERGY", "NIFTY REALTY",
+            "NIFTY PSU BANK", "NIFTY FINANCIAL SERVICES",
+        }
+        assert expected.issubset(INDEX_NAME_MAP.keys())
+        assert set(SECTORAL_INDICES) == expected
+
+    def test_thematic_12_indices_present(self):
+        expected = {
+            "NIFTY INDIA CONSUMPTION", "NIFTY INDIA MANUFACTURING",
+            "NIFTY INFRASTRUCTURE", "NIFTY SERVICES SECTOR",
+            "NIFTY MNC", "NIFTY MEDIA", "NIFTY HEALTHCARE INDEX",
+            "NIFTY OIL & GAS", "NIFTY PRIVATE BANK",
+            "NIFTY CONSUMER DURABLES", "NIFTY CPSE",
+            "NIFTY INDIA DEFENCE",
+        }
+        assert expected.issubset(INDEX_NAME_MAP.keys())
+        assert set(THEMATIC_INDICES) == expected
+
+    def test_broad_indices_subset_matches(self):
+        assert set(BROAD_INDICES) == {
+            "NIFTY 50", "NIFTY 500", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250",
+        }
+
+    def test_supported_indices_is_union_of_groups(self):
+        assert set(SUPPORTED_INDICES) == (
+            set(BROAD_INDICES) | set(SECTORAL_INDICES) | set(THEMATIC_INDICES)
+        )
+
+    @pytest.mark.parametrize(
+        "display,trading",
+        [
+            # Sectoral abbreviations that differ from the display name
+            ("NIFTY FINANCIAL SERVICES", "NIFTY FIN SERVICE"),
+            # Thematic abbreviations
+            ("NIFTY INDIA CONSUMPTION", "NIFTY CONSUMPTION"),
+            ("NIFTY INDIA MANUFACTURING", "NIFTY INDIA MFG"),
+            ("NIFTY INFRASTRUCTURE", "NIFTY INFRA"),
+            ("NIFTY SERVICES SECTOR", "NIFTY SERV SECTOR"),
+            ("NIFTY HEALTHCARE INDEX", "NIFTY HEALTHCARE"),
+            ("NIFTY OIL & GAS", "NIFTY OIL AND GAS"),
+            ("NIFTY PRIVATE BANK", "NIFTY PVT BANK"),
+            ("NIFTY CONSUMER DURABLES", "NIFTY CONSR DURBL"),
+            ("NIFTY INDIA DEFENCE", "NIFTY IND DEFENCE"),
+        ],
+    )
+    def test_trading_name_abbreviations(self, display, trading):
+        assert INDEX_NAME_MAP[display] == trading
+
+
+@respx.mock
+def test_nifty_bank_uses_display_name_as_trading_name():
+    """NIFTY BANK is one of the cases where display == trading; the POST
+    body should carry 'NIFTY BANK' for both `name` and `indexName`."""
+    captured: dict[str, str] = {}
+
+    def _responder(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content.decode()
+        body = json.dumps({"d": json.dumps([
+            {"DATE": "10 Jan 2025", "pe": "12.50", "pb": "2.10", "divYield": "0.80"},
+        ])})
+        return httpx.Response(200, text=body)
+
+    respx.post(
+        "https://www.niftyindices.com/Backpage.aspx/getpepbHistoricaldataDBtoString",
+    ).mock(side_effect=_responder)
+
+    with IndexValuationClient() as client:
+        rows = client.fetch_range(
+            "NIFTY BANK", date(2025, 1, 10), date(2025, 1, 10),
+        )
+
+    assert len(rows) == 1
+    assert rows[0].index_name == "NIFTY BANK"
+    body = captured["body"]
+    assert "'name':'NIFTY BANK'" in body
+    assert "'indexName':'NIFTY BANK'" in body
+
+
+@respx.mock
+def test_financial_services_uses_fin_service_trading_name():
+    """NIFTY FINANCIAL SERVICES must POST with `name='NIFTY FIN SERVICE'`."""
+    captured: dict[str, str] = {}
+
+    def _responder(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content.decode()
+        return httpx.Response(200, text=json.dumps({"d": json.dumps([])}))
+
+    respx.post(
+        "https://www.niftyindices.com/Backpage.aspx/getpepbHistoricaldataDBtoString",
+    ).mock(side_effect=_responder)
+
+    with IndexValuationClient() as client:
+        client.fetch_range(
+            "NIFTY FINANCIAL SERVICES", date(2025, 1, 1), date(2025, 1, 5),
+        )
+
+    body = captured["body"]
+    assert "'name':'NIFTY FIN SERVICE'" in body
+    assert "'indexName':'NIFTY FINANCIAL SERVICES'" in body
+
+
+@respx.mock
+def test_oil_and_gas_normalises_ampersand_in_trading_name():
+    """NIFTY OIL & GAS posts the literal `NIFTY OIL AND GAS` slug —
+    niftyindices treats `&` and `AND` as distinct keys."""
+    captured: dict[str, str] = {}
+
+    def _responder(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content.decode()
+        return httpx.Response(200, text=json.dumps({"d": json.dumps([])}))
+
+    respx.post(
+        "https://www.niftyindices.com/Backpage.aspx/getpepbHistoricaldataDBtoString",
+    ).mock(side_effect=_responder)
+
+    with IndexValuationClient() as client:
+        client.fetch_range(
+            "NIFTY OIL & GAS", date(2025, 1, 1), date(2025, 1, 5),
+        )
+
+    body = captured["body"]
+    assert "'name':'NIFTY OIL AND GAS'" in body
+    assert "'indexName':'NIFTY OIL & GAS'" in body

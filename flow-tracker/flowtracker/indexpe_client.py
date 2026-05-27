@@ -46,12 +46,75 @@ PAGE_DAYS = 360  # niftyindices caps at 365; leave headroom for inclusive edges
 # `name` maps to Trading_Index_Name in IndexMapping.json — when the trading
 # name differs from the display name (e.g. SMLCAP vs SMALLCAP) the POST
 # returns an empty array unless the abbreviation is used.
+#
+# Trading-name slugs probed live against niftyindices.com on 2026-05-27
+# (each name returns >0 rows for a 10-day Jan 2025 window). When the
+# default display==trading name returns [], the trading name is hard-coded.
 INDEX_NAME_MAP: dict[str, str] = {
+    # Broad-market (covered since PR #148)
     "NIFTY 50": "NIFTY 50",
     "NIFTY 500": "NIFTY 500",
     "NIFTY MIDCAP 150": "NIFTY MIDCAP 150",
     "NIFTY SMALLCAP 250": "NIFTY SMLCAP 250",
+    # Sectoral (10) — all use display==trading except FINANCIAL SERVICES
+    "NIFTY BANK": "NIFTY BANK",
+    "NIFTY IT": "NIFTY IT",
+    "NIFTY PHARMA": "NIFTY PHARMA",
+    "NIFTY AUTO": "NIFTY AUTO",
+    "NIFTY FMCG": "NIFTY FMCG",
+    "NIFTY METAL": "NIFTY METAL",
+    "NIFTY ENERGY": "NIFTY ENERGY",
+    "NIFTY REALTY": "NIFTY REALTY",
+    "NIFTY PSU BANK": "NIFTY PSU BANK",
+    "NIFTY FINANCIAL SERVICES": "NIFTY FIN SERVICE",
+    # Thematic (12) — many use trading-name abbreviations
+    "NIFTY INDIA CONSUMPTION": "NIFTY CONSUMPTION",
+    "NIFTY INDIA MANUFACTURING": "NIFTY INDIA MFG",
+    "NIFTY INFRASTRUCTURE": "NIFTY INFRA",
+    "NIFTY SERVICES SECTOR": "NIFTY SERV SECTOR",
+    "NIFTY MNC": "NIFTY MNC",
+    "NIFTY MEDIA": "NIFTY MEDIA",
+    "NIFTY HEALTHCARE INDEX": "NIFTY HEALTHCARE",
+    "NIFTY OIL & GAS": "NIFTY OIL AND GAS",
+    "NIFTY PRIVATE BANK": "NIFTY PVT BANK",
+    "NIFTY CONSUMER DURABLES": "NIFTY CONSR DURBL",
+    "NIFTY CPSE": "NIFTY CPSE",
+    "NIFTY INDIA DEFENCE": "NIFTY IND DEFENCE",
 }
+
+# Subsets for backfill-by-group ergonomics.
+BROAD_INDICES: list[str] = [
+    "NIFTY 50",
+    "NIFTY 500",
+    "NIFTY MIDCAP 150",
+    "NIFTY SMALLCAP 250",
+]
+SECTORAL_INDICES: list[str] = [
+    "NIFTY BANK",
+    "NIFTY IT",
+    "NIFTY PHARMA",
+    "NIFTY AUTO",
+    "NIFTY FMCG",
+    "NIFTY METAL",
+    "NIFTY ENERGY",
+    "NIFTY REALTY",
+    "NIFTY PSU BANK",
+    "NIFTY FINANCIAL SERVICES",
+]
+THEMATIC_INDICES: list[str] = [
+    "NIFTY INDIA CONSUMPTION",
+    "NIFTY INDIA MANUFACTURING",
+    "NIFTY INFRASTRUCTURE",
+    "NIFTY SERVICES SECTOR",
+    "NIFTY MNC",
+    "NIFTY MEDIA",
+    "NIFTY HEALTHCARE INDEX",
+    "NIFTY OIL & GAS",
+    "NIFTY PRIVATE BANK",
+    "NIFTY CONSUMER DURABLES",
+    "NIFTY CPSE",
+    "NIFTY INDIA DEFENCE",
+]
 
 SUPPORTED_INDICES: list[str] = list(INDEX_NAME_MAP.keys())
 

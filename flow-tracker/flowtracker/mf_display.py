@@ -8,6 +8,7 @@ from rich.table import Table
 from rich.text import Text
 
 from flowtracker.mf_models import AMFIReportRow, MFAUMSummary, MFDailyFlow, MFMonthlyFlow
+from flowtracker.mf_nav_models import MFSchemeNav
 from flowtracker.utils import fmt_crores
 
 console = Console()
@@ -201,6 +202,106 @@ def display_mf_daily_trend(daily_data: list[dict]) -> None:
             row["date"],
             _colored_value(row["equity_net"]),
             _colored_value(row["debt_net"]),
+        )
+
+    console.print(table)
+
+
+# -- Daily scheme NAV display (mfapi.in) --
+
+
+def display_mf_nav_latest(snapshot: MFSchemeNav | None) -> None:
+    """Single-row NAV snapshot for a scheme."""
+    if snapshot is None:
+        console.print(
+            "[yellow]No NAV data for this scheme. "
+            "Run 'flowtrack mf nav backfill --scheme <code>' first.[/]"
+        )
+        return
+    body = (
+        f"NAV: [bold]Rs. {snapshot.nav:.4f}[/]   "
+        f"as of [bold]{snapshot.date}[/]"
+    )
+    console.print(Panel(
+        body,
+        title=f"{snapshot.scheme_name} ({snapshot.scheme_code})",
+        border_style="cyan",
+    ))
+
+
+def display_mf_nav_trend(snapshots: list[MFSchemeNav], days: int) -> None:
+    """Tabular NAV trend over the last N days."""
+    if not snapshots:
+        console.print("[yellow]No NAV data for the requested scheme/range.[/]")
+        return
+
+    table = Table(
+        title=f"{snapshots[-1].scheme_name} ({snapshots[-1].scheme_code}) — last {days} days",
+        show_header=True,
+        header_style="bold cyan",
+    )
+    table.add_column("Date", width=12)
+    table.add_column("NAV (Rs.)", justify="right", width=14)
+    table.add_column("Daily %", justify="right", width=10)
+
+    prev: float | None = None
+    rows = list(reversed(snapshots))  # newest first
+    # For display purposes, daily % vs the next-older row in reversed order
+    for i, s in enumerate(rows):
+        if i + 1 < len(rows):
+            older = rows[i + 1].nav
+            pct = (s.nav - older) / older * 100.0 if older else None
+        else:
+            pct = None
+        pct_str = f"{pct:+.2f}%" if pct is not None else "—"
+        color = "green" if (pct or 0) >= 0 else "red"
+        table.add_row(s.date, f"{s.nav:.4f}", f"[{color}]{pct_str}[/]")
+
+    console.print(table)
+
+
+def display_mf_nav_backfill_result(
+    per_scheme: list[tuple[int, str, int]],
+    total: int,
+) -> None:
+    """Summary panel after a backfill across many schemes."""
+    body_lines = [f"Total rows upserted: [bold]{total}[/]", ""]
+    body_lines.append("Per-scheme breakdown:")
+    for code, label, count in per_scheme:
+        color = "green" if count > 0 else "red"
+        body_lines.append(f"  [{color}]{count:>6,d}[/] rows — {label} ({code})")
+    console.print(Panel(
+        "\n".join(body_lines),
+        title="MF NAV Backfill Complete",
+        border_style="green",
+    ))
+
+
+def display_mf_nav_coverage(
+    universe: list[tuple[int, str, str, str, int]],
+) -> None:
+    """Per-scheme coverage table: first/last date + row count."""
+    if not universe:
+        console.print(
+            "[yellow]No NAV data stored. "
+            "Run 'flowtrack mf nav backfill' first.[/]"
+        )
+        return
+
+    table = Table(
+        title=f"MF NAV Coverage ({len(universe)} schemes)",
+        show_header=True,
+        header_style="bold cyan",
+    )
+    table.add_column("Code", justify="right", width=8)
+    table.add_column("Scheme", width=44)
+    table.add_column("First", width=12)
+    table.add_column("Last", width=12)
+    table.add_column("Rows", justify="right", width=8)
+
+    for code, name, first_date, last_date, n in universe:
+        table.add_row(
+            str(code), name[:44], first_date or "—", last_date or "—", f"{n:,}",
         )
 
     console.print(table)
