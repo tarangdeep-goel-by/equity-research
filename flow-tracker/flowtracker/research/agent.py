@@ -1820,7 +1820,7 @@ async def run_synthesis_agent(
     """Run the synthesis agent on existing briefings."""
     from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2 as SYNTHESIS_AGENT_PROMPT
     from flowtracker.research.briefing import load_all_briefings
-    from flowtracker.research.tools import get_composite_score, get_fair_value
+    from flowtracker.research.tools import get_composite_score, get_fair_value, get_concall_insights
 
     symbol = symbol.upper()
     briefings = load_all_briefings(symbol)
@@ -1863,7 +1863,7 @@ async def run_synthesis_agent(
     signals_analysis = _analyze_briefing_signals(briefings)
 
     # Synthesis tools: just composite_score and fair_value
-    synthesis_tools = [get_composite_score, get_fair_value]
+    synthesis_tools = [get_composite_score, get_fair_value, get_concall_insights]
 
     model = model or DEFAULT_MODELS.get("synthesis", "claude-opus-4-6")
 
