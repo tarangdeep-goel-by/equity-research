@@ -13,6 +13,8 @@ tables. Concalls stay on pdfplumber (see doc_extractor.py notes).
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import json
 import logging
 import re
@@ -35,6 +37,13 @@ logger = logging.getLogger(__name__)
 
 _VAULT_BASE = Path.home() / "vault" / "stocks"
 MAX_CONCURRENT_DECK_EXTRACTIONS = 3
+# Decks are read as page images (charts/printed numbers Docling drops as
+# <!-- image -->). Default to a single VLM call over the whole deck so the model
+# prioritizes globally and names segments consistently. Only decks longer than
+# SINGLE_CALL_MAX_PAGES fall back to chunked extraction + merge (DECK_CHUNK_SIZE
+# pages per call) to bound attention dilution / JSON-output overflow.
+SINGLE_CALL_MAX_PAGES = 50
+DECK_CHUNK_SIZE = 8
 
 # --- Deck classifier thresholds (mirrors filing_client._looks_like_real_deck) ---
 #
@@ -250,6 +259,10 @@ _DECK_EXTRACTION_SCHEMA = {
                         "additionalProperties": True,
                     },
                 },
+                "key_metrics": {
+                    "type": "object",
+                    "additionalProperties": True,
+                },
                 "strategic_priorities": {"type": "array", "items": {"type": "string"}},
                 "outlook_and_guidance": {"type": "string"},
                 "new_initiatives": {"type": "array", "items": {"type": "string"}},
@@ -275,7 +288,7 @@ _DECK_EXTRACTION_SCHEMA = {
 
 DECK_EXTRACTION_PROMPT = """**OUTPUT FORMAT: Return ONLY a single valid JSON object. No prose, no markdown fences, no explanation before or after. Start with `{` and end with `}`.**
 
-You are a buy-side analyst reading an Indian company's investor-presentation deck. Extract structured insights into the JSON schema below. The deck has been converted to markdown by Docling — slide titles are H2/H3 headings, tables are rendered as markdown tables, and image placeholders (<!-- image -->) indicate charts whose titles and surrounding context you should interpret.
+You are a buy-side analyst reading an Indian company's investor-presentation deck. You are shown the deck slides as page images. Extract structured insights into the JSON schema below. Read every chart, axis label, table, and printed number directly off the slides — including values printed on bars, lines, and pie segments. Transcribe printed values exactly; only estimate a value from bar/line geometry when no number is printed on the slide, and keep such estimates directional.
 
 Focus on signal — headline numbers, segmental performance, management framing, forward guidance, and strategic priorities. Skip boilerplate (SEBI disclaimers, safe-harbor notices, regulatory cover letters, DIN numbers, e-voting instructions).
 
@@ -296,6 +309,9 @@ Required structure:
       "key_drivers": "<what management attributed growth/margins to>",
       "outlook": "<any forward statement specific to this segment>"
     }
+  },
+  "key_metrics": {
+    "<metric_name_snake_case>": "<value with unit — for ANY quantitative KPI that is NOT a revenue segment: net_debt_cr, capex_fy26_cr, order_book_cr, nim_pct, gnpa_pct, casa_pct, gmv_cr, pre_sales_cr, dividend_per_share, utilization_pct, etc. Capture the period in the key when it matters.>"
   },
   "strategic_priorities": [
     "<management's stated priorities — 'premiumization', 'store network rationalization', 'digital transformation of trade channel'. Concrete, not generic.>"
@@ -319,6 +335,9 @@ Required structure:
 ```
 
 Rules:
+- **Never drop a printed number.** Every figure visible on a slide must land somewhere: a structured field if one fits, else `key_metrics` (with a descriptive snake_case key), else verbatim inside the relevant `charts_described.what_it_shows`. Maximize data capture — when in doubt, capture it in `key_metrics`.
+- `segment_performance` is ONLY for revenue/business segments. Pipelines, R&D, balance-sheet items, capex, order book, BFSI KPIs (NIM/GNPA/CASA), and any other non-segment metric go in `key_metrics`, not as fake segments.
+- `charts_described` must transcribe the chart's actual numbers (axis values, data labels, per-period values) in `what_it_shows`, not just describe the shape.
 - All monetary values in Indian Rupees crores (₹ Cr) unless the deck explicitly uses another unit. Preserve the unit if non-standard (e.g. "USD Mn").
 - For growth percentages, use the sign (positive for growth, negative for decline).
 - If the deck is actually a short corporate notice/letter (not a real presentation — e.g. <5 content slides), set `extraction_status: "not_a_deck"` at the top level and leave other fields empty/null.
@@ -330,10 +349,29 @@ Rules:
 # --- Claude call (mirrors concall_extractor pattern) ---
 
 
+def _build_image_message(text: str, images: list[str]) -> dict:
+    """Streaming-mode user message: a text block followed by one base64-PNG
+    image block per page. SDK 0.2.87 streaming mode forwards these blocks to
+    the model (verified) — there is no first-class image prompt input."""
+    content: list[dict] = [{"type": "text", "text": text}]
+    for img in images:
+        content.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/png", "data": img},
+        })
+    return {
+        "type": "user",
+        "session_id": "",
+        "parent_tool_use_id": None,
+        "message": {"role": "user", "content": content},
+    }
+
+
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
     max_budget: float = 0.40, max_turns: int = 3,
     output_format: dict | None = None,
+    images: list[str] | None = None,
 ) -> str:
     # max_turns=3 — see annual_report_extractor for rationale (large JSON
     # output can overflow a single turn → error_max_turns → exit code 1).
@@ -362,10 +400,18 @@ async def _call_claude(
     )
     if output_format:
         options.output_format = output_format
+
+    if images:
+        async def _prompt_stream():
+            yield _build_image_message(user_prompt, images)
+        prompt_arg: object = _prompt_stream()
+    else:
+        prompt_arg = user_prompt
+
     text_blocks: list[str] = []
     result_text = ""
     try:
-        async for msg in query(prompt=user_prompt, options=options):
+        async for msg in query(prompt=prompt_arg, options=options):
             if isinstance(msg, RateLimitEvent):
                 logger.warning("[deck] rate limited: %s / %s",
                                msg.rate_limit_info.status, msg.rate_limit_info.rate_limit_type)
@@ -439,6 +485,81 @@ def _quarter_label_from_path(pdf_path: Path) -> str:
     return pdf_path.parent.name  # "FY26-Q3"
 
 
+def _render_deck_pages(pdf_path: Path, scale: float = 2.0, max_pages: int = 60) -> list[str]:
+    """Render each PDF page to a base64-encoded PNG for VLM ingestion.
+
+    Uses pypdfium2 (already a dependency — see _classify_deck_pdf). Capped at
+    ``max_pages`` so a pathological deck can't blow up the request payload.
+    """
+    import pypdfium2 as pdfium  # type: ignore[import-untyped]
+
+    doc = pdfium.PdfDocument(str(pdf_path))
+    out: list[str] = []
+    try:
+        for i in range(min(len(doc), max_pages)):
+            pil = doc[i].render(scale=scale).to_pil()
+            buf = io.BytesIO()
+            pil.save(buf, format="PNG")
+            out.append(base64.standard_b64encode(buf.getvalue()).decode())
+    finally:
+        doc.close()
+    return out
+
+
+_DECK_LIST_FIELDS = ("highlights", "strategic_priorities", "new_initiatives", "slide_topics")
+_EMPTY_VALUES = (None, "", [], {})
+
+
+def _merge_deck_chunks(chunks: list[dict]) -> dict:
+    """Union per-chunk partial extractions into one deck dict.
+
+    Lists are concatenated order-preserving with dedupe; ``charts_described``
+    dedupes by lowercased ``slide_title``; ``segment_performance`` merges
+    field-wise (first non-empty value wins); ``outlook_and_guidance`` joins
+    unique non-empty parts. Per-chunk ``extraction_status`` is intentionally
+    dropped — the caller owns the final status.
+    """
+    merged: dict = {f: [] for f in _DECK_LIST_FIELDS}
+    merged["segment_performance"] = {}
+    merged["key_metrics"] = {}
+    merged["charts_described"] = []
+    guidance_parts: list[str] = []
+    seen_charts: set[str] = set()
+
+    for c in chunks:
+        if not isinstance(c, dict):
+            continue
+        for f in _DECK_LIST_FIELDS:
+            for item in (c.get(f) or []):
+                if item and item not in merged[f]:
+                    merged[f].append(item)
+        for seg, fields in (c.get("segment_performance") or {}).items():
+            if not isinstance(fields, dict):
+                continue
+            tgt = merged["segment_performance"].setdefault(seg, {})
+            for fk, fv in fields.items():
+                if fv not in _EMPTY_VALUES and tgt.get(fk) in _EMPTY_VALUES:
+                    tgt[fk] = fv
+        for mk, mv in (c.get("key_metrics") or {}).items():
+            if mv not in _EMPTY_VALUES and merged["key_metrics"].get(mk) in _EMPTY_VALUES:
+                merged["key_metrics"][mk] = mv
+        for ch in (c.get("charts_described") or []):
+            if not isinstance(ch, dict):
+                continue
+            key = (ch.get("slide_title") or "").strip().lower()
+            if key and key in seen_charts:
+                continue
+            if key:
+                seen_charts.add(key)
+            merged["charts_described"].append(ch)
+        g = (c.get("outlook_and_guidance") or "").strip()
+        if g and g not in guidance_parts:
+            guidance_parts.append(g)
+
+    merged["outlook_and_guidance"] = " ".join(guidance_parts)
+    return merged
+
+
 async def _extract_single_deck(
     pdf_path: Path,
     symbol: str,
@@ -489,21 +610,12 @@ async def _extract_single_deck(
     if classification.confidence == "low":
         data_quality_note = (
             f"Low-confidence classification: {classification.reason}. "
-            "Docling-extracted markdown may be sparse (image-heavy deck); "
-            "extracted fields may under-represent slide content."
+            "Image-heavy deck — extracted fields may under-represent slide content."
         )
         logger.info(
             "[deck] %s %s: low-confidence accept — %s",
             symbol, quarter_label, classification.reason,
         )
-
-    user_prompt = (
-        f"Company: {symbol}\nQuarter: {quarter_label}\n"
-        f"Source: investor_deck.pdf\n\n"
-        f"## Deck markdown (Docling-extracted, {len(extraction.headings)} headings, "
-        f"{len(extraction.markdown)} chars)\n\n"
-        f"{extraction.markdown}"
-    )
 
     sector_hint = build_extraction_hint(industry)
     system_prompt = (
@@ -511,31 +623,71 @@ async def _extract_single_deck(
         if sector_hint
         else DECK_EXTRACTION_PROMPT
     )
-    response = await _call_claude(
-        system_prompt, user_prompt, model,
-        max_budget=0.40, max_turns=1,
-        output_format=_DECK_EXTRACTION_SCHEMA,
-    )
 
-    try:
-        data = _extract_json(response)
-        data.setdefault("fy_quarter", quarter_label)
-        data["extraction_status"] = data.get("extraction_status", "complete")
-        data["_elapsed_s"] = round(_time.time() - t0, 1)
-        data["_docling_cached"] = extraction.from_cache
-        data["_docling_degraded"] = extraction.degraded
-        data["_classifier_confidence"] = classification.confidence
-        if data_quality_note:
-            data["data_quality_note"] = data_quality_note
-        return data
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.warning("[deck] %s %s: JSON parse failed: %s", symbol, quarter_label, e)
+    # Images-only extraction: render every slide and let the VLM read the pixels
+    # directly (charts/printed numbers Docling drops as <!-- image -->). One call
+    # over the whole deck by default so the model prioritizes globally and names
+    # segments/metrics consistently; only oversized decks fall back to chunks.
+    images = _render_deck_pages(pdf_path)
+    total = len(images)
+    if total <= SINGLE_CALL_MAX_PAGES:
+        batches = [(0, images)]
+    else:
+        batches = [(i, images[i:i + DECK_CHUNK_SIZE]) for i in range(0, total, DECK_CHUNK_SIZE)]
+
+    partials: list[dict] = []
+    for offset, batch in batches:
+        start, end = offset + 1, offset + len(batch)
+        scope = (
+            f"all {total} slides of this deck"
+            if len(batches) == 1
+            else f"slides {start}-{end} of {total} from this deck"
+        )
+        user_prompt = (
+            f"Company: {symbol}\nQuarter: {quarter_label}\nSource: investor_deck.pdf\n\n"
+            f"You are shown {scope} as page images. Extract the JSON for the "
+            f"content visible in these slides."
+        )
+        response = await _call_claude(
+            system_prompt, user_prompt, model,
+            max_budget=0.40, max_turns=3,
+            output_format=_DECK_EXTRACTION_SCHEMA,
+            images=batch,
+        )
+        try:
+            partials.append(_extract_json(response))
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning("[deck] %s %s batch %d/%d: JSON parse failed: %s",
+                           symbol, quarter_label, offset + 1, len(batches), e)
+
+    if not partials:
+        logger.warning("[deck] %s %s: all %d batch(es) failed to parse",
+                        symbol, quarter_label, len(batches))
         return {
             "fy_quarter": quarter_label,
             "extraction_status": "failed",
-            "extraction_error": f"JSON parse: {e}",
-            "raw_response": response[:2000],
+            "extraction_error": "all batches failed to parse",
+            "_extraction_mode": "images",
+            "_pages_rendered": total,
+            "_chunks": len(batches),
         }
+
+    data = _merge_deck_chunks(partials)
+    data["fy_quarter"] = quarter_label
+    period = next((p.get("period_ended") for p in partials if p.get("period_ended")), None)
+    if period:
+        data["period_ended"] = period
+    data["extraction_status"] = "complete"
+    data["_elapsed_s"] = round(_time.time() - t0, 1)
+    data["_extraction_mode"] = "images"
+    data["_pages_rendered"] = total
+    data["_chunks"] = len(batches)
+    data["_docling_cached"] = extraction.from_cache
+    data["_docling_degraded"] = extraction.degraded
+    data["_classifier_confidence"] = classification.confidence
+    if data_quality_note:
+        data["data_quality_note"] = data_quality_note
+    return data
 
 
 # --- Main pipeline ---

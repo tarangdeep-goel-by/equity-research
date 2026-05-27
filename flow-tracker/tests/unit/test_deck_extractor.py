@@ -240,6 +240,189 @@ class TestClassifyDeckPdf:
         assert c2.is_deck is False
 
 
+class TestBuildImageMessage:
+    """The streaming-mode user message must carry an Anthropic image block per page."""
+
+    def test_text_then_image_blocks(self):
+        from flowtracker.research.deck_extractor import _build_image_message
+
+        msg = _build_image_message("describe these slides", ["b64A", "b64B"])
+        assert msg["type"] == "user"
+        content = msg["message"]["content"]
+        assert content[0] == {"type": "text", "text": "describe these slides"}
+        imgs = [c for c in content if c.get("type") == "image"]
+        assert len(imgs) == 2
+        assert imgs[0]["source"] == {
+            "type": "base64", "media_type": "image/png", "data": "b64A",
+        }
+        assert imgs[1]["source"]["data"] == "b64B"
+
+
+class TestMergeDeckChunks:
+    """Per-chunk partial extractions union into one deck JSON."""
+
+    def test_unions_dedupes_and_field_merges(self):
+        from flowtracker.research.deck_extractor import _merge_deck_chunks
+
+        chunks = [
+            {
+                "highlights": ["rev +10%", "margin +180bps"],
+                "strategic_priorities": ["premiumization"],
+                "segment_performance": {"foods": {"revenue_cr": 100, "margin_pct": None}},
+                "key_metrics": {"net_debt_cr": 1200, "nim_pct": None},
+                "charts_described": [{"slide_title": "R&D Trend", "what_it_shows": "5yr"}],
+                "new_initiatives": ["new plant"],
+                "slide_topics": ["highlights", "segmental"],
+                "outlook_and_guidance": "Targeting double-digit growth.",
+                "extraction_status": "not_a_deck",  # must be ignored
+            },
+            {
+                "highlights": ["rev +10%", "added 120 stores"],  # dup + new
+                "strategic_priorities": ["premiumization", "digital"],
+                "segment_performance": {
+                    "foods": {"revenue_cr": None, "margin_pct": 22.5},
+                    "beverages": {"revenue_cr": 50},
+                },
+                "key_metrics": {"net_debt_cr": 999, "capex_cr": 800, "nim_pct": 3.5},
+                "charts_described": [
+                    {"slide_title": "r&d trend"},  # dup by lowercased title
+                    {"slide_title": "EBITDA bridge"},
+                ],
+                "new_initiatives": ["new plant"],  # dup
+                "slide_topics": ["guidance"],
+                "outlook_and_guidance": "Capex of 500cr planned.",
+            },
+        ]
+        m = _merge_deck_chunks(chunks)
+        assert m["highlights"] == ["rev +10%", "margin +180bps", "added 120 stores"]
+        assert m["strategic_priorities"] == ["premiumization", "digital"]
+        assert m["new_initiatives"] == ["new plant"]
+        assert m["slide_topics"] == ["highlights", "segmental", "guidance"]
+        # field-wise: foods revenue from chunk1, margin from chunk2
+        assert m["segment_performance"]["foods"]["revenue_cr"] == 100
+        assert m["segment_performance"]["foods"]["margin_pct"] == 22.5
+        assert m["segment_performance"]["beverages"]["revenue_cr"] == 50
+        # key_metrics: first non-empty wins per key; chunk2 fills the chunk1 null
+        assert m["key_metrics"]["net_debt_cr"] == 1200
+        assert m["key_metrics"]["capex_cr"] == 800
+        assert m["key_metrics"]["nim_pct"] == 3.5
+        # charts deduped by lowercased title, order preserved
+        assert [c["slide_title"] for c in m["charts_described"]] == ["R&D Trend", "EBITDA bridge"]
+        assert "double-digit growth" in m["outlook_and_guidance"]
+        assert "Capex of 500cr" in m["outlook_and_guidance"]
+        # per-chunk status never leaks into the merged dict
+        assert "extraction_status" not in m
+
+
+class TestExtractSingleDeckImages:
+    """_extract_single_deck renders pages and extracts images-only.
+
+    Default is a single VLM call over the whole deck; oversized decks fall back
+    to chunked extraction + merge.
+    """
+
+    @staticmethod
+    def _wire(deck_mod, monkeypatch, pages: int):
+        from types import SimpleNamespace
+
+        monkeypatch.setattr(
+            deck_mod, "extract_to_markdown",
+            lambda p, c: SimpleNamespace(markdown="md", headings=["h"], from_cache=True, degraded=False),
+        )
+        monkeypatch.setattr(
+            deck_mod, "_classify_deck_pdf",
+            lambda *a, **k: deck_mod._DeckClassification(True, "high", "ok", pages, 100, False),
+        )
+        monkeypatch.setattr(deck_mod, "_render_deck_pages", lambda p, **k: [f"img{i}" for i in range(pages)])
+        calls: list = []
+
+        async def fake_call(system_prompt, user_prompt, model, max_budget=0.40,
+                            max_turns=3, output_format=None, images=None):
+            calls.append(images)
+            idx = len(calls)
+            return json.dumps({
+                "highlights": [f"h{idx}"],
+                "charts_described": [{"slide_title": f"c{idx}"}],
+                "key_metrics": {f"m{idx}_cr": idx * 100},
+                "segment_performance": {},
+                "extraction_status": "complete",
+            })
+
+        monkeypatch.setattr(deck_mod, "_call_claude", fake_call)
+        return calls
+
+    def test_single_call_by_default(self, tmp_path, monkeypatch):
+        import flowtracker.research.deck_extractor as deck_mod
+
+        qdir = tmp_path / "FY25-Q1"; qdir.mkdir()
+        pdf = qdir / "investor_deck.pdf"; pdf.write_bytes(b"%PDF-stub")
+        calls = self._wire(deck_mod, monkeypatch, pages=20)
+
+        result = asyncio.run(deck_mod._extract_single_deck(pdf, "ZYDUSLIFE", "claude-sonnet-4-6"))
+
+        # 20 <= SINGLE_CALL_MAX_PAGES -> one call with ALL 20 images
+        assert len(calls) == 1
+        assert calls[0] == [f"img{i}" for i in range(20)]
+        assert result["_extraction_mode"] == "images"
+        assert result["_pages_rendered"] == 20
+        assert result["_chunks"] == 1
+        assert result["extraction_status"] == "complete"
+        assert result["fy_quarter"] == "FY25-Q1"
+        assert result["highlights"] == ["h1"]
+        assert result["key_metrics"] == {"m1_cr": 100}
+
+    def test_chunked_fallback_for_large_deck(self, tmp_path, monkeypatch):
+        import flowtracker.research.deck_extractor as deck_mod
+
+        qdir = tmp_path / "FY25-Q1"; qdir.mkdir()
+        pdf = qdir / "investor_deck.pdf"; pdf.write_bytes(b"%PDF-stub")
+        calls = self._wire(deck_mod, monkeypatch, pages=20)
+        # Force the chunked path: cap single-call at 8, chunk size 8.
+        monkeypatch.setattr(deck_mod, "SINGLE_CALL_MAX_PAGES", 8)
+        monkeypatch.setattr(deck_mod, "DECK_CHUNK_SIZE", 8)
+
+        result = asyncio.run(deck_mod._extract_single_deck(pdf, "ZYDUSLIFE", "claude-sonnet-4-6"))
+
+        # 20 pages / chunk 8 -> 3 chunks, each handed its slice
+        assert len(calls) == 3
+        assert calls[0] == [f"img{i}" for i in range(8)]
+        assert calls[2] == [f"img{i}" for i in range(16, 20)]
+        assert result["_chunks"] == 3
+        assert result["highlights"] == ["h1", "h2", "h3"]
+        assert {c["slide_title"] for c in result["charts_described"]} == {"c1", "c2", "c3"}
+        assert result["key_metrics"] == {"m1_cr": 100, "m2_cr": 200, "m3_cr": 300}
+
+    def test_rejected_deck_skips_render_and_claude(self, tmp_path, monkeypatch):
+        import flowtracker.research.deck_extractor as deck_mod
+        from types import SimpleNamespace
+
+        qdir = tmp_path / "FY25-Q1"
+        qdir.mkdir()
+        pdf = qdir / "investor_deck.pdf"
+        pdf.write_bytes(b"%PDF-stub")
+
+        monkeypatch.setattr(
+            deck_mod, "extract_to_markdown",
+            lambda p, c: SimpleNamespace(markdown="", headings=[], from_cache=False, degraded=False),
+        )
+        monkeypatch.setattr(
+            deck_mod, "_classify_deck_pdf",
+            lambda *a, **k: deck_mod._DeckClassification(False, "high", "only 1 page", 1, 0, False),
+        )
+
+        def boom_render(*a, **k):
+            raise AssertionError("render called for rejected deck")
+
+        async def boom_call(*a, **k):
+            raise AssertionError("claude called for rejected deck")
+
+        monkeypatch.setattr(deck_mod, "_render_deck_pages", boom_render)
+        monkeypatch.setattr(deck_mod, "_call_claude", boom_call)
+
+        result = asyncio.run(deck_mod._extract_single_deck(pdf, "ZYDUSLIFE", "claude-sonnet-4-6"))
+        assert result["extraction_status"] == "not_a_deck"
+
+
 class TestEnsureDeckDataCacheSkip:
     def test_ensure_deck_data_cached_returns_zero_new(self, vault_home, monkeypatch):
         import flowtracker.research.deck_extractor as deck_mod
