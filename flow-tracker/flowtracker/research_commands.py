@@ -20,25 +20,40 @@ app = typer.Typer(
 console = Console()
 
 
-async def _run_document_pipeline(symbol: str, industry: str | None, console_: Console) -> dict:
-    """Run concall + AR + deck extractors concurrently.
+async def _run_document_pipeline(
+    symbol: str, industry: str | None, console_: Console, include_ar: bool = True
+) -> dict:
+    """Run concall + deck (+ AR when ``include_ar``) extractors concurrently.
 
-    All three read independent PDFs and write to independent vault paths, so
-    they're safe to gather. Each has its own semaphore internally. Returns a
-    dict with per-extractor results or exceptions (return_exceptions=True).
+    All read independent PDFs and write to independent vault paths, so they're
+    safe to gather. Each has its own semaphore internally. Returns a dict with
+    per-extractor results or exceptions (return_exceptions=True).
+
+    ``include_ar=False`` skips the annual-report extraction (concall + deck
+    only). AR is annual, expensive (≈370pp Docling), and unchanged by recent
+    work, so callers that just need fresh quarterly docs (e.g. the eval) opt out;
+    any already-cached AR stays readable via get_annual_report.
     """
-    from flowtracker.research.annual_report_extractor import ensure_annual_report_data
     from flowtracker.research.concall_extractor import ensure_concall_data
     from flowtracker.research.deck_extractor import ensure_deck_data
 
-    concall_res, ar_res, deck_res = await asyncio.gather(
-        ensure_concall_data(symbol, quarters=4, industry=industry),
-        ensure_annual_report_data(
-            symbol, years=2, model="claude-sonnet-4-6", full=False, industry=industry
-        ),
-        ensure_deck_data(symbol, quarters=4, model="claude-sonnet-4-6", industry=industry),
-        return_exceptions=True,
-    )
+    if include_ar:
+        from flowtracker.research.annual_report_extractor import ensure_annual_report_data
+        concall_res, ar_res, deck_res = await asyncio.gather(
+            ensure_concall_data(symbol, quarters=4, industry=industry),
+            ensure_annual_report_data(
+                symbol, years=2, model="claude-sonnet-4-6", full=False, industry=industry
+            ),
+            ensure_deck_data(symbol, quarters=4, model="claude-sonnet-4-6", industry=industry),
+            return_exceptions=True,
+        )
+    else:
+        ar_res = None
+        concall_res, deck_res = await asyncio.gather(
+            ensure_concall_data(symbol, quarters=4, industry=industry),
+            ensure_deck_data(symbol, quarters=4, model="claude-sonnet-4-6", industry=industry),
+            return_exceptions=True,
+        )
 
     # Per-extractor logging — interleaves naturally since gather finished.
     if isinstance(concall_res, Exception):
@@ -54,7 +69,9 @@ async def _run_document_pipeline(symbol: str, industry: str | None, console_: Co
     else:
         console_.print(f"  [dim]No concall PDFs for {symbol}. Agents proceed without concall.[/]")
 
-    if isinstance(ar_res, Exception):
+    if ar_res is None:
+        console_.print("  [dim]AR extraction skipped (concall + deck only).[/]")
+    elif isinstance(ar_res, Exception):
         console_.print(f"  [yellow]⚠[/] AR extraction: {ar_res}")
     elif ar_res:
         _ar_new = ar_res.get("_new_years_extracted", 0)
@@ -923,6 +940,7 @@ def run_agent(
     agents: Annotated[str, typer.Argument(help="Agents to run: business,risk,synthesis (comma-separated) or 'all'")],
     symbol: Annotated[str, typer.Option("--symbol", "-s", help="Stock symbol (e.g. INDIAMART)")],
     skip_fetch: Annotated[bool, typer.Option("--skip-fetch", help="Skip data refresh")] = False,
+    skip_ar: Annotated[bool, typer.Option("--skip-ar", help="Skip annual-report extraction in the doc pipeline (concall + deck only)")] = False,
     verify: Annotated[bool, typer.Option("--verify", help="Run verification after agents")] = False,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Override model for agent")] = None,
     assemble: Annotated[bool, typer.Option("--assemble", help="Assemble final report from all existing briefings after running")] = False,
@@ -1000,9 +1018,10 @@ def run_agent(
         p0.duration_seconds = _time.monotonic() - p0_start
         trace.phases.append(p0)
 
-    # Document pipeline: concall + AR + deck extraction in parallel.
+    # Document pipeline: concall + deck (+ AR unless --skip-ar) extraction in parallel.
     if specialist_agents and not skip_fetch:
-        console.print(f"\n[bold]Document Pipeline (Concalls + AR + Decks) for {symbol}...[/]")
+        _docs_label = "Concalls + Decks" if skip_ar else "Concalls + AR + Decks"
+        console.print(f"\n[bold]Document Pipeline ({_docs_label}) for {symbol}...[/]")
         from flowtracker.research.data_api import ResearchDataAPI
         _industry = None
         try:
@@ -1014,16 +1033,17 @@ def run_agent(
             pass
 
         # AR PDF download (sync; writes PDFs that ensure_annual_report_data reads).
-        try:
-            from flowtracker.research.ar_downloader import ensure_annual_reports
-            n_downloaded = ensure_annual_reports(symbol, max_years=3)
-            if n_downloaded:
-                console.print(f"  [green]✓[/] AR PDFs: {n_downloaded} downloaded")
-        except Exception as e:
-            console.print(f"  [yellow]⚠[/] AR download: {e}")
+        if not skip_ar:
+            try:
+                from flowtracker.research.ar_downloader import ensure_annual_reports
+                n_downloaded = ensure_annual_reports(symbol, max_years=3)
+                if n_downloaded:
+                    console.print(f"  [green]✓[/] AR PDFs: {n_downloaded} downloaded")
+            except Exception as e:
+                console.print(f"  [yellow]⚠[/] AR download: {e}")
 
         try:
-            asyncio.run(_run_document_pipeline(symbol, _industry, console))
+            asyncio.run(_run_document_pipeline(symbol, _industry, console, include_ar=not skip_ar))
         except Exception as e:
             console.print(f"  [yellow]⚠[/] Document pipeline: {e}")
 
