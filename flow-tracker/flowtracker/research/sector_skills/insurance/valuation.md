@@ -20,6 +20,9 @@ Typical range 15-35× at standard growth. Values above 45× imply the market is 
 
 Pull the 5Y P/EV historical band via `get_chart_data` or the valuation helper; normalize for the regulatory regime break (pre vs post-2023 EoM harmonisation) — do not smooth averages across the regime shift.
 
+### Decompose the EV Walk — Don't Stop at Operating ROEV
+When the insurer discloses its embedded-value movement (the "EV walk": opening EV → expected return / unwind + VNB added + operating variances + economic variances → closing EV), report the decomposition, not just headline Operating ROEV. The split tells you whether EV growth is mechanical unwind of the in-force book vs new-business value (VNB) creation — a franchise compounding on VNB deserves a higher P/EV than one coasting on unwind. Source from the embedded-value disclosure in the AR / results deck (`get_company_context(section='annual_report')` / `get_deck_insights`); if only Operating ROEV is disclosed, say so.
+
 ### Justified P/EV — Gordon Framework, Carry `g` Through
 For a mature life insurer the Gordon framework is: `Justified P/EV = (ROEV − g) ÷ (CoE − g)`, where `ROEV` is the return on embedded value (operating, excluding MTM), `CoE` is the cost of equity, and `g` is the sustainable long-run EV growth rate. For Indian life insurers, realistic ranges: ROEV 12-18%, CoE 12-13%, g 10-14% (book retention × ROEV gives the steady-state rate).
 
@@ -47,6 +50,7 @@ For listed insurtech marketplaces (POLICYBZR / PB Fintech and similar), **reject
 - **EV/Revenue on standalone insurance-broking revenue** — strip subsidiary drag (lending, direct insurance, new verticals) before applying the multiple. Typical range 4-10× for high-growth broking/marketplace franchises.
 - **Contribution-margin path** — what share of incremental revenue is flowing to operating profit at current CAC? A marketplace where contribution margin is not improving 300-500 bps YoY at scale has a broken unit-economics thesis.
 - **Implied LTV/CAC anchor** — justify the revenue multiple by showing LTV/CAC >2× is durable, not a one-time pull-forward.
+- **Take-rate (broking revenue ÷ premium facilitated) — estimate it, don't defer it.** When the company discloses premium facilitated / GWP-sourced and broking revenue, compute the take-rate via `calculate` and carry it explicitly into base / bear scenarios (take-rate compression from regulatory commission caps is a core bear driver). Parking "take-rate / commission %" as an Open Question when both inputs are disclosed is a completeness gap, not a genuine unknown.
 
 ### Turnaround Margin Baseline — Override the Naive 3-Year Average
 **This is the POLICYBZR lesson from the valuation-eval run.** When a company has turned profitable recently (positive contribution margin in the last 4 quarters but loss-making in the 3-year historical average), the projection tool's naive 3-year average margin pulls in the loss years and produces negative EPS projections — an arithmetic artifact, not a business signal.

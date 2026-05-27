@@ -26,6 +26,9 @@ Compute via `calculate` with `ttm_fcf_cr` and `market_cap_cr` as named inputs. P
 
 **Why 2.5-3.5 is the fair PEG band for Indian tier-1 IT (not textbook 1.0-1.5):** four balance-sheet attributes compound earnings quality above raw growth. (a) **FCF conversion 80-100% of PAT** — earnings translate cleanly into distributable cash, unlike capex-heavy sectors. (b) **30-50% payout ratio** — ongoing cash yield adds 1.5-3% to total-return. (c) **Net-cash balance sheet** — no solvency discount. (d) **<2% maintenance capex** — incremental growth flows fully to FCF. Strip any of these and the band compresses toward standard 1.5-2.5 PEG territory.
 
+### Operating-Driver Grounding for Forward Estimates (mandatory)
+The forward USD-revenue-growth and margin assumptions that feed every multiple above must be grounded in IT-services operating drivers, not assumed: **headcount growth, utilisation, and attrition** (quarterly/LTM trend), from `get_company_context(section='concall_insights', sub_section='operational_metrics')` (`hiring_and_headcount`) and `management_commentary`. Falling headcount with flat revenue can be a utilisation-led margin tailwind or a demand-weakness tell — name which. Rising attrition pressures wage costs and margin. If these are not disclosed in the latest concall, state the gap rather than projecting growth on an unsupported base.
+
 ### Forward-Multiple Sanity — Gordon / Justified PE with g
 The Gordon framework for a mature franchise: `Justified PE = (1 − retention) × (1 + g) ÷ (CoE − g)`, where `g` is sustainable long-run earnings growth. For Indian IT, realistic `g` sits in the 8-12% range in nominal terms (slower than 15-20% secular pace, given AI-reframe and discretionary-spend drag). **Always carry `g` through the formula** — the BFSI-pilot lesson is that dropping `g` produces a 50-70% under-estimate of fair multiple. Worked calibrations:
 
