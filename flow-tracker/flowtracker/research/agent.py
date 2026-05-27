@@ -132,33 +132,33 @@ AGENT_TIERS = {
 TIER_MAX_RETRIES = {1: 2, 2: 1, 3: 1}
 
 AGENT_MAX_TURNS: dict[str, int] = {
-    "business": 40,
-    "financials": 35,
-    "ownership": 30,
-    "valuation": 45,
-    "risk": 30,
-    "technical": 30,
-    "sector": 25,
-    "news": 25,
-    "macro": 25,
-    "historical_analog": 20,  # 3-5 tool calls + clustering + report
-    "fno_positioning": 15,  # 5 F&O tools + 2 context tools + report
-    "web_research": 20,
+    "business": 50,
+    "financials": 50,
+    "ownership": 40,
+    "valuation": 50,
+    "risk": 40,
+    "technical": 40,
+    "sector": 35,
+    "news": 30,
+    "macro": 30,
+    "historical_analog": 25,  # 3-5 tool calls + clustering + report
+    "fno_positioning": 20,  # 5 F&O tools + 2 context tools + report
+    "web_research": 30,
 }
 
 AGENT_MAX_BUDGET: dict[str, float] = {
-    "business": 1.50,
-    "financials": 2.00,
-    "ownership": 0.75,
-    "valuation": 2.00,
-    "risk": 0.75,
-    "technical": 0.75,
-    "sector": 0.60,
-    "news": 0.50,
-    "macro": 0.60,
-    "historical_analog": 0.50,
-    "fno_positioning": 0.40,
-    "web_research": 0.50,
+    "business": 2.50,
+    "financials": 2.50,
+    "ownership": 2.00,
+    "valuation": 2.50,
+    "risk": 2.00,
+    "technical": 1.50,
+    "sector": 1.50,
+    "news": 1.00,
+    "macro": 1.00,
+    "historical_analog": 1.00,
+    "fno_positioning": 0.60,
+    "web_research": 1.00,
 }
 
 # Claude Code built-ins that agents should NOT have access to.
