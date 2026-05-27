@@ -188,6 +188,18 @@ def _invalid_enum_error(tool_name: str, param: str, value, valid, args: dict) ->
             else f"Call {tool_name} with no {param} to see the TOC."
         ),
     }
+    # Phase 3b: error envelopes carry a `_meta` sidecar (status="error") too.
+    # Exception-safe — never break the error path for metadata.
+    try:
+        from datetime import date
+        err["_meta"] = {
+            "as_of_date": str(date.today()),
+            "status": "error",
+            "count": None,
+            "data_freshness": None,
+        }
+    except Exception:
+        pass
     return _with_dedup(
         tool_name,
         {"content": [{"type": "text", "text": json.dumps(err, default=str)}]},
@@ -1784,6 +1796,70 @@ def _add_freshness_meta(data: dict, api, symbol: str) -> dict:
     return data
 
 
+# Phase 3b: completeness label → wire status. "full" reads as "ok"; "truncated"
+# normalizes to "partial" (both mean "data present but capped"). empty/partial/
+# error pass through. None (unclassifiable) → None so the status key still rides.
+_COMPLETENESS_TO_STATUS = {
+    "full": "ok",
+    "truncated": "partial",
+    "partial": "partial",
+    "empty": "empty",
+    "error": "error",
+}
+
+
+def _stamp_meta(data, api, symbol: str):
+    """Standardize a `_meta` sidecar on a dict payload (Phase 3b).
+
+    Rides ALONGSIDE the existing data dict — does NOT restructure the payload —
+    so the dedup hash, `classify_completeness`, and agent.py parsing are all
+    preserved. Derives status + count from `classify_completeness(data)`, then
+    appends freshness (best-effort). Applied on TOC, per-section success, AND
+    error paths of the 10 section dispatchers.
+
+    Bare LISTS can't carry a sidecar key, so they pass through untouched (the
+    agent layer already captures row_count for lists). Always exception-safe —
+    never break a tool call for metadata.
+    """
+    if not isinstance(data, dict):
+        return data  # bare list / str — leave as-is
+    try:
+        from datetime import date
+        comp, count = classify_completeness(data)
+        status = _COMPLETENESS_TO_STATUS.get(comp, comp)
+        freshness = None
+        if status != "error":
+            try:
+                freshness = api.get_data_freshness(symbol)
+            except Exception:
+                freshness = None
+        data["_meta"] = {
+            "as_of_date": str(date.today()),
+            "status": status,
+            "count": count,
+            "data_freshness": freshness,
+        }
+    except Exception:
+        pass  # Don't break tool calls for metadata failures
+    return data
+
+
+def _enum_toc(sections) -> dict:
+    """Build a lightweight TOC from a Phase-1 section enum constant (Phase 3a).
+
+    Used by the seven dispatchers that have no dedicated `get_<x>_toc` data_api
+    method. Mirrors the compact-TOC-then-drill contract so a no-section call
+    never falls through to the truncation-prone 'all' payload.
+    """
+    return {
+        "_toc": list(sections),
+        "hint": (
+            "Call with section='<one>' or section=['a','b'] for specific data; "
+            "section='all' returns everything (may be truncated)."
+        ),
+    }
+
+
 def _get_fundamentals_section(api, symbol, section, args):
     """Route a single section for get_fundamentals."""
     if section == "quarterly_results":
@@ -1856,8 +1932,7 @@ async def get_fundamentals(args):
         # by the MCP transport, the same failure mode ownership fixed earlier.
         if not section_raw or section_raw in ("toc", "summary"):
             data = api.get_fundamentals_toc(symbol)
-            if isinstance(data, dict) and "error" not in data:
-                data = _add_freshness_meta(data, api, symbol)
+            data = _stamp_meta(data, api, symbol)
             return _with_dedup("get_fundamentals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
         section = _parse_section(section_raw)
@@ -1891,8 +1966,7 @@ async def get_fundamentals(args):
             }
         else:
             data = _get_fundamentals_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_fundamentals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -1987,7 +2061,14 @@ def _get_quality_scores_section(api, symbol, section, args):
 )
 async def get_quality_scores(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    # Default behavior when no section specified: return a compact TOC instead
+    # of the heavy 'all' payload (truncation-prone). 'all' stays an explicit opt-in.
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_QUALITY_SCORES_SECTIONS), api, symbol)
+        return _with_dedup("get_quality_scores", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
     err = _validate_sections("get_quality_scores", section, _QUALITY_SCORES_SECTIONS + _QUALITY_SCORES_SENTINELS, args)
     if err is not None:
         return err
@@ -2039,8 +2120,7 @@ async def get_quality_scores(args):
                 }
         else:
             data = _get_quality_scores_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_quality_scores", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2147,8 +2227,7 @@ async def get_ownership(args):
                 }
             else:
                 data = _get_ownership_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2199,7 +2278,12 @@ def _get_valuation_section(api, symbol, section, args):
 )
 async def get_valuation(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_VALUATION_SECTIONS), api, symbol)
+        return _with_dedup("get_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
     err = _validate_sections("get_valuation", section, _VALUATION_SECTIONS + _VALUATION_SENTINELS, args)
     if err is not None:
         return err
@@ -2215,8 +2299,7 @@ async def get_valuation(args):
             }
         else:
             data = _get_valuation_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2261,7 +2344,12 @@ def _get_fair_value_analysis_section(api, symbol, section, args):
 )
 async def get_fair_value_analysis(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_FAIR_VALUE_SECTIONS), api, symbol)
+        return _with_dedup("get_fair_value_analysis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
     err = _validate_sections("get_fair_value_analysis", section, _FAIR_VALUE_SECTIONS + _FAIR_VALUE_SENTINELS, args)
     if err is not None:
         return err
@@ -2278,8 +2366,7 @@ async def get_fair_value_analysis(args):
             }
         else:
             data = _get_fair_value_analysis_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_fair_value_analysis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2345,8 +2432,7 @@ async def get_peer_sector(args):
         # Same TOC-then-drill pattern as get_fundamentals / get_ownership.
         if not section_raw or section_raw in ("toc", "summary"):
             data = api.get_peer_sector_toc(symbol)
-            if isinstance(data, dict) and "error" not in data:
-                data = _add_freshness_meta(data, api, symbol)
+            data = _stamp_meta(data, api, symbol)
             return _with_dedup("get_peer_sector", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
         section = _parse_section(section_raw)
@@ -2375,8 +2461,7 @@ async def get_peer_sector(args):
             }
         else:
             data = _get_peer_sector_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_peer_sector", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2427,7 +2512,12 @@ def _get_estimates_section(api, symbol, section, args):
 )
 async def get_estimates(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_ESTIMATES_SECTIONS), api, symbol)
+        return _with_dedup("get_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
     err = _validate_sections("get_estimates", section, _ESTIMATES_SECTIONS + _ESTIMATES_SENTINELS, args)
     if err is not None:
         return err
@@ -2447,8 +2537,7 @@ async def get_estimates(args):
             }
         else:
             data = _get_estimates_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2503,7 +2592,12 @@ def _get_market_context_section(api, symbol, section, args):
 )
 async def get_market_context(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_MARKET_CONTEXT_SECTIONS), api, symbol)
+        return _with_dedup("get_market_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
     err = _validate_sections("get_market_context", section, _MARKET_CONTEXT_SECTIONS + _MARKET_CONTEXT_SENTINELS, args)
     if err is not None:
         return err
@@ -2536,8 +2630,7 @@ async def get_market_context(args):
             }
         else:
             data = _get_market_context_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_market_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2625,7 +2718,12 @@ def _get_company_context_section(api, symbol, section, args):
 )
 async def get_company_context(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_COMPANY_CONTEXT_SECTIONS), api, symbol)
+        return _with_dedup("get_company_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
     err = _validate_sections("get_company_context", section, _COMPANY_CONTEXT_SECTIONS + _COMPANY_CONTEXT_SENTINELS, args)
     if err is not None:
         return err
@@ -2668,8 +2766,7 @@ async def get_company_context(args):
             }
         else:
             data = _get_company_context_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_company_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -2721,7 +2818,12 @@ def _get_events_actions_section(api, symbol, section, args):
 )
 async def get_events_actions(args):
     symbol = args["symbol"]
-    section = _parse_section(args.get("section", "all"))
+    section_raw = args.get("section")
+    if not section_raw or section_raw in ("toc", "summary"):
+        with ResearchDataAPI() as api:
+            data = _stamp_meta(_enum_toc(_EVENTS_ACTIONS_SECTIONS), api, symbol)
+        return _with_dedup("get_events_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+    section = _parse_section(section_raw)
     err = _validate_sections("get_events_actions", section, _EVENTS_ACTIONS_SECTIONS + _EVENTS_ACTIONS_SENTINELS, args)
     if err is not None:
         return err
@@ -2740,8 +2842,7 @@ async def get_events_actions(args):
             }
         else:
             data = _get_events_actions_section(api, symbol, section, args)
-        if isinstance(data, dict) and "error" not in data:
-            data = _add_freshness_meta(data, api, symbol)
+        data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_events_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 

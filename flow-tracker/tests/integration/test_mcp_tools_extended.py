@@ -388,6 +388,153 @@ class TestGetEventsActions:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3 — uniform TOC default (3a) + standardized _meta sidecar (3b)
+# ---------------------------------------------------------------------------
+
+
+def _reset_dedup_cache():
+    """Clear the _with_dedup ContextVar so a fresh payload is never replaced by
+    the '[Identical to previous call...]' stub from an earlier test in-process."""
+    from flowtracker.research.tools import _tool_result_cache
+    _tool_result_cache.set({})
+
+
+class TestTocDefaultsAndMeta:
+    """Phase 3a: the seven dispatchers that used to default to the heavy 'all'
+    payload now return a compact enum-constant TOC when called with no section,
+    while section='all' STILL returns the full multi-section payload.
+    Phase 3b: every return path carries a `_meta` sidecar with a `status` key.
+    """
+
+    # --- 3a: no-section default is a TOC, not the full 'all' payload ---
+
+    @pytest.mark.asyncio
+    async def test_quality_scores_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import (
+            _QUALITY_SCORES_SECTIONS,
+            get_quality_scores,
+        )
+        result = await get_quality_scores.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        # TOC shape — has the _toc enum listing, NOT the full 'all' payload.
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_QUALITY_SCORES_SECTIONS)
+        # Must NOT have routed any data section (e.g. piotroski/dupont).
+        assert "piotroski" not in data
+        assert "dupont" not in data
+        # 3b: _meta sidecar present with a status key on the TOC path.
+        assert "_meta" in data
+        assert "status" in data["_meta"]
+
+    @pytest.mark.asyncio
+    async def test_valuation_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import _VALUATION_SECTIONS, get_valuation
+        result = await get_valuation.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_VALUATION_SECTIONS)
+        assert "snapshot" not in data  # not the full payload
+        assert "band" not in data
+        assert "_meta" in data and "status" in data["_meta"]
+
+    @pytest.mark.asyncio
+    async def test_estimates_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import _ESTIMATES_SECTIONS, get_estimates
+        result = await get_estimates.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_ESTIMATES_SECTIONS)
+        assert "consensus" not in data
+        assert "_meta" in data and "status" in data["_meta"]
+
+    @pytest.mark.asyncio
+    async def test_events_actions_no_section_returns_toc(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import (
+            _EVENTS_ACTIONS_SECTIONS,
+            get_events_actions,
+        )
+        result = await get_events_actions.handler({"symbol": "SBIN"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" in data
+        assert set(data["_toc"]) == set(_EVENTS_ACTIONS_SECTIONS)
+        assert "events" not in data
+        assert "_meta" in data and "status" in data["_meta"]
+
+    # --- 3a: section='all' STILL returns the full multi-section payload ---
+
+    @pytest.mark.asyncio
+    async def test_valuation_all_still_full_payload(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_valuation
+        result = await get_valuation.handler({"symbol": "INFY", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" not in data
+        for key in ("snapshot", "band", "pe_history", "key_metrics"):
+            assert key in data
+
+    @pytest.mark.asyncio
+    async def test_estimates_all_still_full_payload(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_estimates
+        result = await get_estimates.handler({"symbol": "INFY", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" not in data
+        for key in ("consensus", "surprises", "revisions", "momentum"):
+            assert key in data
+
+    @pytest.mark.asyncio
+    async def test_quality_scores_all_still_full_payload(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_quality_scores
+        result = await get_quality_scores.handler({"symbol": "INFY", "section": "all"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_toc" not in data
+        for key in ("piotroski", "dupont", "common_size"):
+            assert key in data
+
+    # --- 3b: _meta on a per-section success path (dict payload) ---
+
+    @pytest.mark.asyncio
+    async def test_meta_on_success_dict_path(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_valuation
+        # snapshot returns a dict — _meta should ride alongside it.
+        result = await get_valuation.handler({"symbol": "SBIN", "section": "snapshot"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "_meta" in data
+        meta = data["_meta"]
+        assert "status" in meta and "count" in meta and "as_of_date" in meta
+        assert meta["status"] in ("ok", "empty", "partial", "error")
+
+    # --- 3b: _meta with status='error' on the invalid-section error path ---
+
+    @pytest.mark.asyncio
+    async def test_meta_status_error_on_invalid_section(self, db_env):
+        _reset_dedup_cache()
+        from flowtracker.research.tools import get_valuation
+        result = await get_valuation.handler({"symbol": "SBIN", "section": "bogus_xyz"})
+        data = _parse_tool_result(result)
+        assert isinstance(data, dict)
+        assert "error" in data
+        # Error envelope carries a did-you-mean suggestion AND a _meta status.
+        assert "suggestion" in data
+        assert "_meta" in data
+        assert data["_meta"]["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
 # News
 # ---------------------------------------------------------------------------
 
