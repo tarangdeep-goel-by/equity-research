@@ -5025,6 +5025,32 @@ class ResearchDataAPI:
         "charts_described",
     )
 
+    @staticmethod
+    def _merge_key_metrics_series(quarters: list[dict]) -> dict:
+        """Union each key_metric's period→value map across decks into one series.
+
+        Decks are point-in-time and period-stamped; an agent tracing a metric
+        over time needs the periods stitched. `quarters` is newest-first, so the
+        first value seen for a period wins (newer decks restate; trust the
+        latest). Expects the {unit, values:{period:value}} shape; legacy flat
+        entries are passed through unchanged (no series to build).
+        """
+        series: dict = {}
+        for q in quarters:
+            for metric, payload in (q.get("key_metrics") or {}).items():
+                if not (isinstance(payload, dict) and isinstance(payload.get("values"), dict)):
+                    series.setdefault(metric, payload)
+                    continue
+                entry = series.get(metric)
+                if not (isinstance(entry, dict) and isinstance(entry.get("values"), dict)):
+                    entry = {"unit": payload.get("unit"), "values": {}}
+                    series[metric] = entry
+                if not entry.get("unit") and payload.get("unit"):
+                    entry["unit"] = payload["unit"]
+                for period, val in payload["values"].items():
+                    entry["values"].setdefault(period, val)
+        return series
+
     def get_deck_insights(
         self,
         symbol: str,
@@ -5176,6 +5202,11 @@ class ResearchDataAPI:
                 "section": section_filter,
                 "quarters": slices,
             }
+            # key_metrics: also assemble the cross-quarter time series so an agent
+            # can trace a metric over time in one call (decks are period-stamped
+            # point-in-time; this unions each metric's period→value map).
+            if section_filter == "key_metrics":
+                result["series"] = self._merge_key_metrics_series(data.get("quarters", []))
             if wanted_topics:
                 result["slide_topics_requested"] = sorted(wanted_topics)
             if topic_filter_fallback:

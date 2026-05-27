@@ -47,6 +47,10 @@ MAX_CONCURRENT_DECK_EXTRACTIONS = 3
 # pages per call) to bound attention dilution / JSON-output overflow.
 SINGLE_CALL_MAX_PAGES = 50
 DECK_CHUNK_SIZE = 8
+# Stamped on every extracted quarter. Bump when the extracted JSON shape changes
+# so ensure_deck_data re-extracts stale-shape quarters once instead of serving
+# them from cache forever. v2 = images-only VLM + key_metrics{unit,values{period}}.
+DECK_SCHEMA_VERSION = 2
 
 # --- Deck classifier thresholds (mirrors filing_client._looks_like_real_deck) ---
 #
@@ -270,7 +274,12 @@ Required structure:
     }
   },
   "key_metrics": {
-    "<metric_name_snake_case>": "<value with unit — for ANY quantitative KPI that is NOT a revenue segment: net_debt_cr, capex_fy26_cr, order_book_cr, nim_pct, gnpa_pct, casa_pct, gmv_cr, pre_sales_cr, dividend_per_share, utilization_pct, etc. Capture the period in the key when it matters.>"
+    "<metric_name_snake_case_WITHOUT_period>": {
+      "unit": "<standardized unit: 'INR Cr' for rupee amounts | '%' for percentages | 'x' for ratios | '<CCY> mn' (e.g. 'USD mn') for non-INR currencies>",
+      "values": { "<PERIOD e.g. Q3FY26 or FY24>": <number>, "<PERIOD>": <number> }
+    }
+    // ANY quantitative KPI that is NOT a revenue segment: net_debt, capex, order_book, order_backlog, nim, gnpa, casa, gmv, pre_sales, dividend_per_share, utilization, etc.
+    // The metric name carries NO period — every period the slide shows goes in `values`.
   },
   "strategic_priorities": [
     "<management's stated priorities — 'premiumization', 'store network rationalization', 'digital transformation of trade channel'. Concrete, not generic.>"
@@ -294,10 +303,12 @@ Required structure:
 ```
 
 Rules:
-- **Never drop a printed number.** Every figure visible on a slide must land somewhere: a structured field if one fits, else `key_metrics` (with a descriptive snake_case key), else verbatim inside the relevant `charts_described.what_it_shows`. Maximize data capture — when in doubt, capture it in `key_metrics`.
+- **Never drop a printed number.** Every figure visible on a slide must land somewhere: a structured field if one fits, else `key_metrics`, else verbatim inside the relevant `charts_described.what_it_shows`. Maximize data capture — when in doubt, capture it in `key_metrics`.
+- `key_metrics` shape: each metric key is the metric NAME ONLY (no period in the key), mapping to `{"unit": ..., "values": {<period>: <number>, ...}}`. Decks usually show several quarters or years of history for a metric — capture EVERY period shown in `values` so the metric can be traced over time, not just the latest.
 - `segment_performance` is ONLY for revenue/business segments. Pipelines, R&D, balance-sheet items, capex, order book, BFSI KPIs (NIM/GNPA/CASA), and any other non-segment metric go in `key_metrics`, not as fake segments.
 - `charts_described` must transcribe the chart's actual numbers (axis values, data labels, per-period values) in `what_it_shows`, not just describe the shape.
-- All monetary values in Indian Rupees crores (₹ Cr) unless the deck explicitly uses another unit. Preserve the unit if non-standard (e.g. "USD Mn").
+- **Standardize units to match the firm's databases.** Convert all Indian Rupee amounts to **crores** (1 Cr = 10 million = 100 lakh; so ₹X mn → X/10 Cr, ₹X bn → X×100 Cr, ₹X lakh → X/100 Cr) and set `unit` to `"INR Cr"`. Percentages in percentage form (write 3.5 for 3.5%, not 0.035), `unit` `"%"`. Ratios raw (PE, D/E, book-to-bill), `unit` `"x"`. For non-INR currencies (e.g. US revenue printed in USD mn), keep the currency — set `unit` like `"USD mn"` — and do NOT apply any exchange rate. The same conversion applies to `segment_performance.revenue_cr` (always ₹ crores).
+- All `values` must be plain numbers (and `segment_performance` numeric fields too) — never strings with units; the unit lives in `unit`.
 - For growth percentages, use the sign (positive for growth, negative for decline).
 - If the deck is actually a short corporate notice/letter (not a real presentation — e.g. <5 content slides), set `extraction_status: "not_a_deck"` at the top level and leave other fields empty/null.
 - If a field isn't mentioned, set it to null or empty array — don't guess.
@@ -500,7 +511,14 @@ def _merge_deck_chunks(chunks: list[dict]) -> dict:
                 if fv not in _EMPTY_VALUES and tgt.get(fk) in _EMPTY_VALUES:
                     tgt[fk] = fv
         for mk, mv in (c.get("key_metrics") or {}).items():
-            if mv not in _EMPTY_VALUES and merged["key_metrics"].get(mk) in _EMPTY_VALUES:
+            if isinstance(mv, dict) and isinstance(mv.get("values"), dict):
+                tgt = merged["key_metrics"].setdefault(mk, {"unit": mv.get("unit"), "values": {}})
+                if isinstance(tgt, dict) and isinstance(tgt.get("values"), dict):
+                    if not tgt.get("unit") and mv.get("unit"):
+                        tgt["unit"] = mv["unit"]
+                    for period, val in mv["values"].items():
+                        tgt["values"].setdefault(period, val)
+            elif mv not in _EMPTY_VALUES and merged["key_metrics"].get(mk) in _EMPTY_VALUES:
                 merged["key_metrics"][mk] = mv
         for ch in (c.get("charts_described") or []):
             if not isinstance(ch, dict):
@@ -628,6 +646,7 @@ async def _extract_single_deck(
     data["_pages_rendered"] = total
     data["_chunks"] = len(batches)
     data["_classifier_confidence"] = classification.confidence
+    data["_schema_version"] = DECK_SCHEMA_VERSION
     if data_quality_note:
         data["data_quality_note"] = data_quality_note
     return data
@@ -709,6 +728,7 @@ async def ensure_deck_data(
         q.get("fy_quarter"): q
         for q in existing.get("quarters", [])
         if q.get("extraction_status") == "complete"
+        and q.get("_schema_version") == DECK_SCHEMA_VERSION
     }
 
     to_extract = [pdf for label, pdf in available.items() if label not in cached_quarters]

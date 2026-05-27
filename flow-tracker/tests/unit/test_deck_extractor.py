@@ -27,6 +27,8 @@ def _write_deck_cache(vault_root: Path, symbol: str, quarters: list[str]) -> Non
 
     `vault_root` is the directory that contains `stocks/` (e.g. ``~/vault``).
     """
+    from flowtracker.research.deck_extractor import DECK_SCHEMA_VERSION
+
     fdir = vault_root / "stocks" / symbol / "fundamentals"
     fdir.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -37,6 +39,7 @@ def _write_deck_cache(vault_root: Path, symbol: str, quarters: list[str]) -> Non
             {
                 "fy_quarter": q,
                 "extraction_status": "complete",
+                "_schema_version": DECK_SCHEMA_VERSION,
                 "highlights": [f"{q} highlight"],
             }
             for q in quarters
@@ -256,7 +259,7 @@ class TestMergeDeckChunks:
                 "highlights": ["rev +10%", "margin +180bps"],
                 "strategic_priorities": ["premiumization"],
                 "segment_performance": {"foods": {"revenue_cr": 100, "margin_pct": None}},
-                "key_metrics": {"net_debt_cr": 1200, "nim_pct": None},
+                "key_metrics": {"net_debt_cr": {"unit": "Cr", "values": {"Q3FY26": 1200}}},
                 "charts_described": [{"slide_title": "R&D Trend", "what_it_shows": "5yr"}],
                 "new_initiatives": ["new plant"],
                 "slide_topics": ["highlights", "segmental"],
@@ -270,7 +273,10 @@ class TestMergeDeckChunks:
                     "foods": {"revenue_cr": None, "margin_pct": 22.5},
                     "beverages": {"revenue_cr": 50},
                 },
-                "key_metrics": {"net_debt_cr": 999, "capex_cr": 800, "nim_pct": 3.5},
+                "key_metrics": {
+                    "net_debt_cr": {"unit": "Cr", "values": {"Q2FY26": 1100}},
+                    "nim_pct": {"unit": "%", "values": {"Q3FY26": 3.5}},
+                },
                 "charts_described": [
                     {"slide_title": "r&d trend"},  # dup by lowercased title
                     {"slide_title": "EBITDA bridge"},
@@ -289,10 +295,10 @@ class TestMergeDeckChunks:
         assert m["segment_performance"]["foods"]["revenue_cr"] == 100
         assert m["segment_performance"]["foods"]["margin_pct"] == 22.5
         assert m["segment_performance"]["beverages"]["revenue_cr"] == 50
-        # key_metrics: first non-empty wins per key; chunk2 fills the chunk1 null
-        assert m["key_metrics"]["net_debt_cr"] == 1200
-        assert m["key_metrics"]["capex_cr"] == 800
-        assert m["key_metrics"]["nim_pct"] == 3.5
+        # key_metrics: per-metric values maps union across chunks (newest-first wins)
+        assert m["key_metrics"]["net_debt_cr"]["values"] == {"Q3FY26": 1200, "Q2FY26": 1100}
+        assert m["key_metrics"]["net_debt_cr"]["unit"] == "Cr"
+        assert m["key_metrics"]["nim_pct"]["values"] == {"Q3FY26": 3.5}
         # charts deduped by lowercased title, order preserved
         assert [c["slide_title"] for c in m["charts_described"]] == ["R&D Trend", "EBITDA bridge"]
         assert "double-digit growth" in m["outlook_and_guidance"]
@@ -425,3 +431,38 @@ class TestEnsureDeckDataCacheSkip:
         assert result is not None
         assert result["_new_quarters_extracted"] == 0
         assert result["quarters_analyzed"] == 2
+
+    def test_stale_schema_version_triggers_reextraction(self, vault_home, monkeypatch):
+        """A cached 'complete' quarter from an older schema version must be
+        re-extracted, not served stale — the cache is permanent only while the
+        schema version matches."""
+        import flowtracker.research.deck_extractor as deck_mod
+
+        symbol = "TESTCO"
+        vault_root = vault_home / "vault"
+        monkeypatch.setattr(deck_mod, "_VAULT_BASE", vault_root / "stocks")
+        _write_deck_pdfs(vault_root, symbol, ["FY26-Q3"])
+
+        # Cache says complete but stamped with an OLD schema version.
+        fdir = vault_root / "stocks" / symbol / "fundamentals"
+        fdir.mkdir(parents=True, exist_ok=True)
+        (fdir / "deck_extraction.json").write_text(json.dumps({
+            "symbol": symbol, "quarters_analyzed": 1, "extraction_date": "2026-04-17",
+            "quarters": [{"fy_quarter": "FY26-Q3", "extraction_status": "complete",
+                          "_schema_version": deck_mod.DECK_SCHEMA_VERSION - 1,
+                          "key_metrics": {"nim_q3fy26_pct": 3.5}}],  # old flat shape
+        }))
+
+        calls: list = []
+
+        async def fake_extract(pdf, sym, model, industry=None):
+            calls.append(pdf.parent.name)
+            return {"fy_quarter": pdf.parent.name, "extraction_status": "complete",
+                    "_schema_version": deck_mod.DECK_SCHEMA_VERSION,
+                    "key_metrics": {"nim_pct": {"unit": "%", "values": {"Q3FY26": 3.5}}}}
+
+        monkeypatch.setattr(deck_mod, "_extract_single_deck", fake_extract)
+
+        result = asyncio.run(deck_mod.ensure_deck_data(symbol, quarters=1))
+        assert calls == ["FY26-Q3"], "stale-version quarter should be re-extracted"
+        assert result["_new_quarters_extracted"] == 1
