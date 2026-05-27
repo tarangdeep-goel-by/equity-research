@@ -309,7 +309,7 @@ class TestOwnershipTools:
         fake = FakeAPI()
         with patch_api(fake):
             await get_shareholding.handler({"symbol": "SBIN"})
-        assert fake.calls[0] == ("get_shareholding", ("SBIN", 12), {})
+        assert fake.calls[0] == ("get_shareholding", ("SBIN", 20), {})
 
     @pytest.mark.asyncio
     async def test_shareholding_changes(self):

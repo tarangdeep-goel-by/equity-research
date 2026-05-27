@@ -54,6 +54,14 @@ def fetch(
             help="Live-parse this URL (MoSPI PDF, FRED CSV, etc.) instead of using the seed",
         ),
     ] = None,
+    source: Annotated[
+        str,
+        typer.Option(
+            "--source",
+            help="Data source: 'dbnomics' (IMF/IFS via db.nomics.world — freshest, default) "
+            "or 'seed' (bundled JSON). Ignored when --source-url is given.",
+        ),
+    ] = "dbnomics",
 ) -> None:
     """Fetch one month of India CPI and upsert into the DB."""
     try:
@@ -70,6 +78,10 @@ def fetch(
                 )
                 raise typer.Exit(2)
             row = client.fetch_month(period, source_url=source_url)
+        elif source == "dbnomics":
+            # period None → latest available dbnomics month (fresher than seed).
+            row = client.fetch_from_dbnomics(period)
+            period = row.period if row is not None else period
         else:
             target_period = period or (client.known_periods[-1] if client.known_periods else None)
             if target_period is None:
@@ -80,7 +92,7 @@ def fetch(
 
         if row is None:
             console.print(
-                f"[yellow]No CPI data for period {period!r}. "
+                f"[yellow]No CPI data for period {period!r} via source={source!r}. "
                 f"Latest seed periods: {', '.join(client.known_periods[-6:])}[/yellow]",
             )
             raise typer.Exit(1)

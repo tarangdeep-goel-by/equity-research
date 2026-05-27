@@ -46,7 +46,7 @@ INDEX_TICKERS: tuple[str, ...] = (
     "^CNXENERGY",   # Nifty Energy
     "^CNXREALTY",   # Nifty Realty
     "^CNXPSUBANK",  # Nifty PSU Bank
-    "^CNXFIN",      # Nifty Financial Services
+    "NIFTY_FIN_SERVICE.NS",  # Nifty Financial Services
     # Thematic
     "^CNXSERVICE",  # Nifty Service Sector
     "^CNXMEDIA",    # Nifty Media
@@ -283,11 +283,16 @@ class MacroClient:
     # CCIL tenor buckets we extract. The page lists ~15 buckets; we sample
     # the four that map naturally to a "yield curve" (short / belly / long /
     # ultra-long). Each is the canonical analyst comparable.
+    # CCIL now publishes point-tenor range buckets (e.g. "1Y-2Y", "28Y-30Y")
+    # rather than the old "0Y-1Y" / "19Y-Above" labels. Each pattern anchors on
+    # the FULL bucket label so the leading digit can't accidentally match the
+    # "1" inside neighbouring "10Y" / "13Y" / "15Y" buckets — the tenor regex
+    # is always immediately followed by "</td>" in _parse_ccil_tenor.
     _CCIL_TENOR_BUCKETS: tuple[tuple[str, str], ...] = (
-        ("1y", r"0\s*Y?\s*[-–]\s*1\s*Y"),
-        ("5y", r"4\s*Y?\s*[-–]\s*5\s*Y"),
-        ("10y", r"9\s*Y?\s*[-–]\s*10\s*Y"),
-        ("30y", r"19\s*Y\s*[-–]\s*Above"),
+        ("1y", r"1\s*Y\s*[-–]\s*2\s*Y"),
+        ("5y", r"4\s*Y\s*[-–]\s*5\s*Y"),
+        ("10y", r"9\s*Y\s*[-–]\s*10\s*Y"),
+        ("30y", r"28\s*Y\s*[-–]\s*30\s*Y"),
     )
 
     def _fetch_gsec_curve(self) -> dict[str, float | None]:

@@ -435,3 +435,174 @@ class TestGetStockNews:
         data = _parse_tool_result(result)
         assert isinstance(data, list)
         assert len(data) == 0
+
+
+# ---------------------------------------------------------------------------
+# Macro numeric series + sector-index wiring (feat/agent-data-wiring)
+# ---------------------------------------------------------------------------
+
+
+class TestGetMacroIndicators:
+    @pytest.mark.asyncio
+    async def test_returns_cpi_iip_pmi_yield_sections(self, db_env, populated_store):
+        from flowtracker.cpi_models import CPIMonth
+        from flowtracker.iip_models import IIPMonth
+        from flowtracker.pmi_models import PMIMonth
+        from flowtracker.research.tools import get_macro_indicators
+
+        populated_store.upsert_cpi_monthly([
+            CPIMonth(period="2025-04", cpi_index=194.5, yoy_pct=3.16),
+            CPIMonth(period="2025-03", cpi_index=193.8, yoy_pct=3.34),
+        ])
+        populated_store.upsert_iip_monthly([
+            IIPMonth(period="2025-04", iip_index=152.5, yoy_pct=2.7),
+        ])
+        populated_store.upsert_pmi_monthly([
+            PMIMonth(period="2025-04", services_pmi=58.7, manufacturing_pmi=58.2),
+        ])
+
+        result = await get_macro_indicators.handler({"months": 6})
+        data = _parse_tool_result(result)
+        assert set(data.keys()) >= {"cpi", "iip", "pmi", "yield_curve"}
+        assert data["cpi"]["latest"]["yoy_pct"] == 3.16
+        assert len(data["cpi"]["trend"]) == 2
+        assert data["pmi"]["latest"]["services_pmi"] == 58.7
+
+
+class TestMacroSnapshotEnriched:
+    @pytest.mark.asyncio
+    async def test_includes_cpi_and_yield(self, db_env, populated_store):
+        from flowtracker.cpi_models import CPIMonth
+        from flowtracker.research.tools import get_macro_snapshot
+
+        populated_store.upsert_cpi_monthly([
+            CPIMonth(period="2025-04", cpi_index=194.5, yoy_pct=3.16),
+        ])
+        result = await get_macro_snapshot.handler({})
+        data = _parse_tool_result(result)
+        # gsec_10y seeded by make_macro_snapshots; cpi_inflation from our row.
+        assert "gsec_10y" in data
+        assert data["cpi_inflation"]["yoy_pct"] == 3.16
+        assert data["cpi_inflation"]["as_of_month"] == "2025-04"
+
+
+class TestSectorIndexValuation:
+    @pytest.mark.asyncio
+    async def test_returns_percentile_band(self, db_env, populated_store):
+        from datetime import date, timedelta
+
+        from flowtracker.indexpe_models import IndexValuation
+        from flowtracker.research.tools import get_peer_sector
+
+        # Seed both the likely-resolved sector index (NIFTY BANK for SBIN) and
+        # the broad fallback (NIFTY 500) so the test is robust to how the
+        # symbol's industry resolves.
+        base = date(2024, 1, 1)
+        rows = []
+        for name in ("NIFTY BANK", "NIFTY 500"):
+            for i in range(40):
+                rows.append(IndexValuation(
+                    date=(base + timedelta(days=i)).isoformat(),
+                    index_name=name, pe=12.0 + i * 0.1, pb=1.8 + i * 0.01,
+                    dividend_yield=1.1,
+                ))
+        populated_store.upsert_index_valuations(rows)
+
+        result = await get_peer_sector.handler(
+            {"symbol": "SBIN", "section": "sector_index_valuation"}
+        )
+        data = _parse_tool_result(result)
+        assert data["index_name"] in ("NIFTY BANK", "NIFTY 500")
+        assert data["current"]["pe"] is not None
+        assert "pe_percentile" in data
+
+
+class TestSectorPerformance:
+    @pytest.mark.asyncio
+    async def test_ranks_indices(self, db_env, populated_store):
+        from datetime import date, timedelta
+
+        from flowtracker.research.tools import get_peer_sector
+
+        base = date.today() - timedelta(days=300)
+        recs = []
+        for tkr, p0 in (("^NSEI", 22000.0), ("^CNXIT", 35000.0)):
+            for i in range(300):
+                recs.append({
+                    "date": (base + timedelta(days=i)).isoformat(),
+                    "index_ticker": tkr, "close": p0 * (1 + i * 0.001),
+                })
+        populated_store.upsert_index_daily_prices(recs)
+
+        result = await get_peer_sector.handler(
+            {"symbol": "SBIN", "section": "sector_performance"}
+        )
+        data = _parse_tool_result(result)
+        assert data.get("indices"), data
+        first = data["indices"][0]
+        assert {"index", "ticker", "return_1y_pct"} <= set(first.keys())
+
+
+class TestGoldETFNavInCommoditySnapshot:
+    @pytest.mark.asyncio
+    async def test_gold_etf_nav_present(self, db_env):
+        from flowtracker.research.tools import get_market_context
+
+        result = await get_market_context.handler(
+            {"symbol": "SBIN", "section": "commodities"}
+        )
+        data = _parse_tool_result(result)
+        # populated_store seeds Gold BeES scheme 140088 (10 days).
+        assert "gold_etf_nav" in data
+        assert data["gold_etf_nav"]["nav"] is not None
+
+
+class TestPricePerformanceHorizons:
+    @pytest.mark.asyncio
+    async def test_includes_long_horizons(self, db_env, populated_store, monkeypatch):
+        from datetime import date, timedelta
+
+        from flowtracker.bhavcopy_models import DailyStockData
+        from flowtracker.research.tools import get_market_context
+
+        # ~6.5 years of weekly bars for a fresh symbol → 3Y/5Y/Since-Listing.
+        base = date.today() - timedelta(days=int(365.25 * 6.5))
+        recs = []
+        d, px = base, 100.0
+        while d <= date.today():
+            recs.append(DailyStockData(
+                date=d.isoformat(), symbol="LONGCO",
+                open=px, high=px + 2, low=px - 2, close=px, prev_close=px - 1,
+                volume=100000, turnover=px * 1000,
+                delivery_qty=50000, delivery_pct=55.0,
+            ))
+            d += timedelta(days=7)
+            px += 1.0
+        populated_store.upsert_daily_stock_data(recs)
+
+        # Avoid network: force the yfinance benchmark fetch onto its except path.
+        import yfinance
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("no network in tests")
+
+        monkeypatch.setattr(yfinance, "Ticker", _boom)
+
+        result = await get_market_context.handler(
+            {"symbol": "LONGCO", "section": "price_performance"}
+        )
+        data = _parse_tool_result(result)
+        labels = {p["period"] for p in data["periods"]}
+        assert {"1Y", "3Y", "5Y", "Since Listing"} <= labels
+
+
+class TestValuationAgentCanReachCashFlow:
+    def test_get_fundamentals_in_valuation_allowlist(self):
+        from flowtracker.research.tools import (
+            VALUATION_AGENT_TOOLS_V2,
+            get_fundamentals,
+        )
+
+        # Regression: the valuation prompt (step 4) calls get_fundamentals for
+        # cash_flow_quality/capital_allocation; it must be in the allow-list.
+        assert get_fundamentals in VALUATION_AGENT_TOOLS_V2

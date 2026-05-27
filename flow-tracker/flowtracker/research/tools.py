@@ -263,13 +263,13 @@ async def get_wacc_params(args):
 
 @tool(
     "get_shareholding",
-    "Get quarterly ownership breakdown: FII%, DII%, MF%, Promoter%, Public%. Up to 12 quarters.",
+    "Get quarterly ownership breakdown: FII%, DII%, MF%, Promoter%, Public%. Defaults to 20 quarters (5 years); pass quarters to widen/narrow.",
     {"symbol": str, "quarters": int},
     annotations=READ_ONLY,
 )
 async def get_shareholding(args):
     with ResearchDataAPI() as api:
-        data = api.get_shareholding(args["symbol"], args.get("quarters", 12))
+        data = api.get_shareholding(args["symbol"], args.get("quarters", 20))
     return _with_dedup("get_shareholding", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
@@ -996,6 +996,26 @@ async def get_macro_catalog(args):
 
 
 @tool(
+    "get_macro_indicators",
+    "India macro time-series from the local flowtracker DB (T1 numeric source): "
+    "CPI inflation, IIP (industrial production), PMI (services + manufacturing) monthly "
+    "trend, plus the full G-sec yield curve (1Y/5Y/10Y/30Y) history. Cite THIS for India "
+    "CPI/IIP/PMI/yield NUMBERS (with as-of month) instead of WebSearch. Optional: months "
+    "(trailing window, default 24).",
+    {"months": int},
+    annotations=READ_ONLY,
+)
+async def get_macro_indicators(args):
+    with ResearchDataAPI() as api:
+        data = api.get_macro_indicators(args.get("months", 24))
+    return _with_dedup(
+        "get_macro_indicators",
+        {"content": [{"type": "text", "text": json.dumps(data, default=str)}]},
+        args,
+    )
+
+
+@tool(
     "render_chart",
     "Generate a PNG chart and return the file path for embedding in your report. "
     "Use the embed_markdown value directly in your report to show the chart. "
@@ -1548,7 +1568,7 @@ async def get_quality_scores(args):
 def _get_ownership_section(api, symbol, section, args):
     """Route a single section for get_ownership."""
     if section == "shareholding":
-        return api.get_shareholding(symbol, args.get("quarters", 12))
+        return api.get_shareholding(symbol, args.get("quarters", 20))
     elif section == "changes":
         return api.get_shareholding_changes(symbol)
     elif section == "insider":
@@ -1734,13 +1754,17 @@ def _get_peer_sector_section(api, symbol, section, args):
         return api.get_sector_valuations(symbol)
     elif section == "yahoo_peers":
         return api.get_yahoo_peer_comparison(symbol)
+    elif section == "sector_index_valuation":
+        return api.get_sector_index_valuation(symbol)
+    elif section == "sector_performance":
+        return api.get_sector_index_performance()
     else:
         return {"error": f"Unknown section: {section}"}
 
 
 @tool(
     "get_peer_sector",
-    "Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the 9 sections + 3 recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers'. Do NOT call section='all' — the ~50KB payload across 9 sections may truncate. Optional: metric (for specific valuation metric).",
+    "Peer comparison & sector data. First call with NO section (or section='toc') returns a compact ~1-2KB TOC listing the sections + recommended wave compositions. Then drill with section=['<wave sections>'] or section='<single>'. Valid sections: 'peer_table' | 'peer_metrics' | 'peer_growth' | 'valuation_matrix' | 'benchmarks' | 'sector_overview' | 'sector_flows' | 'sector_valuations' | 'yahoo_peers' | 'sector_index_valuation' (the stock's sector index PE/PB vs its own 10yr median + percentile) | 'sector_performance' (1M/3M/6M/1Y returns across all broad+sectoral indices, ranked — sector rotation). Do NOT call section='all' — the large payload may truncate. Optional: metric (for specific valuation metric).",
     {"symbol": str, "section": str},
     annotations=READ_ONLY,
 )
@@ -1774,6 +1798,8 @@ async def get_peer_sector(args):
                 "sector_overview": api.get_sector_overview_metrics(symbol),
                 "sector_flows": api.get_sector_flows(symbol),
                 "sector_valuations": api.get_sector_valuations(symbol),
+                "sector_index_valuation": api.get_sector_index_valuation(symbol),
+                "sector_performance": api.get_sector_index_performance(),
             }
         else:
             data = _get_peer_sector_section(api, symbol, section, args)
@@ -2373,7 +2399,7 @@ OWNERSHIP_AGENT_TOOLS_V2 = [
 VALUATION_AGENT_TOOLS_V2 = [
     get_analytical_profile, get_valuation, get_fair_value_analysis,
     get_estimates, get_peer_sector, get_events_actions, get_yahoo_peers, get_screener_peers,
-    get_company_context, get_quality_scores, get_market_context,
+    get_company_context, get_quality_scores, get_fundamentals, get_market_context,
     get_chart_data, render_chart, calculate,
     get_annual_report, get_deck_insights,
     get_data_quality_flags,
@@ -2404,8 +2430,9 @@ NEWS_AGENT_TOOLS_V2 = [
 ]
 
 MACRO_AGENT_TOOLS_V2 = [
-    get_macro_catalog,  # lists available anchors + their heading counts
-    get_macro_anchor,   # TOC + section drill for a specific anchor
+    get_macro_catalog,     # lists available anchors + their heading counts
+    get_macro_anchor,      # TOC + section drill for a specific anchor
+    get_macro_indicators,  # local-DB CPI/IIP/PMI trend + full G-sec yield curve
 ]
 
 

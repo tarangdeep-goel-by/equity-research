@@ -245,6 +245,13 @@ HELP_COMMANDS = [
     ["yield-curve", "backfill", "--help"],
     ["yield-curve", "curve", "--help"],
     ["yield-curve", "trend", "--help"],
+
+    # mfnav (daily MF scheme NAVs, mfapi.in)
+    ["mfnav", "--help"],
+    ["mfnav", "fetch", "--help"],
+    ["mfnav", "backfill", "--help"],
+    ["mfnav", "latest", "--help"],
+    ["mfnav", "trend", "--help"],
 ]
 # fmt: on
 

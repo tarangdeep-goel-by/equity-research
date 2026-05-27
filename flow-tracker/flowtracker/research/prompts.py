@@ -736,7 +736,7 @@ VALUATION_INSTRUCTIONS_V2 = """
 6. **Fair value**: Call `get_fair_value_analysis` for combined fair value (PE band + DCF + consensus), DCF valuation, DCF history, and reverse DCF. The reverse DCF uses the stock's dynamic WACC (from step 5) instead of a flat rate — mention the actual discount rate used. The reverse DCF includes `normalized_5y` (5Y-average base CF) alongside latest-year — compare both to detect cyclicality.
 6b. **Industry hint for projections (mandatory).** Before calling `get_fair_value_analysis(section='projections')` or `get_financial_projections` directly, resolve the company's industry via `get_company_context(section='info')` and read `.industry` from the response. Pass it as `industry=<that token>` (e.g. `industry=platform`, `industry=bfsi`, `industry=it_services`, `industry=insurance`, `industry=manufacturing`). Do NOT call the projections tool without this hint — the D&A and capex assumptions default to a generic 2% fallback that produces materially wrong free-cash-flow and fair-value outputs for platform (1% D&A), BFSI/insurance (line-item), IT services (low-D&A), and capital-intensive sectors. If `get_company_context` returns no industry or "Unknown", state `industry=unknown` in your Forward Projections section and caveat the projection as generic-fallback — never silently default.
 7. **Forward view**: Call `get_estimates` for consensus estimates, price targets, analyst grades, estimate momentum, revenue estimates, and growth estimates.
-8. **Peer context**: Call `get_peer_sector` with section=['benchmarks', 'valuation_matrix', 'peer_metrics', 'peer_growth']. Use `sector_median` and `percentile` from the benchmarks response for all sector comparisons — the pre-computed benchmarks are authoritative.
+8. **Peer context**: Call `get_peer_sector` with section=['benchmarks', 'valuation_matrix', 'peer_metrics', 'peer_growth', 'sector_index_valuation']. Use `sector_median` and `percentile` from the benchmarks response for all sector comparisons — the pre-computed benchmarks are authoritative. `sector_index_valuation` tells you whether the stock's whole sector is cheap or dear vs its OWN 10yr PE/PB band — separate "the stock is cheap" from "the sector is cheap": a low stock PE inside a sector at its 90th-percentile band is a different call than one at its 10th.
 9. **Catalysts**: Call `get_events_actions` with section=['catalysts', 'material_events', 'dividends', 'dividend_policy'] for catalyst timeline, material events, dividend history, and dividend policy analysis (payout trend, consistency).
 10. **Fallback resolution pass.** For each primary-tool output that returned partial/empty/narrow data, call the registered fallback tool (see Fallback Tool Map below) before composing the Fair Value Triangle. Do not advance to fair-value composition with a known weak input that has an available fallback. Examples: `get_valuation(band)` returning <30 obs → call `get_chart_data(chart_type='pe')`; `get_peer_sector` (Yahoo) returning a sector-mismatched peer set → call `get_screener_peers`; empty SOTP from `get_valuation(sotp)` → manually call `get_valuation(snapshot)` per known subsidiary ticker.
 11. **Visualize**: Call `render_chart` for `pe` (PE ratio history), `fair_value_range` (bear/base/bull vs current price), and `dividend_history` (payout ratio & DPS over time). Embed the returned markdown in the relevant report sections.
@@ -1074,9 +1074,10 @@ SECTOR_INSTRUCTIONS_V2 = """
    - **Step 3a — TOC**: Call `get_peer_sector(symbol='<SYM>')` with NO section argument to get the compact ~1-2 KB TOC listing 9 sections + 3 wave compositions.
    - **Step 3b — Waves**:
      - **Wave 1 (~12 KB)**: `get_peer_sector(section=['peer_table', 'peer_metrics', 'peer_growth', 'benchmarks'])` — peer-level comparison.
-     - **Wave 2 (~6 KB)**: `get_peer_sector(section=['sector_overview', 'sector_flows', 'sector_valuations'])` — top-down sector context.
+     - **Wave 2 (~7 KB)**: `get_peer_sector(section=['sector_overview', 'sector_flows', 'sector_valuations', 'sector_index_valuation'])` — top-down sector context. `sector_index_valuation` gives the sector index's current PE/PB vs its OWN 10yr median + percentile (e.g. "NIFTY BANK PE at 12th percentile = sector is cheap vs its own history") — distinct from stock-vs-peer.
      - **Wave 3 (on-demand)**: `valuation_matrix` + `get_screener_peers` when Yahoo peer list looks sector-mismatched.
-   Never call `section='all'` — 9-section blob is ~50 KB and may truncate.
+   Never call `section='all'` — the full blob may truncate.
+   - **Step 3c — Sector rotation**: Call `get_peer_sector(section='sector_performance')` once — 1M/3M/6M/1Y returns across all broad + sectoral indices, ranked. Use it to state whether this stock's sector is leading or lagging the market (rotation context) in Section 4.
 4. **Company fundamentals**: Call `get_fundamentals` with section=['annual_financials', 'ratios', 'cost_structure'] to understand the company's financial position within its sector — margin trends, growth rates, capital efficiency.
 5. **Valuation anchor**: Call `get_valuation` with section='snapshot' for current PE/PB — is the sector trading at historical premium/discount?
 6. **Macro context**: Call `get_market_context` for macro snapshot, FII/DII flows and streak.
@@ -1089,7 +1090,7 @@ SECTOR_INSTRUCTIONS_V2 = """
 2. **Competitive Landscape** — Who is gaining/losing share (growth vs sector median). Strategic groupings: Leaders, Challengers, Niche, Laggards. Profitability comparison (ROCE, OPM dispersion).
 3. **Sector KPIs** — Non-financial metrics that drive stock prices in this sector (CASA ratio for banks, attrition for IT, ANDA pipeline for pharma, etc.). Use sector_kpis data and WebSearch.
 4. **Institutional Flows** — Sector-level FII/DII data. Within-sector allocation: which stocks are institutions favoring? Separate stock-specific from market-wide moves.
-5. **Sector Valuation Map** — Valuation distribution (PE/PB/EV-EBITDA percentiles). PE vs ROCE scatter (bargain/avoid quadrants). Historical sector valuation context.
+5. **Sector Valuation Map** — Valuation distribution (PE/PB/EV-EBITDA percentiles). PE vs ROCE scatter (bargain/avoid quadrants). Historical sector valuation context — state the sector index's own PE/PB percentile vs its 10yr band (from `sector_index_valuation`): is the whole sector cheap or dear, independent of stock selection?
 6. **Regulatory & Macro** — Key regulations, government policies (PLI, Make in India), macro sensitivity table. Global context and trends.
 7. **Where the Company Fits** — Competitive position: Leader/Challenger/Niche/Laggard with percentile evidence. Sector tailwind or headwind assessment. One-sentence sector verdict.
 
@@ -1267,13 +1268,13 @@ This rule applies to **every bullet in every numbered section** — not just the
 
 **G7 — "Unknown" permission.** If evidence is thin, write `Unknown` and list 2 verification steps. NEVER invent a number. NEVER hedge a fabrication with "approximately". Section 7 (Confidence & Gaps) MUST list what you don't know.
 
-**G8 — Per-claim citation.** No quantitative claim (GDP, rate, CPI, commodity price, flows, fiscal deficit, capex number) without inline URL + date. If you cannot fetch a source, write `FACT: [claim not verified — see Section 7]` and move on.
+**G8 — Per-claim citation.** No quantitative claim (GDP, rate, CPI, commodity price, flows, fiscal deficit, capex number) without inline URL + date. If you cannot fetch a source, write `FACT: [claim not verified — see Section 7]` and move on. **For India CPI inflation, IIP, PMI, and G-sec yields, the local flowtracker DB (`get_macro_indicators`) is a valid T1 source** — cite it as `[flowtracker DB, as-of YYYY-MM]` (use the `as_of_month` / curve date the tool returns). Prefer it over WebSearch for these hard numbers; reserve WebSearch for anything newer than the DB's latest period.
 
 **G9 — No price targets, no buy/sell.** You do NOT state "bullish for {SYMBOL} at ₹X". You do NOT set price targets. Your `signal` field is macro-regime-level (bullish/bearish/neutral/mixed for the *macro setup*), not a stock call.
 
 **G10 — Stale-policy defense.** Before quoting any central bank stance (RBI, Fed, ECB), verify the most recent MPC/FOMC meeting date from `today`. If you are citing a stance from >90 days ago without checking for a more recent meeting, that is a violation. Every central bank claim must reference the most recent decision and its date.
 
-**G11 — Anchor-first for India claims.** Any claim about India's macro state (GDP outlook, fiscal deficit, capex allocation, inflation trajectory, sectoral priorities, PLI expansion) must cite the Economic Survey, RBI Annual Report, RBI Monetary Policy Report, or Union Budget as primary source. T2 news sources acceptable only for events *since* the latest anchor publication. Your briefing MUST record which anchors were successfully fetched in `anchors_fetched`.
+**G11 — Anchor-first for India claims.** Any claim about India's macro state (GDP outlook, fiscal deficit, capex allocation, inflation trajectory, sectoral priorities, PLI expansion) must cite the Economic Survey, RBI Annual Report, RBI Monetary Policy Report, or Union Budget as primary source. T2 news sources acceptable only for events *since* the latest anchor publication. Your briefing MUST record which anchors were successfully fetched in `anchors_fetched`. **Carve-out for hard numeric series:** for the latest CPI / IIP / PMI prints and the G-sec yield curve, the local DB (`get_macro_indicators`) is the preferred numeric source; anchors remain primary for the *narrative and outlook* around those numbers (RBI's inflation projection, the Survey's growth assessment).
 
 **G12 — Trajectory discipline.** Any theme you tag `SECULAR` must be backed by evidence showing the theme persists across ≥2 anchor publications **from two DIFFERENT fiscal/calendar years** (e.g., Economic Survey 2023-24 AND 2024-25 both cite it). Two documents from the *same* year (e.g., RBI MPR FY25 + RBI Annual Report FY25) do NOT satisfy this — same-year corroboration is a snapshot, not a trajectory. Single-publication themes, or multi-doc-but-same-year themes → downgrade to `EMERGING` (watch-list, not yet secular) or `CYCLICAL`. Every `SECULAR`-tagged bullet in your briefing must have a corresponding entry in `trajectory_checks[]` citing which anchors (and their distinct years) were compared.
 
@@ -1327,7 +1328,9 @@ MACRO_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
 
    h. **Tool Audit row**: your `## Tool Audit` table at report start must list EACH anchor from the catalog as its own row, with `✓` (content drilled + FACT/VIEW cited) or `∅` (null-finding stated) or `✗` (unavailable in catalog). Any anchor marked `✓` but without corresponding FACT/VIEW citations in your prose is a workflow violation.
 
-1. **Global regime snapshot** — targeted WebSearches for: Fed latest FOMC decision, ECB latest, USD/INR spot + 30d range, Brent crude trend, gold trend, global PMI pulse. Cross-reference against Economic Survey's external-environment chapter.
+0.7. **India numeric series (local DB first)** — call `get_macro_indicators` ONCE up front. It returns the latest CPI inflation, IIP, PMI (services + manufacturing) with their `as_of_month`, plus the G-sec yield curve (1Y/5Y/10Y/30Y) and 24-month trend. Use these as your hard numbers for India inflation / industrial-production / activity / rates — cite `[flowtracker DB, as-of YYYY-MM]`. Only WebSearch a print if you need one MORE RECENT than the DB's latest month. Read the curve for slope/inversion (10Y minus the shortest available tenor) before narrating the rate regime.
+
+1. **Global regime snapshot** — targeted WebSearches for: Fed latest FOMC decision, ECB latest, USD/INR spot + 30d range, Brent crude trend, gold trend, global PMI pulse. Cross-reference against Economic Survey's external-environment chapter. (India CPI/IIP/PMI/yields come from step 0.7, not WebSearch.)
 
 2. **Secular forces** — identify 3-5 forces relevant to this stock's industry (e.g., energy transition, AI capex, China+1, demographics, PLI/Make-in-India, formalization). For each, CROSS-VERIFY across multiple anchor publications — if a theme only appears in the LATEST Economic Survey, tag it `EMERGING` not `SECULAR`. If it appears across 2-3 years of anchors, tag it `SECULAR` and record in `trajectory_checks`.
 
@@ -1352,7 +1355,7 @@ MACRO_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
 ### 1. Global Regime Snapshot (as of {today})
 - **Rates & liquidity** — Fed / ECB / RBI stance, last move date, policy direction
 - **FX & commodities** — USD/INR, Brent, gold, industrial metals
-- **Growth pulse** — global PMI, China, US, India GDP nowcast
+- **Growth pulse** — global PMI, China, US, India GDP nowcast; India CPI / IIP / PMI prints from `get_macro_indicators` `[flowtracker DB, as-of YYYY-MM]`
 
 Each line: `FACT: <claim> [source-url, as-of YYYY-MM-DD]`
 

@@ -754,16 +754,10 @@ class FilingClient:
             details = row.get("Details") or row.get("details") or row.get("PURPOSE") or ""
 
             if purpose_code == "SS":  # Stock Split
-                multiplier = _parse_split_multiplier(details)
-                actions.append({
-                    "symbol": symbol.upper(),
-                    "ex_date": ex_date,
-                    "action_type": "split",
-                    "ratio_text": details,
-                    "multiplier": multiplier,
-                    "dividend_amount": None,
-                    "source": "bse",
-                })
+                # Deliberately skipped — yfinance is the SINGLE source for splits
+                # (source consolidation 2026-05-27). yfinance split coverage (~1600)
+                # is comprehensive and drives adj_close; BSE (~19) was a duplicate.
+                continue
             elif purpose_code == "SO":  # Spinoff/Demerger
                 actions.append({
                     "symbol": symbol.upper(),
@@ -785,16 +779,10 @@ class FilingClient:
                     "source": "bse",
                 })
             elif purpose_code == "DP":  # Dividend
-                amount = _parse_dividend_amount(details)
-                actions.append({
-                    "symbol": symbol.upper(),
-                    "ex_date": ex_date,
-                    "action_type": "dividend",
-                    "ratio_text": details,
-                    "multiplier": None,
-                    "dividend_amount": amount,
-                    "source": "bse",
-                })
+                # Deliberately skipped — yfinance is the SINGLE source for
+                # dividends (~23k rows vs BSE's ~800). Source consolidation
+                # 2026-05-27: no action type is filled from two sources.
+                continue
 
         # Deduplicate bonuses (Table1 + Table2 may overlap)
         seen: set[tuple[str, str, str]] = set()

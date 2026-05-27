@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Monthly India macro fetch (CPI / IIP / PMI). India CPI and IIP for month M
+  are published by MoSPI around the 12th of month M+1, and the IMF/IFS
+  (dbnomics) mirror lags a little further. This job runs on the 16th at
+  13:00 IST to give the upstreams a buffer. CPI/IIP default to the dbnomics
+  source; PMI uses the bundled seed. All fetches are idempotent.
+
+  This is a template: __HOME__ is substituted with $HOME by
+  scripts/install-launch-agents.sh at install time. Do not copy this file
+  to ~/Library/LaunchAgents/ directly — run the install script instead.
+
+  Install:
+      bash scripts/install-launch-agents.sh
+
+  Verify:
+      launchctl list | grep flowtracker.monthly-macro
+
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.flowtracker.monthly-macro.plist
+      rm ~/Library/LaunchAgents/com.flowtracker.monthly-macro.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowtracker.monthly-macro</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__HOME__/.local/share/flowtracker/scripts/monthly-macro.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Day</key><integer>16</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
+</dict>
+</plist>
