@@ -1184,7 +1184,11 @@ class TestFetchCorporateActions:
                 actions = client.fetch_corporate_actions("NONE")
         assert actions == []
 
-    def test_parses_all_action_types(self):
+    def test_parses_bse_owned_action_types_only(self):
+        """Source consolidation (2026-05-27): BSE is the single source for
+        bonus / buyback / spinoff only. Splits and dividends are deliberately
+        NOT emitted by the BSE parser — yfinance is the single source for those
+        (comprehensive coverage; bonuses/splits both feed adj_close)."""
         with respx.mock:
             respx.get(url__regex=r"CorporateAction/w").respond(
                 200, json=_BSE_CORP_ACTIONS,
@@ -1195,24 +1199,17 @@ class TestFetchCorporateActions:
 
         types = {a["action_type"] for a in actions}
         assert "bonus" in types
-        assert "split" in types
         assert "spinoff" in types
         assert "buyback" in types
-        assert "dividend" in types
+        # split + dividend are owned by yfinance — BSE must not duplicate them.
+        assert "split" not in types
+        assert "dividend" not in types
 
         # Bonus multiplier computed
         bonus = next(a for a in actions if a["action_type"] == "bonus")
         assert bonus["multiplier"] == 2.0
         assert bonus["symbol"] == "INDIAMART"  # uppercased
         assert bonus["source"] == "bse"
-
-        # Split multiplier computed
-        split = next(a for a in actions if a["action_type"] == "split")
-        assert split["multiplier"] == 5.0
-
-        # Dividend amount parsed
-        div = next(a for a in actions if a["action_type"] == "dividend")
-        assert div["dividend_amount"] == 10.0
 
     def test_deduplicates_by_symbol_date_type(self):
         """Bonus appearing in both Table1 and Table2 should dedupe."""

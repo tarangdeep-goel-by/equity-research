@@ -459,7 +459,7 @@ class TestPeerSectorTOC:
         size = len(json.dumps(toc, default=str))
         assert size < 5000, f"TOC must be <5KB, got {size}"
         assert "available_sections" in toc
-        assert len(toc["available_sections"]) == 9
+        assert len(toc["available_sections"]) == 11
         for s in toc["available_sections"]:
             assert {"key", "size", "purpose"}.issubset(s.keys())
 

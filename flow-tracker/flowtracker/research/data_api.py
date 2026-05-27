@@ -1777,7 +1777,7 @@ class ResearchDataAPI:
         """Compact TOC for get_peer_sector — ~1-2 KB static section menu + waves.
 
         Default response when the agent calls get_peer_sector with no section.
-        Lists all 9 sections + 3 recommended wave compositions so the agent
+        Lists all sections + 3 recommended wave compositions so the agent
         can plan drills without triggering the MCP-truncation failure mode
         that hit get_fundamentals(section='all') and get_ownership(section='all').
         """
@@ -1791,6 +1791,8 @@ class ResearchDataAPI:
             {"key": "sector_flows",       "size": "small", "purpose": "Sector-level FII/DII flow direction + momentum"},
             {"key": "sector_valuations",  "size": "small", "purpose": "Sector-wide valuation percentile vs own history"},
             {"key": "yahoo_peers",        "size": "small", "purpose": "Yahoo-sourced peer set (supplements Screener peers)"},
+            {"key": "sector_index_valuation", "size": "small", "purpose": "The stock's sector INDEX (e.g. NIFTY BANK) PE/PB vs its OWN 10yr median + percentile — is the whole sector cheap/dear?"},
+            {"key": "sector_performance", "size": "small", "purpose": "1M/3M/6M/1Y returns across all broad+sectoral indices, ranked — sector rotation read (symbol-independent)"},
         ]
         waves = [
             {
@@ -1801,9 +1803,9 @@ class ResearchDataAPI:
             },
             {
                 "wave": 2,
-                "label": "Sector context (~6 KB)",
-                "sections": ["sector_overview", "sector_flows", "sector_valuations"],
-                "purpose": "Top-down macro on the sector — flow direction, valuation tier, aggregate size.",
+                "label": "Sector context (~7 KB)",
+                "sections": ["sector_overview", "sector_flows", "sector_valuations", "sector_index_valuation"],
+                "purpose": "Top-down macro on the sector — flow direction, valuation tier, aggregate size, sector-index PE/PB vs own band.",
             },
             {
                 "wave": 3,
@@ -1817,7 +1819,7 @@ class ResearchDataAPI:
             "available_sections": sections,
             "recommended_waves": waves,
             "warnings": {
-                "truncation": "Do NOT call get_peer_sector(section='all') — the ~50 KB payload across 9 sections may truncate. Use recommended_waves.",
+                "truncation": "Do NOT call get_peer_sector(section='all') — the large multi-section payload may truncate. Use recommended_waves.",
                 "seven_plus": "Calling 7+ sections in one list is near the truncation ceiling. Split into Wave 1 + Wave 2 instead.",
             },
             "hint": "Call get_peer_sector(section=[<wave sections>]) using recommended_waves, or section='<single>' for targeted drill. TOC is ~1-2 KB; each wave is 6-12 KB.",
@@ -2536,7 +2538,13 @@ class ResearchDataAPI:
         latest_date = rows[0]["date"]
         result: dict = {"date": latest_date}
         keys = set(rows[0].keys())
-        for field in ("india_vix", "usd_inr", "eur_inr", "gbp_inr", "brent_crude", "gsec_10y"):
+        # Full G-sec curve (1Y/5Y/10Y/30Y) so consumers can read slope/inversion,
+        # not just the 10Y point. Tenors that are null for the recent window are
+        # simply omitted by the coalesce below.
+        for field in (
+            "india_vix", "usd_inr", "eur_inr", "gbp_inr", "brent_crude",
+            "gsec_1y", "gsec_5y", "gsec_10y", "gsec_30y",
+        ):
             if field not in keys:
                 continue
             for row in rows:
@@ -2546,10 +2554,62 @@ class ResearchDataAPI:
                     if row["date"] != latest_date:
                         result[f"{field}_as_of"] = row["date"]
                     break
+        # Monthly India macro series (CPI / IIP / PMI). These are monthly, so each
+        # carries an explicit as_of_month to keep the daily snapshot honest about
+        # staleness (temporal-grounding rule).
+        cpi = self._store.get_cpi_latest()
+        if cpi:
+            result["cpi_inflation"] = {
+                "yoy_pct": cpi.yoy_pct, "index": cpi.cpi_index, "as_of_month": cpi.period,
+            }
+        iip = self._store.get_iip_latest()
+        if iip:
+            result["iip"] = {
+                "yoy_pct": iip.yoy_pct, "index": iip.iip_index, "as_of_month": iip.period,
+            }
+        pmi = self._store.get_pmi_latest()
+        if pmi:
+            result["pmi"] = {
+                "services": pmi.services_pmi, "manufacturing": pmi.manufacturing_pmi,
+                "as_of_month": pmi.period,
+            }
         sc = self.get_system_credit_snapshot()
         if sc:
             result["system_credit"] = sc
         return _clean(result)
+
+    def get_macro_indicators(self, months: int = 24) -> dict:
+        """India macro time-series for the macro agent: CPI / IIP / PMI trend +
+        the full G-sec yield-curve history.
+
+        Returns latest + trailing ``months`` of each monthly series (newest
+        first) plus the daily yield curve over the same horizon. This is the
+        local-DB T1 numeric source — the macro agent should cite it for India
+        CPI/IIP/PMI/yield numbers instead of WebSearch.
+        """
+        months = max(1, int(months))
+        cpi_latest = self._store.get_cpi_latest()
+        iip_latest = self._store.get_iip_latest()
+        pmi_latest = self._store.get_pmi_latest()
+        curve_latest = self._store.get_yield_curve_latest()
+        return _clean({
+            "cpi": {
+                "latest": cpi_latest.model_dump() if cpi_latest else None,
+                "trend": self._store.get_cpi_trend(months),
+            },
+            "iip": {
+                "latest": iip_latest.model_dump() if iip_latest else None,
+                "trend": self._store.get_iip_trend(months),
+            },
+            "pmi": {
+                "latest": pmi_latest.model_dump() if pmi_latest else None,
+                "trend": self._store.get_pmi_trend(months),
+            },
+            "yield_curve": {
+                "latest": curve_latest,
+                "history": self._store.get_yield_curve_history(days=months * 31),
+            },
+        })
 
     def get_system_credit_snapshot(self) -> dict:
         """Latest RBI WSS weekly system-credit aggregate as a plain dict.
@@ -2642,6 +2702,30 @@ class ResearchDataAPI:
                 "change_1m_pct": _brent_change(22),
                 "change_3m_pct": _brent_change(66),
                 "change_1y_pct": _brent_change(252),
+            }
+
+        # Gold BeES ETF NAV (Nippon India ETF Gold BeES, scheme 140088) — the
+        # INR-denominated tradeable gold proxy, alongside spot gold above.
+        etf_rows = self._store.get_etf_navs("140088", days=400)
+        etf_data = sorted(
+            [(r.date, r.nav) for r in etf_rows if r.nav], key=lambda x: x[0]
+        )
+        if etf_data:
+            latest_nav = etf_data[-1][1]
+
+            def _nav_change(days_ago: int, _data=etf_data, _latest=latest_nav) -> float | None:
+                target_idx = max(0, len(_data) - days_ago)
+                if target_idx < len(_data) and _data[target_idx][1]:
+                    return round((_latest - _data[target_idx][1]) / _data[target_idx][1] * 100, 1)
+                return None
+
+            result["gold_etf_nav"] = {
+                "scheme": "Nippon India ETF Gold BeES",
+                "nav": latest_nav,
+                "date": etf_data[-1][0],
+                "change_1m_pct": _nav_change(22),
+                "change_3m_pct": _nav_change(66),
+                "change_1y_pct": _nav_change(252),
             }
 
         return _clean(result) if result else {"available": False, "reason": "No commodity data"}
@@ -9389,9 +9473,12 @@ class ResearchDataAPI:
 
         today = date.today()
 
-        # Period definitions
+        # Period definitions. 3Y/5Y/Since-Listing exploit the full adj_close
+        # history (legacy-bhavcopy backfill spans ~19yr); since-listing is
+        # appended below once the earliest available bar is known.
         period_defs = [
             ("1M", 30), ("3M", 90), ("6M", 180), ("1Y", 365),
+            ("3Y", 1095), ("5Y", 1825),
         ]
 
         # Get split/bonus-adjusted stock prices from DB. adj_close collapses
@@ -9401,7 +9488,7 @@ class ResearchDataAPI:
         conn = self._store._conn
         stock_rows = conn.execute(
             "SELECT date, COALESCE(adj_close, close) AS price FROM daily_stock_data "
-            "WHERE symbol = ? ORDER BY date DESC LIMIT 400",
+            "WHERE symbol = ? ORDER BY date DESC LIMIT 6000",
             (symbol.upper(),)
         ).fetchall()
 
@@ -9412,6 +9499,13 @@ class ResearchDataAPI:
         latest_date = max(stock_prices.keys())
         latest_price = stock_prices[latest_date]
 
+        # Since-listing: full available history, added only when it materially
+        # exceeds 5Y (otherwise it duplicates the 5Y row).
+        earliest_d = date.fromisoformat(min(stock_prices.keys()))
+        since_days = (today - earliest_d).days
+        if since_days > 1825:
+            period_defs.append(("Since Listing", since_days))
+
         # Nifty 50 index prices — from cache or live yfinance
         if index_cache and "^NSEI" in index_cache:
             nifty_prices = index_cache["^NSEI"]
@@ -9419,7 +9513,7 @@ class ResearchDataAPI:
             try:
                 import yfinance as yf
                 nifty = yf.Ticker("^NSEI")
-                hist = nifty.history(period="1y")
+                hist = nifty.history(period="max")
                 nifty_prices = {str(d.date()): row["Close"] for d, row in hist.iterrows()}
             except Exception:
                 nifty_prices = {}
@@ -9435,7 +9529,7 @@ class ResearchDataAPI:
                 try:
                     import yfinance as yf
                     sec = yf.Ticker(sector_idx)
-                    hist = sec.history(period="1y")
+                    hist = sec.history(period="max")
                     sector_prices = {str(d.date()): row["Close"] for d, row in hist.iterrows()}
                 except Exception:
                     pass
@@ -9496,6 +9590,88 @@ class ResearchDataAPI:
             "industry": industry,
             "outperformer": outperformer,
         }
+
+    # --- Sector index valuation & performance (index_valuation_daily / index_daily_prices) ---
+
+    # _resolve_sector_index() ticker → index_valuation_daily index_name.
+    # Covers every ticker that resolver can emit; unmapped → broad Nifty 500.
+    _VALUATION_INDEX_BY_TICKER = {
+        "^NSEBANK": "NIFTY BANK",
+        "^CNXIT": "NIFTY IT",
+        "^CNXPHARMA": "NIFTY PHARMA",
+        "^CNXFMCG": "NIFTY FMCG",
+        "NIFTY_AUTO.NS": "NIFTY AUTO",
+        "NIFTY_REALTY.NS": "NIFTY REALTY",
+        "NIFTY_METAL.NS": "NIFTY METAL",
+        "^CRSLDX": "NIFTY 500",
+    }
+
+    # Broad + sectoral indices stored in index_daily_prices, with display labels.
+    _SECTOR_PERF_INDICES = [
+        ("^NSEI", "Nifty 50"), ("^CRSLDX", "Nifty 500"), ("^CRSMID", "Nifty Midcap 150"),
+        ("^NSEBANK", "Bank"), ("NIFTY_FIN_SERVICE.NS", "Financial Services"), ("^CNXPSUBANK", "PSU Bank"),
+        ("^CNXIT", "IT"), ("^CNXPHARMA", "Pharma"), ("^CNXAUTO", "Auto"),
+        ("^CNXFMCG", "FMCG"), ("^CNXMETAL", "Metal"), ("^CNXREALTY", "Realty"),
+        ("^CNXENERGY", "Energy"), ("^CNXINFRA", "Infrastructure"), ("^CNXMEDIA", "Media"),
+        ("^CNXCONSUM", "Consumption"), ("^CNXSERVICE", "Services"), ("^CNXMNC", "MNC"),
+    ]
+
+    def get_sector_index_valuation(self, symbol: str) -> dict:
+        """Sectoral PE/PB vs its own history for ``symbol``'s sector index.
+
+        Resolves the stock's industry → sector index (reusing
+        ``_resolve_sector_index``), maps to the ``index_valuation_daily`` name,
+        and returns current PE/PB/Div-Yield + 10yr median + percentile rank.
+        Falls back to the broad Nifty 500 when the sector can't be mapped.
+        """
+        industry = self._get_industry(symbol)
+        ticker = self._resolve_sector_index(industry)
+        index_name = self._VALUATION_INDEX_BY_TICKER.get(ticker, "NIFTY 500")
+        pct = self._store.get_index_valuation_percentile(index_name)
+        if not pct:
+            return {
+                "available": False,
+                "reason": f"No valuation history for {index_name}",
+                "index_name": index_name,
+            }
+        pct["resolved_from"] = {
+            "symbol": symbol.upper(),
+            "industry": industry,
+            "sector_index_ticker": ticker,
+        }
+        return _clean(pct)
+
+    def get_sector_index_performance(self) -> dict:
+        """1M/3M/6M/1Y price returns for the broad + sectoral indices, ranked by
+        1Y return — a sector-rotation read across the whole market."""
+        out = []
+        for ticker, label in self._SECTOR_PERF_INDICES:
+            prices = self._store.get_index_prices(ticker, days=400)
+            data = sorted(
+                [(p["date"], p["close"]) for p in prices if p["close"]],
+                key=lambda x: x[0],
+            )
+            if len(data) < 2:
+                continue
+            latest = data[-1][1]
+
+            def _chg(days_ago: int, _d=data, _l=latest) -> float | None:
+                idx = max(0, len(_d) - days_ago)
+                if idx < len(_d) and _d[idx][1]:
+                    return round((_l - _d[idx][1]) / _d[idx][1] * 100, 1)
+                return None
+
+            out.append({
+                "index": label, "ticker": ticker, "date": data[-1][0],
+                "return_1m_pct": _chg(22), "return_3m_pct": _chg(66),
+                "return_6m_pct": _chg(132), "return_1y_pct": _chg(252),
+            })
+        if not out:
+            return {"available": False, "reason": "No index price data"}
+        ranked = sorted(
+            out, key=lambda x: (x["return_1y_pct"] is None, -(x["return_1y_pct"] or 0))
+        )
+        return _clean({"as_of": out[0]["date"], "indices": ranked})
 
     # --- News ---
 

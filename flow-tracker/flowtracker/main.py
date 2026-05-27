@@ -59,6 +59,7 @@ from flowtracker.cpi_commands import app as cpi_app
 from flowtracker.iip_commands import app as iip_app
 from flowtracker.pmi_commands import app as pmi_app
 from flowtracker.yield_curve_commands import app as yield_curve_app
+from flowtracker.mf_nav_commands import app as mfnav_app
 from flowtracker.models import DailyFlow
 from flowtracker.store import FlowStore
 from flowtracker.utils import parse_period
@@ -100,6 +101,7 @@ app.add_typer(cpi_app)
 app.add_typer(iip_app)
 app.add_typer(pmi_app)
 app.add_typer(yield_curve_app, name="yield-curve")
+app.add_typer(mfnav_app, name="mfnav", help="Daily MF scheme NAV history (mfapi.in)")
 console = Console()
 
 

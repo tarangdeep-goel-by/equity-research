@@ -3515,9 +3515,16 @@ class FlowStore:
         if latest is None:
             return {}
 
-        pe_series = [r["pe"] for r in rows if r["pe"] is not None]
-        pb_series = [r["pb"] for r in rows if r["pb"] is not None]
-        divy_series = [r["dividend_yield"] for r in rows if r["dividend_yield"] is not None]
+        # Outlier guard: index PE explodes toward infinity when aggregate
+        # earnings collapse to ~0 (e.g. NIFTY MEDIA/AUTO/REALTY during COVID →
+        # PE 700-7800) and a handful of source glitches sit even higher
+        # (SMALLCAP 250 PE 44,711 in 2016, MNC 58,551 in 2021). These are real
+        # rows but analytically meaningless and skew the distribution, so they
+        # are excluded from the percentile/median sample. Current values are
+        # still reported as-is by get_index_valuation_latest.
+        pe_series = [r["pe"] for r in rows if r["pe"] is not None and 0 < r["pe"] <= 200]
+        pb_series = [r["pb"] for r in rows if r["pb"] is not None and 0 < r["pb"] <= 40]
+        divy_series = [r["dividend_yield"] for r in rows if r["dividend_yield"] is not None and 0 <= r["dividend_yield"] <= 15]
 
         first_row = self._conn.execute(
             "SELECT date FROM index_valuation_daily "
@@ -3546,7 +3553,7 @@ class FlowStore:
             "pe_percentile": _percentile_rank(latest.pe, pe_series),
             "pb_percentile": _percentile_rank(latest.pb, pb_series),
             "divy_percentile": _percentile_rank(latest.dividend_yield, divy_series),
-            "sample_size": len(rows),
+            "sample_size": len(pe_series),
             "history_start": first_row["date"] if first_row else None,
             "history_end": last_row["date"] if last_row else None,
         }

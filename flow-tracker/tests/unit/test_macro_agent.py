@@ -81,11 +81,12 @@ def test_macro_instructions_include_workflow_and_briefing():
 
 
 def test_macro_tools_registered():
-    """Macro agent has anchor-reading MCP tools (get_macro_catalog + get_macro_anchor)."""
-    assert len(MACRO_AGENT_TOOLS_V2) == 2
+    """Macro agent has anchor-reading tools + the local-DB numeric-series tool."""
+    assert len(MACRO_AGENT_TOOLS_V2) == 3
     tool_names = {t.name for t in MACRO_AGENT_TOOLS_V2}
     assert "get_macro_catalog" in tool_names
     assert "get_macro_anchor" in tool_names
+    assert "get_macro_indicators" in tool_names
 
 
 def test_macro_in_agent_constants():

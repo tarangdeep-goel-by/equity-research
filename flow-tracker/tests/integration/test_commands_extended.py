@@ -221,3 +221,51 @@ class TestFundCommands:
     def test_fund_valuation(self, tmp_db, populated_store, monkeypatch):
         result = _run(tmp_db, populated_store, monkeypatch, ["fund", "valuation", "SBIN"])
         assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# MF scheme NAV commands (mfnav)
+# ---------------------------------------------------------------------------
+
+
+class TestMFNavCommands:
+    def test_mfnav_latest_empty(self, tmp_db, populated_store, monkeypatch):
+        # populated_store does not seed mf_scheme_nav_daily — the command
+        # must handle the empty universe gracefully, not crash.
+        result = _run(tmp_db, populated_store, monkeypatch, ["mfnav", "latest"])
+        assert result.exit_code == 0
+        assert "No NAVs stored" in result.output or "NAV" in result.output
+
+    def test_mfnav_trend_empty(self, tmp_db, populated_store, monkeypatch):
+        result = _run(
+            tmp_db, populated_store, monkeypatch, ["mfnav", "trend", "--scheme", "118955"]
+        )
+        assert result.exit_code == 0
+        assert "No NAV history" in result.output or "NAV" in result.output
+
+    def test_mfnav_latest_with_data(self, tmp_db, populated_store, monkeypatch):
+        # Seed two NAV rows for one scheme, then verify the latest table
+        # renders the scheme code and the most recent NAV.
+        from flowtracker.mf_nav_models import MFSchemeNav
+
+        with FlowStore(db_path=tmp_db) as store:
+            store.upsert_mf_scheme_navs(
+                [
+                    MFSchemeNav(
+                        scheme_code=118955,
+                        scheme_name="HDFC Flexi Cap Fund",
+                        date="2026-05-26",
+                        nav=2158.762,
+                    ),
+                    MFSchemeNav(
+                        scheme_code=118955,
+                        scheme_name="HDFC Flexi Cap Fund",
+                        date="2026-05-23",
+                        nav=2155.001,
+                    ),
+                ]
+            )
+        result = _run(tmp_db, populated_store, monkeypatch, ["mfnav", "latest"])
+        assert result.exit_code == 0
+        assert "118955" in result.output
+        assert "HDFC Flexi Cap" in result.output

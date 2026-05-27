@@ -19,11 +19,13 @@ from httpx import Response
 from flowtracker.cpi_client import (
     CPIClient,
     CPIClientError,
+    parse_dbnomics_cpi,
     parse_fred_csv as parse_cpi_fred_csv,
     parse_mospi_release_text,
 )
 from flowtracker.iip_client import (
     IIPClient,
+    parse_dbnomics_iip,
     parse_fred_csv as parse_iip_fred_csv,
     parse_mospi_iip_text,
 )
@@ -201,6 +203,87 @@ class TestCPIClientLiveFetch:
                 ) is None
 
 
+# A trimmed dbnomics /series payload: parallel period/value arrays under
+# series.docs[0]. 2023 baseline + 2024 follow-on so YoY is exactly computable.
+# "2024-04" is a string "NA" (dbnomics' missing-obs marker) and must be skipped.
+_CPI_DBNOMICS = {
+    "series": {
+        "docs": [
+            {
+                "@frequency": "monthly",
+                "series_code": "M.IN.PCPI_IX",
+                "series_name": "Monthly – India – CPI, All items, Index",
+                "period": [
+                    "2023-01", "2023-02", "2023-03",
+                    "2024-01", "2024-02", "2024-03", "2024-04",
+                ],
+                "value": [
+                    200.0, 201.0, 202.0,
+                    210.0, 211.05, 212.1, "NA",
+                ],
+            },
+        ],
+    },
+}
+
+
+class TestCPIDbnomicsParser:
+    def test_parses_and_computes_yoy(self):
+        rows = parse_dbnomics_cpi(_CPI_DBNOMICS, source_url="https://db.example/cpi")
+        by_period = {r.period: r for r in rows}
+        # 2024-04 is "NA" -> skipped entirely.
+        assert "2024-04" not in by_period
+        # 2024-01 vs 2023-01: 210/200 - 1 = 5.0%
+        assert by_period["2024-01"].cpi_index == pytest.approx(210.0)
+        assert by_period["2024-01"].yoy_pct == pytest.approx(5.0)
+        assert by_period["2024-01"].source == "dbnomics"
+        assert by_period["2024-01"].source_url == "https://db.example/cpi"
+        # 2023-01 has no 2022-01 prior -> yoy None, index still present.
+        assert by_period["2023-01"].cpi_index == pytest.approx(200.0)
+        assert by_period["2023-01"].yoy_pct is None
+        # Ascending order.
+        assert [r.period for r in rows] == sorted(r.period for r in rows)
+
+    def test_empty_payload_returns_empty(self):
+        assert parse_dbnomics_cpi({}) == []
+        assert parse_dbnomics_cpi({"series": {"docs": []}}) == []
+
+
+class TestCPIClientDbnomicsFetch:
+    def test_fetch_latest_from_dbnomics(self, cpi_seed):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(url__regex=r"db\.nomics").mock(
+                return_value=Response(200, json=_CPI_DBNOMICS),
+            )
+            with CPIClient(seed=cpi_seed) as client:
+                latest = client.fetch_from_dbnomics()
+                everything = client.fetch_all_from_dbnomics()
+        # Latest valid period is 2024-03 (2024-04 was "NA").
+        assert latest is not None
+        assert latest.period == "2024-03"
+        assert latest.cpi_index == pytest.approx(212.1)
+        assert latest.yoy_pct == pytest.approx(round((212.1 / 202.0 - 1) * 100, 2))
+        assert len(everything) == 6  # 7 obs minus the NA row
+
+    def test_fetch_named_period_from_dbnomics(self, cpi_seed):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(url__regex=r"db\.nomics").mock(
+                return_value=Response(200, json=_CPI_DBNOMICS),
+            )
+            with CPIClient(seed=cpi_seed) as client:
+                row = client.fetch_from_dbnomics("2024-02")
+        assert row is not None
+        assert row.period == "2024-02"
+        assert row.cpi_index == pytest.approx(211.05)
+
+    def test_http_error_returns_none_and_empty(self, cpi_seed):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(url__regex=r"db\.nomics").mock(return_value=Response(503))
+            with CPIClient(seed=cpi_seed) as client:
+                assert client.fetch_from_dbnomics() is None
+                assert client.fetch_all_from_dbnomics() == []
+
+
 # ---------------------------------------------------------------------------
 # IIP client
 # ---------------------------------------------------------------------------
@@ -242,6 +325,66 @@ class TestIIPFREDCSV:
         rows = parse_iip_fred_csv(csv)
         assert [r.period for r in rows] == ["2024-01", "2024-02"]
         assert rows[0].iip_index == pytest.approx(151.7)
+
+
+_IIP_DBNOMICS = {
+    "series": {
+        "docs": [
+            {
+                "@frequency": "monthly",
+                "series_code": "M.IN.AIP_IX",
+                "series_name": "Monthly – India – Industrial Production, Index",
+                "period": [
+                    "2023-09", "2023-10",
+                    "2024-09", "2024-10",
+                ],
+                "value": [
+                    140.0, 150.0,
+                    147.0, "NA",  # 2024-10 missing
+                ],
+            },
+        ],
+    },
+}
+
+
+class TestIIPDbnomicsParser:
+    def test_parses_and_computes_yoy(self):
+        rows = parse_dbnomics_iip(_IIP_DBNOMICS, source_url="https://db.example/iip")
+        by_period = {r.period: r for r in rows}
+        assert "2024-10" not in by_period  # "NA" skipped
+        # 2024-09 vs 2023-09: 147/140 - 1 = 5.0%
+        assert by_period["2024-09"].iip_index == pytest.approx(147.0)
+        assert by_period["2024-09"].yoy_pct == pytest.approx(5.0)
+        assert by_period["2024-09"].source == "dbnomics"
+        # 2023-09 has no prior -> yoy None.
+        assert by_period["2023-09"].yoy_pct is None
+
+    def test_empty_payload_returns_empty(self):
+        assert parse_dbnomics_iip({}) == []
+
+
+class TestIIPClientDbnomicsFetch:
+    def test_fetch_latest_from_dbnomics(self, iip_seed):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(url__regex=r"db\.nomics").mock(
+                return_value=Response(200, json=_IIP_DBNOMICS),
+            )
+            with IIPClient(seed=iip_seed) as client:
+                latest = client.fetch_from_dbnomics()
+                everything = client.fetch_all_from_dbnomics()
+        # Latest valid period is 2024-09 (2024-10 was "NA").
+        assert latest is not None
+        assert latest.period == "2024-09"
+        assert latest.yoy_pct == pytest.approx(5.0)
+        assert len(everything) == 3
+
+    def test_http_error_returns_none(self, iip_seed):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(url__regex=r"db\.nomics").mock(return_value=Response(500))
+            with IIPClient(seed=iip_seed) as client:
+                assert client.fetch_from_dbnomics() is None
+                assert client.fetch_all_from_dbnomics() == []
 
 
 # ---------------------------------------------------------------------------
@@ -333,41 +476,48 @@ class TestYieldCurveClient:
 # ---------------------------------------------------------------------------
 
 
-# Realistic CCIL HTML fragment with the four tenors we care about.
+# Realistic CCIL HTML fragment with the four tenors we care about, in the
+# current point-tenor range-bucket format (1Y-2Y / 4Y-5Y / 9Y-10Y / 28Y-30Y).
+# Neighbouring buckets (13Y-15Y, plus standalone SDL "10Y"/"15Y" rows) are
+# included so the boundary anchoring is exercised — the "1y" pattern must not
+# latch onto "13Y-15Y" and the "10y" pattern must not latch onto the SDL "10Y".
 _CCIL_HTML = """
 <table>
-  <tr><td>2025-05-26</td><td>0Y-1Y</td><td>6.40% GS 2026</td><td>6.45</td></tr>
-  <tr><td>2025-05-26</td><td>4Y-5Y</td><td>6.99% GS 2031</td><td>6.62</td></tr>
-  <tr><td>2025-05-26</td><td>9Y-10Y</td><td>6.33% GS 2035</td><td>6.58</td></tr>
-  <tr><td>2025-05-26</td><td>19Y-Above</td><td>7.30% GS 2053</td><td>6.90</td></tr>
+  <tr><td>2026-05-26</td><td>1Y-2Y</td><td>7.02% GS 2027</td><td>6.45</td></tr>
+  <tr><td>2026-05-26</td><td>4Y-5Y</td><td>6.36% GS 2031</td><td>6.62</td></tr>
+  <tr><td>2026-05-26</td><td>9Y-10Y</td><td>6.48% GS 2035</td><td>6.58</td></tr>
+  <tr><td>2026-05-26</td><td>13Y-15Y</td><td>6.68% GS 2040</td><td>7.37</td></tr>
+  <tr><td>2026-05-26</td><td>28Y-30Y</td><td>7.24% GS 2055</td><td>6.90</td></tr>
+  <tr><td>2026-05-26</td><td>10Y</td><td>7.77% MEGHALAYA SGS 2036</td><td>7.77</td></tr>
+  <tr><td>2026-05-26</td><td>15Y</td><td>7.84% BIHAR SGS 2041</td><td>7.84</td></tr>
 </table>
 """
 
 
 class TestCCILMultiTenorParser:
     def test_parses_each_tenor(self):
-        # 0Y-1Y
+        # 1Y-2Y
         assert _parse_ccil_tenor(
             _CCIL_HTML,
-            r"0\s*Y?\s*[-–]\s*1\s*Y",
+            r"1\s*Y\s*[-–]\s*2\s*Y",
             label="1y",
         ) == pytest.approx(6.45)
         # 4Y-5Y
         assert _parse_ccil_tenor(
             _CCIL_HTML,
-            r"4\s*Y?\s*[-–]\s*5\s*Y",
+            r"4\s*Y\s*[-–]\s*5\s*Y",
             label="5y",
         ) == pytest.approx(6.62)
         # 9Y-10Y
         assert _parse_ccil_tenor(
             _CCIL_HTML,
-            r"9\s*Y?\s*[-–]\s*10\s*Y",
+            r"9\s*Y\s*[-–]\s*10\s*Y",
             label="10y",
         ) == pytest.approx(6.58)
-        # 19Y-Above
+        # 28Y-30Y
         assert _parse_ccil_tenor(
             _CCIL_HTML,
-            r"19\s*Y\s*[-–]\s*Above",
+            r"28\s*Y\s*[-–]\s*30\s*Y",
             label="30y",
         ) == pytest.approx(6.90)
 

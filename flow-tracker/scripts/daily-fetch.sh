@@ -61,7 +61,8 @@ run_with_retry "python -m flowtracker fund fetch --valuation-only" "Valuation sn
 # so subsequent calls proceed regardless. `breadth recompute` MUST run AFTER
 # `bhavcopy fetch` because it consumes today's prices that bhavcopy just landed.
 run_with_retry "flowtrack surveillance fetch" "Surveillance flags (ASM/GSM/ESM)"
-run_with_retry "flowtrack indexpe fetch" "Index PE/PB/Yield (4 indices)"
+run_with_retry "flowtrack indexpe fetch" "Index PE/PB/Div-Yield (all supported indices)"
+run_with_retry "flowtrack mfnav fetch" "MF scheme daily NAVs (mfapi.in)"
 run_with_retry "flowtrack ipo fetch" "IPO pipeline (upcoming/current/listings)"
 run_with_retry "flowtrack breadth recompute" "Market breadth (post-bhavcopy)"
 
