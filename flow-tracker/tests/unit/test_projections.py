@@ -99,6 +99,39 @@ class TestDaRatioRouting:
         assert strat["ratio"] == 0.02
         assert strat["source"] == "real_estate_fallback"
 
+    @pytest.mark.parametrize(
+        "token",
+        [
+            "energy",
+            "power",
+            "Power Generation",
+            "Power Generation & Distribution",
+            "Renewable Energy",
+            "Electric Utilities",
+            "Green Energy",
+            "Power Transmission",
+        ],
+    )
+    def test_da_ratio_energy_power_resolves_to_7pct(self, token):
+        """Energy/power/renewable tokens → 7% ratio (NOT the 2% unresolved default)."""
+        strat = _resolve_da_strategy(
+            industry=token, latest_rev=10_000, latest_dep=600, latest_net_block=None
+        )
+        assert strat["mode"] == "ratio"
+        assert strat["ratio"] == 0.07
+        assert strat["source"] == "energy_power_default"
+        assert strat["ratio"] != 0.02  # explicitly not the unresolved default
+        assert any("power" in c.lower() or "renewable" in c.lower() for c in strat["caveats"])
+
+    def test_da_ratio_genuinely_unknown_token_still_2pct(self):
+        """A genuinely-unknown industry token must still fall through to 2% default."""
+        strat = _resolve_da_strategy(
+            industry="widgets", latest_rev=10_000, latest_dep=300, latest_net_block=None
+        )
+        assert strat["mode"] == "ratio"
+        assert strat["ratio"] == 0.02
+        assert strat["source"] == "unresolved_default"
+
     def test_da_ratio_unresolved_industry_uses_midpoint_with_caveat(self):
         """Unknown industry → 2% midpoint + explicit 'unresolved' caveat."""
         strat = _resolve_da_strategy(

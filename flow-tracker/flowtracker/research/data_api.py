@@ -25,6 +25,62 @@ logger = logging.getLogger(__name__)
 # fraction, prefer Screener and log a warning so the discrepancy is traceable.
 _SHARE_COUNT_TOLERANCE = 0.05
 
+# Curated parent→listed-subsidiary fallback for SOTP, used only when the
+# `listed_subsidiaries` DB table has no rows for the parent. Each entry carries
+# ONLY ticker + name + relationship + a COARSE stake flagged for verification —
+# no live financials (those go stale; the agent fetches live market cap). The
+# `source`/`verify_note` fields tell the agent to treat the stake as a candidate
+# to confirm against the latest shareholding filing, not as gospel. NSE tickers.
+# Real DB rows always take precedence over this map.
+_CURATED_LISTED_SUBSIDIARIES: dict[str, list[dict]] = {
+    "NTPC": [
+        {
+            "sub_symbol": "NTPCGREEN",
+            "sub_name": "NTPC Green Energy",
+            "parent_ownership_pct": 89.0,
+            "relationship": "listed renewable-energy subsidiary",
+        },
+    ],
+    "BHARTIARTL": [
+        {
+            "sub_symbol": "AIRTELAFRICA",
+            "sub_name": "Airtel Africa",
+            "parent_ownership_pct": 56.0,
+            "relationship": (
+                "listed African telecom subsidiary — LSE-PRIMARY/foreign "
+                "listing, not NSE"
+            ),
+        },
+    ],
+    "HDFCBANK": [
+        {
+            "sub_symbol": "HDB",
+            "sub_name": "HDB Financial Services",
+            "parent_ownership_pct": 94.0,
+            "relationship": "listed NBFC subsidiary (IPO 2025)",
+        },
+    ],
+    "SBIN": [
+        {
+            "sub_symbol": "SBILIFE",
+            "sub_name": "SBI Life Insurance",
+            "parent_ownership_pct": 55.0,
+            "relationship": "listed life-insurance subsidiary",
+        },
+        {
+            "sub_symbol": "SBICARD",
+            "sub_name": "SBI Cards & Payment Services",
+            "parent_ownership_pct": 69.0,
+            "relationship": "listed credit-card subsidiary",
+        },
+    ],
+}
+_CURATED_SUB_SOURCE = "curated_map"
+_CURATED_SUB_VERIFY_NOTE = (
+    "stake approximate — confirm vs latest shareholding filing; "
+    "fetch live market cap"
+)
+
 
 def _is_bridged(flag: dict, *, required_parent: str | None = None) -> bool:
     """Return True iff flag carries a conserved aggregate_bridge.
@@ -73,9 +129,17 @@ def _reconcile_shares_outstanding(
 
 
 def _percentile_rank(values: list[float], value: float) -> float:
-    """Simple percentile rank: % of values strictly below the given value."""
-    below = sum(1 for v in values if v < value)
-    return round(100 * below / len(values)) if values else 0
+    """Simple percentile rank: % of values strictly below the given value.
+
+    Tolerates non-numeric contamination (e.g. Screener '-'/'NA' placeholders):
+    coerces ``values`` to floats, drops non-numerics, and returns 0 gracefully
+    when ``value`` itself isn't numeric.
+    """
+    if not isinstance(value, (int, float)):
+        return 0
+    numeric = [v for v in values if isinstance(v, (int, float))]
+    below = sum(1 for v in numeric if v < value)
+    return round(100 * below / len(numeric)) if numeric else 0
 
 
 def _ema(series: list[float], period: int) -> list[float]:
@@ -587,6 +651,22 @@ class ResearchDataAPI:
         """
         subs = self._store.get_listed_subsidiaries(symbol)
 
+        # Curated fallback: only when the DB table has no rows for this parent.
+        # Real DB rows always take precedence. Curated entries carry source +
+        # verify_note so the agent treats the coarse stake as a candidate to
+        # confirm (NTPC, BHARTIARTL, HDFCBANK, SBIN).
+        if not subs:
+            curated = _CURATED_LISTED_SUBSIDIARIES.get(symbol.upper())
+            if curated:
+                subs = [
+                    {
+                        **row,
+                        "source": _CURATED_SUB_SOURCE,
+                        "verify_note": _CURATED_SUB_VERIFY_NOTE,
+                    }
+                    for row in curated
+                ]
+
         # Always run auto-discovery so recently-listed children surface
         # even when no curated mapping exists yet.
         auto_window_days = 180
@@ -655,6 +735,9 @@ class ResearchDataAPI:
                     "parent_stake_value_cr": round(parent_stake_cr) if parent_stake_cr else None,
                     "per_share_value": round(per_share_value, 2) if per_share_value else None,
                 }
+                if row.get("source"):
+                    entry["source"] = row["source"]
+                    entry["verify_note"] = row.get("verify_note")
                 if is_recent:
                     entry["recently_listed"] = True
                     entry["listed_on"] = first_date
@@ -674,6 +757,9 @@ class ResearchDataAPI:
                     "per_share_value": None,
                     "needs_refresh": True,
                 }
+                if row.get("source"):
+                    entry["source"] = row["source"]
+                    entry["verify_note"] = row.get("verify_note")
                 if is_recent:
                     entry["recently_listed"] = True
                     entry["listed_on"] = first_date
@@ -1130,6 +1216,18 @@ class ResearchDataAPI:
             # carries the same 2x bug as its share count.
             if price:
                 snap["market_cap"] = round(price * shares / 1e7, 2)
+                # EV = mcap + total_debt - total_cash. yfinance's enterprise_value
+                # inherits the same doubled-share inflation as its mcap, so recompute
+                # it from the corrected mcap (PIDILITIND showed ~2x-inflated EV).
+                # market_cap/total_debt/total_cash are all stored in crores
+                # (fund_client._to_cr at ingestion), so no unit conversion needed.
+                if snap.get("enterprise_value") is not None:
+                    snap["enterprise_value"] = round(
+                        snap["market_cap"]
+                        + (snap.get("total_debt") or 0)
+                        - (snap.get("total_cash") or 0),
+                        2,
+                    )
         mcap = snap.get("market_cap") or 0  # already in crores
         if float_shares and price:
             snap["free_float_mcap_cr"] = round(float_shares * price / 1e7, 2)
@@ -3695,7 +3793,10 @@ class ResearchDataAPI:
                 years = len(fcfs) - 1
                 try:
                     cagr = (latest / oldest) ** (1 / years) - 1
-                    if cagr > 0.30:
+                    # 0.45 cap: reject only genuinely implausible perpetual-ish
+                    # FCF CAGR. The old 0.30 cap rejected legitimate high-growth
+                    # names (PIDILITIND).
+                    if cagr > 0.45:
                         return "growth_above_limits"
                 except (ValueError, ZeroDivisionError):
                     pass
@@ -4749,7 +4850,14 @@ class ResearchDataAPI:
         sector_stats: dict = {}
         subject_percentiles: dict = {}
         for metric in self._MATRIX_METRICS:
-            values = [e[metric] for e in all_entries if metric in e and e[metric] is not None]
+            # Coerce to float and drop non-numeric placeholders ('-'/'NA'/str)
+            # before quantiles/min/max — a mixed column would raise a TypeError
+            # (`'<' not supported between float and str`), e.g. OLAELEC.
+            values = [
+                float(e[metric])
+                for e in all_entries
+                if metric in e and isinstance(e[metric], (int, float))
+            ]
             if len(values) < 2:
                 continue
             quantiles = statistics.quantiles(values, n=4)
@@ -8029,7 +8137,16 @@ class ResearchDataAPI:
         valuation = self.get_valuation_snapshot(symbol)
         market_cap = valuation.get("market_cap")
         if not market_cap or market_cap <= 0:
-            return {"error": "No market cap data"}
+            # The snapshot only looks back 7 days, which misses slightly-stale
+            # rows (HINDUNILVR). Retry over a wider window before giving up.
+            wide_hist = self._store.get_valuation_history(symbol, days=90)
+            for snap in reversed(wide_hist):  # oldest-first → most recent last
+                mcap = getattr(snap, "market_cap", None)
+                if mcap and mcap > 0:
+                    market_cap = mcap
+                    break
+            if not market_cap or market_cap <= 0:
+                return {"error": "No market cap data"}
 
         latest = annual[0]  # most recent year
         prev = annual[1]

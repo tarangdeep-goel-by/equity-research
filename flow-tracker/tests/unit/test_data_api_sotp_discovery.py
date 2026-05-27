@@ -49,11 +49,13 @@ def _seed_company(s, sym, name):
     s._conn.commit()
 
 
+# Synthetic parent/child decoupled from the curated SOTP map (which now
+# covers NTPC/SBIN/etc.) so these tests exercise auto-discovery in isolation.
 def _seed_ntpc_with_green(api, days_ago=60):
     today = date.today()
-    _seed_company(api._store, "NTPC", "NTPC LIMITED")
-    _seed_listing(api._store, "NTPCGREEN", today - timedelta(days=days_ago))
-    _seed_promoter(api._store, "NTPCGREEN", "NTPC Limited", 88.0, "Mar 2026")
+    _seed_company(api._store, "TESTPAR", "TESTPAR LIMITED")
+    _seed_listing(api._store, "TESTGREEN", today - timedelta(days=days_ago))
+    _seed_promoter(api._store, "TESTGREEN", "TESTPAR Limited", 88.0, "Mar 2026")
 
 
 def test_discover_recent_listings_finds_within_window(api):
@@ -93,39 +95,39 @@ def test_find_promoter_owned_children_no_match_unrelated_promoter(api):
 
 def test_get_listed_subsidiaries_augments_with_auto_discovered(api, monkeypatch):
     _seed_ntpc_with_green(api)
-    api._store.upsert_listed_subsidiary("NTPC", "OLDCURATED", "Old Curated", 60.0, "Sub")
+    api._store.upsert_listed_subsidiary("TESTPAR", "OLDCURATED", "Old Curated", 60.0, "Sub")
     api._store._conn.execute(
         "INSERT INTO valuation_snapshot (symbol, date, shares_outstanding) "
-        "VALUES ('NTPC', ?, 9700000000)",
+        "VALUES ('TESTPAR', ?, 9700000000)",
         (date.today().isoformat(),),
     )
     api._store._conn.commit()
     monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(
         Ticker=lambda sym: type("T", (), {"info": {"marketCap": 0}})()
     ))
-    out = api.get_listed_subsidiaries("NTPC")
+    out = api.get_listed_subsidiaries("TESTPAR")
     assert out and len(out["subsidiaries"]) == 1
     assert len(out["auto_discovered_candidates"]) == 1
-    assert out["auto_discovered_candidates"][0]["symbol"] == "NTPCGREEN"
+    assert out["auto_discovered_candidates"][0]["symbol"] == "TESTGREEN"
     assert out["auto_discovered_candidates"][0]["confidence"] == "auto_discovered_needs_verification"
 
 
 def test_get_listed_subsidiaries_zero_manual_with_auto_returns_dict(api):
     _seed_ntpc_with_green(api)
-    out = api.get_listed_subsidiaries("NTPC")
+    out = api.get_listed_subsidiaries("TESTPAR")
     assert out and out["subsidiaries"] == []
     assert len(out["auto_discovered_candidates"]) == 1
-    assert out["auto_discovered_candidates"][0]["symbol"] == "NTPCGREEN"
+    assert out["auto_discovered_candidates"][0]["symbol"] == "TESTGREEN"
 
 
 def test_get_listed_subsidiaries_zero_manual_zero_auto_returns_none(api):
-    _seed_company(api._store, "NTPC", "NTPC LIMITED")
-    assert api.get_listed_subsidiaries("NTPC") is None
+    _seed_company(api._store, "TESTPAR", "TESTPAR LIMITED")
+    assert api.get_listed_subsidiaries("TESTPAR") is None
 
 
 def test_auto_discovery_window_meta_present(api):
     _seed_ntpc_with_green(api)
-    out = api.get_listed_subsidiaries("NTPC")
+    out = api.get_listed_subsidiaries("TESTPAR")
     assert out["_meta"]["auto_discovery_window_days"] == 180
 
 
