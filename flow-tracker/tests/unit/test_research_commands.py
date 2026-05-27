@@ -499,3 +499,54 @@ class TestHelpSmoke:
         assert result.exit_code == 0, result.output
         # Each command's typer-generated help should mention --help.
         assert "--help" in result.output
+
+
+class TestDocPipelineSkipAr:
+    """`_run_document_pipeline(include_ar=...)` — eval skips the AR extractor."""
+
+    @staticmethod
+    def _patch(monkeypatch, calls):
+        import flowtracker.research.annual_report_extractor as ar
+        import flowtracker.research.concall_extractor as cc
+        import flowtracker.research.deck_extractor as dk
+
+        async def fake_concall(*a, **k):
+            calls.append("concall")
+            return {"quarters_analyzed": 1, "_new_quarters_extracted": 0}
+
+        async def fake_deck(*a, **k):
+            calls.append("deck")
+            return {"quarters_analyzed": 1, "_new_quarters_extracted": 0}
+
+        async def fake_ar(*a, **k):
+            calls.append("ar")
+            return {"years_analyzed": [], "_new_years_extracted": 0}
+
+        monkeypatch.setattr(cc, "ensure_concall_data", fake_concall)
+        monkeypatch.setattr(dk, "ensure_deck_data", fake_deck)
+        monkeypatch.setattr(ar, "ensure_annual_report_data", fake_ar)
+
+    def _run(self):
+        import asyncio
+        import io
+
+        from rich.console import Console
+
+        import flowtracker.research_commands as rc
+        return rc, asyncio, Console(file=io.StringIO())
+
+    def test_skip_ar_runs_concall_deck_only(self, monkeypatch):
+        calls: list = []
+        self._patch(monkeypatch, calls)
+        rc, asyncio, console = self._run()
+        res = asyncio.run(rc._run_document_pipeline("TESTCO", None, console, include_ar=False))
+        assert "ar" not in calls
+        assert set(calls) == {"concall", "deck"}
+        assert res["ar"] is None
+
+    def test_include_ar_runs_all_three(self, monkeypatch):
+        calls: list = []
+        self._patch(monkeypatch, calls)
+        rc, asyncio, console = self._run()
+        asyncio.run(rc._run_document_pipeline("TESTCO", None, console, include_ar=True))
+        assert set(calls) == {"concall", "deck", "ar"}

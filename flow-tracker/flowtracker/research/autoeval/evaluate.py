@@ -210,7 +210,10 @@ def run_agent(agent: str, stock: str) -> tuple[float, bool]:
     cwd = Path(__file__).resolve().parents[3]  # flow-tracker/
     start = time.monotonic()
     proc = subprocess.Popen(
-        ["uv", "run", "flowtrack", "research", "run", agent, "-s", stock],
+        # --skip-ar: the eval ensures fresh concall + deck (the docs recent work
+        # improved) but skips the expensive annual-report extraction. AR is
+        # annual/unchanged; any cached AR stays readable to agents.
+        ["uv", "run", "flowtrack", "research", "run", agent, "-s", stock, "--skip-ar"],
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
