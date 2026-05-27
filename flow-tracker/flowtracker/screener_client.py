@@ -89,7 +89,7 @@ class ScreenerClient:
         self._email, self._password = _load_credentials()
         self._client = httpx.Client(
             follow_redirects=True,
-            timeout=httpx.Timeout(connect=15, read=45, write=10, pool=10),
+            timeout=httpx.Timeout(connect=10, read=10, write=10, pool=10),
             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"},
         )
         self._is_consolidated: bool = True  # Set by fetch_company_page
@@ -121,7 +121,7 @@ class ScreenerClient:
         if "/login/" in str(resp.url):
             raise ScreenerError("Login failed — check credentials in screener.env")
 
-    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> httpx.Response:
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 1, **kwargs) -> httpx.Response:
         """HTTP request with exponential backoff and session recovery."""
         last_exc = None
         for attempt in range(max_retries + 1):
