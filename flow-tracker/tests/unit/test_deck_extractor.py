@@ -114,8 +114,7 @@ class TestClassifyDeckPdf:
         )
         _mock_pdfium(monkeypatch, pages=1, first3_text=first3)
 
-        markdown = "## Nestl India Limited\n\nReg 30 boilerplate\n" * 20
-        c = _classify_deck_pdf(pdf, markdown=markdown, headings_count=2)
+        c = _classify_deck_pdf(pdf)
         assert c.is_deck is False
         assert c.confidence == "high"
         assert c.pages == 1
@@ -133,7 +132,7 @@ class TestClassifyDeckPdf:
         ) * 10  # ~1.3KB, well under 2500 chars
         _mock_pdfium(monkeypatch, pages=4, first3_text=first3)
 
-        c = _classify_deck_pdf(pdf, markdown="## Foo\n\nbody " * 50, headings_count=1)
+        c = _classify_deck_pdf(pdf)
         assert c.is_deck is False
         assert c.has_disclosure_marker is True
         assert "Reg 30 cover-letter signature" in c.reason
@@ -155,19 +154,17 @@ class TestClassifyDeckPdf:
         ) * 30
         _mock_pdfium(monkeypatch, pages=38, first3_text=first3)
 
-        markdown = "## Slide 1\n## Slide 2\n## Slide 3\n" + ("body " * 1000)
-        c = _classify_deck_pdf(pdf, markdown=markdown, headings_count=39)
+        c = _classify_deck_pdf(pdf)
         assert c.is_deck is True
         assert c.confidence == "high"
         assert c.pages == 38
 
-    def test_image_heavy_deck_low_confidence_accept(self, tmp_path, monkeypatch):
-        """30-page glossy deck with sparse Docling text — accept low-confidence.
+    def test_image_heavy_deck_accepted_high_confidence(self, tmp_path, monkeypatch):
+        """32-page glossy deck with near-zero extractable text — accept HIGH.
 
-        Real-world counter-example to the previous markdown-only rule:
-        page count says deck, Docling produces little text because slides
-        are image-heavy. Previously this would have been rejected — now
-        it's accepted with confidence='low' and a data_quality_note.
+        Page count alone is decisive now: extraction reads page images via the
+        VLM, so sparse text layer is irrelevant. (Under the old markdown rule
+        this was a low-confidence accept; post-VLM it's a confident deck.)
         """
         from flowtracker.research.deck_extractor import _classify_deck_pdf
 
@@ -177,33 +174,36 @@ class TestClassifyDeckPdf:
         first3 = "Investor Day 2026\nFY26 Results\nQ3 Business Update\n" * 5
         _mock_pdfium(monkeypatch, pages=32, first3_text=first3)
 
-        # Sparse Docling markdown — under the 2KB / 3-headings threshold.
-        c = _classify_deck_pdf(
-            pdf, markdown="## Cover\n\nlight content", headings_count=1
-        )
+        c = _classify_deck_pdf(pdf)
         assert c.is_deck is True
-        assert c.confidence == "low"
+        assert c.confidence == "high"
         assert c.pages == 32
 
-    def test_short_real_deck_with_rich_markdown_accepted(self, tmp_path, monkeypatch):
-        """5-page real deck (rare) with rich markdown → accept low-confidence."""
+    def test_short_deck_no_disclosure_accepted_low(self, tmp_path, monkeypatch):
+        """5-page PDF, no disclosure signature → accept low-confidence.
+
+        The VLM reads images, so a short deck without the cover-letter signature
+        is handed through (low-confidence) rather than rejected on text density.
+        """
         from flowtracker.research.deck_extractor import _classify_deck_pdf
 
         pdf = tmp_path / "investor_deck.pdf"
         pdf.write_bytes(b"%PDF-stub")
-        first3 = "AGM 2026\nQuarterly Highlights\n" * 30  # ~1.5KB, no disclosure
+        first3 = "AGM 2026\nQuarterly Highlights\n" * 30  # no disclosure markers
         _mock_pdfium(monkeypatch, pages=5, first3_text=first3)
 
-        markdown = "## Highlights\n## Segments\n## Outlook\n## Capex\n" + (
-            "body " * 500
-        )
-        c = _classify_deck_pdf(pdf, markdown=markdown, headings_count=4)
+        c = _classify_deck_pdf(pdf)
         assert c.is_deck is True
         # 5 pages < _DECK_LOW_CONFIDENCE_PAGES(10), so confidence must be low
         assert c.confidence == "low"
 
-    def test_no_pdfium_falls_back_to_markdown(self, tmp_path, monkeypatch):
-        """If pypdfium2 import fails, classifier uses markdown heuristic only."""
+    def test_no_pdfium_fails_open_accept(self, tmp_path, monkeypatch):
+        """If pypdfium2 import fails, classifier fails open → accept low-confidence.
+
+        Without Docling there's no secondary signal, so a transient pdfium
+        failure must not lose a real deck — accept and let extraction proceed.
+        """
+        import builtins
         import sys
 
         from flowtracker.research.deck_extractor import _classify_deck_pdf
@@ -211,13 +211,6 @@ class TestClassifyDeckPdf:
         pdf = tmp_path / "investor_deck.pdf"
         pdf.write_bytes(b"%PDF-stub")
 
-        # Force ImportError by inserting a sentinel that raises on attribute access.
-        class _RaisingModule:
-            def __getattr__(self, name):
-                raise ImportError("pypdfium2 not available in this env")
-
-        # Easier: remove from sys.modules and block re-import via builtins.__import__.
-        import builtins
         real_import = builtins.__import__
 
         def fake_import(name, *args, **kwargs):
@@ -228,16 +221,10 @@ class TestClassifyDeckPdf:
         monkeypatch.setattr(builtins, "__import__", fake_import)
         sys.modules.pop("pypdfium2", None)
 
-        # Rich markdown → accept low-confidence.
-        c1 = _classify_deck_pdf(
-            pdf, markdown="## A\n## B\n## C\n" + ("x" * 5000), headings_count=5
-        )
-        assert c1.is_deck is True
-        assert c1.confidence == "low"
-
-        # Sparse markdown → reject.
-        c2 = _classify_deck_pdf(pdf, markdown="## A\nshort", headings_count=1)
-        assert c2.is_deck is False
+        c = _classify_deck_pdf(pdf)
+        assert c.is_deck is True
+        assert c.confidence == "low"
+        assert "fail-open" in c.reason
 
 
 class TestBuildImageMessage:
@@ -323,12 +310,6 @@ class TestExtractSingleDeckImages:
 
     @staticmethod
     def _wire(deck_mod, monkeypatch, pages: int):
-        from types import SimpleNamespace
-
-        monkeypatch.setattr(
-            deck_mod, "extract_to_markdown",
-            lambda p, c: SimpleNamespace(markdown="md", headings=["h"], from_cache=True, degraded=False),
-        )
         monkeypatch.setattr(
             deck_mod, "_classify_deck_pdf",
             lambda *a, **k: deck_mod._DeckClassification(True, "high", "ok", pages, 100, False),
@@ -394,17 +375,12 @@ class TestExtractSingleDeckImages:
 
     def test_rejected_deck_skips_render_and_claude(self, tmp_path, monkeypatch):
         import flowtracker.research.deck_extractor as deck_mod
-        from types import SimpleNamespace
 
         qdir = tmp_path / "FY25-Q1"
         qdir.mkdir()
         pdf = qdir / "investor_deck.pdf"
         pdf.write_bytes(b"%PDF-stub")
 
-        monkeypatch.setattr(
-            deck_mod, "extract_to_markdown",
-            lambda p, c: SimpleNamespace(markdown="", headings=[], from_cache=False, degraded=False),
-        )
         monkeypatch.setattr(
             deck_mod, "_classify_deck_pdf",
             lambda *a, **k: deck_mod._DeckClassification(False, "high", "only 1 page", 1, 0, False),

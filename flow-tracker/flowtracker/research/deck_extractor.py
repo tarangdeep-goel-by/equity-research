@@ -1,14 +1,18 @@
-"""Extract structured insights from investor deck PDFs using Docling + Claude Agent SDK.
+"""Extract structured insights from investor deck PDFs using vision (Claude Agent SDK).
 
 Pipeline per deck:
-  1. doc_extractor.extract_to_markdown() → Docling produces markdown + heading index
-  2. Claude Sonnet 4.6 reads the markdown, fills a deck-specific JSON schema
+  1. pdfium gate (_classify_deck_pdf) rejects Reg 30 cover letters by page count
+     + disclosure-marker signature
+  2. _render_deck_pages renders every slide to a PNG; the VLM reads the page
+     images directly (charts/printed numbers a markdown extractor drops) and
+     fills a deck-specific JSON schema
   3. Per-quarter JSON is aggregated into deck_extraction.json alongside the concall
      extraction in fundamentals/
 
 Complements the concall pipeline — decks show polished charts, segmental tables,
 and forward guidance slides that the raw concall transcript doesn't expose as
-tables. Concalls stay on pdfplumber (see doc_extractor.py notes).
+tables. Images-only: a deck's value (charts, segment numbers, guidance) is visual,
+so reading rendered pages beats text extraction.
 """
 from __future__ import annotations
 
@@ -30,7 +34,6 @@ from claude_agent_sdk import (
     query,
 )
 
-from flowtracker.research.doc_extractor import extract_to_markdown
 from flowtracker.research.heading_toc import deck_slide_index
 
 logger = logging.getLogger(__name__)
@@ -88,104 +91,60 @@ class _DeckClassification(NamedTuple):
     has_disclosure_marker: bool
 
 
-def _classify_deck_pdf(pdf_path: Path, markdown: str, headings_count: int) -> _DeckClassification:
+def _classify_deck_pdf(pdf_path: Path) -> _DeckClassification:
     """Decide whether a downloaded ``investor_deck.pdf`` is a real deck.
 
-    Combines pdfium-based page/text signals with the Docling markdown signals.
-    Page count is the primary discriminator — cover letters are 1-3 pages,
-    real decks are 10-50 pages. Disclosure-marker phrases catch the rare
-    multi-page Reg 30 letter. The Docling markdown signals (heading count,
-    total chars) are used only as a secondary guard for the ambiguous
-    middle band (3-9 pages, no disclosure markers): an image-heavy real
-    deck typically still produces 2KB+ of markdown across all pages even
-    when the first three are mostly title slides.
-
-    Falls back to acceptance on any pdfium failure — the original markdown
-    heuristic ran post-Docling so callers never had a way to short-circuit;
-    we mirror that fail-open behaviour to avoid losing real decks on
-    transient pypdfium2 errors.
+    pdfium-only (no Docling). Page count is the primary discriminator — cover
+    letters are 1-3 pages, real decks are 10-50. Disclosure-marker phrases in
+    the first three pages catch the rare multi-page Reg 30 letter. Short PDFs
+    in the 3-9 page band without that signature are accepted as low-confidence:
+    extraction now reads page images via the VLM, so sparse extractable text is
+    no longer a reason to reject (it would falsely drop image-heavy decks).
+    Fails open (accept) on any pypdfium2 error so transient failures don't lose
+    real decks — mirrors ``_looks_like_real_*`` accept-on-error semantics.
     """
-    pages = 0
-    first3 = ""
-    pdfium_ok = False
     try:
         import pypdfium2 as pdfium  # type: ignore[import-untyped]
+        doc = pdfium.PdfDocument(str(pdf_path))
         try:
-            doc = pdfium.PdfDocument(str(pdf_path))
-        except Exception:
-            doc = None
-        if doc is not None:
-            try:
-                pages = len(doc)
-                first3 = "".join(
-                    doc[i].get_textpage().get_text_range()
-                    for i in range(min(3, pages))
-                )
-                pdfium_ok = True
-            finally:
-                doc.close()
-    except ImportError:
-        # No pypdfium2 — fall through to markdown-only decision below.
-        pass
+            pages = len(doc)
+            first3 = "".join(
+                doc[i].get_textpage().get_text_range() for i in range(min(3, pages))
+            )
+        finally:
+            doc.close()
+    except Exception:
+        return _DeckClassification(
+            True, "low", "pypdfium2 unavailable/parse error — accepting (fail-open)",
+            0, 0, False,
+        )
 
     has_disclosure = any(m in first3.lower() for m in _DECK_DISCLOSURE_MARKERS) if first3 else False
 
-    if pdfium_ok:
-        # Hard reject: too few pages to be a deck, period.
-        if pages < _DECK_HARD_REJECT_PAGES:
-            return _DeckClassification(
-                False, "high",
-                f"pdf has only {pages} page(s) — never a real deck",
-                pages, len(first3), has_disclosure,
-            )
-        # Hard reject: short PDF with disclosure markers AND sparse first-3
-        # text — the canonical Reg 30 cover-letter signature.
-        if (
-            pages < _DECK_LOW_CONFIDENCE_PAGES
-            and has_disclosure
-            and len(first3.strip()) < _DECK_FIRST3_TEXT_THRESHOLD
-        ):
-            return _DeckClassification(
-                False, "high",
-                f"pages={pages} + disclosure markers + first3_chars={len(first3.strip())} "
-                f"matches Reg 30 cover-letter signature",
-                pages, len(first3), has_disclosure,
-            )
-        # Real deck if it has decent length OR the markdown extractor produced
-        # enough structure to work with. Image-heavy decks can be very short
-        # on extractable text but still 30+ pages — accept those as
-        # low-confidence so downstream knows the markdown may be sparse.
-        markdown_rich = headings_count >= 3 and len(markdown) >= 2000
-        if pages >= _DECK_LOW_CONFIDENCE_PAGES or markdown_rich:
-            confidence = "high" if (pages >= _DECK_LOW_CONFIDENCE_PAGES and markdown_rich) else "low"
-            return _DeckClassification(
-                True, confidence,
-                f"pages={pages}, headings={headings_count}, md_chars={len(markdown)}",
-                pages, len(first3), has_disclosure,
-            )
-        # 3-9 pages, no clear disclosure markers, sparse markdown → reject as
-        # ambiguous-but-likely-not-deck. Real short decks (e.g. AGM teaser)
-        # tend to still have headings/charts that Docling captures.
+    # Hard reject: too few pages to be a deck, period.
+    if pages < _DECK_HARD_REJECT_PAGES:
         return _DeckClassification(
-            False, "high",
-            f"pages={pages} but headings={headings_count} and md_chars={len(markdown)} "
-            f"too sparse for a real deck",
+            False, "high", f"pdf has only {pages} page(s) — never a real deck",
             pages, len(first3), has_disclosure,
         )
-
-    # pdfium unavailable / parse failure — fall back to the original
-    # markdown-only heuristic so we don't lose real decks on transient
-    # errors. This matches `_looks_like_real_*` accept-on-error semantics.
-    if headings_count < 3 or len(markdown) < 2000:
+    # Hard reject: short PDF with disclosure markers AND sparse first-3 text —
+    # the canonical Reg 30 cover-letter signature.
+    if (
+        pages < _DECK_LOW_CONFIDENCE_PAGES
+        and has_disclosure
+        and len(first3.strip()) < _DECK_FIRST3_TEXT_THRESHOLD
+    ):
         return _DeckClassification(
-            False, "low",
-            "pdfium unavailable; markdown sparse (headings<3 or chars<2000)",
-            0, 0, False,
+            False, "high",
+            f"pages={pages} + disclosure markers + first3_chars={len(first3.strip())} "
+            f"matches Reg 30 cover-letter signature",
+            pages, len(first3), has_disclosure,
         )
+    # >=10 pages → confident real deck; 3-9 pages without the cover-letter
+    # signature → accept low-confidence (the VLM reads the images regardless).
+    confidence = "high" if pages >= _DECK_LOW_CONFIDENCE_PAGES else "low"
     return _DeckClassification(
-        True, "low",
-        "pdfium unavailable; markdown looks rich enough",
-        0, 0, False,
+        True, confidence, f"pages={pages}", pages, len(first3), has_disclosure,
     )
 
 # --- Sector-specific extraction hint ---
@@ -566,33 +525,21 @@ async def _extract_single_deck(
     model: str,
     industry: str | None = None,
 ) -> dict:
-    """Extract one deck PDF → structured JSON. Handles Docling + Claude extraction."""
+    """Extract one deck PDF → structured JSON via images-only VLM extraction."""
     import time as _time
     t0 = _time.time()
     quarter_label = _quarter_label_from_path(pdf_path)
 
-    # Docling pass (cached via doc_extractor)
-    cache_dir = pdf_path.parent
-    extraction = extract_to_markdown(pdf_path, cache_dir)
-
-    # Classifier — see _classify_deck_pdf for the rule. Combines pdfium page
-    # count + first-3-page text + disclosure markers with the Docling markdown
-    # signals so image-heavy real decks (low text density, high page count)
-    # don't get falsely rejected, while Reg 30 cover letters are caught
-    # consistently regardless of which surface (filing_client at download
-    # time, or the extractor at re-classify time) sees them first.
-    classification = _classify_deck_pdf(
-        pdf_path,
-        markdown=extraction.markdown,
-        headings_count=len(extraction.headings),
-    )
+    # Classifier — pdfium-only gate (see _classify_deck_pdf). Rejects Reg 30
+    # cover letters by page count + disclosure-marker signature, consistently
+    # with filing_client's download-time check.
+    classification = _classify_deck_pdf(pdf_path)
     if not classification.is_deck:
         logger.warning(
             "[deck] %s %s: classifier rejected (%s) — pages=%d, first3_chars=%d, "
-            "headings=%d, md_chars=%d, disclosure_marker=%s",
+            "disclosure_marker=%s",
             symbol, quarter_label, classification.reason,
             classification.pages, classification.first3_chars,
-            len(extraction.headings), len(extraction.markdown),
             classification.has_disclosure_marker,
         )
         return {
@@ -601,8 +548,6 @@ async def _extract_single_deck(
             "extraction_error": classification.reason,
             "pages": classification.pages,
             "first3_chars": classification.first3_chars,
-            "headings_detected": len(extraction.headings),
-            "chars": len(extraction.markdown),
             "has_disclosure_marker": classification.has_disclosure_marker,
         }
 
@@ -610,7 +555,7 @@ async def _extract_single_deck(
     if classification.confidence == "low":
         data_quality_note = (
             f"Low-confidence classification: {classification.reason}. "
-            "Image-heavy deck — extracted fields may under-represent slide content."
+            "Short deck or classifier ran without full page signal — treat coverage cautiously."
         )
         logger.info(
             "[deck] %s %s: low-confidence accept — %s",
@@ -682,8 +627,6 @@ async def _extract_single_deck(
     data["_extraction_mode"] = "images"
     data["_pages_rendered"] = total
     data["_chunks"] = len(batches)
-    data["_docling_cached"] = extraction.from_cache
-    data["_docling_degraded"] = extraction.degraded
     data["_classifier_confidence"] = classification.confidence
     if data_quality_note:
         data["data_quality_note"] = data_quality_note
