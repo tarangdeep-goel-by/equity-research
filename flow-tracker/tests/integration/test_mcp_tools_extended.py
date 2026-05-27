@@ -629,9 +629,13 @@ class TestSectionEnumValidation:
         from flowtracker.research.tools import get_annual_report
         result = await get_annual_report.handler({"symbol": "SBIN", "section": "auditor_report"})
         data = _parse_tool_result(result)
-        # Valid section routes through to the API (no validation error envelope).
-        assert not (isinstance(data, dict) and data.get("error", "").startswith("Invalid section"))
-        assert result.get("is_error") is not True
+        # A valid section must NOT be rejected as an invalid-enum value (no
+        # did-you-mean validation envelope). It MAY still return a data-absence
+        # error ("No AR extractions found…") when the vault has no AR for this
+        # symbol — that is correct Phase-0 behavior (is_error=True is right), and
+        # CI has no vault data, so we don't assert is_error here.
+        assert not (isinstance(data, dict) and "valid_values" in data)
+        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid section"))
 
     @pytest.mark.asyncio
     async def test_fundamentals_invalid_section_is_rejected(self, db_env):
