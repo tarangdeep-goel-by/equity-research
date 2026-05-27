@@ -15,6 +15,9 @@ _INDUSTRY_DA_RATIOS: dict[str, tuple[float, str, str | None]] = {
     "metals": (0.05, "metals_default", None),
     "cement": (0.05, "cement_default", None),
     "auto": (0.05, "auto_default", None),
+    # Asset-heavy power / energy / renewables (regulatory capex cycles drive high D&A)
+    "energy": (0.07, "energy_power_default",
+               "Asset-heavy power/renewables — D&A ~7% of revenue per regulatory capex cycles."),
     # Asset-light platforms / IT services / insurance / marketplaces
     "it_services": (0.01, "it_services_default",
                     "Industry classified as 'it_services' — D&A 1% of revenue per asset-light routing."),
@@ -81,6 +84,30 @@ def _resolve_da_strategy(
                 "Industry classified as 'real_estate' but net_block unavailable — "
                 "fell back to 2% of revenue."
             ],
+        }
+
+    # Energy/power/renewables: match common Screener/industry tokens (substring,
+    # case-insensitive) → asset-heavy 7% D&A entry. Checked before exact-key
+    # lookup so multi-word labels (e.g. "Power Generation & Distribution",
+    # "Renewable Energy", "Electric Utilities") resolve correctly.
+    if any(
+        tok in ind
+        for tok in (
+            "power",
+            "renewable",
+            "electric utilit",
+            "energy",
+            "power generation",
+            "green energy",
+            "transmission",
+        )
+    ):
+        ratio, source, caveat = _INDUSTRY_DA_RATIOS["energy"]
+        return {
+            "mode": "ratio",
+            "ratio": ratio,
+            "source": source,
+            "caveats": [caveat] if caveat else [],
         }
 
     if ind in _INDUSTRY_DA_RATIOS:

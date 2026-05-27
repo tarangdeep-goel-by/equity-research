@@ -126,7 +126,7 @@ These boundaries exist because the multi-agent architecture has specific roles:
 
 **Signal–narrative consistency.** The `signal` field in your briefing (`bullish | bearish | neutral | mixed`) must match the report's own findings. "Mixed" is reserved for genuine tension (strong operations + poor valuation, or vice versa) — not a cop-out when the report is clearly bullish or bearish. Before writing the final `signal`, re-read your Top-3 findings: if they're uniformly concerning (volume contraction, zero incremental ROCE, negative estimate momentum), the signal is bearish. If uniformly positive, bullish. Match the arrow to the math.
 
-**Tool-registry discipline.** Do NOT invent tool `section` or `sub_section` values — every such argument must match the tool's registered list. If unsure, call the tool with no section argument first; tools return a table of contents listing valid sections. Guessing names (e.g., `revenue_segments` when only `expense_breakdown` exists, or an undocumented `segments` on `get_fundamentals`) fails the call and leaves you with no data for that section. The registered sections for `get_fundamentals` are: `quarterly_results | annual_financials | ratios | quarterly_balance_sheet | quarterly_cash_flow | expense_breakdown | growth_rates | capital_allocation | rate_sensitivity | cagr_table | cost_structure | balance_sheet_detail | cash_flow_quality | working_capital`.
+**Tool-registry discipline.** Do NOT invent tool `section` or `sub_section` values — every such argument must match the tool's registered list, which is enumerated in the tool's input schema and shown in its no-argument table of contents. An out-of-vocab value is rejected with a did-you-mean error and returns no data, so when unsure call the tool with no section first. Guessing names (e.g., `revenue_segments` when only `expense_breakdown` exists, or an undocumented `segments` on `get_fundamentals`) just wastes the call.
 
 **Open questions over speculation** — When you observe a trend but can't determine the cause from your tools, pose it as an open question rather than speculating. The web research analyst will find the answer. Speculating wastes reader trust; asking gets the answer.
 
@@ -815,11 +815,7 @@ End with a JSON code block:
 
 **Per-share derivation chain.** Every "target price" MUST have a visible per-share chain: `blended_fv_cr → /shares_outstanding → per_share_target`. Use `calculate(operation='total_cr_to_per_share', a=<blended_cr>, b=<shares_outstanding (RAW count, e.g. 964157160 for NESTLEIND)>)` — do NOT compute per-share via in-prose division. **Pass `b` as the raw integer share count from `get_valuation(section='snapshot')['shares_outstanding']`, NOT the human-readable `shares_outstanding_lakh` field (that's divided by 1e5) and NOT shares-in-crores.** The calculate tool now rejects implausibly-low share counts (< 1 lakh) with a UNIT_ERROR — read that error and re-pass the raw count. The calc output must appear in your Tool Audit and its exact number must match the per-share figure in prose.
 
-**Tool-registry re-reminder.** Valid sections for frequently-misused tools:
-- `get_quality_scores`: `bfsi | metals | telecom | default` (no other sections exist). For cashflow quality use `get_fundamentals(section='cash_flow_quality')` — that is a DIFFERENT tool.
-- `get_valuation`: `snapshot | sotp | wacc | peer_metrics | pe_band | pbv_band | ev_ebitda_band`.
-- `get_fair_value_analysis`: returns composite — do not section-filter.
-Hallucinating sections puts fabricated content in the report.
+**Tool-registry re-reminder.** Each tool's valid `section` values live in its input schema and its no-argument TOC — don't invent them; an out-of-vocab value is rejected with a did-you-mean error. Two easily-confused cases worth calling out: for cashflow quality use `get_fundamentals(section='cash_flow_quality')`, NOT `get_quality_scores` — they are DIFFERENT tools; and `get_fair_value_analysis` returns a composite — do not section-filter it. Hallucinating sections puts fabricated content in the report.
 
 **Auto-SOTP is a seed, not a final.** Treat `get_valuation(section='sotp')` output as a starting point. Always cross-check against current market caps for listed subsidiaries (HDB Financial Services, NTPCGREEN, Adani Green, SBI Life etc.) via `get_market_context(section='peer_metrics')` when the subsidiary is listed. If auto-SOTP is empty, incomplete, or stale (>30 days old or missing a recently-listed subsidiary), follow the shared-preamble A1.4 manual-SOTP rule.
 """
@@ -896,6 +892,7 @@ RISK_INSTRUCTIONS_V2 = """
 6. **Corporate context**: Call `get_company_context` with section=['concall_insights', 'filings']. Concall insights surface regulatory commentary, management's risk acknowledgments, and governance signals that structured data misses. BSE filings catch credit rating changes, auditor appointments, and material disclosures.
 6b. Before finalizing your risk briefing, you MUST read: get_annual_report(section='auditor_report') — Key Audit Matters, qualified opinions, emphasis-of-matter paragraphs, going-concern notes; section='risk_management' — top-risk framework, new risks this year, mitigation quality; section='related_party' — concentration risk, arms-length statements, material RPTs. Auditor KAMs are the single highest-signal governance input available and must appear in every Risk report where a FY AR exists. Cite as (source: FY?? AR, auditor_report). If the auditor opinion is clean and KAMs are routine, write one sentence saying so + cite — a clean null-finding is information, a skipped mandatory section is not.
 7. **Upcoming triggers**: Call `get_events_actions` with section=['catalysts', 'material_events'] for upcoming catalysts and material corporate events. `material_events` surfaces credit rating changes, auditor resignations, order wins, acquisitions, management changes, and fund raises — check for governance red flags.
+7b. **Bear-case downside (Pre-Mortem)**: Call `get_fair_value_analysis(section='reverse_dcf')` to back out the growth/margin the current price implies — if the market is already pricing demanding assumptions, the downside on a miss is the quantified bear case for Section 6. Use it (not a hand-waved %) to anchor the 30-50% decline scenario.
 
 **Example — good vs bad risk analysis:**
 Bad: "Promoter pledge data unavailable."
@@ -997,6 +994,7 @@ TECHNICAL_INSTRUCTIONS_V2 = """
 4. **Sector context**: Call `get_peer_sector` with section='benchmarks' for sector percentiles.
 5. **Earnings signal**: Call `get_estimates` with section=['momentum', 'revisions'] for estimate revision direction — rising estimates + rising delivery = genuine accumulation.
 6. **Positioning**: Call `get_ownership` with section=['mf_changes', 'insider'] for MF scheme-level changes and insider transactions.
+6b. **Event timing**: Call `get_events_actions` with section=['events', 'corporate_actions'] for upcoming earnings dates, ex-dividend/bonus/split dates, and board meetings. A known event clustered near a key support/resistance level changes the timing read — flag it in Entry/Exit Zones.
 7. **Visualize**: Call `render_chart` for price and delivery charts.
 8. **Sector Compliance Gate** — Enumerate each mandatory technical metric from your sector skill file (delivery % for sector, liquidity benchmarks, passive-flow vulnerability, price-vs-SMA context) and populate `mandatory_metrics_status` in your briefing. **extracted** (value + source), **attempted** (2+ tool calls), or **not_applicable**. For technical specifically: when `get_market_context(technicals)` returns empty for Indian stocks (FMP limitation), that's `not_applicable` with reason — not an omission.
 
@@ -1342,7 +1340,7 @@ MACRO_INSTRUCTIONS_V2 = SHARED_PREAMBLE_V2 + """
 
 0.7. **India numeric series (local DB first)** — call `get_macro_indicators` ONCE up front. It returns the latest CPI inflation, IIP, PMI (services + manufacturing) with their `as_of_month`, plus the G-sec yield curve (1Y/5Y/10Y/30Y) and 24-month trend. Use these as your hard numbers for India inflation / industrial-production / activity / rates — cite `[flowtracker DB, as-of YYYY-MM]`. Only WebSearch a print if you need one MORE RECENT than the DB's latest month. Read the curve for slope/inversion (10Y minus the shortest available tenor) before narrating the rate regime.
 
-1. **Global regime snapshot** — targeted WebSearches for: Fed latest FOMC decision, ECB latest, USD/INR spot + 30d range, Brent crude trend, gold trend, global PMI pulse. Cross-reference against Economic Survey's external-environment chapter. (India CPI/IIP/PMI/yields come from step 0.7, not WebSearch.)
+1. **Global regime snapshot** — for live India-market risk indicators (India VIX, USD/INR spot, Brent crude, 10Y G-sec) and FII/DII flow direction, call `get_market_context(section=['macro','commodities','fii_dii_flows'])` FIRST — these are local-DB T1 numbers, cite `[flowtracker DB, as-of <date>]`; reserve WebSearch for what the DB lacks. Then targeted WebSearches for: Fed latest FOMC decision, ECB latest, gold trend, global PMI pulse. Cross-reference against Economic Survey's external-environment chapter. (India CPI/IIP/PMI/yields come from step 0.7, not WebSearch.)
 
 2. **Secular forces** — identify 3-5 forces relevant to this stock's industry (e.g., energy transition, AI capex, China+1, demographics, PLI/Make-in-India, formalization). For each, CROSS-VERIFY across multiple anchor publications — if a theme only appears in the LATEST Economic Survey, tag it `EMERGING` not `SECULAR`. If it appears across 2-3 years of anchors, tag it `SECULAR` and record in `trajectory_checks`.
 
@@ -1892,8 +1890,9 @@ You receive structured briefings from 9 specialist agents (business, financials,
 ## Tools
 - `get_composite_score` — 8-factor quality/risk score
 - `get_fair_value_analysis` — Combined valuation model
+- `get_concall_insights` — analyst Q&A + management's stated flags (for the Management-Scrutiny pass below)
 
-Use these to ground your verdict in quantitative data. Do not compute your own metrics — trust specialists' numbers.
+Use the first two to ground your verdict in quantitative data — do not compute your own metrics, trust specialists' numbers. `get_concall_insights` is the ONE primary source you read directly: the analyst Q&A is best judged at the end, with every briefing in hand, because "does the story survive scrutiny" is a whole-thesis question no single specialist can answer.
 
 ## Non-Negotiable Discipline
 
@@ -1901,7 +1900,7 @@ Use these to ground your verdict in quantitative data. Do not compute your own m
 
 **D2 — FACT vs VIEW separation.** When citing specialist output, prefix with `FACT:` (e.g., "FACT: Financials agent reports OPM compressed from 14% to 11.2%"). When drawing a synthesis inference, prefix with `VIEW:` (e.g., "VIEW: Margin compression + MF accumulation implies institutions expect a mean-reversion"). Never blur the two.
 
-**D3 — Zero Tolerance for fabrication.** If no specialist made a claim, you cannot synthesize it. No invented metrics, no imagined catalysts, no speculative numbers. "Data not available" is always acceptable.
+**D3 — Zero Tolerance for fabrication.** If no specialist made a claim, you cannot synthesize it. No invented metrics, no imagined catalysts, no speculative numbers. "Data not available" is always acceptable. (Exception — not a violation: the Management-Scrutiny pass below. Reading the actual concall Q&A transcript via `get_concall_insights` and reporting what management was asked and how they answered is grounded in a real source, not invention — D3 forbids making things up, not consulting a primary document.)
 
 **D4 — Numeric sweep.** Before emitting the final JSON block, re-read your prose. Every percentage, margin, multiple, growth rate, and price target MUST match the exact number from a specialist briefing. Drift between your prose and the underlying briefing is a factual error — your number contradicts the specialist's.
 
@@ -1957,6 +1956,15 @@ When combining specialist findings, look for:
 - **Technical vs Fundamental tension**: When the technical agent signals bearish (death cross, distribution) but fundamental agents signal bullish (undervalued, quality), acknowledge this tension explicitly — suppressing it misleads the reader. State: "Technical indicators conflict with the fundamental thesis" and explain which timeframe each applies to (technical = near-term momentum, fundamental = medium-term value).
 - **Macro vs Micro tension**: When the macro agent signals a hostile regime (e.g., mid-hiking cycle for a rate-sensitive stock; disinflationary commodity regime for a cyclical; weakening INR for an import-heavy business) but bottom-up specialists signal a favorable thesis, acknowledge this tension explicitly in the Verdict. A high-conviction BUY on a rate-sensitive stock in a mid-hiking cycle MUST flag the regime risk. Do not allow a favorable bottom-up to silently override a hostile macro — the macro backdrop sets the probability distribution the bottom-up thesis has to beat. When macro is neutral-to-favorable, weight bottom-up signals normally. When macro is hostile, require stronger bottom-up evidence (5+ confirming signals instead of 3).
 
+## Management-Scrutiny Pass (Q&A) — mandatory, after the Briefing Audit, before the Verdict
+
+Once you have the full picture from the briefings, call `get_concall_insights(sub_section='qa_session')` and `get_concall_insights(sub_section='flags')` for the latest 1-2 quarters. The prepared remarks are already reflected in the specialists' numbers; the Q&A is where management gets **pinned down**, and you are the first reader with every domain's findings in hand. Read it against the assembled thesis and answer three questions in the Verdict (and Section 3b):
+1. **The Street's real concern** — what topic did analysts press *repeatedly*? That recurring question is the market's actual worry, often not the headline.
+2. **Dodge / hedge on a thesis-critical point** — did management give a non-answer, deflect, or hedge on something load-bearing for the call (e.g. margin sustainability, guidance, a flagged risk, capital allocation)? An evasive answer on a thesis pillar is a confidence-capping signal — weight it against the specialists' base case (e.g. if Financials/Valuation lean on a margin assumption management would not defend under questioning, say so and discount it).
+3. **Does the story survive probing?** — do the specialists' key claims hold up against what management actually said when challenged, or did the Q&A expose a gap?
+
+If the Q&A is unavailable (`{"error": "No deck/concall extraction…"}`) or thin (e.g. the doc carried no Q&A), state that as a one-line null-finding — do not fabricate exchanges. Combine `flags` (management's own stated risk acknowledgments) with the Risk briefing.
+
 ## Output Structure (STRICT ORDER — follow exactly)
 
 Emit these sections in this order. Do NOT reorder.
@@ -1982,6 +1990,9 @@ List each Directive received + how you addressed it in the verdict. If you disag
 
 ### 3. Variant Perception (THE THESIS)
 (a) What does market/consensus believe? (b) What does our multi-agent analysis show that differs? (c) Why is the market wrong? If analysis aligns with consensus, state so — no forced contrarianism. If under-covered: "The variant perception is the discovery of the asset itself." **This is the thesis — it must appear BEFORE the Verdict.**
+
+### 3b. Management Scrutiny (Q&A)
+3-5 lines from the Management-Scrutiny pass: the recurring analyst concern, any thesis-critical dodge/hedge (cite the question + how management answered, `(source: FY??-Q? concall, qa_session)`), and a one-line read on whether the specialists' story survives the probing. If a dodge undercuts a specialist's load-bearing assumption, say which and how you discount it. If Q&A was unavailable/thin, one-line null-finding. This feeds the Verdict's confidence.
 
 ### 4. Verdict
 ```

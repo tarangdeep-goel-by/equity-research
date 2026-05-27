@@ -1264,3 +1264,132 @@ def analog_backtest(
         note=note or "",
     )
     bh._run(args_ns)
+
+
+@app.command("tool-audit")
+def tool_audit(
+    since: Annotated[str | None, typer.Option("--since", help="Only include traces dated on/after YYYY-MM-DD")] = None,
+    agent: Annotated[str | None, typer.Option("--agent", help="Filter the scorecard to a single agent (e.g. valuation)")] = None,
+    symbol: Annotated[str | None, typer.Option("--symbol", "-s", help="Only audit traces for this stock symbol")] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Dump the raw audit dict as JSON instead of a table")] = False,
+) -> None:
+    """Tool-use trace-audit (read-only): per-agent scorecard from pipeline traces.
+
+    Reads the enriched per-call traces under ~/vault/stocks/*/traces/*.json and
+    reports, per agent, the tool-layer health metrics used to track whether the
+    tool-layer hardening worked: error / empty rates, invalid-arg rejections,
+    hallucinated (unregistered) tool calls, duplicate calls, registry coverage,
+    latency hotspots, and truncation risk. Does not modify anything.
+
+    Examples:
+        flowtrack research tool-audit --since 2026-05-01
+        flowtrack research tool-audit --agent valuation --json
+        flowtrack research tool-audit -s HDFCLIFE
+    """
+    from datetime import date as _date
+
+    from flowtracker.research.tool_audit import audit_traces, discover_trace_files
+
+    since_date: _date | None = None
+    if since:
+        try:
+            since_date = _date.fromisoformat(since)
+        except ValueError:
+            console.print(f"[red]Invalid --since date (expected YYYY-MM-DD): {since}[/]")
+            raise typer.Exit(1)
+
+    paths = discover_trace_files(since=since_date, symbol=symbol)
+    if not paths:
+        scope = f" for {symbol.upper()}" if symbol else ""
+        console.print(f"[yellow]No trace files found{scope} in ~/vault/stocks/*/traces/[/]")
+        raise typer.Exit(0)
+
+    result = audit_traces(paths)
+    agents = result["agents"]
+
+    if agent:
+        agent = agent.strip().lower()
+        if agent not in agents:
+            console.print(f"[red]No traces for agent '{agent}'. Available: {', '.join(agents) or '(none)'}[/]")
+            raise typer.Exit(1)
+        agents = {agent: agents[agent]}
+
+    if as_json:
+        if agent:
+            result = {**result, "agents": agents}
+        print(json.dumps(result, indent=2, default=str))
+        return
+
+    from rich.table import Table
+
+    meta = result["meta"]
+    title = (
+        f"Tool-Use Trace Audit  ({meta['file_count']} traces"
+        + (f", since {since}" if since else "")
+        + (f", {symbol.upper()}" if symbol else "")
+        + ")"
+    )
+    table = Table(title=title, show_header=True, header_style="bold cyan")
+    table.add_column("Agent")
+    table.add_column("Calls", justify="right")
+    table.add_column("Err%", justify="right")
+    table.add_column("Empty%", justify="right")
+    table.add_column("InvArg", justify="right")
+    table.add_column("Halluc", justify="right")
+    table.add_column("Builtin", justify="right")
+    table.add_column("Dupes", justify="right")
+    table.add_column("Cov%", justify="right")
+    table.add_column("Trunc", justify="right")
+    table.add_column("Slowest tool (ms)")
+
+    def _row(name: str, m: dict, *, overall: bool = False):
+        err = m["error_rate"] * 100
+        empty = m["empty_rate"] * 100
+        halluc = m["unknown_tool_count"]
+        cov = m.get("coverage_pct")
+        cov_str = f"{cov:.0f}" if (cov is not None and not overall) else "-"
+        hot = m["latency_hotspots"]
+        hot_str = f"{hot[0]['tool']} ({hot[0]['duration_ms']})" if hot else "-"
+        err_str = f"[red]{err:.1f}[/]" if err > 0 else "0.0"
+        halluc_str = f"[red]{halluc}[/]" if halluc else "0"
+        style = "bold" if overall else None
+        table.add_row(
+            f"[bold]{name}[/]" if overall else name,
+            str(m["total_calls"]),
+            err_str,
+            f"{empty:.1f}",
+            str(m["invalid_arg_count"]),
+            halluc_str,
+            str(m["builtin_tool_count"]),
+            str(m["duplicate_calls"]),
+            cov_str,
+            str(m["truncation_risk"]),
+            hot_str,
+            style=style,
+        )
+
+    for name in sorted(agents):
+        _row(name, agents[name])
+
+    if not agent and len(agents) > 1:
+        table.add_section()
+        _row("OVERALL", result["overall"], overall=True)
+
+    console.print(table)
+
+    # Surface hallucinated tool names — the headline tool-layer-hardening signal.
+    halluc_names: dict[str, list[str]] = {
+        n: m["unknown_tools"] for n, m in agents.items() if m["unknown_tools"]
+    }
+    if halluc_names:
+        console.print("\n[bold red]Hallucinated / misrouted tools[/] (called but not registered for the agent):")
+        for n, tools in sorted(halluc_names.items()):
+            console.print(f"  [yellow]{n}[/]: {', '.join(tools)}")
+
+    console.print(
+        f"\n[dim]Notes: result_summary is capped at {meta['result_summary_capped_at']} chars in stored traces "
+        f"(invalid-arg detection is best-effort); truncation risk uses payload_len when present "
+        f"(>{meta['truncation_threshold']:,} chars), else the capped result_summary length.[/]"
+    )
+    if meta.get("unreadable"):
+        console.print(f"[dim]Skipped {len(meta['unreadable'])} unreadable trace file(s).[/]")

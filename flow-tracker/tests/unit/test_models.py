@@ -1055,6 +1055,23 @@ class TestToolEvidence:
         e = ToolEvidence(tool="test", unknown_field="dropped")
         assert not hasattr(e, "unknown_field")
 
+    def test_telemetry_defaults(self):
+        e = ToolEvidence(tool="get_price_history")
+        assert e.completeness is None
+        assert e.row_count is None
+        assert e.payload_len is None
+
+    def test_payload_len_populated(self):
+        e = ToolEvidence(
+            tool="get_price_history",
+            completeness="full",
+            row_count=3,
+            payload_len=1234,
+        )
+        assert e.completeness == "full"
+        assert e.row_count == 3
+        assert e.payload_len == 1234
+
 
 class TestAgentCost:
     def test_defaults(self):

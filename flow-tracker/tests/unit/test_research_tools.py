@@ -165,438 +165,6 @@ class TestCacheKey:
 
 
 # ---------------------------------------------------------------------------
-# Core financials — quarterly / annual / ratios / BS / CF
-# ---------------------------------------------------------------------------
-
-
-class TestCoreFinancialsTools:
-    """Thin pass-through wrappers for core P&L / BS / CF data."""
-
-    @pytest.mark.asyncio
-    async def test_quarterly_results_default_quarters(self):
-        from flowtracker.research.tools import get_quarterly_results
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            result = await get_quarterly_results.handler({"symbol": "SBIN"})
-        data = _parse(result)
-        assert data["_fake"] == "get_quarterly_results"
-        # Default quarters = 12
-        assert fake.calls[0] == ("get_quarterly_results", ("SBIN", 12), {})
-
-    @pytest.mark.asyncio
-    async def test_quarterly_results_custom_quarters(self):
-        from flowtracker.research.tools import get_quarterly_results
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_quarterly_results.handler({"symbol": "SBIN", "quarters": 4})
-        assert fake.calls[0] == ("get_quarterly_results", ("SBIN", 4), {})
-
-    @pytest.mark.asyncio
-    async def test_annual_financials(self):
-        from flowtracker.research.tools import get_annual_financials
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_annual_financials.handler({"symbol": "INFY", "years": 5})
-        assert fake.calls[0] == ("get_annual_financials", ("INFY", 5), {})
-
-    @pytest.mark.asyncio
-    async def test_annual_financials_default_years(self):
-        from flowtracker.research.tools import get_annual_financials
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_annual_financials.handler({"symbol": "INFY"})
-        assert fake.calls[0][1] == ("INFY", 10)
-
-    @pytest.mark.asyncio
-    async def test_efficiency_ratios_calls_screener_ratios(self):
-        from flowtracker.research.tools import get_efficiency_ratios
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_efficiency_ratios.handler({"symbol": "SBIN"})
-        # Tool maps get_efficiency_ratios to api.get_screener_ratios
-        assert fake.calls[0][0] == "get_screener_ratios"
-        assert fake.calls[0][1] == ("SBIN", 10)
-
-    @pytest.mark.asyncio
-    async def test_quarterly_balance_sheet_default(self):
-        from flowtracker.research.tools import get_quarterly_balance_sheet
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_quarterly_balance_sheet.handler({"symbol": "SBIN"})
-        assert fake.calls[0] == ("get_quarterly_balance_sheet", ("SBIN", 8), {})
-
-    @pytest.mark.asyncio
-    async def test_quarterly_cash_flow_default(self):
-        from flowtracker.research.tools import get_quarterly_cash_flow
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_quarterly_cash_flow.handler({"symbol": "SBIN"})
-        assert fake.calls[0] == ("get_quarterly_cash_flow", ("SBIN", 8), {})
-
-
-# ---------------------------------------------------------------------------
-# Valuation — snapshot / band / pe_history / wacc
-# ---------------------------------------------------------------------------
-
-
-class TestValuationTools:
-    @pytest.mark.asyncio
-    async def test_valuation_snapshot(self):
-        from flowtracker.research.tools import get_valuation_snapshot
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_valuation_snapshot.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_valuation_snapshot"
-
-    @pytest.mark.asyncio
-    async def test_valuation_band_defaults(self):
-        from flowtracker.research.tools import get_valuation_band
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_valuation_band.handler({"symbol": "SBIN"})
-        # metric default = 'pe_trailing', days default = 2500
-        assert fake.calls[0] == ("get_valuation_band", ("SBIN", "pe_trailing", 2500), {})
-
-    @pytest.mark.asyncio
-    async def test_valuation_band_custom(self):
-        from flowtracker.research.tools import get_valuation_band
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_valuation_band.handler(
-                {"symbol": "SBIN", "metric": "pb", "days": 1000}
-            )
-        assert fake.calls[0][1] == ("SBIN", "pb", 1000)
-
-    @pytest.mark.asyncio
-    async def test_pe_history(self):
-        from flowtracker.research.tools import get_pe_history
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_pe_history.handler({"symbol": "SBIN", "days": 500})
-        assert fake.calls[0] == ("get_pe_history", ("SBIN", 500), {})
-
-    @pytest.mark.asyncio
-    async def test_wacc_params(self):
-        from flowtracker.research.tools import get_wacc_params
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_wacc_params.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_wacc_params"
-
-
-# ---------------------------------------------------------------------------
-# Ownership & institutional
-# ---------------------------------------------------------------------------
-
-
-class TestOwnershipTools:
-    @pytest.mark.asyncio
-    async def test_shareholding_default_quarters(self):
-        from flowtracker.research.tools import get_shareholding
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_shareholding.handler({"symbol": "SBIN"})
-        assert fake.calls[0] == ("get_shareholding", ("SBIN", 20), {})
-
-    @pytest.mark.asyncio
-    async def test_shareholding_changes(self):
-        from flowtracker.research.tools import get_shareholding_changes
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_shareholding_changes.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_shareholding_changes"
-
-    @pytest.mark.asyncio
-    async def test_insider_transactions_default_days(self):
-        from flowtracker.research.tools import get_insider_transactions
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_insider_transactions.handler({"symbol": "SBIN"})
-        # Default days = 1825 (5 years)
-        assert fake.calls[0][1] == ("SBIN", 1825)
-
-    @pytest.mark.asyncio
-    async def test_bulk_block_deals(self):
-        from flowtracker.research.tools import get_bulk_block_deals
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_bulk_block_deals.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_bulk_block_deals"
-
-    @pytest.mark.asyncio
-    async def test_mf_holdings(self):
-        from flowtracker.research.tools import get_mf_holdings
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_mf_holdings.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_mf_holdings"
-
-    @pytest.mark.asyncio
-    async def test_mf_holding_changes(self):
-        from flowtracker.research.tools import get_mf_holding_changes
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_mf_holding_changes.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_mf_holding_changes"
-
-    @pytest.mark.asyncio
-    async def test_shareholder_detail_without_classification(self):
-        from flowtracker.research.tools import get_shareholder_detail
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_shareholder_detail.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", None)
-
-    @pytest.mark.asyncio
-    async def test_shareholder_detail_with_classification(self):
-        from flowtracker.research.tools import get_shareholder_detail
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_shareholder_detail.handler(
-                {"symbol": "SBIN", "classification": "fii"}
-            )
-        assert fake.calls[0][1] == ("SBIN", "fii")
-
-
-# ---------------------------------------------------------------------------
-# Market signals
-# ---------------------------------------------------------------------------
-
-
-class TestMarketSignalTools:
-    @pytest.mark.asyncio
-    async def test_delivery_trend_default(self):
-        from flowtracker.research.tools import get_delivery_trend
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_delivery_trend.handler({"symbol": "SBIN"})
-        # Default days = 30
-        assert fake.calls[0] == ("get_delivery_trend", ("SBIN", 30), {})
-
-    @pytest.mark.asyncio
-    async def test_promoter_pledge(self):
-        from flowtracker.research.tools import get_promoter_pledge
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_promoter_pledge.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_promoter_pledge"
-
-    @pytest.mark.asyncio
-    async def test_technical_indicators(self):
-        from flowtracker.research.tools import get_technical_indicators
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_technical_indicators.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_technical_indicators"
-
-    @pytest.mark.asyncio
-    async def test_price_performance(self):
-        from flowtracker.research.tools import get_price_performance
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_price_performance.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_price_performance"
-
-
-# ---------------------------------------------------------------------------
-# Consensus / estimates
-# ---------------------------------------------------------------------------
-
-
-class TestEstimatesTools:
-    @pytest.mark.asyncio
-    async def test_consensus_estimate(self):
-        from flowtracker.research.tools import get_consensus_estimate
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_consensus_estimate.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_consensus_estimate"
-
-    @pytest.mark.asyncio
-    async def test_earnings_surprises(self):
-        from flowtracker.research.tools import get_earnings_surprises
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_earnings_surprises.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_earnings_surprises"
-
-    @pytest.mark.asyncio
-    async def test_estimate_revisions(self):
-        from flowtracker.research.tools import get_estimate_revisions
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_estimate_revisions.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_estimate_revisions"
-
-    @pytest.mark.asyncio
-    async def test_estimate_momentum(self):
-        from flowtracker.research.tools import get_estimate_momentum
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_estimate_momentum.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_estimate_momentum"
-
-    @pytest.mark.asyncio
-    async def test_revenue_estimates(self):
-        from flowtracker.research.tools import get_revenue_estimates
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_revenue_estimates.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_revenue_estimates"
-
-    @pytest.mark.asyncio
-    async def test_growth_estimates(self):
-        from flowtracker.research.tools import get_growth_estimates
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_growth_estimates.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_growth_estimates"
-
-    @pytest.mark.asyncio
-    async def test_analyst_grades(self):
-        from flowtracker.research.tools import get_analyst_grades
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_analyst_grades.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_analyst_grades"
-
-    @pytest.mark.asyncio
-    async def test_price_targets(self):
-        from flowtracker.research.tools import get_price_targets
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_price_targets.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_price_targets"
-
-
-# ---------------------------------------------------------------------------
-# Events & calendar / dividends / corporate actions
-# ---------------------------------------------------------------------------
-
-
-class TestEventsAndActionsTools:
-    @pytest.mark.asyncio
-    async def test_events_calendar(self):
-        from flowtracker.research.tools import get_events_calendar
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_events_calendar.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_events_calendar"
-
-    @pytest.mark.asyncio
-    async def test_dividend_history_default(self):
-        from flowtracker.research.tools import get_dividend_history
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_dividend_history.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", 10)
-
-    @pytest.mark.asyncio
-    async def test_corporate_actions(self):
-        from flowtracker.research.tools import get_corporate_actions
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_corporate_actions.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_corporate_actions"
-
-    @pytest.mark.asyncio
-    async def test_adjusted_eps_default(self):
-        from flowtracker.research.tools import get_adjusted_eps
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_adjusted_eps.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", 12)
-
-    @pytest.mark.asyncio
-    async def test_upcoming_catalysts_default_days(self):
-        from flowtracker.research.tools import get_upcoming_catalysts
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_upcoming_catalysts.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", 90)
-
-
-# ---------------------------------------------------------------------------
-# Macro (no symbol required)
-# ---------------------------------------------------------------------------
-
-
-class TestMacroTools:
-    @pytest.mark.asyncio
-    async def test_macro_snapshot(self):
-        from flowtracker.research.tools import get_macro_snapshot
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_macro_snapshot.handler({})
-        assert fake.calls[0][0] == "get_macro_snapshot"
-
-    @pytest.mark.asyncio
-    async def test_fii_dii_streak(self):
-        from flowtracker.research.tools import get_fii_dii_streak
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_fii_dii_streak.handler({})
-        assert fake.calls[0][0] == "get_fii_dii_streak"
-
-    @pytest.mark.asyncio
-    async def test_fii_dii_flows_default(self):
-        from flowtracker.research.tools import get_fii_dii_flows
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_fii_dii_flows.handler({})
-        assert fake.calls[0][1] == (30,)
-
-    @pytest.mark.asyncio
-    async def test_fii_dii_flows_custom(self):
-        from flowtracker.research.tools import get_fii_dii_flows
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_fii_dii_flows.handler({"days": 90})
-        assert fake.calls[0][1] == (90,)
-
-
-# ---------------------------------------------------------------------------
 # Screener APIs (Phase 2)
 # ---------------------------------------------------------------------------
 
@@ -612,15 +180,6 @@ class TestScreenerPhaseTools:
         assert fake.calls[0] == ("get_chart_data", ("SBIN", "pe"), {})
 
     @pytest.mark.asyncio
-    async def test_peer_comparison(self):
-        from flowtracker.research.tools import get_peer_comparison
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_peer_comparison.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_peer_comparison"
-
-    @pytest.mark.asyncio
     async def test_yahoo_peers_uppercases_symbol(self):
         """get_yahoo_peers uppercases the input symbol before dispatch."""
         from flowtracker.research.tools import get_yahoo_peers
@@ -630,79 +189,9 @@ class TestScreenerPhaseTools:
             await get_yahoo_peers.handler({"symbol": "sbin"})
         assert fake.calls[0] == ("get_yahoo_peer_comparison", ("SBIN",), {})
 
-    @pytest.mark.asyncio
-    async def test_expense_breakdown_default_section(self):
-        from flowtracker.research.tools import get_expense_breakdown
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_expense_breakdown.handler({"symbol": "SBIN"})
-        assert fake.calls[0] == ("get_expense_breakdown", ("SBIN", "profit-loss"), {})
-
-    @pytest.mark.asyncio
-    async def test_expense_breakdown_custom_section(self):
-        from flowtracker.research.tools import get_expense_breakdown
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_expense_breakdown.handler(
-                {"symbol": "SBIN", "section": "balance-sheet"}
-            )
-        assert fake.calls[0][1] == ("SBIN", "balance-sheet")
-
-
 # ---------------------------------------------------------------------------
 # Filings / company info
 # ---------------------------------------------------------------------------
-
-
-class TestCompanyInfoTools:
-    @pytest.mark.asyncio
-    async def test_recent_filings_default_limit(self):
-        from flowtracker.research.tools import get_recent_filings
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_recent_filings.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", 10)
-
-    @pytest.mark.asyncio
-    async def test_company_info(self):
-        from flowtracker.research.tools import get_company_info
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_company_info.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_company_info"
-
-    @pytest.mark.asyncio
-    async def test_company_profile(self):
-        from flowtracker.research.tools import get_company_profile
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_company_profile.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_company_profile"
-
-    @pytest.mark.asyncio
-    async def test_company_documents_no_filter(self):
-        from flowtracker.research.tools import get_company_documents
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_company_documents.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", None)
-
-    @pytest.mark.asyncio
-    async def test_company_documents_with_filter(self):
-        from flowtracker.research.tools import get_company_documents
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_company_documents.handler(
-                {"symbol": "SBIN", "doc_type": "concall_transcript"}
-            )
-        assert fake.calls[0][1] == ("SBIN", "concall_transcript")
 
 
 # ---------------------------------------------------------------------------
@@ -712,24 +201,10 @@ class TestCompanyInfoTools:
 
 class TestBusinessProfileTools:
     @pytest.mark.asyncio
-    async def test_get_business_profile_missing_returns_empty(
+    async def test_save_business_profile_persists_to_vault(
         self, monkeypatch, tmp_path: Path
     ):
-        from flowtracker.research.tools import get_business_profile
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        result = await get_business_profile.handler({"symbol": "NONEXIST"})
-        data = _parse(result)
-        assert data == ""
-
-    @pytest.mark.asyncio
-    async def test_save_then_get_business_profile_roundtrip(
-        self, monkeypatch, tmp_path: Path
-    ):
-        from flowtracker.research.tools import (
-            get_business_profile,
-            save_business_profile,
-        )
+        from flowtracker.research.tools import save_business_profile
 
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
@@ -739,9 +214,10 @@ class TestBusinessProfileTools:
         save_text = save_result["content"][0]["text"]
         assert "Saved business profile" in save_text
 
-        get_result = await get_business_profile.handler({"symbol": "sbin"})
-        content = _parse(get_result)
-        assert "India's largest bank" in content
+        # Verify the profile was written to the vault path on disk.
+        profile_path = tmp_path / "vault" / "stocks" / "SBIN" / "profile.md"
+        assert profile_path.exists()
+        assert "India's largest bank" in profile_path.read_text()
 
 
 # ---------------------------------------------------------------------------
@@ -751,51 +227,6 @@ class TestBusinessProfileTools:
 
 class TestFmpAndQualityTools:
     @pytest.mark.asyncio
-    async def test_dcf_valuation(self):
-        from flowtracker.research.tools import get_dcf_valuation
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_dcf_valuation.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_dcf_valuation"
-
-    @pytest.mark.asyncio
-    async def test_dcf_history(self):
-        from flowtracker.research.tools import get_dcf_history
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_dcf_history.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_dcf_history"
-
-    @pytest.mark.asyncio
-    async def test_dupont_decomposition(self):
-        from flowtracker.research.tools import get_dupont_decomposition
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_dupont_decomposition.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_dupont_decomposition"
-
-    @pytest.mark.asyncio
-    async def test_key_metrics_history(self):
-        from flowtracker.research.tools import get_key_metrics_history
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_key_metrics_history.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", 10)
-
-    @pytest.mark.asyncio
-    async def test_financial_growth_rates(self):
-        from flowtracker.research.tools import get_financial_growth_rates
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_financial_growth_rates.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_financial_growth_rates"
-
-    @pytest.mark.asyncio
     async def test_fair_value(self):
         from flowtracker.research.tools import get_fair_value
 
@@ -804,166 +235,14 @@ class TestFmpAndQualityTools:
             await get_fair_value.handler({"symbol": "SBIN"})
         assert fake.calls[0][0] == "get_fair_value"
 
-    @pytest.mark.asyncio
-    async def test_valuation_matrix(self):
-        from flowtracker.research.tools import get_valuation_matrix
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_valuation_matrix.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_valuation_matrix"
-
-    @pytest.mark.asyncio
-    async def test_sector_benchmarks_no_metric(self):
-        from flowtracker.research.tools import get_sector_benchmarks
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_sector_benchmarks.handler({"symbol": "SBIN"})
-        assert fake.calls[0][1] == ("SBIN", None)
-
-    @pytest.mark.asyncio
-    async def test_sector_benchmarks_with_metric(self):
-        from flowtracker.research.tools import get_sector_benchmarks
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_sector_benchmarks.handler({"symbol": "SBIN", "metric": "pe"})
-        assert fake.calls[0][1] == ("SBIN", "pe")
-
-    @pytest.mark.asyncio
-    async def test_peer_metrics(self):
-        from flowtracker.research.tools import get_peer_metrics
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_peer_metrics.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_peer_metrics"
-
-    @pytest.mark.asyncio
-    async def test_peer_growth(self):
-        from flowtracker.research.tools import get_peer_growth
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_peer_growth.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_peer_growth"
-
-    @pytest.mark.asyncio
-    async def test_financial_projections(self):
-        from flowtracker.research.tools import get_financial_projections
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_financial_projections.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_financial_projections"
-
-
 # ---------------------------------------------------------------------------
 # Sector tools
 # ---------------------------------------------------------------------------
 
 
-class TestSectorTools:
-    @pytest.mark.asyncio
-    async def test_sector_overview_metrics(self):
-        from flowtracker.research.tools import get_sector_overview_metrics
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_sector_overview_metrics.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_sector_overview_metrics"
-
-    @pytest.mark.asyncio
-    async def test_sector_flows(self):
-        from flowtracker.research.tools import get_sector_flows
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_sector_flows.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_sector_flows"
-
-    @pytest.mark.asyncio
-    async def test_sector_valuations(self):
-        from flowtracker.research.tools import get_sector_valuations
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_sector_valuations.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_sector_valuations"
-
-
 # ---------------------------------------------------------------------------
 # Deep quality / forensics tools
 # ---------------------------------------------------------------------------
-
-
-class TestDeepQualityTools:
-    """The 15+ quality/forensic tools that only flow through get_quality_scores
-    section routing. Exercising them directly keeps their wrappers covered."""
-
-    @pytest.mark.asyncio
-    async def test_earnings_quality(self):
-        from flowtracker.research.tools import get_earnings_quality
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_earnings_quality.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_earnings_quality"
-
-    @pytest.mark.asyncio
-    async def test_piotroski_score(self):
-        from flowtracker.research.tools import get_piotroski_score
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_piotroski_score.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_piotroski_score"
-
-    @pytest.mark.asyncio
-    async def test_beneish_score(self):
-        from flowtracker.research.tools import get_beneish_score
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_beneish_score.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_beneish_score"
-
-    @pytest.mark.asyncio
-    async def test_reverse_dcf(self):
-        from flowtracker.research.tools import get_reverse_dcf
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_reverse_dcf.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_reverse_dcf"
-
-    @pytest.mark.asyncio
-    async def test_capex_cycle(self):
-        from flowtracker.research.tools import get_capex_cycle
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_capex_cycle.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_capex_cycle"
-
-    @pytest.mark.asyncio
-    async def test_common_size_pl(self):
-        from flowtracker.research.tools import get_common_size_pl
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_common_size_pl.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_common_size_pl"
-
-    @pytest.mark.asyncio
-    async def test_bfsi_metrics(self):
-        from flowtracker.research.tools import get_bfsi_metrics
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_bfsi_metrics.handler({"symbol": "HDFCBANK"})
-        assert fake.calls[0][0] == "get_bfsi_metrics"
 
 
 # ---------------------------------------------------------------------------
@@ -974,28 +253,6 @@ class TestDeepQualityTools:
 class TestSectorKpisAndConcallTools:
     """These are paginated (sub_section) wrappers: no sub_section returns
     the TOC; with sub_section returns the drilled-in data."""
-
-    @pytest.mark.asyncio
-    async def test_sector_kpis_toc_mode(self):
-        from flowtracker.research.tools import get_sector_kpis
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_sector_kpis.handler({"symbol": "HDFCBANK"})
-        # Dispatches with kpi_key=None for TOC
-        assert fake.calls[0][0] == "get_sector_kpis"
-        assert fake.calls[0][2] == {"kpi_key": None}
-
-    @pytest.mark.asyncio
-    async def test_sector_kpis_drill(self):
-        from flowtracker.research.tools import get_sector_kpis
-
-        fake = FakeAPI()
-        with patch_api(fake):
-            await get_sector_kpis.handler(
-                {"symbol": "HDFCBANK", "sub_section": "gross_npa_pct"}
-            )
-        assert fake.calls[0][2] == {"kpi_key": "gross_npa_pct"}
 
     @pytest.mark.asyncio
     async def test_concall_insights_toc_mode(self):
@@ -2124,7 +1381,11 @@ class TestCalculateTool:
         )
         data = _parse(result)
         assert "error" in data
-        assert "Unknown operation" in data["error"]
+        # Phase 1-B: the enum guard rejects unknown ops up front with a
+        # standardized did-you-mean envelope (replaces the old in-chain
+        # "Unknown operation" message).
+        assert data["error"].startswith("Invalid operation")
+        assert "valid_values" in data and "suggestion" in data
 
     @pytest.mark.asyncio
     async def test_timestamp_discipline_no_args_is_clean(self):
@@ -2328,10 +1589,10 @@ class TestDedupCache:
         # Reset the context var for this test run
         t._tool_result_cache.set({})
 
-        fake = FakeAPI(overrides={"get_fii_dii_streak": {"streak": 3}})
+        fake = FakeAPI(overrides={"get_macro_indicators": {"cpi": 5.0}})
         with patch_api(fake):
-            first = await t.get_fii_dii_streak.handler({})
-            second = await t.get_fii_dii_streak.handler({})
+            first = await t.get_macro_indicators.handler({})
+            second = await t.get_macro_indicators.handler({})
 
         first_text = first["content"][0]["text"]
         second_text = second["content"][0]["text"]
@@ -2358,16 +1619,6 @@ class TestToolRegistries:
         assert get_fundamentals in RESEARCH_TOOLS_V2
         assert get_ownership in RESEARCH_TOOLS_V2
         assert get_quality_scores in RESEARCH_TOOLS_V2
-
-    def test_v1_registry_has_individual_tools(self):
-        from flowtracker.research.tools import (
-            RESEARCH_TOOLS,
-            get_quarterly_results,
-            get_shareholding,
-        )
-
-        assert get_quarterly_results in RESEARCH_TOOLS
-        assert get_shareholding in RESEARCH_TOOLS
 
     def test_specialist_registries_nonempty(self):
         from flowtracker.research.tools import (
@@ -2530,3 +1781,78 @@ class TestClassifyCompleteness:
         assert _count_rows({"name": "x"}) is None
         assert _count_rows(42) is None
         assert _count_rows("hello") is None
+
+
+# ---------------------------------------------------------------------------
+# _wrap_handler_is_error (Phase 0-A) — flag is_error on the envelope when the
+# payload classifies as an error, without mutating the content text.
+# ---------------------------------------------------------------------------
+
+
+def _make_is_error_tool(name: str, payload):
+    """Build a tiny SdkMcpTool whose handler returns a JSON-encoded payload."""
+    from claude_agent_sdk import SdkMcpTool
+
+    async def handler(args):
+        return {"content": [{"type": "text", "text": json.dumps(payload)}]}
+
+    return SdkMcpTool(name=name, description="", input_schema={}, handler=handler)
+
+
+class TestWrapHandlerIsError:
+    """Envelope-level is_error flagging via classify_completeness."""
+
+    @pytest.mark.asyncio
+    async def test_error_payload_sets_is_error(self):
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        tool = _wrap_handler_is_error(_make_is_error_tool("boom", {"error": "kaboom"}))
+        result = await tool.handler({})
+        assert result["is_error"] is True
+        # Content text is untouched (dedup hash preserved).
+        assert json.loads(result["content"][0]["text"]) == {"error": "kaboom"}
+
+    @pytest.mark.asyncio
+    async def test_normal_payload_not_flagged(self):
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        tool = _wrap_handler_is_error(_make_is_error_tool("ok", {"rows": [1, 2, 3]}))
+        result = await tool.handler({})
+        assert result.get("is_error") is not True
+        assert "is_error" not in result
+
+    @pytest.mark.asyncio
+    async def test_non_json_text_left_unflagged(self):
+        from claude_agent_sdk import SdkMcpTool
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        async def handler(args):
+            return {"content": [{"type": "text", "text": "[dedup stub]"}]}
+
+        tool = _wrap_handler_is_error(
+            SdkMcpTool(name="stub", description="", input_schema={}, handler=handler)
+        )
+        result = await tool.handler({})
+        assert "is_error" not in result
+
+    def test_wrapping_is_idempotent(self):
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        tool = _wrap_handler_is_error(_make_is_error_tool("once", {"rows": [1]}))
+        wrapped_handler = tool.handler
+        _wrap_handler_is_error(tool)  # second pass must not re-wrap
+        assert tool.handler is wrapped_handler
+
+    def test_all_registered_tools_are_wrapped(self):
+        from flowtracker.research import tools as t
+
+        seen = {}
+        for reg in t._ALL_TOOL_REGISTRIES:
+            for tool in reg:
+                seen[id(tool)] = tool
+        unwrapped = [
+            tool.name
+            for tool in seen.values()
+            if not getattr(tool.handler, "_is_error_wrapped", False)
+        ]
+        assert unwrapped == []

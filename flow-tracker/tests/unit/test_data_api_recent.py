@@ -911,8 +911,10 @@ class TestChartData:
 
 class TestListedSubsidiaries:
     def test_none_or_empty_when_not_seeded(self, api):
-        # No listed_subsidiaries seeded → method should return None or empty list
-        result = api.get_listed_subsidiaries("SBIN")
+        # No listed_subsidiaries seeded → method should return None or empty list.
+        # Use a symbol absent from the curated SOTP fallback map (SBIN/NTPC/etc.
+        # now have curated entries).
+        result = api.get_listed_subsidiaries("NOCURATEDSUB")
         assert result is None or result == []
 
 

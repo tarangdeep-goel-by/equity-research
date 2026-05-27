@@ -81,12 +81,14 @@ def test_macro_instructions_include_workflow_and_briefing():
 
 
 def test_macro_tools_registered():
-    """Macro agent has anchor-reading tools + the local-DB numeric-series tool."""
-    assert len(MACRO_AGENT_TOOLS_V2) == 3
+    """Macro agent has anchor-reading tools + the local-DB numeric-series tool
+    + live market context (VIX/USD-INR/Brent/G-sec/flows)."""
+    assert len(MACRO_AGENT_TOOLS_V2) == 4
     tool_names = {t.name for t in MACRO_AGENT_TOOLS_V2}
     assert "get_macro_catalog" in tool_names
     assert "get_macro_anchor" in tool_names
     assert "get_macro_indicators" in tool_names
+    assert "get_market_context" in tool_names
 
 
 def test_macro_in_agent_constants():
