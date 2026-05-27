@@ -29,7 +29,7 @@ _HEADERS = {
     "Referer": _PREFLIGHT_URL,
 }
 
-MAX_RETRIES = 3
+MAX_RETRIES = 1
 BACKOFF_BASE = 1
 
 # XBRL context ref mapping: category key -> normalized category
@@ -135,7 +135,7 @@ class NSEHoldingClient:
         self._client = httpx.Client(
             headers=_HEADERS,
             follow_redirects=True,
-            timeout=httpx.Timeout(connect=15.0, read=90.0, write=10.0, pool=10.0),
+            timeout=httpx.Timeout(connect=10.0, read=15.0, write=10.0, pool=10.0),
         )
         self._has_cookies = False
 
