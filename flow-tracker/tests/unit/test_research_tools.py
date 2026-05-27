@@ -372,10 +372,12 @@ class TestOwnershipTools:
 
         fake = FakeAPI()
         with patch_api(fake):
+            # 'foreign_institutions' is the valid token (Phase 1-B enum). The old
+            # 'fii' shorthand is now rejected with a did-you-mean envelope.
             await get_shareholder_detail.handler(
-                {"symbol": "SBIN", "classification": "fii"}
+                {"symbol": "SBIN", "classification": "foreign_institutions"}
             )
-        assert fake.calls[0][1] == ("SBIN", "fii")
+        assert fake.calls[0][1] == ("SBIN", "foreign_institutions")
 
 
 # ---------------------------------------------------------------------------
@@ -828,8 +830,10 @@ class TestFmpAndQualityTools:
 
         fake = FakeAPI()
         with patch_api(fake):
-            await get_sector_benchmarks.handler({"symbol": "SBIN", "metric": "pe"})
-        assert fake.calls[0][1] == ("SBIN", "pe")
+            # 'pe_trailing' is a valid _BENCHMARK_METRICS token (Phase 1-B enum).
+            # Bare 'pe' is a valuation_band alias, not a sector-benchmark metric.
+            await get_sector_benchmarks.handler({"symbol": "SBIN", "metric": "pe_trailing"})
+        assert fake.calls[0][1] == ("SBIN", "pe_trailing")
 
     @pytest.mark.asyncio
     async def test_peer_metrics(self):
@@ -2124,7 +2128,11 @@ class TestCalculateTool:
         )
         data = _parse(result)
         assert "error" in data
-        assert "Unknown operation" in data["error"]
+        # Phase 1-B: the enum guard rejects unknown ops up front with a
+        # standardized did-you-mean envelope (replaces the old in-chain
+        # "Unknown operation" message).
+        assert data["error"].startswith("Invalid operation")
+        assert "valid_values" in data and "suggestion" in data
 
     @pytest.mark.asyncio
     async def test_timestamp_discipline_no_args_is_clean(self):
@@ -2530,3 +2538,78 @@ class TestClassifyCompleteness:
         assert _count_rows({"name": "x"}) is None
         assert _count_rows(42) is None
         assert _count_rows("hello") is None
+
+
+# ---------------------------------------------------------------------------
+# _wrap_handler_is_error (Phase 0-A) — flag is_error on the envelope when the
+# payload classifies as an error, without mutating the content text.
+# ---------------------------------------------------------------------------
+
+
+def _make_is_error_tool(name: str, payload):
+    """Build a tiny SdkMcpTool whose handler returns a JSON-encoded payload."""
+    from claude_agent_sdk import SdkMcpTool
+
+    async def handler(args):
+        return {"content": [{"type": "text", "text": json.dumps(payload)}]}
+
+    return SdkMcpTool(name=name, description="", input_schema={}, handler=handler)
+
+
+class TestWrapHandlerIsError:
+    """Envelope-level is_error flagging via classify_completeness."""
+
+    @pytest.mark.asyncio
+    async def test_error_payload_sets_is_error(self):
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        tool = _wrap_handler_is_error(_make_is_error_tool("boom", {"error": "kaboom"}))
+        result = await tool.handler({})
+        assert result["is_error"] is True
+        # Content text is untouched (dedup hash preserved).
+        assert json.loads(result["content"][0]["text"]) == {"error": "kaboom"}
+
+    @pytest.mark.asyncio
+    async def test_normal_payload_not_flagged(self):
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        tool = _wrap_handler_is_error(_make_is_error_tool("ok", {"rows": [1, 2, 3]}))
+        result = await tool.handler({})
+        assert result.get("is_error") is not True
+        assert "is_error" not in result
+
+    @pytest.mark.asyncio
+    async def test_non_json_text_left_unflagged(self):
+        from claude_agent_sdk import SdkMcpTool
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        async def handler(args):
+            return {"content": [{"type": "text", "text": "[dedup stub]"}]}
+
+        tool = _wrap_handler_is_error(
+            SdkMcpTool(name="stub", description="", input_schema={}, handler=handler)
+        )
+        result = await tool.handler({})
+        assert "is_error" not in result
+
+    def test_wrapping_is_idempotent(self):
+        from flowtracker.research.tools import _wrap_handler_is_error
+
+        tool = _wrap_handler_is_error(_make_is_error_tool("once", {"rows": [1]}))
+        wrapped_handler = tool.handler
+        _wrap_handler_is_error(tool)  # second pass must not re-wrap
+        assert tool.handler is wrapped_handler
+
+    def test_all_registered_tools_are_wrapped(self):
+        from flowtracker.research import tools as t
+
+        seen = {}
+        for reg in t._ALL_TOOL_REGISTRIES:
+            for tool in reg:
+                seen[id(tool)] = tool
+        unwrapped = [
+            tool.name
+            for tool in seen.values()
+            if not getattr(tool.handler, "_is_error_wrapped", False)
+        ]
+        assert unwrapped == []

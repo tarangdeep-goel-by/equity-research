@@ -332,6 +332,106 @@ class TestToolResultCapture:
         assert "revenue: 1000" in ev.result_summary
         assert ev.completeness == "full"
 
+    @pytest.mark.asyncio
+    async def test_tool_result_json_payload_classified(
+        self, patch_sdk_types, stub_heavy_deps, monkeypatch
+    ):
+        """A JSON list payload is decoded and run through classify_completeness:
+        completeness='full', row_count=len, and payload_len=full text length."""
+        import json as _json
+
+        payload = [{"date": "2025-01-01", "close": 100}, {"date": "2025-01-02", "close": 101}]
+        content = _json.dumps(payload)
+        call = ToolUseBlock(id="t1", name="mcp__valuation__get_price_history", input={})
+        result = ToolResultBlock(tool_use_id="t1", content=content, is_error=False)
+        stream = [
+            _FakeAssistantMessage([call]),
+            UserMessage(content=[result]),
+            _FakeResultMessage("# Report\n\nBody text here."),
+        ]
+        fake_query, _ = _make_query([("yield", stream)])
+        monkeypatch.setattr(agent_mod, "query", fake_query)
+
+        _, trace = await agent_mod._run_specialist(
+            name="valuation", symbol="TESTCO", system_prompt="p",
+            tools=[], max_turns=1, max_budget=0.1, model="claude-sonnet-4-6",
+        )
+
+        ev = trace.tool_calls[0]
+        assert ev.is_error is False
+        assert ev.completeness == "full"
+        assert ev.row_count == 2
+        assert ev.payload_len == len(content)
+
+    @pytest.mark.asyncio
+    async def test_tool_result_json_error_payload_classified(
+        self, patch_sdk_types, stub_heavy_deps, monkeypatch
+    ):
+        """A JSON dict with a truthy 'error' key classifies as 'error' with
+        row_count=None, and payload_len is still recorded."""
+        import json as _json
+
+        content = _json.dumps({"error": "no data for symbol"})
+        call = ToolUseBlock(id="t1", name="mcp__valuation__get_fair_value", input={})
+        # SDK delivered as a non-error block; classifier should still tag 'error'.
+        result = ToolResultBlock(tool_use_id="t1", content=content, is_error=False)
+        stream = [
+            _FakeAssistantMessage([call]),
+            UserMessage(content=[result]),
+            _FakeResultMessage("# Report\n\nBody text here."),
+        ]
+        fake_query, _ = _make_query([("yield", stream)])
+        monkeypatch.setattr(agent_mod, "query", fake_query)
+
+        _, trace = await agent_mod._run_specialist(
+            name="valuation", symbol="TESTCO", system_prompt="p",
+            tools=[], max_turns=1, max_budget=0.1, model="claude-sonnet-4-6",
+        )
+
+        ev = trace.tool_calls[0]
+        assert ev.completeness == "error"
+        assert ev.row_count is None
+        assert ev.payload_len == len(content)
+
+    @pytest.mark.asyncio
+    async def test_tool_result_list_content_classified(
+        self, patch_sdk_types, stub_heavy_deps, monkeypatch
+    ):
+        """Production shape: SDK delivers ToolResultBlock.content as a LIST of
+        content items ([{'type':'text','text': json}]), not a bare string. The
+        inner text must be extracted before classify/summary/hash — otherwise
+        json.loads(str(list)) fails and row_count/completeness never populate."""
+        import json as _json
+
+        payload = [{"q": "FY25", "rev": 100}, {"q": "FY26", "rev": 120}, {"q": "FY27", "rev": 140}]
+        text = _json.dumps(payload)
+        call = ToolUseBlock(id="t1", name="mcp__valuation__get_quarterly_results", input={})
+        result = ToolResultBlock(
+            tool_use_id="t1",
+            content=[{"type": "text", "text": text}],
+            is_error=False,
+        )
+        stream = [
+            _FakeAssistantMessage([call]),
+            UserMessage(content=[result]),
+            _FakeResultMessage("# Report\n\nBody text here."),
+        ]
+        fake_query, _ = _make_query([("yield", stream)])
+        monkeypatch.setattr(agent_mod, "query", fake_query)
+
+        _, trace = await agent_mod._run_specialist(
+            name="valuation", symbol="TESTCO", system_prompt="p",
+            tools=[], max_turns=1, max_budget=0.1, model="claude-sonnet-4-6",
+        )
+
+        ev = trace.tool_calls[0]
+        assert ev.completeness == "full"
+        assert ev.row_count == 3
+        assert ev.payload_len == len(text)
+        # result_summary holds the real JSON text, not the list-repr.
+        assert ev.result_summary.startswith("[{")
+        assert "'type': 'text'" not in ev.result_summary
+
     def test_options_request_user_message_replay(self):
         """_run_specialist must enable replay-user-messages so the SDK actually
         delivers UserMessage (and thus ToolResultBlock) into the stream."""
