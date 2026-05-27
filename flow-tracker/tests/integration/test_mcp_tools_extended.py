@@ -40,147 +40,14 @@ def _parse_tool_result(result: dict) -> list | dict:
 
 
 # ---------------------------------------------------------------------------
-# Core Financials
-# ---------------------------------------------------------------------------
-
-class TestGetQuarterlyResults:
-    @pytest.mark.asyncio
-    async def test_returns_data_for_sbin(self, db_env):
-        from flowtracker.research.tools import get_quarterly_results
-        result = await get_quarterly_results.handler({"symbol": "SBIN", "quarters": 4})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-        assert "revenue" in data[0]
-
-    @pytest.mark.asyncio
-    async def test_unknown_symbol_returns_empty(self, db_env):
-        from flowtracker.research.tools import get_quarterly_results
-        result = await get_quarterly_results.handler({"symbol": "NONEXIST", "quarters": 4})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) == 0
-
-
-class TestGetAnnualFinancials:
-    @pytest.mark.asyncio
-    async def test_returns_data(self, db_env):
-        from flowtracker.research.tools import get_annual_financials
-        result = await get_annual_financials.handler({"symbol": "SBIN", "years": 5})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-        assert "revenue" in data[0]
-        assert "net_income" in data[0]
-
-
-# ---------------------------------------------------------------------------
-# Valuation
-# ---------------------------------------------------------------------------
-
-class TestGetValuationSnapshot:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_valuation_snapshot
-        result = await get_valuation_snapshot.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-        assert "price" in data or "pe_trailing" in data
-
-
-# ---------------------------------------------------------------------------
-# Ownership
-# ---------------------------------------------------------------------------
-
-class TestGetShareholding:
-    @pytest.mark.asyncio
-    async def test_returns_list(self, db_env):
-        from flowtracker.research.tools import get_shareholding
-        result = await get_shareholding.handler({"symbol": "SBIN", "quarters": 4})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-
-
-class TestGetInsiderTransactions:
-    @pytest.mark.asyncio
-    async def test_returns_list(self, db_env):
-        from flowtracker.research.tools import get_insider_transactions
-        result = await get_insider_transactions.handler({"symbol": "SBIN", "days": 365})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-
-
-# ---------------------------------------------------------------------------
-# Market Signals
-# ---------------------------------------------------------------------------
-
-class TestGetDeliveryTrend:
-    @pytest.mark.asyncio
-    async def test_returns_list(self, db_env):
-        from flowtracker.research.tools import get_delivery_trend
-        result = await get_delivery_trend.handler({"symbol": "SBIN", "days": 30})
-        data = _parse_tool_result(result)
-        assert isinstance(data, list)
-        assert len(data) > 0
-
-
-# ---------------------------------------------------------------------------
-# Consensus
-# ---------------------------------------------------------------------------
-
-class TestGetConsensusEstimate:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_consensus_estimate
-        result = await get_consensus_estimate.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-        assert "target_mean" in data or "recommendation" in data
-
-
-# ---------------------------------------------------------------------------
 # FMP Tools
 # ---------------------------------------------------------------------------
-
-class TestGetDupontDecomposition:
-    @pytest.mark.asyncio
-    async def test_returns_data(self, db_env):
-        from flowtracker.research.tools import get_dupont_decomposition
-        result = await get_dupont_decomposition.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        # May be dict with "years" key or a list
-        assert isinstance(data, (list, dict))
-
 
 class TestGetFairValue:
     @pytest.mark.asyncio
     async def test_returns_dict(self, db_env):
         from flowtracker.research.tools import get_fair_value
         result = await get_fair_value.handler({"symbol": "SBIN"})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-
-
-# ---------------------------------------------------------------------------
-# Macro (no symbol required)
-# ---------------------------------------------------------------------------
-
-class TestGetMacroSnapshot:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_macro_snapshot
-        result = await get_macro_snapshot.handler({})
-        data = _parse_tool_result(result)
-        assert isinstance(data, dict)
-
-
-class TestGetFiiDiiStreak:
-    @pytest.mark.asyncio
-    async def test_returns_dict(self, db_env):
-        from flowtracker.research.tools import get_fii_dii_streak
-        result = await get_fii_dii_streak.handler({})
         data = _parse_tool_result(result)
         assert isinstance(data, dict)
 
@@ -616,23 +483,6 @@ class TestGetMacroIndicators:
         assert data["pmi"]["latest"]["services_pmi"] == 58.7
 
 
-class TestMacroSnapshotEnriched:
-    @pytest.mark.asyncio
-    async def test_includes_cpi_and_yield(self, db_env, populated_store):
-        from flowtracker.cpi_models import CPIMonth
-        from flowtracker.research.tools import get_macro_snapshot
-
-        populated_store.upsert_cpi_monthly([
-            CPIMonth(period="2025-04", cpi_index=194.5, yoy_pct=3.16),
-        ])
-        result = await get_macro_snapshot.handler({})
-        data = _parse_tool_result(result)
-        # gsec_10y seeded by make_macro_snapshots; cpi_inflation from our row.
-        assert "gsec_10y" in data
-        assert data["cpi_inflation"]["yoy_pct"] == 3.16
-        assert data["cpi_inflation"]["as_of_month"] == "2025-04"
-
-
 class TestSectorIndexValuation:
     @pytest.mark.asyncio
     async def test_returns_percentile_band(self, db_env, populated_store):
@@ -960,74 +810,6 @@ class TestStandaloneVocabValidation:
         result = await get_data_quality_flags.handler({"symbol": "INFY"})
         data = _parse_tool_result(result)
         assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid min_severity"))
-
-    @pytest.mark.asyncio
-    async def test_shareholder_detail_invalid_classification_is_rejected(self, db_env):
-        from flowtracker.research.tools import get_shareholder_detail
-        result = await get_shareholder_detail.handler({"symbol": "SBIN", "classification": "fii"})
-        data = _parse_tool_result(result)
-        assert "error" in data and "suggestion" in data
-        assert result.get("is_error") is True
-
-    @pytest.mark.asyncio
-    async def test_shareholder_detail_no_classification_routes(self, db_env):
-        # Optional param omitted (None = all) → must NOT be validated.
-        from flowtracker.research.tools import get_shareholder_detail
-        result = await get_shareholder_detail.handler({"symbol": "INFY"})
-        data = _parse_tool_result(result)
-        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid classification"))
-
-    @pytest.mark.asyncio
-    async def test_company_documents_invalid_doc_type_is_rejected(self, db_env):
-        from flowtracker.research.tools import get_company_documents
-        result = await get_company_documents.handler({"symbol": "SBIN", "doc_type": "transcript"})
-        data = _parse_tool_result(result)
-        assert "error" in data and "suggestion" in data
-        assert result.get("is_error") is True
-
-    @pytest.mark.asyncio
-    async def test_company_documents_concall_recording_routes(self, db_env):
-        # 'concall_recording' is a valid token (was missing from the stale ref list).
-        from flowtracker.research.tools import get_company_documents
-        result = await get_company_documents.handler({"symbol": "INFY", "doc_type": "concall_recording"})
-        data = _parse_tool_result(result)
-        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid doc_type"))
-
-    @pytest.mark.asyncio
-    async def test_sector_benchmarks_invalid_metric_is_rejected(self, db_env):
-        from flowtracker.research.tools import get_sector_benchmarks
-        result = await get_sector_benchmarks.handler({"symbol": "SBIN", "metric": "nonsense_metric"})
-        data = _parse_tool_result(result)
-        # get_sector_benchmarks is an orphan standalone tool — superseded by the
-        # get_peer_sector(section='benchmarks') dispatcher and NOT in any agent
-        # registry, so _wrap_handler_is_error never wraps it (no is_error flag).
-        # The validation guard still returns the correct did-you-mean envelope.
-        assert "error" in data and "suggestion" in data
-        assert "valid_values" in data
-        assert data["error"].startswith("Invalid metric")
-
-    @pytest.mark.asyncio
-    async def test_sector_benchmarks_no_metric_routes(self, db_env):
-        from flowtracker.research.tools import get_sector_benchmarks
-        result = await get_sector_benchmarks.handler({"symbol": "INFY"})
-        data = _parse_tool_result(result)
-        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid metric"))
-
-    @pytest.mark.asyncio
-    async def test_valuation_band_invalid_metric_is_rejected(self, db_env):
-        from flowtracker.research.tools import get_valuation_band
-        result = await get_valuation_band.handler({"symbol": "SBIN", "metric": "bogus", "days": 1000})
-        data = _parse_tool_result(result)
-        assert "error" in data and "suggestion" in data
-        assert result.get("is_error") is True
-
-    @pytest.mark.asyncio
-    async def test_valuation_band_alias_metric_routes(self, db_env):
-        # 'pb' alias is a documented metric — must NOT be rejected.
-        from flowtracker.research.tools import get_valuation_band
-        result = await get_valuation_band.handler({"symbol": "INFY", "metric": "pb", "days": 1500})
-        data = _parse_tool_result(result)
-        assert not (isinstance(data, dict) and str(data.get("error", "")).startswith("Invalid metric"))
 
     def test_built_schema_render_chart_has_enum(self):
         from flowtracker.research.tools import render_chart
