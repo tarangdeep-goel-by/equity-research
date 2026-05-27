@@ -38,6 +38,16 @@ Applying a ₹3-8 lakh benchmark to a discount broker at ₹35,000 per client wo
 
 Call `calculate` with `market_cap`, `active_clients`, and sub-type-matched peer comparable values as named inputs. This frame is especially useful for pre-IPO / recently-listed brokers where historical PE band is thin.
 
+### Active-Client Denominator and the Float / MTF Revenue Legs — Model Them Explicitly
+The GROWW-class failure mode has two parts. First, the per-client frame above was computed on an **F&O-user proxy** rather than total active clients — an F&O-trader count is a fraction of the active base and inflates market-cap-per-client several-fold, breaking the cross-peer comparison. The denominator for the §Market-Cap-Per-Active-Client frame must be the **total 12-month active client count** (the NSE-active UCC base, or management's stated active-client figure), not the F&O-user subset and not the total-registered-user number (which is inflated by dormant sign-ups). Extract the active-client count from `get_company_context(section='concall_insights', sub_section='operational_metrics')` where management discloses it; cite the quarter. If the disclosure only gives F&O users or total registered users and not the active base, state the gap and flag it as an Open Question — do not substitute the F&O proxy and do not estimate the active base from registered users.
+
+Second, the balance-sheet revenue legs were left qualitative ("a stable earnings leg", "margin-funding yield") rather than modeled. For brokers with a material client-float book or MTF (margin trading facility) book, build these as **explicit revenue lines**, not adjectives:
+
+- **Float yield** — the broker earns interest on client float (settlement balances, idle client funds, margin deposits parked in liquid instruments). Model it as `float-income = average client-float balance × float yield`. Pull the float balance and the disclosed float/treasury-income line from `get_company_context(section='concall_insights', sub_section='financial_metrics')` or the AR (`get_company_context(section='annual_report', sub_section='other_income')`); the yield tracks short-term rates, so cross-check against the current rate environment. Note that SEBI's tightening on use of client funds caps this leg — model the post-rule run-rate, not the pre-rule one.
+- **MTF-interest contribution** — translate MTF book growth into an interest-income line: `MTF-interest = average MTF book × net MTF spread` (lending rate charged to clients minus the broker's own funding cost). Extract the MTF book size and disclosed MTF-interest income from `get_company_context(section='concall_insights', sub_section='financial_metrics')`; where the book is disclosed but the spread is not, state the spread assumption explicitly and source it from the disclosed lending rate. A fast-growing MTF book is a genuine, capital-funded earnings driver that the through-cycle PE frame must capture — but it consumes regulatory capital, so net it against the capital build (per the FCFE-failure discipline above).
+
+Where either book or its yield/spread is genuinely undisclosed, state the gap rather than imputing — do not fabricate a float balance or an MTF spread to populate the revenue bridge.
+
 ### Per-AUM Valuation for Wealth and PMS
 For wealth / PMS-tilted brokers, P/AUM (market cap as % of total AUM or AUA) is a useful cross-section. Indian listed wealth-managers trade in the 4-8% P/AUM band for standalone PMS; bank-owned wealth arms are harder to isolate without SOTP. The structural floor: a mature wealth franchise at 1.0-1.5% annual fee yield and 40-50% PBT margin supports a 5-7× multiple on fee-income, which maps to roughly 5-7% P/AUM.
 
@@ -77,7 +87,8 @@ When `get_valuation(section='band', metric='pe')` returns `status='schema_valid_
 
 ### Open Questions — Broker Valuation-Specific
 - "What was the F&O ADTV peak in FY24 and the normalized through-cycle mid-point (70-80% of peak) used for earnings normalisation? Is the current year trailing PE being compared against the peak-year or normalized earnings?"
-- "What is market cap per 12-month active client for this broker, and how does it compare with 2-3 named peers in the same sub-type?"
+- "What is market cap per 12-month active client for this broker, and how does it compare with 2-3 named peers in the same sub-type? Was the denominator the total active-client base or an F&O-user / total-registered-user proxy?"
+- "What are the explicit float-income and MTF-interest revenue lines (average float/MTF balance × yield/spread), and what quarter and disclosure were the balances and yields sourced from? If undisclosed, is the gap flagged rather than imputed?"
 - "Does the current PE premium to sector median reconcile with the ARPU + activation-rate + product-breadth + MTF-spread decomposition, or is there a residual multiple gap?"
 - "Is any SEBI regulatory overhang (weekly-expiry rationalisation, further margin tightening, TER/true-to-label rulings) in consultation that would warrant a further multiple discount?"
 - "For bank-owned brokers: what is the standalone broker SOTP value vs consolidated parent-bank P/B? Is the captive revenue being double-counted in the parent's valuation already?"

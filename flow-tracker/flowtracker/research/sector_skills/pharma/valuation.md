@@ -65,6 +65,20 @@ Components to specify:
 
 State the bull-case multiplier (e.g., "pipeline NPV adds ₹8,500 Cr to base-case EV, a 12% uplift; dependent on 4 specific gAstaZeneca-style launches in the next 18 months") rather than a diffuse "pipeline potential" framing.
 
+### Per-Asset rNPV — Quantify the Material Pipeline Drivers, Don't Just Name Them
+The DRREDDY-class failure mode is stating that complex generics / biosimilars (e.g. Abatacept, Semaglutide) "drive the bull case" without putting a number on any of them — a qualitative pipeline narrative that the multiple cannot be reconciled against. For every **material** pipeline asset (one that management has flagged as a needle-mover, or that the bull case explicitly leans on), build an explicit risk-adjusted NPV per asset and sum them — do not collapse the whole pipeline into one diffuse "optionality" line:
+
+`Asset rNPV = peak sales × probability-of-success (PoS) × peak-sales multiple` (or, for a near-dated launch, `risk-adjusted launch-year contribution = launch-year revenue × PoS × segment EV/Revenue`).
+
+- **Peak sales / TAM** — extract the addressable-market size, expected India/US share, and management's own peak-sales guidance from `get_company_context(section='concall_insights', sub_section='operational_metrics')` and `get_company_context(section='annual_report', sub_section='pipeline')` where disclosed. If the peak-sales figure or TAM for the named asset is genuinely undisclosed, state the gap and add it to Open Questions — do not estimate or fabricate a peak-sales number to make the rNPV "work".
+- **Probability-of-success** — anchor to the FDA-pipeline PoS bands already in the bull-case section above (standard ANDA ~35-45%, paragraph-IV FTF higher, specialty 505(b)(2) 25-35%, biosimilars phase-dependent). State the band used per asset.
+- **Multiple** — apply a peak-sales or EV/Revenue multiple drawn from the asset's segment (complex generics / biosimilars sit in the specialty band). The multiple itself must be peer-justified (see below), not asserted.
+
+Present the result as a per-asset table (asset · peak sales · PoS · multiple · rNPV · % of bull-case EV) so the reader can see which one or two assets actually carry the thesis. An asset the bull case names but cannot be rNPV-quantified from disclosure is an Open Question, not a silent omission.
+
+### Peer-Justify Every Segment Multiple in the SOTP
+The segment EV/EBITDA bands in the Segment-SOTP section are starting anchors, not a licence to assign a multiple by assertion. For each segment multiple used (and for each pipeline-asset multiple in the rNPV table above), justify it against an actual peer comparable: pull the segment-relevant peer set from `get_peer_sector(section='benchmarks')` (or `get_yahoo_peers` for a specialty/biosimilar comparable that the Indian peer set misses) and state the named peer and its trading multiple that supports the figure chosen. "US Specialty at 25× EV/EBITDA" must read as "US Specialty at 25×, in line with [named specialty peer] at 24-26×" — extract the peer multiple where disclosed; if no clean segment-pure peer exists, say so and widen the multiple to a justified range rather than presenting a false point estimate.
+
 ### Historical Band Context — Regime-Shift Caveats
 A 5-10Y PE band via `get_valuation(section='band', metric='pe')` with `get_chart_data(chart_type='pe')` as deep-history fallback gives long-arc context (current vs median vs trough-peak). The band has regime breaks:
 - **Post-2017 US generics trough** — the FY17-FY20 US price-erosion cycle compressed sector PE from 25-30× to 15-20×; pre-2017 medians are not directly comparable.
@@ -100,5 +114,7 @@ When `get_fundamentals(section='revenue_segments')` returns aggregate-only and `
 - "For segment SOTP: what margin was assumed for US Specialty, India branded, US generics, CDMO, and API respectively? Does the sum-of-segment EBITDA reconcile to consolidated within ±5%?"
 - "What is the FCF Yield (CFO − capex) / Market Cap, and does it confirm or contradict the PE-implied growth rate?"
 - "For pipeline-conditional bull case: which specific ANDA / 505(b)(2) / NDA filings underpin the uplift, and what are the expected approval timelines, launch prices, and competitor-exclusivity calendars?"
+- "For each material pipeline asset (e.g. complex generics / biosimilars): what peak sales / TAM, PoS, and multiple were used in the per-asset rNPV, and what % of the bull-case EV does each asset contribute? Were any named assets left out of the rNPV because peak sales were undisclosed?"
+- "Is every segment SOTP multiple (and every pipeline-asset multiple) justified against a named peer comparable from get_peer_sector / get_yahoo_peers, or are any assigned by assertion?"
 - "What `g` was used in the justified PE / P/B framework, and at ±2 pp sensitivity on `g`, what is the multiple range?"
 - "Is the trailing PE distorted by a US launch-year earnings peak, a specialty pre-peak margin ramp, or a one-off FX or divestment gain that should be normalised before peer comparison?"
