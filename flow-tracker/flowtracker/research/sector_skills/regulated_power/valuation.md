@@ -51,6 +51,20 @@ Regulated-power valuation is especially WACC-sensitive because CoE drives both t
 
 Do NOT leave some dependent outputs at the original WACC and some at the new — that produces an incoherent fair-value triangle. Route the override through `calculate` with the WACC delta as a named input and recompute all four dependent outputs within the same section.
 
+### Regulated-ROE Sensitivity — The Single Most Load-Bearing Regulatory Input
+WACC-override propagation above handles the *discount-rate* side. The NTPC-class gap is the other half: the **normative regulated ROE** (currently 15.5% on regulated equity under the CERC 2024-29 block) is itself a regulatory variable that can be revised at the next control-period reset, and the justified P/B is roughly linear in it. A valuation that fixes regulated ROE at the current norm and never sensitises it is silently assuming regulatory permanence — exactly the risk a regulated utility carries. Mandate an explicit regulated-ROE sensitivity:
+
+- Recompute the justified P/B from `(ROE_reg − g) ÷ (CoE − g)` at **ROE_reg ± 50-100 bps** around the realized base case, and report the resulting fair-value range, not a point estimate. A 100 bps move in normative ROE typically shifts justified P/B by 10-20% at mature-utility inputs — material enough that the base case alone is not defensible.
+- Frame the downside leg concretely: "if CERC revises the normative ROE from 15.5% to 14.5% in the 2029-34 block, justified P/B falls from X× to Y×, implying Z% downside from the current price." Source the current normative ROE and any consultation-paper signals on the next reset from `get_company_context(section='annual_report', sub_section='regulatory')` or `get_company_context(section='concall_insights', sub_section='management_commentary')` where disclosed; if the next-block ROE direction is genuinely not yet signalled, state that and run the sensitivity symmetrically rather than asserting a revision.
+- Route the ROE-flex recomputation through `calculate` with `roe_reg`, `coe`, and `g` as named inputs, holding CoE and g fixed so the sensitivity isolates the regulatory variable.
+
+### Adjust Peer Multiples for the Regulated Capital Structure
+A regulated utility's leverage is structurally set by the regulator (the CERC normative 70:30 debt:equity capital structure), so its balance sheet is not freely comparable to an unregulated peer's. When using `get_peer_sector(section='benchmarks')` (or `get_yahoo_peers`) for a peer P/B or EV/EBITDA table, do **not** read a raw multiple gap as a quality signal without caveating the capital structure:
+
+- A regulated utility carrying high, regulator-sanctioned debt against a guaranteed return on equity is lower-risk-per-turn-of-leverage than an unregulated industrial at the same debt/equity — the leverage is matched to a contracted, return-bearing RAB. State this when the peer set mixes regulated and unregulated names.
+- For EV-based peer multiples, the regulated debt sits in EV but is serviced by the regulated return; flag that an EV/EBITDA comparison against a peer with a different regulatory capital structure (or an unregulated merchant name) is not apples-to-apples, and prefer the P/B-ROE frame which already internalises the capital structure.
+- Where the peer's regulated-vs-merchant debt split is disclosed, note it; where it is not, caveat the comparison explicitly rather than presenting the multiple gap as clean. Do not normalise a peer's leverage by estimating an undisclosed regulated-debt share — state the limitation.
+
 ### DCF Terminal Growth — Anchor to Regulated-RAB Growth, Not GDP
 If doing a manual DCF on a regulated utility, the terminal growth anchor is **regulated-RAB growth** (5-8% nominal), not broad GDP (8-10% nominal). RAB grows through approved capex cycles, not through demand elasticity. For renewable pure-plays with 20-25Y finite PPAs, DCF should run as explicit-period-plus-terminal-zero (the PPA expires and asset value converts to residual land + re-contracting optionality at uncertain merchant rates); do NOT apply a perpetuity-growth terminal on a finite-PPA cash flow.
 
@@ -79,6 +93,8 @@ When `get_valuation(section='band')` returns a narrow window (<30 observations) 
 
 ### Open Questions — Regulated Power Valuation-Specific
 - "What CoE was used in the justified P/B calculation, and has WACC been propagated consistently to reverse-DCF implied growth and peer-relative multiples?"
+- "What is the fair-value range under a regulated-ROE sensitivity of ±50-100 bps around the current CERC norm, and what is the implied downside if the normative ROE is cut at the next control-period reset?"
+- "Does the peer P/B / EV/EBITDA table caveat the regulated (CERC-normative) capital structure, or is a raw multiple gap against differently-levered or unregulated peers being read as a clean quality signal?"
 - "For recently-listed green/renewable subsidiaries: what is the implied holdco discount embedded in the current parent market price vs standalone regulated-franchise value?"
 - "What is the current dividend-yield spread to 10Y G-sec, and does trailing payout sustainability support treating this as a reliable bond-proxy signal?"
 - "For renewable pipeline: at the current bid-tariff auction clearing price and the CoE used, does the project equity IRR still clear the 13-15% hurdle rate, or is the pipeline margin-thin?"

@@ -13,6 +13,9 @@ Platform "Other Costs" often exceed 50% of revenue, making it the largest line i
 - **Marketing/CAC** — customer acquisition spend. Track as % of revenue — should be declining for mature platforms
 - **Technology costs** — relatively fixed, provides operating leverage
 - **Employee costs** — often high for tech-heavy platforms
+- **ESOP charge to P&L** — the non-cash compensation line (see ESOP Adjustment below); critical for a tech platform's true profitability
+
+**When `expense_breakdown` returns only an aggregate "Other Expenses" %** (no marketing / logistics / tech split — a known data limitation), do not silently drop CAC / contribution-margin. Pull the split from the AR other-expense schedule (`get_company_context(section='annual_report', sub_section='notes_to_financials')`) or concall `operational_metrics`. If it is genuinely undisclosed, state the gap explicitly — CAC and contribution margin are critical platform metrics, not optional. A silent omission reads as an analytical miss; a stated gap reads as diligence.
 
 ### Business Mix Shift
 Many Indian platforms are shifting business models (e.g., Zomato: food delivery → quick commerce → going-out):

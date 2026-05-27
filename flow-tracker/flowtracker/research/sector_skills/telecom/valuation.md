@@ -50,6 +50,17 @@ For diversified telecom groups, SOTP is often the biggest valuation lever:
 
 If `get_valuation(section='sotp')` returns sparse subsidiary mapping, fall back to manual per-ticker `get_valuation(section='snapshot', symbol=SUB_TICKER)` calls — do not leave a listed subsidiary out of SOTP as an open question when the tool can resolve it.
 
+**Identifying a sub is not valuing it — put a number on each material part.** The BHARTIARTL-class failure mode is listing Airtel Africa, Nxtra (data centres), and Indus Towers as "material subsidiaries" and then stopping, leaving the SOTP qualitative. When a sub is **listed or material, value it explicitly**:
+- **Listed subsidiary (e.g. Airtel Africa — primary listing on the LSE, a foreign listing requiring FX conversion; Indus Towers — listed on the NSE India)** — take its own current market cap × the parent's disclosed stake %. Pull the sub's market cap via `get_valuation(section='snapshot', symbol=SUB_TICKER)` and the stake % from `get_company_context(section='annual_report', sub_section='subsidiaries')` or the concall; do not use book value. If the sub trades on a foreign exchange (Airtel Africa on the LSE), state the FX used to convert to INR.
+- **Unlisted but material (e.g. Nxtra data centres)** — apply a sector multiple: data-centre EV/MW (capacity × ₹/MW for operational + committed MW) or a peer EV/EBITDA from a listed data-centre comparable via `get_peer_sector(section='benchmarks')` or `get_yahoo_peers`. Extract the operational/committed MW and segment EBITDA from `get_company_context(section='concall_insights', sub_section='operational_metrics')` or `(section='annual_report', sub_section='segments')` where disclosed.
+- Where the stake %, the sub's listing/market cap, or the unlisted sub's MW/EBITDA is genuinely undisclosed, state the gap and add it to Open Questions — but a sub that *can* be valued from disclosure must be valued, not flagged.
+
+### Verify Net-Debt Composition Before the EV→Equity Bridge
+The EV→equity bridge above subtracts Net debt — but the BHARTIARTL gap was using the headline net-debt figure without verifying what it contains. For an Indian telco, the headline net-debt line frequently **excludes or inconsistently reports** the two largest quasi-debt items: **deferred spectrum payment liabilities** and **AGR dues**. Before plugging Net debt into the bridge, decompose and verify it:
+- Reconcile the headline net-debt figure against its components — bank/bond borrowings, lease liabilities, deferred spectrum liability, and AGR dues — sourced from `get_company_context(section='annual_report', sub_section='borrowings')` or the auditor-note section of `get_company_context(section='filings')`. State whether the headline number already includes spectrum + AGR or whether they must be added on top.
+- If the headline net debt excludes spectrum/AGR, add them explicitly (consistent with the quasi-debt treatment in financials.md) so the equity bridge is not systematically over-valued by tens of thousands of crores.
+- Where the spectrum-liability or AGR-dues quantum is genuinely undisclosed in the period on file, state the gap and bound the equity value with and without the item rather than silently using the unverified headline figure. Do not estimate the AGR/spectrum liability if it is not disclosed.
+
 ### Justified EV/EBITDA — Anchor to Growth, Not to Historical Band Alone
 Historical EV/EBITDA bands (5-10Y via `get_chart_data(chart_type='ev_ebitda')` where available, or constructed from EV series and EBITDA series) give context but do not justify the multiple on their own. The regime-break warning applies: post-2016-new-entrant-disruption and post-tariff-hike-cycle regimes are structurally distinct; smoothing across them produces a misleading median.
 
@@ -78,7 +89,8 @@ When `get_valuation(section='band', metric='ev_ebitda')` returns a narrow window
 
 ### Open Questions — Telecom Valuation-Specific
 - "Has spectrum amortisation policy been normalised across peers before citing peer PE, and from which quarter's notes-to-accounts was the schedule extracted?"
-- "Does the SOTP include the current market cap of listed subsidiaries (separately-listed tower / enterprise / international entities) at the parent's disclosed stake %, and what holdco discount was applied?"
+- "Does the SOTP put an actual value on every material subsidiary (Airtel Africa at its own market cap × stake; Indus Towers at market cap × stake; Nxtra at data-centre EV/MW or peer EV/EBITDA), or are any material subs merely identified and left unvalued?"
+- "Was the headline net-debt figure decomposed and verified to confirm whether it already includes deferred spectrum liabilities and AGR dues before being used in the EV→equity bridge?"
 - "Does the target per-share use `(Target EV − Net debt − Minority interest + Investments) ÷ diluted shares`, with AGR and deferred spectrum dues included in Net debt?"
 - "At the current EV, what ARPU trajectory and subscriber-growth path does the reverse-DCF imply, and is that path consistent with the current tariff-cycle and tele-density curve?"
 - "Is the current EV/EBITDA premium to sector median reconciled with the ARPU + market-share + spectrum-holdings + tenancy-ratio + leverage decomposition, or is there a residual multiple gap?"

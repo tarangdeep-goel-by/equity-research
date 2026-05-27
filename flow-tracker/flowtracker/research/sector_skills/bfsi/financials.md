@@ -30,7 +30,7 @@ Banks are regulated on **CRAR** (Capital to Risk-weighted Assets Ratio, Basel II
 - Whenever discussing an equity raise (QIP, rights issue), sub-debt issuance, or accelerated credit growth, cite the **pre- and post-action CRAR/CET1**
 - Canonical key via `get_sector_kpis(sub_section='capital_adequacy_ratio_pct')`
 - CET1 compression below ~10% in a growing bank is a warning — either dilution is imminent or growth slows
-- All forward BVPS or CRAR projections (BVPS × (1+g)^years) must go through the `calculate` tool — compound interest in your head produces errors that reviewers catch
+- All forward BVPS or CRAR projections (BVPS × (1+g)^years) must go through the `calculate` tool — compound interest in your head produces errors that make the projection inaccurate
 
 ### Valuation Basis
 - Use **P/B** (Price to Book) as the primary valuation metric, not PE

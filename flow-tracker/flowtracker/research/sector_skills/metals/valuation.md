@@ -69,7 +69,7 @@ For integrated steel-plus-mining and diversified mining holdings, a single conso
 4. **Listed subsidiaries** — isolate separately; apply parent's stake-adjusted market cap with a 20-25% holding-company discount (parent's SOTP cannot pay full market price for the subsidiary's listed value).
 5. Back out implied EV for the standalone (ex-SOTP) operating business — this is what the market is really paying for the core.
 
-Call `get_valuation(section='sotp')` for the tool-computed view; override with the per-vertical through-cycle normalization above where the tool defaults to TTM.
+Call `get_valuation(section='sotp')` for the tool-computed view; override with the per-vertical through-cycle normalization above where the tool defaults to TTM. **A `get_valuation(section='sotp')` response of "no listed subsidiaries" is the START of a manual per-vertical build, never a reason to skip SOTP** — foreign or unlisted verticals (e.g. an overseas rolled-products / FRP business such as Novelis) are valued on global sector peers (FRP / auto-sheet EV/EBITDA via `get_yahoo_peers`), India operations on domestic peers, then summed with the holdco discount. Skipping SOTP because the auto-tool returned empty understates the parts.
 
 ### What Fails for Metals — Name These Explicitly
 - **PE at cycle peak** — inverted signal; lowest PE marks the turn. Do not cite PE in isolation without cycle phase.

@@ -21,7 +21,7 @@ The statutory ceiling on foreign ownership in large private banks is **74% aggre
 - **ICICIBANK**: ADR listing on NYSE. Same retrieval path (SEC 20-F)
 - **KOTAKBANK**: Historically ran GDR programme pre-HDFC merger era — retrieve from LSE / RBI ECB filings
 - **Aggregation formula**: `true_foreign_holding_% = (direct_FPI_shares + ADR_underlying_shares + NRI_shares + FDI_shares) / total_India_equity`
-- **Where to search for ADR/GDR outstanding:** apply the canonical Tenet 14 search sequence with private-bank-specific queries — `query='ADR'`, `'depositary receipts'`, `'Form 20-F'`. Stopping at the first empty result and pleading missing data — as agents have done in prior runs — is a workflow violation.
+- **Where to search for ADR/GDR outstanding:** apply the canonical Tenet 14 search sequence with private-bank-specific queries — `query='ADR'`, `'depositary receipts'`, `'Form 20-F'`. Stopping at the first empty result and pleading missing data — as agents have done in prior runs — leaves the foreign-holding picture incomplete and unreliable.
 - If still genuinely absent after the canonical search, add Open Question: "What is the current ADR/GDR outstanding as % of paid-up, and what is the combined FPI + ADR + NRI + FDI vs the 74% cap?"
 
 (See `bfsi/ownership.md` for the 5% RBI prior-approval threshold rule — applies to all banks.)
