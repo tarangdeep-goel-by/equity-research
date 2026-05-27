@@ -1,18 +1,24 @@
-"""Extract structured insights from investor deck PDFs using Docling + Claude Agent SDK.
+"""Extract structured insights from investor deck PDFs using vision (Claude Agent SDK).
 
 Pipeline per deck:
-  1. doc_extractor.extract_to_markdown() → Docling produces markdown + heading index
-  2. Claude Sonnet 4.6 reads the markdown, fills a deck-specific JSON schema
+  1. pdfium gate (_classify_deck_pdf) rejects Reg 30 cover letters by page count
+     + disclosure-marker signature
+  2. _render_deck_pages renders every slide to a PNG; the VLM reads the page
+     images directly (charts/printed numbers a markdown extractor drops) and
+     fills a deck-specific JSON schema
   3. Per-quarter JSON is aggregated into deck_extraction.json alongside the concall
      extraction in fundamentals/
 
 Complements the concall pipeline — decks show polished charts, segmental tables,
 and forward guidance slides that the raw concall transcript doesn't expose as
-tables. Concalls stay on pdfplumber (see doc_extractor.py notes).
+tables. Images-only: a deck's value (charts, segment numbers, guidance) is visual,
+so reading rendered pages beats text extraction.
 """
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import json
 import logging
 import re
@@ -28,13 +34,23 @@ from claude_agent_sdk import (
     query,
 )
 
-from flowtracker.research.doc_extractor import extract_to_markdown
 from flowtracker.research.heading_toc import deck_slide_index
 
 logger = logging.getLogger(__name__)
 
 _VAULT_BASE = Path.home() / "vault" / "stocks"
 MAX_CONCURRENT_DECK_EXTRACTIONS = 3
+# Decks are read as page images (charts/printed numbers Docling drops as
+# <!-- image -->). Default to a single VLM call over the whole deck so the model
+# prioritizes globally and names segments consistently. Only decks longer than
+# SINGLE_CALL_MAX_PAGES fall back to chunked extraction + merge (DECK_CHUNK_SIZE
+# pages per call) to bound attention dilution / JSON-output overflow.
+SINGLE_CALL_MAX_PAGES = 50
+DECK_CHUNK_SIZE = 8
+# Stamped on every extracted quarter. Bump when the extracted JSON shape changes
+# so ensure_deck_data re-extracts stale-shape quarters once instead of serving
+# them from cache forever. v2 = images-only VLM + key_metrics{unit,values{period}}.
+DECK_SCHEMA_VERSION = 2
 
 # --- Deck classifier thresholds (mirrors filing_client._looks_like_real_deck) ---
 #
@@ -79,104 +95,60 @@ class _DeckClassification(NamedTuple):
     has_disclosure_marker: bool
 
 
-def _classify_deck_pdf(pdf_path: Path, markdown: str, headings_count: int) -> _DeckClassification:
+def _classify_deck_pdf(pdf_path: Path) -> _DeckClassification:
     """Decide whether a downloaded ``investor_deck.pdf`` is a real deck.
 
-    Combines pdfium-based page/text signals with the Docling markdown signals.
-    Page count is the primary discriminator — cover letters are 1-3 pages,
-    real decks are 10-50 pages. Disclosure-marker phrases catch the rare
-    multi-page Reg 30 letter. The Docling markdown signals (heading count,
-    total chars) are used only as a secondary guard for the ambiguous
-    middle band (3-9 pages, no disclosure markers): an image-heavy real
-    deck typically still produces 2KB+ of markdown across all pages even
-    when the first three are mostly title slides.
-
-    Falls back to acceptance on any pdfium failure — the original markdown
-    heuristic ran post-Docling so callers never had a way to short-circuit;
-    we mirror that fail-open behaviour to avoid losing real decks on
-    transient pypdfium2 errors.
+    pdfium-only (no Docling). Page count is the primary discriminator — cover
+    letters are 1-3 pages, real decks are 10-50. Disclosure-marker phrases in
+    the first three pages catch the rare multi-page Reg 30 letter. Short PDFs
+    in the 3-9 page band without that signature are accepted as low-confidence:
+    extraction now reads page images via the VLM, so sparse extractable text is
+    no longer a reason to reject (it would falsely drop image-heavy decks).
+    Fails open (accept) on any pypdfium2 error so transient failures don't lose
+    real decks — mirrors ``_looks_like_real_*`` accept-on-error semantics.
     """
-    pages = 0
-    first3 = ""
-    pdfium_ok = False
     try:
         import pypdfium2 as pdfium  # type: ignore[import-untyped]
+        doc = pdfium.PdfDocument(str(pdf_path))
         try:
-            doc = pdfium.PdfDocument(str(pdf_path))
-        except Exception:
-            doc = None
-        if doc is not None:
-            try:
-                pages = len(doc)
-                first3 = "".join(
-                    doc[i].get_textpage().get_text_range()
-                    for i in range(min(3, pages))
-                )
-                pdfium_ok = True
-            finally:
-                doc.close()
-    except ImportError:
-        # No pypdfium2 — fall through to markdown-only decision below.
-        pass
+            pages = len(doc)
+            first3 = "".join(
+                doc[i].get_textpage().get_text_range() for i in range(min(3, pages))
+            )
+        finally:
+            doc.close()
+    except Exception:
+        return _DeckClassification(
+            True, "low", "pypdfium2 unavailable/parse error — accepting (fail-open)",
+            0, 0, False,
+        )
 
     has_disclosure = any(m in first3.lower() for m in _DECK_DISCLOSURE_MARKERS) if first3 else False
 
-    if pdfium_ok:
-        # Hard reject: too few pages to be a deck, period.
-        if pages < _DECK_HARD_REJECT_PAGES:
-            return _DeckClassification(
-                False, "high",
-                f"pdf has only {pages} page(s) — never a real deck",
-                pages, len(first3), has_disclosure,
-            )
-        # Hard reject: short PDF with disclosure markers AND sparse first-3
-        # text — the canonical Reg 30 cover-letter signature.
-        if (
-            pages < _DECK_LOW_CONFIDENCE_PAGES
-            and has_disclosure
-            and len(first3.strip()) < _DECK_FIRST3_TEXT_THRESHOLD
-        ):
-            return _DeckClassification(
-                False, "high",
-                f"pages={pages} + disclosure markers + first3_chars={len(first3.strip())} "
-                f"matches Reg 30 cover-letter signature",
-                pages, len(first3), has_disclosure,
-            )
-        # Real deck if it has decent length OR the markdown extractor produced
-        # enough structure to work with. Image-heavy decks can be very short
-        # on extractable text but still 30+ pages — accept those as
-        # low-confidence so downstream knows the markdown may be sparse.
-        markdown_rich = headings_count >= 3 and len(markdown) >= 2000
-        if pages >= _DECK_LOW_CONFIDENCE_PAGES or markdown_rich:
-            confidence = "high" if (pages >= _DECK_LOW_CONFIDENCE_PAGES and markdown_rich) else "low"
-            return _DeckClassification(
-                True, confidence,
-                f"pages={pages}, headings={headings_count}, md_chars={len(markdown)}",
-                pages, len(first3), has_disclosure,
-            )
-        # 3-9 pages, no clear disclosure markers, sparse markdown → reject as
-        # ambiguous-but-likely-not-deck. Real short decks (e.g. AGM teaser)
-        # tend to still have headings/charts that Docling captures.
+    # Hard reject: too few pages to be a deck, period.
+    if pages < _DECK_HARD_REJECT_PAGES:
         return _DeckClassification(
-            False, "high",
-            f"pages={pages} but headings={headings_count} and md_chars={len(markdown)} "
-            f"too sparse for a real deck",
+            False, "high", f"pdf has only {pages} page(s) — never a real deck",
             pages, len(first3), has_disclosure,
         )
-
-    # pdfium unavailable / parse failure — fall back to the original
-    # markdown-only heuristic so we don't lose real decks on transient
-    # errors. This matches `_looks_like_real_*` accept-on-error semantics.
-    if headings_count < 3 or len(markdown) < 2000:
+    # Hard reject: short PDF with disclosure markers AND sparse first-3 text —
+    # the canonical Reg 30 cover-letter signature.
+    if (
+        pages < _DECK_LOW_CONFIDENCE_PAGES
+        and has_disclosure
+        and len(first3.strip()) < _DECK_FIRST3_TEXT_THRESHOLD
+    ):
         return _DeckClassification(
-            False, "low",
-            "pdfium unavailable; markdown sparse (headings<3 or chars<2000)",
-            0, 0, False,
+            False, "high",
+            f"pages={pages} + disclosure markers + first3_chars={len(first3.strip())} "
+            f"matches Reg 30 cover-letter signature",
+            pages, len(first3), has_disclosure,
         )
+    # >=10 pages → confident real deck; 3-9 pages without the cover-letter
+    # signature → accept low-confidence (the VLM reads the images regardless).
+    confidence = "high" if pages >= _DECK_LOW_CONFIDENCE_PAGES else "low"
     return _DeckClassification(
-        True, "low",
-        "pdfium unavailable; markdown looks rich enough",
-        0, 0, False,
+        True, confidence, f"pages={pages}", pages, len(first3), has_disclosure,
     )
 
 # --- Sector-specific extraction hint ---
@@ -250,6 +222,10 @@ _DECK_EXTRACTION_SCHEMA = {
                         "additionalProperties": True,
                     },
                 },
+                "key_metrics": {
+                    "type": "object",
+                    "additionalProperties": True,
+                },
                 "strategic_priorities": {"type": "array", "items": {"type": "string"}},
                 "outlook_and_guidance": {"type": "string"},
                 "new_initiatives": {"type": "array", "items": {"type": "string"}},
@@ -275,7 +251,7 @@ _DECK_EXTRACTION_SCHEMA = {
 
 DECK_EXTRACTION_PROMPT = """**OUTPUT FORMAT: Return ONLY a single valid JSON object. No prose, no markdown fences, no explanation before or after. Start with `{` and end with `}`.**
 
-You are a buy-side analyst reading an Indian company's investor-presentation deck. Extract structured insights into the JSON schema below. The deck has been converted to markdown by Docling — slide titles are H2/H3 headings, tables are rendered as markdown tables, and image placeholders (<!-- image -->) indicate charts whose titles and surrounding context you should interpret.
+You are a buy-side analyst reading an Indian company's investor-presentation deck. You are shown the deck slides as page images. Extract structured insights into the JSON schema below. Read every chart, axis label, table, and printed number directly off the slides — including values printed on bars, lines, and pie segments. Transcribe printed values exactly; only estimate a value from bar/line geometry when no number is printed on the slide, and keep such estimates directional.
 
 Focus on signal — headline numbers, segmental performance, management framing, forward guidance, and strategic priorities. Skip boilerplate (SEBI disclaimers, safe-harbor notices, regulatory cover letters, DIN numbers, e-voting instructions).
 
@@ -296,6 +272,14 @@ Required structure:
       "key_drivers": "<what management attributed growth/margins to>",
       "outlook": "<any forward statement specific to this segment>"
     }
+  },
+  "key_metrics": {
+    "<metric_name_snake_case_WITHOUT_period>": {
+      "unit": "<standardized unit: 'INR Cr' for rupee amounts | '%' for percentages | 'x' for ratios | '<CCY> mn' (e.g. 'USD mn') for non-INR currencies>",
+      "values": { "<PERIOD e.g. Q3FY26 or FY24>": <number>, "<PERIOD>": <number> }
+    }
+    // ANY quantitative KPI that is NOT a revenue segment: net_debt, capex, order_book, order_backlog, nim, gnpa, casa, gmv, pre_sales, dividend_per_share, utilization, etc.
+    // The metric name carries NO period — every period the slide shows goes in `values`.
   },
   "strategic_priorities": [
     "<management's stated priorities — 'premiumization', 'store network rationalization', 'digital transformation of trade channel'. Concrete, not generic.>"
@@ -319,7 +303,12 @@ Required structure:
 ```
 
 Rules:
-- All monetary values in Indian Rupees crores (₹ Cr) unless the deck explicitly uses another unit. Preserve the unit if non-standard (e.g. "USD Mn").
+- **Never drop a printed number.** Every figure visible on a slide must land somewhere: a structured field if one fits, else `key_metrics`, else verbatim inside the relevant `charts_described.what_it_shows`. Maximize data capture — when in doubt, capture it in `key_metrics`.
+- `key_metrics` shape: each metric key is the metric NAME ONLY (no period in the key), mapping to `{"unit": ..., "values": {<period>: <number>, ...}}`. Decks usually show several quarters or years of history for a metric — capture EVERY period shown in `values` so the metric can be traced over time, not just the latest.
+- `segment_performance` is ONLY for revenue/business segments. Pipelines, R&D, balance-sheet items, capex, order book, BFSI KPIs (NIM/GNPA/CASA), and any other non-segment metric go in `key_metrics`, not as fake segments.
+- `charts_described` must transcribe the chart's actual numbers (axis values, data labels, per-period values) in `what_it_shows`, not just describe the shape.
+- **Standardize units to match the firm's databases.** Convert all Indian Rupee amounts to **crores** (1 Cr = 10 million = 100 lakh; so ₹X mn → X/10 Cr, ₹X bn → X×100 Cr, ₹X lakh → X/100 Cr) and set `unit` to `"INR Cr"`. Percentages in percentage form (write 3.5 for 3.5%, not 0.035), `unit` `"%"`. Ratios raw (PE, D/E, book-to-bill), `unit` `"x"`. For non-INR currencies (e.g. US revenue printed in USD mn), keep the currency — set `unit` like `"USD mn"` — and do NOT apply any exchange rate. The same conversion applies to `segment_performance.revenue_cr` (always ₹ crores).
+- All `values` must be plain numbers (and `segment_performance` numeric fields too) — never strings with units; the unit lives in `unit`.
 - For growth percentages, use the sign (positive for growth, negative for decline).
 - If the deck is actually a short corporate notice/letter (not a real presentation — e.g. <5 content slides), set `extraction_status: "not_a_deck"` at the top level and leave other fields empty/null.
 - If a field isn't mentioned, set it to null or empty array — don't guess.
@@ -330,10 +319,29 @@ Rules:
 # --- Claude call (mirrors concall_extractor pattern) ---
 
 
+def _build_image_message(text: str, images: list[str]) -> dict:
+    """Streaming-mode user message: a text block followed by one base64-PNG
+    image block per page. SDK 0.2.87 streaming mode forwards these blocks to
+    the model (verified) — there is no first-class image prompt input."""
+    content: list[dict] = [{"type": "text", "text": text}]
+    for img in images:
+        content.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/png", "data": img},
+        })
+    return {
+        "type": "user",
+        "session_id": "",
+        "parent_tool_use_id": None,
+        "message": {"role": "user", "content": content},
+    }
+
+
 async def _call_claude(
     system_prompt: str, user_prompt: str, model: str,
     max_budget: float = 0.40, max_turns: int = 3,
     output_format: dict | None = None,
+    images: list[str] | None = None,
 ) -> str:
     # max_turns=3 — see annual_report_extractor for rationale (large JSON
     # output can overflow a single turn → error_max_turns → exit code 1).
@@ -362,10 +370,18 @@ async def _call_claude(
     )
     if output_format:
         options.output_format = output_format
+
+    if images:
+        async def _prompt_stream():
+            yield _build_image_message(user_prompt, images)
+        prompt_arg: object = _prompt_stream()
+    else:
+        prompt_arg = user_prompt
+
     text_blocks: list[str] = []
     result_text = ""
     try:
-        async for msg in query(prompt=user_prompt, options=options):
+        async for msg in query(prompt=prompt_arg, options=options):
             if isinstance(msg, RateLimitEvent):
                 logger.warning("[deck] rate limited: %s / %s",
                                msg.rate_limit_info.status, msg.rate_limit_info.rate_limit_type)
@@ -439,39 +455,109 @@ def _quarter_label_from_path(pdf_path: Path) -> str:
     return pdf_path.parent.name  # "FY26-Q3"
 
 
+def _render_deck_pages(pdf_path: Path, scale: float = 2.0, max_pages: int = 60) -> list[str]:
+    """Render each PDF page to a base64-encoded PNG for VLM ingestion.
+
+    Uses pypdfium2 (already a dependency — see _classify_deck_pdf). Capped at
+    ``max_pages`` so a pathological deck can't blow up the request payload.
+    """
+    import pypdfium2 as pdfium  # type: ignore[import-untyped]
+
+    doc = pdfium.PdfDocument(str(pdf_path))
+    out: list[str] = []
+    try:
+        for i in range(min(len(doc), max_pages)):
+            pil = doc[i].render(scale=scale).to_pil()
+            buf = io.BytesIO()
+            pil.save(buf, format="PNG")
+            out.append(base64.standard_b64encode(buf.getvalue()).decode())
+    finally:
+        doc.close()
+    return out
+
+
+_DECK_LIST_FIELDS = ("highlights", "strategic_priorities", "new_initiatives", "slide_topics")
+_EMPTY_VALUES = (None, "", [], {})
+
+
+def _merge_deck_chunks(chunks: list[dict]) -> dict:
+    """Union per-chunk partial extractions into one deck dict.
+
+    Lists are concatenated order-preserving with dedupe; ``charts_described``
+    dedupes by lowercased ``slide_title``; ``segment_performance`` merges
+    field-wise (first non-empty value wins); ``outlook_and_guidance`` joins
+    unique non-empty parts. Per-chunk ``extraction_status`` is intentionally
+    dropped — the caller owns the final status.
+    """
+    merged: dict = {f: [] for f in _DECK_LIST_FIELDS}
+    merged["segment_performance"] = {}
+    merged["key_metrics"] = {}
+    merged["charts_described"] = []
+    guidance_parts: list[str] = []
+    seen_charts: set[str] = set()
+
+    for c in chunks:
+        if not isinstance(c, dict):
+            continue
+        for f in _DECK_LIST_FIELDS:
+            for item in (c.get(f) or []):
+                if item and item not in merged[f]:
+                    merged[f].append(item)
+        for seg, fields in (c.get("segment_performance") or {}).items():
+            if not isinstance(fields, dict):
+                continue
+            tgt = merged["segment_performance"].setdefault(seg, {})
+            for fk, fv in fields.items():
+                if fv not in _EMPTY_VALUES and tgt.get(fk) in _EMPTY_VALUES:
+                    tgt[fk] = fv
+        for mk, mv in (c.get("key_metrics") or {}).items():
+            if isinstance(mv, dict) and isinstance(mv.get("values"), dict):
+                tgt = merged["key_metrics"].setdefault(mk, {"unit": mv.get("unit"), "values": {}})
+                if isinstance(tgt, dict) and isinstance(tgt.get("values"), dict):
+                    if not tgt.get("unit") and mv.get("unit"):
+                        tgt["unit"] = mv["unit"]
+                    for period, val in mv["values"].items():
+                        tgt["values"].setdefault(period, val)
+            elif mv not in _EMPTY_VALUES and merged["key_metrics"].get(mk) in _EMPTY_VALUES:
+                merged["key_metrics"][mk] = mv
+        for ch in (c.get("charts_described") or []):
+            if not isinstance(ch, dict):
+                continue
+            key = (ch.get("slide_title") or "").strip().lower()
+            if key and key in seen_charts:
+                continue
+            if key:
+                seen_charts.add(key)
+            merged["charts_described"].append(ch)
+        g = (c.get("outlook_and_guidance") or "").strip()
+        if g and g not in guidance_parts:
+            guidance_parts.append(g)
+
+    merged["outlook_and_guidance"] = " ".join(guidance_parts)
+    return merged
+
+
 async def _extract_single_deck(
     pdf_path: Path,
     symbol: str,
     model: str,
     industry: str | None = None,
 ) -> dict:
-    """Extract one deck PDF → structured JSON. Handles Docling + Claude extraction."""
+    """Extract one deck PDF → structured JSON via images-only VLM extraction."""
     import time as _time
     t0 = _time.time()
     quarter_label = _quarter_label_from_path(pdf_path)
 
-    # Docling pass (cached via doc_extractor)
-    cache_dir = pdf_path.parent
-    extraction = extract_to_markdown(pdf_path, cache_dir)
-
-    # Classifier — see _classify_deck_pdf for the rule. Combines pdfium page
-    # count + first-3-page text + disclosure markers with the Docling markdown
-    # signals so image-heavy real decks (low text density, high page count)
-    # don't get falsely rejected, while Reg 30 cover letters are caught
-    # consistently regardless of which surface (filing_client at download
-    # time, or the extractor at re-classify time) sees them first.
-    classification = _classify_deck_pdf(
-        pdf_path,
-        markdown=extraction.markdown,
-        headings_count=len(extraction.headings),
-    )
+    # Classifier — pdfium-only gate (see _classify_deck_pdf). Rejects Reg 30
+    # cover letters by page count + disclosure-marker signature, consistently
+    # with filing_client's download-time check.
+    classification = _classify_deck_pdf(pdf_path)
     if not classification.is_deck:
         logger.warning(
             "[deck] %s %s: classifier rejected (%s) — pages=%d, first3_chars=%d, "
-            "headings=%d, md_chars=%d, disclosure_marker=%s",
+            "disclosure_marker=%s",
             symbol, quarter_label, classification.reason,
             classification.pages, classification.first3_chars,
-            len(extraction.headings), len(extraction.markdown),
             classification.has_disclosure_marker,
         )
         return {
@@ -480,8 +566,6 @@ async def _extract_single_deck(
             "extraction_error": classification.reason,
             "pages": classification.pages,
             "first3_chars": classification.first3_chars,
-            "headings_detected": len(extraction.headings),
-            "chars": len(extraction.markdown),
             "has_disclosure_marker": classification.has_disclosure_marker,
         }
 
@@ -489,21 +573,12 @@ async def _extract_single_deck(
     if classification.confidence == "low":
         data_quality_note = (
             f"Low-confidence classification: {classification.reason}. "
-            "Docling-extracted markdown may be sparse (image-heavy deck); "
-            "extracted fields may under-represent slide content."
+            "Short deck or classifier ran without full page signal — treat coverage cautiously."
         )
         logger.info(
             "[deck] %s %s: low-confidence accept — %s",
             symbol, quarter_label, classification.reason,
         )
-
-    user_prompt = (
-        f"Company: {symbol}\nQuarter: {quarter_label}\n"
-        f"Source: investor_deck.pdf\n\n"
-        f"## Deck markdown (Docling-extracted, {len(extraction.headings)} headings, "
-        f"{len(extraction.markdown)} chars)\n\n"
-        f"{extraction.markdown}"
-    )
 
     sector_hint = build_extraction_hint(industry)
     system_prompt = (
@@ -511,31 +586,70 @@ async def _extract_single_deck(
         if sector_hint
         else DECK_EXTRACTION_PROMPT
     )
-    response = await _call_claude(
-        system_prompt, user_prompt, model,
-        max_budget=0.40, max_turns=1,
-        output_format=_DECK_EXTRACTION_SCHEMA,
-    )
 
-    try:
-        data = _extract_json(response)
-        data.setdefault("fy_quarter", quarter_label)
-        data["extraction_status"] = data.get("extraction_status", "complete")
-        data["_elapsed_s"] = round(_time.time() - t0, 1)
-        data["_docling_cached"] = extraction.from_cache
-        data["_docling_degraded"] = extraction.degraded
-        data["_classifier_confidence"] = classification.confidence
-        if data_quality_note:
-            data["data_quality_note"] = data_quality_note
-        return data
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.warning("[deck] %s %s: JSON parse failed: %s", symbol, quarter_label, e)
+    # Images-only extraction: render every slide and let the VLM read the pixels
+    # directly (charts/printed numbers Docling drops as <!-- image -->). One call
+    # over the whole deck by default so the model prioritizes globally and names
+    # segments/metrics consistently; only oversized decks fall back to chunks.
+    images = _render_deck_pages(pdf_path)
+    total = len(images)
+    if total <= SINGLE_CALL_MAX_PAGES:
+        batches = [(0, images)]
+    else:
+        batches = [(i, images[i:i + DECK_CHUNK_SIZE]) for i in range(0, total, DECK_CHUNK_SIZE)]
+
+    partials: list[dict] = []
+    for offset, batch in batches:
+        start, end = offset + 1, offset + len(batch)
+        scope = (
+            f"all {total} slides of this deck"
+            if len(batches) == 1
+            else f"slides {start}-{end} of {total} from this deck"
+        )
+        user_prompt = (
+            f"Company: {symbol}\nQuarter: {quarter_label}\nSource: investor_deck.pdf\n\n"
+            f"You are shown {scope} as page images. Extract the JSON for the "
+            f"content visible in these slides."
+        )
+        response = await _call_claude(
+            system_prompt, user_prompt, model,
+            max_budget=0.40, max_turns=3,
+            output_format=_DECK_EXTRACTION_SCHEMA,
+            images=batch,
+        )
+        try:
+            partials.append(_extract_json(response))
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning("[deck] %s %s batch %d/%d: JSON parse failed: %s",
+                           symbol, quarter_label, offset + 1, len(batches), e)
+
+    if not partials:
+        logger.warning("[deck] %s %s: all %d batch(es) failed to parse",
+                        symbol, quarter_label, len(batches))
         return {
             "fy_quarter": quarter_label,
             "extraction_status": "failed",
-            "extraction_error": f"JSON parse: {e}",
-            "raw_response": response[:2000],
+            "extraction_error": "all batches failed to parse",
+            "_extraction_mode": "images",
+            "_pages_rendered": total,
+            "_chunks": len(batches),
         }
+
+    data = _merge_deck_chunks(partials)
+    data["fy_quarter"] = quarter_label
+    period = next((p.get("period_ended") for p in partials if p.get("period_ended")), None)
+    if period:
+        data["period_ended"] = period
+    data["extraction_status"] = "complete"
+    data["_elapsed_s"] = round(_time.time() - t0, 1)
+    data["_extraction_mode"] = "images"
+    data["_pages_rendered"] = total
+    data["_chunks"] = len(batches)
+    data["_classifier_confidence"] = classification.confidence
+    data["_schema_version"] = DECK_SCHEMA_VERSION
+    if data_quality_note:
+        data["data_quality_note"] = data_quality_note
+    return data
 
 
 # --- Main pipeline ---
@@ -614,6 +728,7 @@ async def ensure_deck_data(
         q.get("fy_quarter"): q
         for q in existing.get("quarters", [])
         if q.get("extraction_status") == "complete"
+        and q.get("_schema_version") == DECK_SCHEMA_VERSION
     }
 
     to_extract = [pdf for label, pdf in available.items() if label not in cached_quarters]

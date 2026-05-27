@@ -5126,11 +5126,38 @@ class ResearchDataAPI:
     _DECK_SECTIONS = (
         "highlights",
         "segment_performance",
+        "key_metrics",
         "strategic_priorities",
         "outlook_and_guidance",
         "new_initiatives",
         "charts_described",
     )
+
+    @staticmethod
+    def _merge_key_metrics_series(quarters: list[dict]) -> dict:
+        """Union each key_metric's period→value map across decks into one series.
+
+        Decks are point-in-time and period-stamped; an agent tracing a metric
+        over time needs the periods stitched. `quarters` is newest-first, so the
+        first value seen for a period wins (newer decks restate; trust the
+        latest). Expects the {unit, values:{period:value}} shape; legacy flat
+        entries are passed through unchanged (no series to build).
+        """
+        series: dict = {}
+        for q in quarters:
+            for metric, payload in (q.get("key_metrics") or {}).items():
+                if not (isinstance(payload, dict) and isinstance(payload.get("values"), dict)):
+                    series.setdefault(metric, payload)
+                    continue
+                entry = series.get(metric)
+                if not (isinstance(entry, dict) and isinstance(entry.get("values"), dict)):
+                    entry = {"unit": payload.get("unit"), "values": {}}
+                    series[metric] = entry
+                if not entry.get("unit") and payload.get("unit"):
+                    entry["unit"] = payload["unit"]
+                for period, val in payload["values"].items():
+                    entry["values"].setdefault(period, val)
+        return series
 
     def get_deck_insights(
         self,
@@ -5138,6 +5165,7 @@ class ResearchDataAPI:
         section_filter: str | None = None,
         quarter: str | None = None,
         slide_topics: list[str] | None = None,
+        full: bool = False,
     ) -> dict:
         """Get pre-extracted investor-deck insights from the vault.
 
@@ -5149,8 +5177,14 @@ class ResearchDataAPI:
         populated sections + slide_topics_by_quarter when tagged). <4KB.
 
         With section_filter: returns that deck section across all quarters. Valid:
-        'highlights', 'segment_performance', 'strategic_priorities',
+        'highlights', 'segment_performance', 'key_metrics', 'strategic_priorities',
         'outlook_and_guidance', 'new_initiatives', 'charts_described'.
+
+        With full=True: returns the complete record (all sections) for the selected
+        scope — one quarter if `quarter` is given, else every quarter. Use after the
+        TOC when you want to read a whole deck in one call instead of N section
+        drills. Internal bookkeeping keys (_*) are stripped. Takes precedence over
+        section_filter.
 
         Optional narrowing:
           - quarter='FY26-Q3' narrows every path to one quarter.
@@ -5224,6 +5258,24 @@ class ResearchDataAPI:
             "degraded_quality": meta_status == "partial",
         }
 
+        # Full read: complete record(s) for the selected scope, internal
+        # bookkeeping keys (_*) stripped. Lets an agent read a whole deck in one
+        # call instead of drilling each section. Takes precedence over section_filter.
+        if full:
+            full_quarters = [
+                {k: v for k, v in q.items() if not k.startswith("_")}
+                for q in data.get("quarters", [])
+            ]
+            result = {
+                "symbol": symbol.upper(),
+                "mode": "full",
+                "quarters": full_quarters,
+            }
+            if extraction_quality_warning:
+                result["_extraction_quality_warning"] = extraction_quality_warning
+            result["_meta"] = meta
+            return result
+
         # slide_topics filter — narrow to quarters whose slide_topics intersect,
         # implies agent wants the charts_described section from those quarters.
         wanted_topics = {t.lower() for t in slide_topics} if slide_topics else set()
@@ -5258,6 +5310,11 @@ class ResearchDataAPI:
                 "section": section_filter,
                 "quarters": slices,
             }
+            # key_metrics: also assemble the cross-quarter time series so an agent
+            # can trace a metric over time in one call (decks are period-stamped
+            # point-in-time; this unions each metric's period→value map).
+            if section_filter == "key_metrics":
+                result["series"] = self._merge_key_metrics_series(data.get("quarters", []))
             if wanted_topics:
                 result["slide_topics_requested"] = sorted(wanted_topics)
             if topic_filter_fallback:

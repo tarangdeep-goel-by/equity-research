@@ -210,3 +210,71 @@ class TestDeckInsightsDrill:
         result = api.get_deck_insights("TESTCO", quarter="FY26-Q3", section_filter="outlook_and_guidance")
         assert len(result["quarters"]) == 1
         assert "mid-teens" in result["quarters"][0]["outlook_and_guidance"]
+
+
+# --- key_metrics section + full-quarter read mode -----------------------------
+
+class TestDeckInsightsKeyMetricsAndFull:
+    @staticmethod
+    def _decks() -> list[dict]:
+        return [{
+            "fy_quarter": "FY26-Q3", "period_ended": "2025-12-31",
+            "extraction_status": "complete",
+            "highlights": ["Rev +10%"],
+            "segment_performance": {"retail": {"revenue_cr": 100}},
+            "key_metrics": {
+                "net_debt_cr": {"unit": "Cr", "values": {"Q3FY26": 1200}},
+                "nim_pct": {"unit": "%", "values": {"Q3FY26": 3.5, "Q2FY26": 3.4}},
+            },
+            "strategic_priorities": ["premiumization"],
+            "outlook_and_guidance": "mid-teens growth",
+            "new_initiatives": [], "charts_described": [],
+            "slide_topics": ["highlights"],
+            # internal bookkeeping that must NOT surface to agents:
+            "_extraction_mode": "images", "_pages_rendered": 30, "_chunks": 1,
+        }]
+
+    def test_key_metrics_drill_returns_quarters_and_series(self, api, vault_home):
+        _write_decks(vault_home / "vault", "TESTCO", self._decks())
+        drill = api.get_deck_insights("TESTCO", section_filter="key_metrics")
+        assert drill["section"] == "key_metrics"
+        # per-quarter raw retained for provenance
+        assert drill["quarters"][0]["key_metrics"]["nim_pct"]["values"]["Q3FY26"] == 3.5
+        # assembled cross-quarter series present
+        assert drill["series"]["nim_pct"]["values"] == {"Q3FY26": 3.5, "Q2FY26": 3.4}
+        assert drill["series"]["nim_pct"]["unit"] == "%"
+
+    def test_key_metrics_series_unions_across_quarters_newest_wins(self, api, vault_home):
+        quarters = [
+            {"fy_quarter": "FY26-Q3", "period_ended": "2025-12-31", "extraction_status": "complete",
+             "key_metrics": {"nim_pct": {"unit": "%", "values": {"Q3FY26": 4.9, "Q2FY26": 4.8}}}},
+            {"fy_quarter": "FY26-Q2", "period_ended": "2025-09-30", "extraction_status": "complete",
+             "key_metrics": {"nim_pct": {"unit": "%", "values": {"Q2FY26": 4.85, "Q1FY26": 4.7}}}},
+        ]
+        _write_decks(vault_home / "vault", "TESTCO", quarters)
+        drill = api.get_deck_insights("TESTCO", section_filter="key_metrics")
+        # Q2FY26 reported by both decks → newest (FY26-Q3) wins (4.8, not 4.85)
+        assert drill["series"]["nim_pct"]["values"] == {"Q3FY26": 4.9, "Q2FY26": 4.8, "Q1FY26": 4.7}
+
+    def test_key_metrics_in_toc_available_and_populated(self, api, vault_home):
+        _write_decks(vault_home / "vault", "TESTCO", self._decks())
+        toc = api.get_deck_insights("TESTCO")
+        assert "key_metrics" in toc["available_sections"]
+        assert "key_metrics" in toc["quarters"][0]["sections_populated"]
+
+    def test_full_quarter_returns_all_sections_without_internal_keys(self, api, vault_home):
+        _write_decks(vault_home / "vault", "TESTCO", self._decks())
+        result = api.get_deck_insights("TESTCO", quarter="FY26-Q3", full=True)
+        assert result["mode"] == "full"
+        rec = result["quarters"][0]
+        assert rec["highlights"] == ["Rev +10%"]
+        assert rec["key_metrics"]["net_debt_cr"]["values"]["Q3FY26"] == 1200
+        assert rec["segment_performance"]["retail"]["revenue_cr"] == 100
+        assert not any(k.startswith("_") for k in rec), "internal keys must be stripped"
+
+    def test_full_all_quarters(self, api, vault_home):
+        _write_decks(vault_home / "vault", "TESTCO", self._decks())
+        result = api.get_deck_insights("TESTCO", full=True)
+        assert result["mode"] == "full"
+        assert len(result["quarters"]) == 1
+        assert result["quarters"][0]["fy_quarter"] == "FY26-Q3"

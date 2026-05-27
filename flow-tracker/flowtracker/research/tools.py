@@ -565,8 +565,8 @@ async def get_concall_insights(args):
 
 get_deck_insights = tool(
     "get_deck_insights",
-    "Get pre-extracted investor-deck insights from the vault: up to 4 quarters of highlights, segment_performance, strategic_priorities, outlook_and_guidance, new_initiatives, charts_described, and slide_topics. Complements get_concall_insights — decks show polished charts, segmental tables, and forward guidance slides that the transcript doesn't expose as structured data. First call returns a compact TOC (quarters + populated sections + slide_topics_by_quarter when tagged). Pass sub_section to drill into one section across all quarters ('highlights' | 'segment_performance' | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'). Pass quarter (e.g. 'FY26-Q3') to narrow. Pass slide_topics (e.g. ['segmental','outlook']) to filter quarters by their topic tags.",
-    {"symbol": str, "sub_section": str, "quarter": str, "slide_topics": list},
+    "Get pre-extracted investor-deck insights from the vault: up to 4 quarters of highlights, segment_performance, key_metrics, strategic_priorities, outlook_and_guidance, new_initiatives, charts_described, and slide_topics. Complements get_concall_insights — decks show polished charts, segmental tables, and forward guidance slides that the transcript doesn't expose as structured data. key_metrics holds non-segment quantitative KPIs read off the slides (debt, capex, order book/backlog, NIM/GNPA/CASA, time-series financials). First call returns a compact TOC (quarters + populated sections + slide_topics_by_quarter when tagged). Pass sub_section to drill into one section across all quarters ('highlights' | 'segment_performance' | 'key_metrics' | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'). Pass full=true to read a whole deck's complete record in one call (combine with quarter to scope to one quarter). Pass quarter (e.g. 'FY26-Q3') to narrow. Pass slide_topics (e.g. ['segmental','outlook']) to filter quarters by their topic tags.",
+    {"symbol": str, "sub_section": str, "quarter": str, "slide_topics": list, "full": bool},
     annotations=READ_ONLY,
 )
 
@@ -579,6 +579,7 @@ async def get_deck_insights(args):
             section_filter=args.get("sub_section"),
             quarter=args.get("quarter"),
             slide_topics=args.get("slide_topics"),
+            full=args.get("full", False),
         )
     return _with_dedup("get_deck_insights", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
@@ -1742,6 +1743,7 @@ def _get_company_context_section(api, symbol, section, args):
             section_filter=args.get("sub_section"),
             quarter=args.get("quarter"),
             slide_topics=args.get("slide_topics"),
+            full=args.get("full", False),
         )
     elif section == "annual_report":
         return api.get_annual_report(
@@ -1759,7 +1761,7 @@ def _get_company_context_section(api, symbol, section, args):
 
 @tool(
     "get_company_context",
-    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'deck_insights' | 'annual_report' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks' | 'comparable_growth_metrics' (management's like-for-like / ex-merger / constant-currency statements); for deck_insights: 'highlights' | 'segment_performance' | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'; for annual_report: 'chairman_letter' | 'mdna' | 'risk_management' | 'auditor_report' | 'corporate_governance' | 'brsr' | 'related_party' | 'segmental' | 'notes_to_financials' | 'financial_statements' — optional 'year' param to narrow to one FY like FY25; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
+    "Company info, profile & documents. section: 'info' | 'profile' | 'documents' | 'business_profile' | 'concall_insights' | 'deck_insights' | 'annual_report' | 'sector_kpis' | 'filings' | ['section1', 'section2']. Optional sub_section (for concall_insights: 'operational_metrics' | 'financial_metrics' | 'management_commentary' | 'subsidiaries' | 'qa_session' | 'flags' | 'opening_remarks' | 'comparable_growth_metrics' (management's like-for-like / ex-merger / constant-currency statements); for deck_insights: 'highlights' | 'segment_performance' | 'key_metrics' (non-segment KPIs — debt, capex, order book, NIM/GNPA/CASA, multi-period financials — returns a cross-quarter time series per metric) | 'strategic_priorities' | 'outlook_and_guidance' | 'new_initiatives' | 'charts_described'; for annual_report: 'chairman_letter' | 'mdna' | 'risk_management' | 'auditor_report' | 'corporate_governance' | 'brsr' | 'related_party' | 'segmental' | 'notes_to_financials' | 'financial_statements' — optional 'year' param to narrow to one FY like FY25; for sector_kpis: a specific canonical KPI key like 'gross_npa_pct' — call without sub_section first to see available keys). First call returns a compact table of contents; drill in with sub_section.",
     {
         "type": "object",
         "properties": {
@@ -1781,7 +1783,8 @@ def _get_company_context_section(api, symbol, section, args):
                     "Drill-in within section. For concall_insights: operational_metrics, "
                     "financial_metrics, management_commentary, subsidiaries, qa_session, flags, "
                     "opening_remarks, comparable_growth_metrics. For deck_insights: highlights, "
-                    "segment_performance, strategic_priorities, outlook_and_guidance, "
+                    "segment_performance, key_metrics (non-segment KPIs + cross-quarter series), "
+                    "strategic_priorities, outlook_and_guidance, "
                     "new_initiatives, charts_described. For annual_report: chairman_letter, mdna, "
                     "risk_management, auditor_report, corporate_governance, brsr, related_party, "
                     "segmental, notes_to_financials, financial_statements. For sector_kpis: a "
@@ -1794,6 +1797,7 @@ def _get_company_context_section(api, symbol, section, args):
             "limit": {"type": "integer", "description": "Row cap for filings (default 10)."},
             "qa_topics": {"type": "array", "items": {"type": "string"}, "description": "Q&A topic tags for concall_insights."},
             "slide_topics": {"type": "array", "items": {"type": "string"}, "description": "Slide topic tags for deck_insights."},
+            "full": {"type": "boolean", "description": "deck_insights: return a whole deck's complete record in one call."},
         },
         "required": ["symbol"],
     },
