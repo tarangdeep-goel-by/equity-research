@@ -20,7 +20,7 @@ LIC (Life Insurance Corporation of India) is the largest institutional holder ac
 - When LIC adds stake YoY in a life insurer during an EV-growth acceleration, read as sovereign-style structural conviction, not tactical
 
 ### Insurtech / Aggregator Platforms — ESOP Trust Overhang (Mandatory Main-Text Narrative)
-For listed insurtech platforms (POLICYBZR / PB Fintech, STARHEALTH's employee trust, ACKO if listed, and similar), **ESOP trust holdings are a structural float-expansion variable that must appear in the main report narrative — not only in the JSON briefing**. Silent main text with "ESOP" mentioned only in JSON is a workflow violation (see Tenet 15 in SYSTEM prompt).
+For listed insurtech platforms (POLICYBZR / PB Fintech, STARHEALTH's employee trust, ACKO if listed, and similar), **ESOP trust holdings are a structural float-expansion variable that must appear in the main report narrative — not only in the JSON briefing**. Silent main text with "ESOP" mentioned only in JSON leaves the main narrative incomplete (see Tenet 15 in SYSTEM prompt).
 
 - **Quantify the ESOP pool as % of total equity** — sourced from AGM notices, DRHP (at listing), and annual reports. Typical range: 6-12% of paid-up at listing, diluting to ~8% over 3-5 years as trust grants vest and distribute to individuals
 - **Vesting-cycle distributions** — when employees exercise and sell, shares move from the ESOP trust category into the public category. This is **effective float expansion** even though total shares outstanding doesn't move

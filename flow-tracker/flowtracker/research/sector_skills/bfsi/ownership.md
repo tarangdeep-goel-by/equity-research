@@ -82,7 +82,7 @@ When you observe a **large single-quarter ownership change (>5pp)** in any categ
 Rule: if you see a jump >5pp in a single quarter, your default assumption is reclassification/corporate-action, and you must cite the specific trigger (from concall_insights, filings, or corporate_actions) before narrating it as active accumulation or distribution. If you cannot find the trigger, pose as an open question and state the caveat clearly in the main narrative.
 
 ### Mandatory Ownership Checklist (Write Before Report)
-Before drafting the Institutional Verdict, explicitly confirm each row. A missing row is a workflow violation.
+Before drafting the Institutional Verdict, explicitly confirm each row. A missing row leaves the verdict incomplete.
 
 - [ ] Subtype identified: PSU bank / private bank / insurance / NBFC / exchange / AMC
 - [ ] Aggregate foreign-holding cap stated with statute reference

@@ -38,7 +38,7 @@ Platform KPIs (GMV, take rate, AOV, MTU / MAU, order frequency, CAC, contributio
 
 ## Multi-Vertical Platform Coverage (new)
 
-Multi-vertical platforms (food + quick commerce + B2B + payments) — every vertical that is ≥5% of GMV or ≥10% of revenue MUST have its own dedicated section in the business report AND its own separate component in the SOTP valuation. Covering only the headline vertical is a PROMPT_FIX downgrade. Examples:
+Multi-vertical platforms (food + quick commerce + B2B + payments) — every vertical that is ≥5% of GMV or ≥10% of revenue MUST have its own dedicated section in the business report AND its own separate component in the SOTP valuation. Covering only the headline vertical leaves the report incomplete. Examples:
 
 - ETERNAL: food delivery + Hyperpure (B2B) + District (quick commerce) + Blinkit — all four need separate treatment once individually material.
 - PAYTM: UPI / payments + lending + commerce — each vertical separate.

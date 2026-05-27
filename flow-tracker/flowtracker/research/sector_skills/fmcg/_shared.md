@@ -14,8 +14,8 @@
 
 ## Channel-Mix Extraction (tightened — new)
 
-If `get_fundamentals(section='revenue_segments')` returns 0 channel fields (GT / MT / e-com), you MUST open `get_deck_insights(sub_section='charts_described')` for the latest quarter — HUL and similar FMCG companies disclose channel splits in deck charts, not in Screener's structured feed. Missing channel mix without a deck check is a PROMPT_FIX downgrade.
+If `get_fundamentals(section='revenue_segments')` returns 0 channel fields (GT / MT / e-com), you MUST open `get_deck_insights(sub_section='charts_described')` for the latest quarter — HUL and similar FMCG companies disclose channel splits in deck charts, not in Screener's structured feed. Missing channel mix without a deck check leaves the business picture incomplete.
 
 ## UVG vs Price Decomposition Mandatory (new)
 
-FMCG financials agent: historical UVG (Underlying Volume Growth) vs price-led growth decomposition is MANDATORY for the last 4 quarters — this is the single most important FMCG metric. Source chain: `get_sector_kpis(symbol, sub_section='uvg_pct')` → concall `financial_metrics` → deck `highlights`. Missing this decomposition is a PROMPT_FIX downgrade; citing total revenue growth without the UVG/price split is insufficient.
+FMCG financials agent: historical UVG (Underlying Volume Growth) vs price-led growth decomposition is MANDATORY for the last 4 quarters — this is the single most important FMCG metric. Source chain: `get_sector_kpis(symbol, sub_section='uvg_pct')` → concall `financial_metrics` → deck `highlights`. Missing this decomposition leaves the financials section incomplete; citing total revenue growth without the UVG/price split is insufficient.

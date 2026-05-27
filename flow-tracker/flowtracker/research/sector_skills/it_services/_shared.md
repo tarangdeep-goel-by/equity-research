@@ -49,4 +49,4 @@ IT Services business and risk agents MUST cite all of the following for Tier-1 I
 3. Net headcount additions, latest quarter
 4. Attrition LTM (%)
 
-Source chain: `get_company_context(section='client_concentration')` → `get_concall_insights(sub_section='operational_metrics')` → `get_deck_insights(sub_section='highlights')` for the latest quarter. All four are mandatory — missing any is a PROMPT_FIX downgrade for Tier-1 IT coverage.
+Source chain: `get_company_context(section='client_concentration')` → `get_concall_insights(sub_section='operational_metrics')` → `get_deck_insights(sub_section='highlights')` for the latest quarter. All four are mandatory — missing any leaves Tier-1 IT coverage incomplete.

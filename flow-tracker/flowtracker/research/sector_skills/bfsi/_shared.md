@@ -51,11 +51,11 @@ This company is a bank, NBFC, or financial services company. Apply BFSI-specific
 
 ## BFSI Asset-Quality Metrics — Strict Enforcement (new)
 
-Missing any of GNPA %, NNPA %, PCR %, LCR %, CRAR %, or CET-1 % when the bank is in the Nifty-50 BFSI cohort is a PROMPT_FIX downgrade. Extract via the mandatory chain: `get_quality_scores(section='bfsi')` → `get_sector_kpis(symbol, sub_section=<key>)` → `get_concall_insights(sub_section='financial_metrics')` for the last 4 quarters → `get_annual_report(section='segmental')` or `auditor_report`. Cite each value with 1-decimal precision: "GNPA 2.1%" NOT "below 3%".
+Missing any of GNPA %, NNPA %, PCR %, LCR %, CRAR %, or CET-1 % when the bank is in the Nifty-50 BFSI cohort leaves the report incomplete. Extract via the mandatory chain: `get_quality_scores(section='bfsi')` → `get_sector_kpis(symbol, sub_section=<key>)` → `get_concall_insights(sub_section='financial_metrics')` for the last 4 quarters → `get_annual_report(section='segmental')` or `auditor_report`. Cite each value with 1-decimal precision: "GNPA 2.1%" NOT "below 3%".
 
 ## CFO-for-BFSI Rule (new)
 
-Operating cash flow for banks and NBFCs is dominated by deposit and loan flow swings quarter to quarter. Do NOT use CFO to argue dividend sustainability. Use the dividend payout ratio (from `get_fundamentals(section='ratios')`) or `total dividend / net_profit` trajectory instead. Citing CFO coverage for a BFSI dividend is a COMPUTATION-level downgrade.
+Operating cash flow for banks and NBFCs is dominated by deposit and loan flow swings quarter to quarter. Do NOT use CFO to argue dividend sustainability. Use the dividend payout ratio (from `get_fundamentals(section='ratios')`) or `total dividend / net_profit` trajectory instead. Citing CFO coverage for a BFSI dividend is inaccurate.
 
 ## ROCE Exclusion for BFSI (new)
 
