@@ -268,7 +268,11 @@ Before writing your report, reconcile every section-routed tool you called again
 ]
 ```
 
-`thesis_impact` is one of `"material"` (gap meaningfully degrades your section's verdict) or `"informational"` (nice-to-have, doesn't change the call). `fallbacks_attempted` is the list of tool names you tried before declaring the gap — empty list is fine if no fallback exists for that data type. An empty `data_gaps` list is acceptable only when every section-routed tool you called returned populated data the report consumed.
+`thesis_impact` is one of `"material"` (gap meaningfully degrades your section's verdict) or `"informational"` (nice-to-have, doesn't change the call). `fallbacks_attempted` is the list of tool names you tried before declaring the gap.
+
+**Fallback-first invariant (non-negotiable).** If a registered fallback exists for the gap — per your INSTRUCTIONS_V2 fallback map or the SHARED_PREAMBLE "Common shared fallbacks" list — you MUST invoke it before emitting the `data_gaps` entry. Empty `fallbacks_attempted` is acceptable **only** when no fallback exists in the registry for that data type. The Lever 2 reframe ("flag what's missing") is for genuinely unresolvable gaps, NOT a permission slip to skip a registered fallback that was one tool call away. Concrete failure mode the rule blocks: agent identifies Yahoo peer set as mismatched (BAJFINANCE in FMCG set) → emits `data_gaps[{tool: get_screener_peers, fallbacks_attempted: []}]` → never actually called `get_screener_peers`. That entry is a workflow violation — the fallback exists, run it, then surface the result. If the fallback also returns empty, *then* the data_gap entry is appropriate with `fallbacks_attempted: ["get_screener_peers"]`.
+
+An empty `data_gaps` list is acceptable only when every section-routed tool you called returned populated data the report consumed.
 
 2. **End-of-report `## Data Gaps` markdown table** — a visible audit reader's-eye summary, one row per entry:
 

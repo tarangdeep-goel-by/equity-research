@@ -149,6 +149,19 @@ class TestDataExhaustionReconciliation:
             assert '"fallbacks_attempted":' in instr, f"{name} schema missing fallbacks_attempted"
             assert '"thesis_impact":' in instr, f"{name} schema missing thesis_impact"
 
+    def test_fallback_first_invariant_for_data_gaps(self):
+        """Empirical fix: HUL eval 2026-05-28 emitted a data_gap entry with
+        empty fallbacks_attempted when get_screener_peers (a registered
+        fallback) existed. The Lever 2 reframe ('flag what's missing') gave
+        the agent permission to skip the fallback. Rule must explicitly say:
+        fallback-first is non-negotiable; emitting a data_gap before invoking
+        the registered fallback is a workflow violation.
+        """
+        text = SHARED_PREAMBLE_V2.lower()
+        assert "fallback-first" in text or "fallback first" in text
+        assert "workflow violation" in text or "permission slip" in text
+        assert "registered fallback" in text
+
     def test_per_section_accounting_for_section_routed_tools(self):
         """Reconciliation mechanism: account for every populated TOC section per tool used.
 
