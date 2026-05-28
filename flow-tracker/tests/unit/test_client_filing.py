@@ -1038,7 +1038,16 @@ class TestDeckSanityFilter:
 
 
 class TestLooksLikeRealDeck:
-    """Unit tests for the content-based deck sanity helper."""
+    """Unit tests for the content-based deck sanity helper.
+
+    Gate semantics (2026-05-28, aligned with PR #179's
+    ``deck_extractor._classify_deck_pdf``):
+    - pages < 3 → False (hard reject)
+    - pages 3-9 with disclosure markers AND <2500 chars first-3pp → False
+    - pages 3-9 without that signature → True (image-heavy decks ok)
+    - pages ≥ 10 → True (high confidence)
+    - pypdfium2 unavailable / parse error → True (fail-open)
+    """
 
     def test_missing_file_accepts(self, tmp_path: Path):
         from flowtracker.filing_client import _looks_like_real_deck
@@ -1048,6 +1057,104 @@ class TestLooksLikeRealDeck:
         from flowtracker.filing_client import _looks_like_real_deck
         p = tmp_path / "bad.pdf"
         p.write_bytes(b"not a pdf at all")
+        assert _looks_like_real_deck(p) is True
+
+
+def _mock_pdfium_for_filing(monkeypatch, pages: int, first3_text: str) -> None:
+    """Install a fake ``pypdfium2`` returning ``pages`` pages whose first 3
+    concatenate to ``first3_text``. Mirrors the helper in test_deck_extractor.
+    """
+    import sys
+    from unittest.mock import MagicMock
+
+    chunks = [first3_text, "", ""] if pages >= 1 else []
+    page_objs = []
+    for i in range(pages):
+        text = chunks[i] if i < len(chunks) else ""
+        textpage = MagicMock()
+        textpage.get_text_range.return_value = text
+        page = MagicMock()
+        page.get_textpage.return_value = textpage
+        page_objs.append(page)
+
+    doc = MagicMock()
+    doc.__len__ = lambda self: pages
+    doc.__getitem__ = lambda self, i: page_objs[i]
+    doc.close = MagicMock()
+
+    fake = MagicMock()
+    fake.PdfDocument = MagicMock(return_value=doc)
+    monkeypatch.setitem(sys.modules, "pypdfium2", fake)
+
+
+class TestLooksLikeRealDeckGate:
+    """Exercise the page-count + disclosure-marker logic of the new gate."""
+
+    def test_one_page_pdf_rejected(self, tmp_path: Path, monkeypatch):
+        """1-page PDFs are Reg-30 cover letters every time — hard reject."""
+        from flowtracker.filing_client import _looks_like_real_deck
+        p = tmp_path / "cover.pdf"; p.write_bytes(b"placeholder")
+        _mock_pdfium_for_filing(monkeypatch, pages=1, first3_text="Sub: Intimation")
+        assert _looks_like_real_deck(p) is False
+
+    def test_two_page_pdf_rejected(self, tmp_path: Path, monkeypatch):
+        from flowtracker.filing_client import _looks_like_real_deck
+        p = tmp_path / "cover2.pdf"; p.write_bytes(b"placeholder")
+        _mock_pdfium_for_filing(monkeypatch, pages=2, first3_text="x" * 5000)
+        assert _looks_like_real_deck(p) is False
+
+    def test_thirty_page_image_heavy_real_deck_accepted(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """The bug this fixes: pre-2026-05-28 a 30-page image-heavy deck with
+        low text density on early pages was rejected by the text-char gate.
+        Now: ≥10pp → high-confidence accept, regardless of text density.
+
+        Anchored on the GODREJPROP/PIDILITIND/HINDUNILVR audit (multi-MB
+        files with 'Investor Presentation' headlines rejected as cover
+        letters)."""
+        from flowtracker.filing_client import _looks_like_real_deck
+        p = tmp_path / "real_deck.pdf"; p.write_bytes(b"placeholder")
+        _mock_pdfium_for_filing(monkeypatch, pages=30, first3_text="Q3 FY26")
+        assert _looks_like_real_deck(p) is True
+
+    def test_short_pdf_with_disclosure_signature_rejected(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """5-page PDF + Reg-30 disclosure marker + sparse text = canonical
+        cover letter. All three conditions required to reject."""
+        from flowtracker.filing_client import _looks_like_real_deck
+        p = tmp_path / "regletter.pdf"; p.write_bytes(b"placeholder")
+        _mock_pdfium_for_filing(
+            monkeypatch, pages=5,
+            first3_text="Sub: Intimation under Regulation 30 of SEBI (Listing "
+            "Obligations and Disclosure Requirements). Audio recording dial-in.",
+        )
+        assert _looks_like_real_deck(p) is False
+
+    def test_short_pdf_without_disclosure_accepted(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """5-page PDF without the cover-letter signature → low-confidence
+        accept. VLM extractor handles image-heavy short decks fine."""
+        from flowtracker.filing_client import _looks_like_real_deck
+        p = tmp_path / "short_deck.pdf"; p.write_bytes(b"placeholder")
+        _mock_pdfium_for_filing(monkeypatch, pages=5, first3_text="Brief")
+        assert _looks_like_real_deck(p) is True
+
+    def test_long_pdf_with_reg30_boilerplate_still_accepted(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """A 30-page real deck may mention 'regulation 30' in legal boilerplate.
+        Page count is the primary signal — the disclosure-marker reject only
+        fires for SHORT PDFs with the canonical signature."""
+        from flowtracker.filing_client import _looks_like_real_deck
+        p = tmp_path / "real_deck_with_boilerplate.pdf"; p.write_bytes(b"placeholder")
+        _mock_pdfium_for_filing(
+            monkeypatch, pages=30,
+            first3_text="Audio recording will be available. "
+            "Regulation 30 of SEBI...",
+        )
         assert _looks_like_real_deck(p) is True
 
 
