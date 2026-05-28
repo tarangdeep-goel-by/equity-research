@@ -225,11 +225,17 @@ def run_agent(agent: str, stock: str) -> tuple[float, bool]:
             line = proc.stderr.readline()
             if line:
                 print(f"  {line.rstrip()}", file=sys.stderr)
-            # Check timeout
-            if time.monotonic() - start > 1800:
+            # Check timeout. Post-Lever-2 the valuation prompt's Data Exhaustion
+            # Reconciliation step pushes long-running stocks (HUL, ADANIENT, etc.)
+            # past 30 min, so 50 min gives margin without making genuine hangs slow
+            # to surface. The Claude Agent SDK CLI subprocess is spawned by `research
+            # run` and does NOT receive this kill (parent SIGKILL doesn't propagate
+            # to the SDK subprocess), so an orphan can keep writing the report on
+            # disk even after timeout — accept that as a known quirk.
+            if time.monotonic() - start > 3000:
                 proc.kill()
                 proc.wait()
-                raise subprocess.TimeoutExpired(cmd="agent", timeout=1800)
+                raise subprocess.TimeoutExpired(cmd="agent", timeout=3000)
         # Drain remaining stderr
         for line in proc.stderr:
             print(f"  {line.rstrip()}", file=sys.stderr)

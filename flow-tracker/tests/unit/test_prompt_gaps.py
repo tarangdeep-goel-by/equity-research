@@ -129,6 +129,26 @@ class TestDataExhaustionReconciliation:
             for kw in ("welcome", "first-class", "first class", "surface", "flag loudly", "raise it as a data_gap")
         )
 
+    def test_each_agent_schema_includes_data_gaps_field(self):
+        """Empirical fix: agents follow the JSON schema example shown in their
+        INSTRUCTIONS_V2, not the abstract SHARED_PREAMBLE rule. First eval run
+        (HINDUNILVR + ADANIENT 2026-05-28) proved this — agents emitted the old
+        briefing shape (no data_gaps) despite the new SHARED_PREAMBLE section.
+        Each per-agent JSON schema example MUST include the data_gaps field.
+        """
+        for name, instr in [
+            ("BUSINESS", BUSINESS_INSTRUCTIONS_V2),
+            ("FINANCIAL", FINANCIAL_INSTRUCTIONS_V2),
+            ("RISK", RISK_INSTRUCTIONS_V2),
+            ("TECHNICAL", TECHNICAL_INSTRUCTIONS_V2),
+            ("SECTOR", SECTOR_INSTRUCTIONS_V2),
+            ("VALUATION", VALUATION_INSTRUCTIONS_V2),
+        ]:
+            assert '"data_gaps":' in instr, f"{name}_INSTRUCTIONS_V2 missing data_gaps in JSON schema example"
+            # Confirm the structured shape, not just the key word:
+            assert '"fallbacks_attempted":' in instr, f"{name} schema missing fallbacks_attempted"
+            assert '"thesis_impact":' in instr, f"{name} schema missing thesis_impact"
+
     def test_per_section_accounting_for_section_routed_tools(self):
         """Reconciliation mechanism: account for every populated TOC section per tool used.
 

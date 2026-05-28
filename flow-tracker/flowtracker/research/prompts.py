@@ -433,6 +433,16 @@ End with a JSON code block:
       "attempts": ["<tool_call_1>", "<tool_call_2>"]
     }
   },
+  "data_gaps": [
+    {
+      "tool": "<tool_name e.g. get_deck_insights>",
+      "section": "<section_or_sub_section e.g. outlook_and_guidance, or null>",
+      "args": {"symbol": "<sym>", "quarter": "<FYxx-Qx or null>"},
+      "fallbacks_attempted": ["<fallback_tool_1>", "<fallback_tool_2>"],
+      "intent": "<what you wanted from this section — one sentence>",
+      "thesis_impact": "<material|informational>"
+    }
+  ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
@@ -578,6 +588,16 @@ End with a JSON code block:
       "attempts": ["<tool_call_1>", "<tool_call_2>"]
     }
   },
+  "data_gaps": [
+    {
+      "tool": "<tool_name e.g. get_deck_insights>",
+      "section": "<section_or_sub_section e.g. outlook_and_guidance, or null>",
+      "args": {"symbol": "<sym>", "quarter": "<FYxx-Qx or null>"},
+      "fallbacks_attempted": ["<fallback_tool_1>", "<fallback_tool_2>"],
+      "intent": "<what you wanted from this section — one sentence>",
+      "thesis_impact": "<material|informational>"
+    }
+  ],
   "open_questions": ["<question tied to a metric marked 'attempted' above>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
@@ -721,6 +741,16 @@ End with a JSON code block:
       "attempts": ["<tool_call_1>", "<tool_call_2>"]
     }
   },
+  "data_gaps": [
+    {
+      "tool": "<tool_name e.g. get_deck_insights>",
+      "section": "<section_or_sub_section e.g. outlook_and_guidance, or null>",
+      "args": {"symbol": "<sym>", "quarter": "<FYxx-Qx or null>"},
+      "fallbacks_attempted": ["<fallback_tool_1>", "<fallback_tool_2>"],
+      "intent": "<what you wanted from this section — one sentence>",
+      "thesis_impact": "<material|informational>"
+    }
+  ],
   "open_questions": ["<question tied to a metric marked 'attempted' above, within the 3-5 ceiling>"],
   "reconciliations": [
     {
@@ -861,6 +891,16 @@ End with a JSON code block:
       "attempts": ["<tool_call_1>", "<tool_call_2>"]
     }
   },
+  "data_gaps": [
+    {
+      "tool": "<tool_name e.g. get_deck_insights>",
+      "section": "<section_or_sub_section e.g. outlook_and_guidance, or null>",
+      "args": {"symbol": "<sym>", "quarter": "<FYxx-Qx or null>"},
+      "fallbacks_attempted": ["<fallback_tool_1>", "<fallback_tool_2>"],
+      "intent": "<what you wanted from this section — one sentence>",
+      "thesis_impact": "<material|informational>"
+    }
+  ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
   "signal_direction": "<bullish|bearish|neutral|mixed>"
 }
@@ -991,6 +1031,16 @@ End with a JSON code block:
       "attempts": ["<tool_call_1>", "<tool_call_2>"]
     }
   },
+  "data_gaps": [
+    {
+      "tool": "<tool_name e.g. get_deck_insights>",
+      "section": "<section_or_sub_section e.g. outlook_and_guidance, or null>",
+      "args": {"symbol": "<sym>", "quarter": "<FYxx-Qx or null>"},
+      "fallbacks_attempted": ["<fallback_tool_1>", "<fallback_tool_2>"],
+      "intent": "<what you wanted from this section — one sentence>",
+      "thesis_impact": "<material|informational>"
+    }
+  ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
@@ -1086,6 +1136,16 @@ End with a JSON code block:
       "attempts": ["<tool_call_1>", "<tool_call_2>"]
     }
   },
+  "data_gaps": [
+    {
+      "tool": "<tool_name e.g. get_deck_insights>",
+      "section": "<section_or_sub_section e.g. outlook_and_guidance, or null>",
+      "args": {"symbol": "<sym>", "quarter": "<FYxx-Qx or null>"},
+      "fallbacks_attempted": ["<fallback_tool_1>", "<fallback_tool_2>"],
+      "intent": "<what you wanted from this section — one sentence>",
+      "thesis_impact": "<material|informational>"
+    }
+  ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
@@ -1189,6 +1249,16 @@ End with a JSON code block:
       "attempts": ["<tool_call_1>", "<tool_call_2>"]
     }
   },
+  "data_gaps": [
+    {
+      "tool": "<tool_name e.g. get_deck_insights>",
+      "section": "<section_or_sub_section e.g. outlook_and_guidance, or null>",
+      "args": {"symbol": "<sym>", "quarter": "<FYxx-Qx or null>"},
+      "fallbacks_attempted": ["<fallback_tool_1>", "<fallback_tool_2>"],
+      "intent": "<what you wanted from this section — one sentence>",
+      "thesis_impact": "<material|informational>"
+    }
+  ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"]
 }
 ```
