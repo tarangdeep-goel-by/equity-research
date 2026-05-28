@@ -76,6 +76,24 @@ class ToolEvidence(BaseModel, extra="ignore"):
     extraction_meta: dict | None = None
 
 
+class DataGap(BaseModel, extra="ignore"):
+    """A data layer gap the agent surfaces after exhausting fallbacks.
+
+    Per-report entry that says: I wanted X, tool Y returned nothing, I tried
+    fallbacks Z, the data is genuinely not on file. Surfaced loudly (no cap)
+    so the data-layer roadmap can pick up what we should collect next.
+    Mirrors the vocabulary of ``tool_audit.data_coverage`` (tool, section)
+    so the analyzer can aggregate per-report entries across runs.
+    """
+
+    tool: str  # registered tool name, e.g. "get_deck_insights"
+    section: str | None = None  # the section / sub_section drilled, when applicable
+    args: dict = Field(default_factory=dict)  # call args that returned empty
+    fallbacks_attempted: list[str] = Field(default_factory=list)  # other tools tried
+    intent: str = ""  # what the agent wanted to know — one sentence
+    thesis_impact: Literal["material", "informational"] = "informational"
+
+
 class AgentCost(BaseModel, extra="ignore"):
     """Cost and token tracking for a single agent run."""
 

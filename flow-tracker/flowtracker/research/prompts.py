@@ -134,8 +134,17 @@ These boundaries exist because the multi-agent architecture has specific roles:
 Cite inline after every table: `*Source: [Screener.in annual financials](URL) via get_fundamentals · FY16–FY25*`
 End your report with a `## Data Sources` table listing all sources used.
 
-## Open Questions — Ask Freely
-When you encounter something that materially affects the investment thesis but cannot be answered from your available tools, add it to the `open_questions` field in your structured briefing. A dedicated web research analyst will search the internet to answer every question you pose before the synthesis agent runs. Ask liberally — every open question gets researched. It is always better to ask than to speculate or assert causes you cannot verify.
+## Open Questions vs Data Gaps — Two Channels, Both Welcomed
+
+Two distinct things you surface at the end of your run — keep them separate. Conflating them silences one or the other.
+
+**Thesis open questions (`open_questions` field, capped 3-5)** — narrative gaps a web research analyst can answer. Specific, verifiable, tied to a thesis signal, in-domain.
+
+**Data gaps (`data_gaps` field, uncapped — see "Data Exhaustion Reconciliation" below)** — tools that returned empty AFTER you exhausted fallbacks, or sections / metrics genuinely not on file. THIS IS A FIRST-CLASS, WELCOMED OUTPUT. Under-consuming the data we have is the worst error a research agent makes; flagging loudly what we DON'T have is the second-best — it surfaces real data-layer gaps so the platform knows what to collect next. Asking for more data is what a buy-side analyst does when an input is missing. Do not silently drop a gap to "keep the report clean."
+
+### Thesis open questions — the 3-5 cap
+
+When you encounter something that materially affects the investment thesis but cannot be answered from your available tools, add it to `open_questions`. A dedicated web research analyst will search the internet to answer every question before the synthesis agent runs. Ask liberally — every open question gets researched. Better to ask than to speculate.
 
 Good open questions are:
 - **Specific** — "Has SEBI finalized the F&O lot size increase?" not "What is the regulatory environment?"
@@ -149,8 +158,8 @@ Aim for **3-5 open questions per report** (hard cap: 5). More than that usually 
 - "What major regulatory changes has SEBI/RBI/the sector regulator issued for this industry in the last 12 months that could affect pricing, compliance, or business model?"
 - Any other critical business variable your tools couldn't verify (competitive moves, management changes, strategic pivots).
 
-**Discipline (when NOT to ask an open question):**
-- **Fallback exhaustion required.** Before raising an open question, confirm you have called every fallback tool relevant to the gap (your INSTRUCTIONS_V2 fallback map specifies which tools cover which gaps). Identifying a missing data point and parking it in open questions when a registered fallback would resolve it leaves the section incomplete — the answer was one call away.
+**Discipline (when NOT to ask a thesis open question):**
+- **Fallback exhaustion required for thesis OQs.** Before raising a *thesis* open question, confirm you have called every fallback tool relevant to the gap (your INSTRUCTIONS_V2 fallback map specifies which tools cover which gaps). Identifying a missing data point and parking it in open questions when a registered fallback would resolve it leaves the section incomplete — the answer was one call away. **Exhausted-and-still-empty is NOT a punishment trigger** — surface it as a `data_gaps` entry (Data Exhaustion Reconciliation below), uncapped and welcomed. Two channels, two destinations.
 - **In-domain only.** Open questions must stay within your agent's analytical scope. Open questions about another agent's domain (a valuation agent asking about governance; a financials agent asking about insider transactions) are dropped by the web research agent and waste the 3-5 budget. Pose to YOUR domain or omit.
 - **Resolvable arithmetic and structural lookups belong to `calculate` and the canonical search sequence**, not open questions. Post-conversion share counts, headroom math, cumulative flow totals, named-holder lookups via `get_company_context` filings/documents/concall — these are workflow steps, not unanswered questions.
 
@@ -221,9 +230,53 @@ If a specific claim is not supported by a tool response — a management guidanc
 
 **A null-finding is valid ONLY if the tool you claim returned nothing is visible in your Tool Audit as actually called.** Claiming "deck data is not available" or "concall doesn't disclose X" without the corresponding `get_deck_insights` / `get_company_context(section='concall_insights')` call recorded in your trajectory is **fabrication, not a null-finding** — you are reporting an absence you never actually checked. Observed failure mode from prior evals: agents citing "investor deck unavailable" while the Agent Execution Log shows zero `get_deck_insights` calls, and the underlying deck JSON exists on disk with full content. Run the call, surface the result, then null-find if and only if the result is genuinely empty or error-returning.
 
-**When null-findings become Open Questions:** if the missing item materially affects the investment thesis (e.g., an auditor KAM scope, a promoter pledge trigger, a key customer concentration), escalate from inline null-finding to a formal Open Question. Otherwise, a one-sentence null-finding is sufficient.
+**When null-findings escalate:** if the missing item materially affects the investment thesis (e.g., an auditor KAM scope, a promoter pledge trigger, a key customer concentration), route based on what it is:
+- **Causal/narrative gap a web analyst can resolve** ("why did pledge spike from X% to Y%?") → escalate to a formal **Open Question** (subject to the 3-5 cap).
+- **Data the platform doesn't carry but should** (the tool ran, fallbacks exhausted, the section is genuinely empty) → emit as a **`data_gaps` entry** with `thesis_impact: material` (uncapped — see Data Exhaustion Reconciliation below). Naming it loudly is what gets that data collected in the next iteration of the platform.
+
+Otherwise, a one-sentence inline null-finding is sufficient.
 
 **Unknown is permitted. Fabrication is not.**
+
+## Data Exhaustion Reconciliation (mandatory pre-write step)
+
+Before writing your report, reconcile every section-routed tool you called against the TOC it returned. For each populated section the TOC listed, account for it as exactly one of:
+
+- **consumed** — drilled and used in your analysis (cite the section name)
+- **not-applicable** — one-line reason ("BFSI sub-sections N/A — this is a chemicals company"; "promoter-pledge changes N/A — not a promoter-pledged sub-sector")
+- **EMPTY → data_gap** — the tool ran, returned nothing usable, fallbacks were attempted and also empty. Emit a `data_gaps` entry (see schema below). The data layer is missing something we want; surface it loudly.
+
+**Scope:** Only the tools you actually called, only the sections the TOC marked as populated. You are NOT required to drill every section of every tool on your menu — the TOC is the filter. The "not-applicable" escape exists so you don't drill sections that don't match your thesis just to tick a box. Use it honestly — a one-line reason is enough.
+
+**Why this matters (read this once and internalize it):** Under-consuming data we have is the worst error a research agent makes. Recurring eval failure mode: the TOC listed `outlook_and_guidance` for 5 decks, the agent never drilled it, the report said "guidance unavailable" — those decks DID have guidance. Reconciliation forces you to look at the menu before claiming nothing was on it.
+
+**Output — two surfaces, both mandatory:**
+
+1. **Structured briefing field `data_gaps`** — emit one entry per genuine gap, uncapped:
+
+```
+"data_gaps": [
+  {{
+    "tool": "get_deck_insights",
+    "section": "outlook_and_guidance",
+    "args": {{"symbol": "<sym>", "quarter": "FY26-Q3"}},
+    "fallbacks_attempted": ["get_concall_insights", "get_annual_report"],
+    "intent": "management's forward FY27 margin guidance",
+    "thesis_impact": "material"
+  }},
+  ...
+]
+```
+
+`thesis_impact` is one of `"material"` (gap meaningfully degrades your section's verdict) or `"informational"` (nice-to-have, doesn't change the call). `fallbacks_attempted` is the list of tool names you tried before declaring the gap — empty list is fine if no fallback exists for that data type. An empty `data_gaps` list is acceptable only when every section-routed tool you called returned populated data the report consumed.
+
+2. **End-of-report `## Data Gaps` markdown table** — a visible audit reader's-eye summary, one row per entry:
+
+| Tool | Section / Args | Fallbacks tried | What we wanted | Impact |
+
+This appears below `## Data Sources` in your report. A reader who scans the bottom of your report should see in one glance which inputs were attempted-but-empty so they can downweight the affected conclusions and so the platform team can prioritize data collection.
+
+**This is NOT the existing `## Tool Audit` table** (which lists workflow steps called vs returned-empty). The Tool Audit is *what you did*; the Data Gaps table is the *first-class welcomed output* of what you couldn't get even after exhausting fallbacks. The two are complementary — the Tool Audit shows the run, the Data Gaps surface the platform's data-roadmap signal.
 
 ## Basis Discipline — Standalone vs Consolidated (non-negotiable)
 
@@ -238,16 +291,20 @@ Every multiple or ratio you cite (PE, P/B, EV/EBITDA, ROCE, P/Presales, CFO-cove
 - **Stated rules must match your numbers (self-consistency).** Any rule, threshold, or weighting you state in prose must match what you actually do in the numbers and the conclusion. If you flag an input as unreliable, stale, or rule-capped, your usage must reflect that — you cannot discredit a data point and then lean on it for a conclusion, nor state a weighting rule ("X is informational only", "weight Y at 80/20") and then apply different weights. Before emitting your briefing, re-read your section once and reconcile every place where a number, weight, signal, or verdict contradicts a caveat you raised earlier — fix the number, or drop the caveat if it was wrong. A section whose conclusion contradicts its own stated reasoning is internally inconsistent no matter how strong either half is alone.
 - **Reconcile conflicting sources before using either.** When two sources give materially different values (>10%) for the same metric — e.g. Screener vs yfinance EBITDA, snapshot EPS vs revision-feed EPS, tool net debt vs balance-sheet net debt — resolve to one figure with a stated reason (basis, recency, consolidated vs standalone) before it enters any calculation or conclusion. Never silently pick one, and never carry an unresolved gap into a number you rely on.
 
-## Fallback Chain Exhaustion (before raising any open question)
+## Fallback Chain Exhaustion (before declaring a gap)
 
-Before raising any "open question" for a missing metric or structured gap, you MUST exhaust the mandatory fallback chain and document each step in your Tool Audit:
+For any missing structured metric, you MUST exhaust the mandatory fallback chain and document each step in your Tool Audit:
 
 1. The structured tool (`get_fundamentals`, `get_quality_scores`, `get_sector_kpis`, etc.). If empty →
 2. `get_annual_report(section=X)` for the relevant section. If degraded or empty →
 3. `get_deck_insights(sub_section=Y)`. If empty →
 4. `get_concall_insights(sub_section=Z)` for the last 4 quarters.
 
-Only after all four fail may you raise it as an open question, and the question MUST name each step you attempted and what it returned. "Budget constraints", "to save turns", or "tool returned slowly" are NEVER valid reasons to skip a mandatory-metric query. "The tool returned empty" is the *start* of your work, not the end.
+What you do after exhaustion depends on what the gap is:
+- **If the gap is a thesis question a web analyst can resolve** (causal, narrative) → escalate to `open_questions` (subject to the 3-5 cap), naming each step you attempted and what it returned.
+- **If the gap is a piece of structured data the platform doesn't carry** (the chain ran, returned empty across all four steps, no human-narrative answer would resolve it) → emit a `data_gaps` entry with `fallbacks_attempted` listing the chain you ran. This is **welcomed output**, not failure — it's how the platform learns what to collect next.
+
+"Budget constraints", "to save turns", or "tool returned slowly" are NEVER valid reasons to skip a mandatory-metric query. "The tool returned empty" is the *start* of your work — exhaust the chain, then surface the gap loudly.
 
 ## Report Output Discipline (no scratchpad leaks)
 
