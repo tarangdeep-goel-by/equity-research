@@ -44,10 +44,10 @@ class TestComparableGrowthMetricsSchema:
         assert "comparable_growth_metrics" in ResearchDataAPI._CONCALL_SECTIONS
 
     def test_preamble_references_new_subsection(self):
-        """SHARED_PREAMBLE_V2 must direct agents to call this fallback."""
-        from flowtracker.research.prompts import SHARED_PREAMBLE_V2
-        assert "comparable_growth_metrics" in SHARED_PREAMBLE_V2
-        assert "like-for-like" in SHARED_PREAMBLE_V2.lower() or "comparable basis" in SHARED_PREAMBLE_V2.lower()
+        """SHARED_PREAMBLE must direct agents to call this fallback."""
+        from flowtracker.research.prompts import SHARED_PREAMBLE
+        assert "comparable_growth_metrics" in SHARED_PREAMBLE
+        assert "like-for-like" in SHARED_PREAMBLE.lower() or "comparable basis" in SHARED_PREAMBLE.lower()
 
 
 # ---------------------------------------------------------------------------

@@ -45,8 +45,8 @@ def test_assembly_includes_macro_section():
 def test_build_specialist_prompt_returns_macro():
     """build_specialist_prompt should return a non-empty tuple for 'macro'."""
     # Use a mock industry / no DB access — build_specialist_prompt reads api,
-    # but tolerates failures. We just test the AGENT_PROMPTS_V2 lookup works.
-    from flowtracker.research.prompts import AGENT_PROMPTS_V2
-    system_base, instructions = AGENT_PROMPTS_V2["macro"]
+    # but tolerates failures. We just test the AGENT_PROMPTS lookup works.
+    from flowtracker.research.prompts import AGENT_PROMPTS
+    system_base, instructions = AGENT_PROMPTS["macro"]
     assert system_base and instructions
     assert "Global Macro Strategist" in system_base

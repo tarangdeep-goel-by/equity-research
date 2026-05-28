@@ -1,78 +1,86 @@
 """Tests that agent prompts reference the expected tool sections."""
 from flowtracker.research.prompts import (
-    BUSINESS_INSTRUCTIONS_V2,
-    FINANCIAL_INSTRUCTIONS_V2,
-    RISK_INSTRUCTIONS_V2,
-    TECHNICAL_INSTRUCTIONS_V2,
-    SECTOR_INSTRUCTIONS_V2,
-    NEWS_INSTRUCTIONS_V2,
-    VALUATION_INSTRUCTIONS_V2,
-    SHARED_PREAMBLE_V2,
+    BUSINESS_INSTRUCTIONS,
+    BUSINESS_SYSTEM,
+    FINANCIAL_INSTRUCTIONS,
+    FINANCIAL_SYSTEM,
+    OWNERSHIP_INSTRUCTIONS,
+    OWNERSHIP_SYSTEM,
+    RISK_INSTRUCTIONS,
+    RISK_SYSTEM,
+    TECHNICAL_INSTRUCTIONS,
+    TECHNICAL_SYSTEM,
+    SECTOR_INSTRUCTIONS,
+    SECTOR_SYSTEM,
+    NEWS_INSTRUCTIONS,
+    VALUATION_INSTRUCTIONS,
+    VALUATION_SYSTEM,
+    SHARED_PREAMBLE,
 )
 
 
 class TestPromptCoverage:
     def test_business_calls_valuation(self):
-        assert "get_valuation" in BUSINESS_INSTRUCTIONS_V2
+        assert "get_valuation" in BUSINESS_INSTRUCTIONS
 
     def test_business_calls_events(self):
-        assert "get_events_actions" in BUSINESS_INSTRUCTIONS_V2
+        assert "get_events_actions" in BUSINESS_INSTRUCTIONS
 
     def test_risk_has_cost_structure(self):
-        assert "cost_structure" in RISK_INSTRUCTIONS_V2
+        assert "cost_structure" in RISK_INSTRUCTIONS
 
     def test_risk_has_working_capital(self):
-        assert "working_capital" in RISK_INSTRUCTIONS_V2
+        assert "working_capital" in RISK_INSTRUCTIONS
 
     def test_technical_calls_estimates(self):
-        assert "get_estimates" in TECHNICAL_INSTRUCTIONS_V2
+        assert "get_estimates" in TECHNICAL_INSTRUCTIONS
 
     def test_technical_calls_ownership(self):
-        assert "get_ownership" in TECHNICAL_INSTRUCTIONS_V2
+        assert "get_ownership" in TECHNICAL_INSTRUCTIONS
 
     def test_sector_calls_fundamentals(self):
-        assert "get_fundamentals" in SECTOR_INSTRUCTIONS_V2
+        assert "get_fundamentals" in SECTOR_INSTRUCTIONS
 
     def test_sector_calls_valuation(self):
-        assert "get_valuation" in SECTOR_INSTRUCTIONS_V2
+        assert "get_valuation" in SECTOR_INSTRUCTIONS
 
     def test_news_calls_company_context(self):
-        assert "get_company_context" in NEWS_INSTRUCTIONS_V2
+        assert "get_company_context" in NEWS_INSTRUCTIONS
 
     def test_valuation_has_material_events(self):
-        assert "material_events" in VALUATION_INSTRUCTIONS_V2
+        assert "material_events" in VALUATION_INSTRUCTIONS
 
     def test_valuation_has_cash_flow_quality(self):
-        assert "cash_flow_quality" in VALUATION_INSTRUCTIONS_V2
+        assert "cash_flow_quality" in VALUATION_INSTRUCTIONS
 
     def test_financial_has_quarterly_bs(self):
-        assert "quarterly_balance_sheet" in FINANCIAL_INSTRUCTIONS_V2
+        assert "quarterly_balance_sheet" in FINANCIAL_INSTRUCTIONS
 
     def test_preamble_has_freshness(self):
-        assert "data_age_hours" in SHARED_PREAMBLE_V2
+        assert "data_age_hours" in SHARED_PREAMBLE
 
     def test_preamble_has_capex_cycle(self):
-        assert "Capex cycle" in SHARED_PREAMBLE_V2
+        assert "Capex cycle" in SHARED_PREAMBLE
 
     def test_preamble_has_f_score(self):
-        assert "F-Score" in SHARED_PREAMBLE_V2
+        assert "F-Score" in SHARED_PREAMBLE
 
     def test_preamble_has_name_op_concrete_usage_map(self):
         """Name-op tenet must ship the concrete-usage-map examples so agents
         don't misuse pct_of / growth_rate / margin_of_safety (see Fix 8).
         """
-        assert "Concrete usage map" in SHARED_PREAMBLE_V2
+        assert "Concrete usage map" in SHARED_PREAMBLE
         # pct_of: "what % of b is a" — NOT "compute a% of b".
-        assert 'What is 36.24% of 238,563?' in SHARED_PREAMBLE_V2
-        assert 'expr(a="0.3624 * 238563"' in SHARED_PREAMBLE_V2
-        assert 'What percent of 238,563 is 86,462?' in SHARED_PREAMBLE_V2
-        assert "pct_of(a=86462, b=238563)" in SHARED_PREAMBLE_V2
+        assert 'What is 36.24% of 238,563?' in SHARED_PREAMBLE
+        assert 'expr(a="0.3624 * 238563"' in SHARED_PREAMBLE
+        assert 'What percent of 238,563 is 86,462?' in SHARED_PREAMBLE
+        assert "pct_of(a=86462, b=238563)" in SHARED_PREAMBLE
         # growth_rate vs pp-delta.
-        assert "growth_rate(a=100, b=120)" in SHARED_PREAMBLE_V2
-        assert 'expr(a="2.1 - 1.8"' in SHARED_PREAMBLE_V2
+        assert "growth_rate(a=100, b=120)" in SHARED_PREAMBLE
+        assert 'expr(a="2.1 - 1.8"' in SHARED_PREAMBLE
         # margin_of_safety vs price-vs-SMA.
-        assert "margin_of_safety(a=1200, b=1000)" in SHARED_PREAMBLE_V2
-        assert "(1010 - 980) / 980 * 100" in SHARED_PREAMBLE_V2
+        assert "margin_of_safety(a=1200, b=1000)" in SHARED_PREAMBLE
+        assert "(1010 - 980) / 980 * 100" in SHARED_PREAMBLE
 
 
 class TestDataExhaustionReconciliation:
@@ -84,21 +92,21 @@ class TestDataExhaustionReconciliation:
     """
 
     def test_preamble_has_data_exhaustion_section(self):
-        assert "Data Exhaustion Reconciliation" in SHARED_PREAMBLE_V2
+        assert "Data Exhaustion Reconciliation" in SHARED_PREAMBLE
 
     def test_preamble_references_data_gaps_briefing_field(self):
         """Agent must know to populate `briefing.data_gaps` as a structured field."""
-        assert "data_gaps" in SHARED_PREAMBLE_V2
+        assert "data_gaps" in SHARED_PREAMBLE
 
     def test_preamble_has_data_gaps_markdown_table(self):
         """End-of-report `## Data Gaps` markdown table is mandated for visibility."""
-        assert "## Data Gaps" in SHARED_PREAMBLE_V2
+        assert "## Data Gaps" in SHARED_PREAMBLE
 
     def test_data_gaps_channel_is_uncapped(self):
         """Reframe — the 3-5 cap is for thesis OQs only; data_gaps are uncapped."""
         # The new section must explicitly state data_gaps are unbounded — agents
         # must not silently drop genuine empties to "stay under the cap".
-        assert "uncapped" in SHARED_PREAMBLE_V2.lower() or "no limit" in SHARED_PREAMBLE_V2.lower()
+        assert "uncapped" in SHARED_PREAMBLE.lower() or "no limit" in SHARED_PREAMBLE.lower()
 
     def test_preamble_distinguishes_thesis_oqs_vs_data_gaps(self):
         """Two distinct channels: thesis open_questions (capped 3-5) vs data_gaps (uncapped).
@@ -106,10 +114,10 @@ class TestDataExhaustionReconciliation:
         Both must be mentioned together so the agent learns the distinction.
         """
         # Thesis OQ cap survives.
-        assert "3-5" in SHARED_PREAMBLE_V2 or "hard cap: 5" in SHARED_PREAMBLE_V2
+        assert "3-5" in SHARED_PREAMBLE or "hard cap: 5" in SHARED_PREAMBLE
         # Both channels named near each other.
-        assert "thesis" in SHARED_PREAMBLE_V2.lower()
-        assert "data_gaps" in SHARED_PREAMBLE_V2
+        assert "thesis" in SHARED_PREAMBLE.lower()
+        assert "data_gaps" in SHARED_PREAMBLE
 
     def test_fallback_exhaustion_emits_data_gap_not_suppress(self):
         """After fallback exhaustion + still empty, the answer is `data_gaps`, not silence.
@@ -120,7 +128,7 @@ class TestDataExhaustionReconciliation:
         # The reframed exhaustion guidance must reference data_gaps as the destination.
         # Find the fallback section and assert data_gaps emission is the prescribed action.
         # Use a lenient check — any near-mention of "exhausted" near "data_gap" suffices.
-        text = SHARED_PREAMBLE_V2.lower()
+        text = SHARED_PREAMBLE.lower()
         assert "data_gap" in text
         # The reframe phrase must appear — explicit that empty-after-exhaustion is welcomed,
         # not punished. We match for "welcome" / "first-class" / "loudly" / "surface" near data_gap.
@@ -131,20 +139,20 @@ class TestDataExhaustionReconciliation:
 
     def test_each_agent_schema_includes_data_gaps_field(self):
         """Empirical fix: agents follow the JSON schema example shown in their
-        INSTRUCTIONS_V2, not the abstract SHARED_PREAMBLE rule. First eval run
+        INSTRUCTIONS, not the abstract SHARED_PREAMBLE rule. First eval run
         (HINDUNILVR + ADANIENT 2026-05-28) proved this — agents emitted the old
         briefing shape (no data_gaps) despite the new SHARED_PREAMBLE section.
         Each per-agent JSON schema example MUST include the data_gaps field.
         """
         for name, instr in [
-            ("BUSINESS", BUSINESS_INSTRUCTIONS_V2),
-            ("FINANCIAL", FINANCIAL_INSTRUCTIONS_V2),
-            ("RISK", RISK_INSTRUCTIONS_V2),
-            ("TECHNICAL", TECHNICAL_INSTRUCTIONS_V2),
-            ("SECTOR", SECTOR_INSTRUCTIONS_V2),
-            ("VALUATION", VALUATION_INSTRUCTIONS_V2),
+            ("BUSINESS", BUSINESS_INSTRUCTIONS),
+            ("FINANCIAL", FINANCIAL_INSTRUCTIONS),
+            ("RISK", RISK_INSTRUCTIONS),
+            ("TECHNICAL", TECHNICAL_INSTRUCTIONS),
+            ("SECTOR", SECTOR_INSTRUCTIONS),
+            ("VALUATION", VALUATION_INSTRUCTIONS),
         ]:
-            assert '"data_gaps":' in instr, f"{name}_INSTRUCTIONS_V2 missing data_gaps in JSON schema example"
+            assert '"data_gaps":' in instr, f"{name}_INSTRUCTIONS missing data_gaps in JSON schema example"
             # Confirm the structured shape, not just the key word:
             assert '"fallbacks_attempted":' in instr, f"{name} schema missing fallbacks_attempted"
             assert '"thesis_impact":' in instr, f"{name} schema missing thesis_impact"
@@ -157,7 +165,7 @@ class TestDataExhaustionReconciliation:
         fallback-first is non-negotiable; emitting a data_gap before invoking
         the registered fallback is a workflow violation.
         """
-        text = SHARED_PREAMBLE_V2.lower()
+        text = SHARED_PREAMBLE.lower()
         assert "fallback-first" in text or "fallback first" in text
         assert "workflow violation" in text or "permission slip" in text
         assert "registered fallback" in text
@@ -170,7 +178,7 @@ class TestDataExhaustionReconciliation:
         Not the full catalog — only the TOC-populated subset.
         """
         # The mechanism phrase must reference per-section accounting tied to the TOC.
-        text = SHARED_PREAMBLE_V2.lower()
+        text = SHARED_PREAMBLE.lower()
         assert "toc" in text
         assert "consumed" in text or "drilled" in text
         # The N-A escape valve prevents tick-box behavior on irrelevant sections.
@@ -181,26 +189,26 @@ class TestNoRedundantFetches:
     """Verify prompts don't instruct re-fetching data already in analytical_profile."""
 
     def test_financial_no_piotroski_in_quality_scores(self):
-        assert "'piotroski'" not in FINANCIAL_INSTRUCTIONS_V2.split("get_quality_scores")[1].split("\n")[0]
+        assert "'piotroski'" not in FINANCIAL_INSTRUCTIONS.split("get_quality_scores")[1].split("\n")[0]
 
     def test_financial_no_beneish_in_quality_scores(self):
-        assert "'beneish'" not in FINANCIAL_INSTRUCTIONS_V2.split("get_quality_scores")[1].split("\n")[0]
+        assert "'beneish'" not in FINANCIAL_INSTRUCTIONS.split("get_quality_scores")[1].split("\n")[0]
 
     def test_risk_no_composite_score_tool(self):
-        assert "get_composite_score" not in RISK_INSTRUCTIONS_V2
+        assert "get_composite_score" not in RISK_INSTRUCTIONS
 
     def test_valuation_single_valuation_call(self):
         # Should only have one get_valuation call, not two
-        count = VALUATION_INSTRUCTIONS_V2.count("Call `get_valuation`")
+        count = VALUATION_INSTRUCTIONS.count("Call `get_valuation`")
         assert count == 1, f"Expected 1 get_valuation call, found {count}"
 
     def test_preamble_warns_against_refetch(self):
-        assert "avoids redundant calls" in SHARED_PREAMBLE_V2
+        assert "avoids redundant calls" in SHARED_PREAMBLE
 
     def test_preamble_lists_profile_contents(self):
-        assert "Quality scores" in SHARED_PREAMBLE_V2
-        assert "Reverse DCF" in SHARED_PREAMBLE_V2
-        assert "WACC" in SHARED_PREAMBLE_V2
+        assert "Quality scores" in SHARED_PREAMBLE
+        assert "Reverse DCF" in SHARED_PREAMBLE
+        assert "WACC" in SHARED_PREAMBLE
 
 
 class TestMFHoldingChangesFix:
@@ -313,3 +321,137 @@ class TestMFHoldingChangesFix:
         assert len(exited) == 1
         assert exited[0]["scheme_name"] == "SBI Blue Chip"
         assert exited[0]["quantity"] == 0
+
+
+class TestPhase0DedupedPatterns:
+    """Phase 0 of prompt-pattern-transfer: 4 patterns previously duplicated across
+    5-7 specialist prompts are consolidated into SHARED_PREAMBLE. These tests
+    assert (a) the canonical rule lives in SHARED, and (b) no per-agent block
+    redundantly re-states the rule.
+
+    The 4 moved patterns:
+      - Anomaly Resolution (exhaust tools before asking) → SHARED, agents keep
+        only a one-line trio pointer
+      - Hard-evidence rule for overriding system signals → SHARED only
+      - Single-period anomaly: reclassification-first → SHARED only
+      - Structural signal absence ≠ informational → SHARED only
+
+    Per-agent canonical anomaly-resolution tool trios stay where they are (each
+    agent has a unique trio for its domain).
+    """
+
+    # --- Anomaly Resolution ---
+
+    def test_shared_has_anomaly_resolution_section(self):
+        assert "### Anomaly Resolution — Exhaust Tools Before Asking" in SHARED_PREAMBLE
+        assert "canonical anomaly-resolution trio" in SHARED_PREAMBLE
+
+    def test_each_specialist_has_anomaly_resolution_trio_pointer(self):
+        """Every specialist that previously had a full anomaly-resolution bullet
+        now has a short trio pointer that references SHARED. The pointer lives
+        in each agent's SYSTEM block (Key Rules)."""
+        for name, instr in [
+            ("BUSINESS", BUSINESS_SYSTEM),
+            ("FINANCIAL", FINANCIAL_SYSTEM),
+            ("VALUATION", VALUATION_SYSTEM),
+            ("RISK", RISK_SYSTEM),
+            ("TECHNICAL", TECHNICAL_SYSTEM),
+            ("SECTOR", SECTOR_SYSTEM),
+        ]:
+            assert "Anomaly-resolution trio" in instr, (
+                f"{name} missing 'Anomaly-resolution trio' pointer — should reference SHARED"
+            )
+
+    def test_no_specialist_re_states_anomaly_resolution_framing(self):
+        """The old 'Anomaly resolution via tools first' / 'Before flagging X as
+        an open question, resolve via...' framing must not duplicate the SHARED
+        rule in any specialist prompt."""
+        for name, instr in [
+            ("BUSINESS_INSTRUCTIONS", BUSINESS_INSTRUCTIONS),
+            ("BUSINESS_SYSTEM", BUSINESS_SYSTEM),
+            ("FINANCIAL_SYSTEM", FINANCIAL_SYSTEM),
+            ("VALUATION_SYSTEM", VALUATION_SYSTEM),
+            ("RISK_SYSTEM", RISK_SYSTEM),
+            ("TECHNICAL_SYSTEM", TECHNICAL_SYSTEM),
+            ("SECTOR_SYSTEM", SECTOR_SYSTEM),
+        ]:
+            assert "Anomaly resolution via tools first" not in instr, (
+                f"{name} still contains the old 'Anomaly resolution via tools first' framing"
+            )
+
+    # --- Hard-evidence rule ---
+
+    def test_shared_has_hard_evidence_rule(self):
+        assert "Hard-evidence rule for overriding system-classified signals" in SHARED_PREAMBLE
+        assert "2 INDEPENDENT DATA POINTS" in SHARED_PREAMBLE
+
+    def test_no_specialist_re_states_hard_evidence_rule(self):
+        """Hard-evidence rule was previously in 7/7 specialists. After Phase 0
+        it must appear only in SHARED."""
+        for name, instr in [
+            ("BUSINESS_SYSTEM", BUSINESS_SYSTEM),
+            ("FINANCIAL_SYSTEM", FINANCIAL_SYSTEM),
+            ("OWNERSHIP_SYSTEM", OWNERSHIP_SYSTEM),
+            ("VALUATION_SYSTEM", VALUATION_SYSTEM),
+            ("RISK_SYSTEM", RISK_SYSTEM),
+            ("TECHNICAL_SYSTEM", TECHNICAL_SYSTEM),
+            ("SECTOR_SYSTEM", SECTOR_SYSTEM),
+        ]:
+            assert "Hard-evidence rule for overriding system" not in instr, (
+                f"{name} still contains a 'Hard-evidence rule' bullet — should be SHARED-only"
+            )
+
+    # --- Single-period reclassification-first ---
+
+    def test_shared_has_single_period_reclassification_rule(self):
+        assert "Single-period anomaly → reclassification hypothesis first" in SHARED_PREAMBLE
+        assert "block-trade / index rebalance / corporate action" in SHARED_PREAMBLE
+
+    def test_no_specialist_re_states_single_period_rule(self):
+        """Single-period reclassification rule was previously in 5+ specialists
+        (Bus, Val, Risk, Tech, Sector — Own keeps its 5pp-specific text)."""
+        for name, instr in [
+            ("BUSINESS_SYSTEM", BUSINESS_SYSTEM),
+            ("VALUATION_SYSTEM", VALUATION_SYSTEM),
+            ("RISK_SYSTEM", RISK_SYSTEM),
+            ("TECHNICAL_SYSTEM", TECHNICAL_SYSTEM),
+            ("SECTOR_SYSTEM", SECTOR_SYSTEM),
+        ]:
+            # The exact generic-framing phrases used pre-Phase-0:
+            assert "Single-period anomaly → reclassification hypothesis first" not in instr, (
+                f"{name} still contains pre-Phase-0 single-period-reclassification framing"
+            )
+            assert "Single-period anomaly → reclassification-first" not in instr, (
+                f"{name} still contains pre-Phase-0 single-period-reclassification framing"
+            )
+
+    # --- Structural absence ---
+
+    def test_shared_has_structural_absence_rule(self):
+        assert "Structural signal absence ≠ informational signal" in SHARED_PREAMBLE
+        assert "structurally possible" in SHARED_PREAMBLE
+
+    def test_no_specialist_re_states_structural_absence_rule(self):
+        """Structural absence rule was previously in 6+ specialists. Only allowed
+        per-agent reference is a short pointer like 'per SHARED Structural signal absence'.
+        Full framings ('Structural signal absence ≠ informational signal' as a
+        bullet header) must not duplicate the SHARED rule."""
+        for name, instr in [
+            ("BUSINESS_SYSTEM", BUSINESS_SYSTEM),
+            ("FINANCIAL_SYSTEM", FINANCIAL_SYSTEM),
+            ("VALUATION_SYSTEM", VALUATION_SYSTEM),
+            ("RISK_SYSTEM", RISK_SYSTEM),
+            ("SECTOR_SYSTEM", SECTOR_SYSTEM),
+        ]:
+            # The bullet-header version of the rule. (A short "per SHARED ..."
+            # reference like the one in OWNERSHIP T9 is allowed.)
+            assert "**Structural signal absence ≠ informational signal.**" not in instr, (
+                f"{name} still contains the full Structural-absence bullet — should be SHARED-only"
+            )
+
+    # --- Signal Interpretation Discipline section as a whole ---
+
+    def test_shared_has_signal_interpretation_section(self):
+        """All 3 paired 'don't over-read signals' rules live together in a
+        dedicated SHARED section so they're discoverable as a unit."""
+        assert "## Signal Interpretation Discipline" in SHARED_PREAMBLE

@@ -13,13 +13,13 @@ from flowtracker.research.agent import (
     DEFAULT_MODELS,
     _SYNTHESIS_FIELDS,
 )
-from flowtracker.research.prompts import AGENT_PROMPTS_V2
-from flowtracker.research.tools import MACRO_AGENT_TOOLS_V2
+from flowtracker.research.prompts import AGENT_PROMPTS
+from flowtracker.research.tools import MACRO_AGENT_TOOLS
 
 
 def test_macro_prompt_registered():
-    assert "macro" in AGENT_PROMPTS_V2
-    entry = AGENT_PROMPTS_V2["macro"]
+    assert "macro" in AGENT_PROMPTS
+    entry = AGENT_PROMPTS["macro"]
     assert isinstance(entry, tuple) and len(entry) == 2
     system, instructions = entry
     assert isinstance(system, str) and len(system) > 500
@@ -28,7 +28,7 @@ def test_macro_prompt_registered():
 
 def test_macro_system_has_guardrails():
     """Every G1..G12 guardrail token must be present in the system prompt."""
-    system, _ = AGENT_PROMPTS_V2["macro"]
+    system, _ = AGENT_PROMPTS["macro"]
     # G1 — date-stamped grounding
     assert "today" in system.lower()
     # G2 — FACT/VIEW separation
@@ -63,7 +63,7 @@ def test_macro_system_has_guardrails():
 
 
 def test_macro_instructions_include_workflow_and_briefing():
-    _, instructions = AGENT_PROMPTS_V2["macro"]
+    _, instructions = AGENT_PROMPTS["macro"]
     # Workflow steps 0-7 present
     for step in ["0.", "1.", "2.", "3.", "4.", "5.", "6.", "7."]:
         assert step in instructions
@@ -83,8 +83,8 @@ def test_macro_instructions_include_workflow_and_briefing():
 def test_macro_tools_registered():
     """Macro agent has anchor-reading tools + the local-DB numeric-series tool
     + live market context (VIX/USD-INR/Brent/G-sec/flows)."""
-    assert len(MACRO_AGENT_TOOLS_V2) == 4
-    tool_names = {t.name for t in MACRO_AGENT_TOOLS_V2}
+    assert len(MACRO_AGENT_TOOLS) == 4
+    tool_names = {t.name for t in MACRO_AGENT_TOOLS}
     assert "get_macro_catalog" in tool_names
     assert "get_macro_anchor" in tool_names
     assert "get_macro_indicators" in tool_names
@@ -137,8 +137,8 @@ def test_synthesis_fields_include_macro():
 
 
 def test_synthesis_prompt_mentions_9_agents_and_macro_tension():
-    from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2
-    assert "9 specialist" in SYNTHESIS_AGENT_PROMPT_V2
-    assert "macro" in SYNTHESIS_AGENT_PROMPT_V2.lower()
+    from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT
+    assert "9 specialist" in SYNTHESIS_AGENT_PROMPT
+    assert "macro" in SYNTHESIS_AGENT_PROMPT.lower()
     # Macro-vs-micro tension rule
-    assert "Macro vs Micro" in SYNTHESIS_AGENT_PROMPT_V2 or "macro vs micro" in SYNTHESIS_AGENT_PROMPT_V2.lower()
+    assert "Macro vs Micro" in SYNTHESIS_AGENT_PROMPT or "macro vs micro" in SYNTHESIS_AGENT_PROMPT.lower()

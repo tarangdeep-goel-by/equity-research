@@ -41,17 +41,17 @@ from flowtracker.research.briefing import (
 from flowtracker.research.tools import (
     _tool_result_cache,
     classify_completeness,
-    BUSINESS_AGENT_TOOLS_V2,
-    FINANCIAL_AGENT_TOOLS_V2,
-    FNO_POSITIONING_AGENT_TOOLS_V2,
-    HISTORICAL_ANALOG_AGENT_TOOLS_V2,
-    MACRO_AGENT_TOOLS_V2,
-    NEWS_AGENT_TOOLS_V2,
-    OWNERSHIP_AGENT_TOOLS_V2,
-    RISK_AGENT_TOOLS_V2,
-    SECTOR_AGENT_TOOLS_V2,
-    TECHNICAL_AGENT_TOOLS_V2,
-    VALUATION_AGENT_TOOLS_V2,
+    BUSINESS_AGENT_TOOLS,
+    FINANCIAL_AGENT_TOOLS,
+    FNO_POSITIONING_AGENT_TOOLS,
+    HISTORICAL_ANALOG_AGENT_TOOLS,
+    MACRO_AGENT_TOOLS,
+    NEWS_AGENT_TOOLS,
+    OWNERSHIP_AGENT_TOOLS,
+    RISK_AGENT_TOOLS,
+    SECTOR_AGENT_TOOLS,
+    TECHNICAL_AGENT_TOOLS,
+    VALUATION_AGENT_TOOLS,
 )
 
 
@@ -105,17 +105,17 @@ DEFAULT_EFFORT: dict[str, str] = {
 }
 
 AGENT_TOOLS: dict[str, list] = {
-    "business": BUSINESS_AGENT_TOOLS_V2,
-    "financials": FINANCIAL_AGENT_TOOLS_V2,
-    "ownership": OWNERSHIP_AGENT_TOOLS_V2,
-    "valuation": VALUATION_AGENT_TOOLS_V2,
-    "risk": RISK_AGENT_TOOLS_V2,
-    "technical": TECHNICAL_AGENT_TOOLS_V2,
-    "sector": SECTOR_AGENT_TOOLS_V2,
-    "news": NEWS_AGENT_TOOLS_V2,
-    "macro": MACRO_AGENT_TOOLS_V2,
-    "historical_analog": HISTORICAL_ANALOG_AGENT_TOOLS_V2,
-    "fno_positioning": FNO_POSITIONING_AGENT_TOOLS_V2,
+    "business": BUSINESS_AGENT_TOOLS,
+    "financials": FINANCIAL_AGENT_TOOLS,
+    "ownership": OWNERSHIP_AGENT_TOOLS,
+    "valuation": VALUATION_AGENT_TOOLS,
+    "risk": RISK_AGENT_TOOLS,
+    "technical": TECHNICAL_AGENT_TOOLS,
+    "sector": SECTOR_AGENT_TOOLS,
+    "news": NEWS_AGENT_TOOLS,
+    "macro": MACRO_AGENT_TOOLS,
+    "historical_analog": HISTORICAL_ANALOG_AGENT_TOOLS,
+    "fno_positioning": FNO_POSITIONING_AGENT_TOOLS,
 }
 
 # Agent failure severity tiers for synthesis confidence capping
@@ -1129,11 +1129,11 @@ async def _extract_briefing(name: str, symbol: str, report_text: str) -> dict:
 
     # Second pass: extract the briefing JSON schema from the agent's own prompt
     # and ask haiku to fill it from the report text
-    from flowtracker.research.prompts import AGENT_PROMPTS_V2
-    entry = AGENT_PROMPTS_V2.get(name)
+    from flowtracker.research.prompts import AGENT_PROMPTS
+    entry = AGENT_PROMPTS.get(name)
 
     # Find the JSON schema block in the agent's prompt (between ```json and ```)
-    # AGENT_PROMPTS_V2 stores (system, instructions) tuples — schema is in instructions
+    # AGENT_PROMPTS stores (system, instructions) tuples — schema is in instructions
     schema_hint = ""
     if entry:
         import re
@@ -1819,7 +1819,7 @@ async def run_synthesis_agent(
     effort: str | None = None,
 ) -> tuple[BriefingEnvelope, AgentTrace]:
     """Run the synthesis agent on existing briefings."""
-    from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT_V2 as SYNTHESIS_AGENT_PROMPT
+    from flowtracker.research.prompts import SYNTHESIS_AGENT_PROMPT as SYNTHESIS_AGENT_PROMPT
     from flowtracker.research.briefing import load_all_briefings
     from flowtracker.research.tools import get_composite_score, get_fair_value, get_concall_insights
 

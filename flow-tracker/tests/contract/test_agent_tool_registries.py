@@ -12,15 +12,15 @@ contract change is explicit and reviewable.
 from __future__ import annotations
 
 from flowtracker.research.tools import (
-    BUSINESS_AGENT_TOOLS_V2,
-    FINANCIAL_AGENT_TOOLS_V2,
-    NEWS_AGENT_TOOLS_V2,
-    OWNERSHIP_AGENT_TOOLS_V2,
-    RESEARCH_TOOLS_V2,
-    RISK_AGENT_TOOLS_V2,
-    SECTOR_AGENT_TOOLS_V2,
-    TECHNICAL_AGENT_TOOLS_V2,
-    VALUATION_AGENT_TOOLS_V2,
+    BUSINESS_AGENT_TOOLS,
+    FINANCIAL_AGENT_TOOLS,
+    NEWS_AGENT_TOOLS,
+    OWNERSHIP_AGENT_TOOLS,
+    RESEARCH_TOOLS,
+    RISK_AGENT_TOOLS,
+    SECTOR_AGENT_TOOLS,
+    TECHNICAL_AGENT_TOOLS,
+    VALUATION_AGENT_TOOLS,
     get_annual_report,
     get_deck_insights,
 )
@@ -32,14 +32,14 @@ AR_MANDATED = {"BUSINESS", "FINANCIAL", "OWNERSHIP", "VALUATION", "RISK"}
 DECK_MANDATED = {"BUSINESS", "FINANCIAL", "VALUATION"}
 
 REGISTRIES = {
-    "BUSINESS": BUSINESS_AGENT_TOOLS_V2,
-    "FINANCIAL": FINANCIAL_AGENT_TOOLS_V2,
-    "OWNERSHIP": OWNERSHIP_AGENT_TOOLS_V2,
-    "VALUATION": VALUATION_AGENT_TOOLS_V2,
-    "RISK": RISK_AGENT_TOOLS_V2,
-    "TECHNICAL": TECHNICAL_AGENT_TOOLS_V2,
-    "SECTOR": SECTOR_AGENT_TOOLS_V2,
-    "NEWS": NEWS_AGENT_TOOLS_V2,
+    "BUSINESS": BUSINESS_AGENT_TOOLS,
+    "FINANCIAL": FINANCIAL_AGENT_TOOLS,
+    "OWNERSHIP": OWNERSHIP_AGENT_TOOLS,
+    "VALUATION": VALUATION_AGENT_TOOLS,
+    "RISK": RISK_AGENT_TOOLS,
+    "TECHNICAL": TECHNICAL_AGENT_TOOLS,
+    "SECTOR": SECTOR_AGENT_TOOLS,
+    "NEWS": NEWS_AGENT_TOOLS,
 }
 
 
@@ -77,5 +77,5 @@ def test_get_deck_insights_in_mandated_registries():
 
 def test_ar_deck_tools_in_research_tools_v2_master_list():
     """Both AR/deck tools must be exported via the master V2 registry."""
-    assert get_annual_report in RESEARCH_TOOLS_V2
-    assert get_deck_insights in RESEARCH_TOOLS_V2
+    assert get_annual_report in RESEARCH_TOOLS
+    assert get_deck_insights in RESEARCH_TOOLS

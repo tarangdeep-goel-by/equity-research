@@ -596,13 +596,13 @@ class TestPricePerformanceHorizons:
 class TestValuationAgentCanReachCashFlow:
     def test_get_fundamentals_in_valuation_allowlist(self):
         from flowtracker.research.tools import (
-            VALUATION_AGENT_TOOLS_V2,
+            VALUATION_AGENT_TOOLS,
             get_fundamentals,
         )
 
         # Regression: the valuation prompt (step 4) calls get_fundamentals for
         # cash_flow_quality/capital_allocation; it must be in the allow-list.
-        assert get_fundamentals in VALUATION_AGENT_TOOLS_V2
+        assert get_fundamentals in VALUATION_AGENT_TOOLS
 
 
 # ---------------------------------------------------------------------------

@@ -324,19 +324,19 @@ def test_common_size_narrows_to_recent_segment(api):
 # --------------------------------------------------- prompt rule integrity
 
 def test_shared_preamble_mentions_flags():
-    from flowtracker.research.prompts import SHARED_PREAMBLE_V2
-    assert "get_data_quality_flags" in SHARED_PREAMBLE_V2
-    assert "Reclassification" in SHARED_PREAMBLE_V2
-    assert any(m in SHARED_PREAMBLE_V2 for m in
+    from flowtracker.research.prompts import SHARED_PREAMBLE
+    assert "get_data_quality_flags" in SHARED_PREAMBLE
+    assert "Reclassification" in SHARED_PREAMBLE
+    assert any(m in SHARED_PREAMBLE for m in
                ["DuPont", "F-score", "F-Score", "CAGR", "margin walk", "common-size"])
 
 
 def test_shared_preamble_orders_concall_before_window():
     """Gemini fix #5: management's comparable basis must be checked BEFORE
     falling back to the unbroken sub-window."""
-    from flowtracker.research.prompts import SHARED_PREAMBLE_V2
-    rule_start = SHARED_PREAMBLE_V2.find("## Reclassification Breaks")
-    rule = SHARED_PREAMBLE_V2[rule_start:]
+    from flowtracker.research.prompts import SHARED_PREAMBLE
+    rule_start = SHARED_PREAMBLE.find("## Reclassification Breaks")
+    rule = SHARED_PREAMBLE[rule_start:]
     concall_idx = rule.find("comparable_growth_metrics")
     fallback_idx = rule.find("unbroken sub-window")
     assert 0 < concall_idx < fallback_idx, (

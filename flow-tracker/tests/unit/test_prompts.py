@@ -13,11 +13,11 @@ guards against specialist prompts regressing to a projection call without
 the explicit industry-hint guidance.
 """
 from flowtracker.research.prompts import (
-    AGENT_PROMPTS_V2,
+    AGENT_PROMPTS,
 )
 
 
-# Every specialist (system, instructions) pair lives in AGENT_PROMPTS_V2.
+# Every specialist (system, instructions) pair lives in AGENT_PROMPTS.
 # We check the concatenated prompt body for each entry.
 _SPECIALIST_KEYS = [
     "business",
@@ -33,7 +33,7 @@ _SPECIALIST_KEYS = [
 
 
 def _prompt_body(key: str) -> str:
-    system, instructions = AGENT_PROMPTS_V2[key]
+    system, instructions = AGENT_PROMPTS[key]
     return system + "\n" + instructions
 
 

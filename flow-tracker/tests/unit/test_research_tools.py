@@ -1610,37 +1610,37 @@ class TestToolRegistries:
 
     def test_v2_registry_has_core_tools(self):
         from flowtracker.research.tools import (
-            RESEARCH_TOOLS_V2,
+            RESEARCH_TOOLS,
             get_fundamentals,
             get_ownership,
             get_quality_scores,
         )
 
-        assert get_fundamentals in RESEARCH_TOOLS_V2
-        assert get_ownership in RESEARCH_TOOLS_V2
-        assert get_quality_scores in RESEARCH_TOOLS_V2
+        assert get_fundamentals in RESEARCH_TOOLS
+        assert get_ownership in RESEARCH_TOOLS
+        assert get_quality_scores in RESEARCH_TOOLS
 
     def test_specialist_registries_nonempty(self):
         from flowtracker.research.tools import (
-            BUSINESS_AGENT_TOOLS_V2,
-            FINANCIAL_AGENT_TOOLS_V2,
-            NEWS_AGENT_TOOLS_V2,
-            OWNERSHIP_AGENT_TOOLS_V2,
-            RISK_AGENT_TOOLS_V2,
-            SECTOR_AGENT_TOOLS_V2,
-            TECHNICAL_AGENT_TOOLS_V2,
-            VALUATION_AGENT_TOOLS_V2,
+            BUSINESS_AGENT_TOOLS,
+            FINANCIAL_AGENT_TOOLS,
+            NEWS_AGENT_TOOLS,
+            OWNERSHIP_AGENT_TOOLS,
+            RISK_AGENT_TOOLS,
+            SECTOR_AGENT_TOOLS,
+            TECHNICAL_AGENT_TOOLS,
+            VALUATION_AGENT_TOOLS,
         )
 
         for reg in (
-            BUSINESS_AGENT_TOOLS_V2,
-            FINANCIAL_AGENT_TOOLS_V2,
-            OWNERSHIP_AGENT_TOOLS_V2,
-            VALUATION_AGENT_TOOLS_V2,
-            RISK_AGENT_TOOLS_V2,
-            TECHNICAL_AGENT_TOOLS_V2,
-            SECTOR_AGENT_TOOLS_V2,
-            NEWS_AGENT_TOOLS_V2,
+            BUSINESS_AGENT_TOOLS,
+            FINANCIAL_AGENT_TOOLS,
+            OWNERSHIP_AGENT_TOOLS,
+            VALUATION_AGENT_TOOLS,
+            RISK_AGENT_TOOLS,
+            TECHNICAL_AGENT_TOOLS,
+            SECTOR_AGENT_TOOLS,
+            NEWS_AGENT_TOOLS,
         ):
             assert len(reg) > 0
 
