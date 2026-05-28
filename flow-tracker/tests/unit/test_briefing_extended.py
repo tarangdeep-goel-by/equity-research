@@ -13,6 +13,7 @@ import pytest
 
 from flowtracker.research.briefing import (
     BriefingEnvelope,
+    DataGap,
     ToolEvidence,
     AgentCost,
     VerificationResult,
@@ -238,3 +239,58 @@ class TestModels:
         cost = AgentCost()
         assert cost.input_tokens == 0
         assert cost.total_cost_usd == 0.0
+
+
+class TestDataGap:
+    """DataGap is the per-report entry used by Lever 2 to surface data-layer gaps.
+
+    Lives inside ``BriefingEnvelope.briefing["data_gaps"]`` (free-form dict),
+    same pattern as ``mandatory_metrics_status`` / ``reconciliations``.
+    """
+
+    def test_minimal_construction(self):
+        gap = DataGap(tool="get_deck_insights")
+        assert gap.tool == "get_deck_insights"
+        assert gap.section is None
+        assert gap.args == {}
+        assert gap.fallbacks_attempted == []
+        assert gap.intent == ""
+        assert gap.thesis_impact == "informational"
+
+    def test_full_round_trip(self):
+        gap = DataGap(
+            tool="get_deck_insights",
+            section="outlook_and_guidance",
+            args={"symbol": "HINDUNILVR", "quarter": "FY26-Q3"},
+            fallbacks_attempted=["get_concall_insights", "get_annual_report"],
+            intent="management's forward margin guidance for FY27",
+            thesis_impact="material",
+        )
+        dumped = gap.model_dump()
+        rebuilt = DataGap.model_validate(dumped)
+        assert rebuilt == gap
+
+    def test_thesis_impact_enum(self):
+        """thesis_impact accepts only 'material' | 'informational'."""
+        with pytest.raises(Exception):
+            DataGap(tool="x", thesis_impact="critical")
+
+    def test_lives_inside_briefing_dict(self):
+        """data_gaps round-trips through BriefingEnvelope.briefing (dict)."""
+        gaps = [
+            DataGap(tool="get_deck_insights", section="outlook_and_guidance").model_dump(),
+            DataGap(tool="get_fundamentals", section="cash_flow_quality",
+                    fallbacks_attempted=["get_quality_scores"]).model_dump(),
+        ]
+        env = BriefingEnvelope(
+            agent="valuation", symbol="HINDUNILVR",
+            briefing={"data_gaps": gaps, "key_findings": []},
+        )
+        saved = save_envelope(env)
+        assert "briefing" in saved
+        # Round-trip through disk
+        loaded = load_envelope("HINDUNILVR", "valuation")
+        assert loaded is not None
+        assert len(loaded.briefing["data_gaps"]) == 2
+        assert loaded.briefing["data_gaps"][0]["tool"] == "get_deck_insights"
+        assert loaded.briefing["data_gaps"][1]["fallbacks_attempted"] == ["get_quality_scores"]

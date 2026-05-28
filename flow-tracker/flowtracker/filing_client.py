@@ -75,14 +75,18 @@ _TRANSCRIPT_BODY_DISCLOSURE_MARKERS = (
     "disclosure under regulation 30",
 )
 
-# Pages/text thresholds for investor-deck sanity check. Real investor presentation
-# decks are 15-50 pages with lots of visuals but still 5,000+ chars of extractable
-# text in the first 3 pages (title + agenda + company overview always have text).
-# Analyst/Investor Meet cover letters (BSE Reg 30 announcements with "investor
-# presentation" in the headline) are 1-3 pages with <2,000 chars of dial-in info.
-_MIN_DECK_PAGES = 5
-_MIN_DECK_TEXT_CHARS = 2500
-# Phrases that strongly indicate the PDF is a cover letter, not a real deck.
+# Deck-gate thresholds. Reg-30 cover letters are 1-3 pages with disclosure
+# wording. Real decks are 10-50 pages; image-heavy decks have low extractable
+# text on early pages (PR #179's VLM pipeline reads images directly), so text
+# density alone is not a reliable signal — page count + disclosure-marker
+# signature is. Mirrors ``research/deck_extractor._classify_deck_pdf``;
+# previously this gate over-rejected multi-MB real decks at GODREJPROP /
+# PIDILITIND / HINDUNILVR (2026-05-28 audit found 0 real decks downloaded
+# for these stocks despite 13+ deck-headlined BSE filings per stock).
+_DECK_HARD_REJECT_PAGES = 3            # < 3 pages → never a real deck
+_DECK_LOW_CONFIDENCE_PAGES = 10        # 3-9 pages w/o disclosure → accept low
+_DECK_FIRST3_TEXT_THRESHOLD = 2500     # cover letters front-load <2.5k chars
+# Phrases that strongly indicate the PDF is a Reg-30 cover letter, not a deck.
 _DECK_BODY_DISCLOSURE_MARKERS = (
     "dial-in",
     "dial in",
@@ -91,6 +95,11 @@ _DECK_BODY_DISCLOSURE_MARKERS = (
     "disclosure under regulation 30",
     "sebi (listing obligations",
     "conference call dial",
+    "regulation 30 of sebi",
+    "regulation 30 of the sebi",
+    "audio/ video recording",
+    "audio-video recording",
+    "audio/video recording",
 )
 
 
@@ -140,11 +149,17 @@ def _looks_like_real_transcript(pdf_path: Path) -> bool:
 def _looks_like_real_deck(pdf_path: Path) -> bool:
     """Return True if the PDF looks like an actual investor-presentation deck.
 
-    Guards against Reg 30 disclosure cover letters that BSE indexes under
-    "Analyst / Investor Meet" with "investor presentation" in the headline —
-    observed pattern on HDFCBANK FY25-Q4 through FY26-Q3: every filing stored
-    as `investor_deck.pdf` is a 1-3 page dial-in announcement, not the real
-    deck. The real deck is uploaded to the bank's own website.
+    pdfium-only gate. Page count is the primary discriminator — cover letters
+    are 1-3 pages, real decks are 10-50. Disclosure markers in the first 3
+    pages catch the rare multi-page Reg-30 letter. Short PDFs (3-9pp) without
+    the cover-letter signature are accepted: PR #179's deck extractor reads
+    page images via VLM, so sparse extractable text on early pages is no
+    longer a reason to reject (it would falsely drop image-heavy real decks).
+
+    Aligned with ``research/deck_extractor._classify_deck_pdf`` so the
+    downloader and extractor gates make the same decision on the same PDF.
+    Pre-2026-05-28 this used a text-density heuristic that over-rejected
+    multi-MB image-heavy real decks (GODREJPROP/PIDILITIND/HINDUNILVR).
 
     Returns True on any parse failure so we never destroy a cached PDF for a
     transient error — the caller keeps the file and logs instead.
@@ -157,15 +172,10 @@ def _looks_like_real_deck(pdf_path: Path) -> bool:
     try:
         doc = pdfium.PdfDocument(str(pdf_path))
     except Exception:
-        return True
+        return True  # fail-open on parse error — don't lose real decks
 
     try:
         pages = len(doc)
-        if pages < _MIN_DECK_PAGES:
-            return False
-        # Sample first 3 pages — cover letters front-load "Sub: Intimation of
-        # ... audio call" disclaimer text; real decks front-load the title
-        # slide + company overview with extractable text.
         sample = "".join(
             doc[i].get_textpage().get_text_range()
             for i in range(min(3, pages))
@@ -173,11 +183,27 @@ def _looks_like_real_deck(pdf_path: Path) -> bool:
     finally:
         doc.close()
 
-    if len(sample.strip()) < _MIN_DECK_TEXT_CHARS:
+    # Hard reject: too few pages to be a deck, period.
+    if pages < _DECK_HARD_REJECT_PAGES:
         return False
-    lower = sample.lower()
-    if any(m in lower for m in _DECK_BODY_DISCLOSURE_MARKERS):
+
+    has_disclosure = any(
+        m in sample.lower() for m in _DECK_BODY_DISCLOSURE_MARKERS
+    ) if sample else False
+
+    # Hard reject: short PDF + disclosure markers + sparse first-3 text
+    # is the canonical Reg-30 cover-letter signature. The combination
+    # matters — short alone could be a Capital Markets Day teaser; sparse
+    # alone could be a glossy image-heavy real deck.
+    if (
+        pages < _DECK_LOW_CONFIDENCE_PAGES
+        and has_disclosure
+        and len(sample.strip()) < _DECK_FIRST3_TEXT_THRESHOLD
+    ):
         return False
+
+    # >=10pp confidently real; 3-9pp without cover-letter signature accepted
+    # as low-confidence (the VLM reads images regardless of text density).
     return True
 
 

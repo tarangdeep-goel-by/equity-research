@@ -75,6 +75,108 @@ class TestPromptCoverage:
         assert "(1010 - 980) / 980 * 100" in SHARED_PREAMBLE_V2
 
 
+class TestDataExhaustionReconciliation:
+    """Lever 2 — agent must surface unconsumed/empty data as `data_gaps`, uncapped.
+
+    The reframe: under-consuming available data is the worst error. An explicit
+    "tool returned empty for X" is a welcomed, first-class output (not a
+    failure to minimize). Separate from the 3-5 thesis open-question cap.
+    """
+
+    def test_preamble_has_data_exhaustion_section(self):
+        assert "Data Exhaustion Reconciliation" in SHARED_PREAMBLE_V2
+
+    def test_preamble_references_data_gaps_briefing_field(self):
+        """Agent must know to populate `briefing.data_gaps` as a structured field."""
+        assert "data_gaps" in SHARED_PREAMBLE_V2
+
+    def test_preamble_has_data_gaps_markdown_table(self):
+        """End-of-report `## Data Gaps` markdown table is mandated for visibility."""
+        assert "## Data Gaps" in SHARED_PREAMBLE_V2
+
+    def test_data_gaps_channel_is_uncapped(self):
+        """Reframe — the 3-5 cap is for thesis OQs only; data_gaps are uncapped."""
+        # The new section must explicitly state data_gaps are unbounded — agents
+        # must not silently drop genuine empties to "stay under the cap".
+        assert "uncapped" in SHARED_PREAMBLE_V2.lower() or "no limit" in SHARED_PREAMBLE_V2.lower()
+
+    def test_preamble_distinguishes_thesis_oqs_vs_data_gaps(self):
+        """Two distinct channels: thesis open_questions (capped 3-5) vs data_gaps (uncapped).
+
+        Both must be mentioned together so the agent learns the distinction.
+        """
+        # Thesis OQ cap survives.
+        assert "3-5" in SHARED_PREAMBLE_V2 or "hard cap: 5" in SHARED_PREAMBLE_V2
+        # Both channels named near each other.
+        assert "thesis" in SHARED_PREAMBLE_V2.lower()
+        assert "data_gaps" in SHARED_PREAMBLE_V2
+
+    def test_fallback_exhaustion_emits_data_gap_not_suppress(self):
+        """After fallback exhaustion + still empty, the answer is `data_gaps`, not silence.
+
+        Existing 'Fallback exhaustion required' rule (line 153 pre-Lever-2) treated
+        gaps as a workflow violation. Reframed: exhaust + empty → surface as data_gap.
+        """
+        # The reframed exhaustion guidance must reference data_gaps as the destination.
+        # Find the fallback section and assert data_gaps emission is the prescribed action.
+        # Use a lenient check — any near-mention of "exhausted" near "data_gap" suffices.
+        text = SHARED_PREAMBLE_V2.lower()
+        assert "data_gap" in text
+        # The reframe phrase must appear — explicit that empty-after-exhaustion is welcomed,
+        # not punished. We match for "welcome" / "first-class" / "loudly" / "surface" near data_gap.
+        assert any(
+            kw in text
+            for kw in ("welcome", "first-class", "first class", "surface", "flag loudly", "raise it as a data_gap")
+        )
+
+    def test_each_agent_schema_includes_data_gaps_field(self):
+        """Empirical fix: agents follow the JSON schema example shown in their
+        INSTRUCTIONS_V2, not the abstract SHARED_PREAMBLE rule. First eval run
+        (HINDUNILVR + ADANIENT 2026-05-28) proved this — agents emitted the old
+        briefing shape (no data_gaps) despite the new SHARED_PREAMBLE section.
+        Each per-agent JSON schema example MUST include the data_gaps field.
+        """
+        for name, instr in [
+            ("BUSINESS", BUSINESS_INSTRUCTIONS_V2),
+            ("FINANCIAL", FINANCIAL_INSTRUCTIONS_V2),
+            ("RISK", RISK_INSTRUCTIONS_V2),
+            ("TECHNICAL", TECHNICAL_INSTRUCTIONS_V2),
+            ("SECTOR", SECTOR_INSTRUCTIONS_V2),
+            ("VALUATION", VALUATION_INSTRUCTIONS_V2),
+        ]:
+            assert '"data_gaps":' in instr, f"{name}_INSTRUCTIONS_V2 missing data_gaps in JSON schema example"
+            # Confirm the structured shape, not just the key word:
+            assert '"fallbacks_attempted":' in instr, f"{name} schema missing fallbacks_attempted"
+            assert '"thesis_impact":' in instr, f"{name} schema missing thesis_impact"
+
+    def test_fallback_first_invariant_for_data_gaps(self):
+        """Empirical fix: HUL eval 2026-05-28 emitted a data_gap entry with
+        empty fallbacks_attempted when get_screener_peers (a registered
+        fallback) existed. The Lever 2 reframe ('flag what's missing') gave
+        the agent permission to skip the fallback. Rule must explicitly say:
+        fallback-first is non-negotiable; emitting a data_gap before invoking
+        the registered fallback is a workflow violation.
+        """
+        text = SHARED_PREAMBLE_V2.lower()
+        assert "fallback-first" in text or "fallback first" in text
+        assert "workflow violation" in text or "permission slip" in text
+        assert "registered fallback" in text
+
+    def test_per_section_accounting_for_section_routed_tools(self):
+        """Reconciliation mechanism: account for every populated TOC section per tool used.
+
+        Scope (agreed): for tools the agent actually called, enumerate sections the TOC
+        listed as populated, and mark each consumed / N-A with reason / EMPTY → data_gap.
+        Not the full catalog — only the TOC-populated subset.
+        """
+        # The mechanism phrase must reference per-section accounting tied to the TOC.
+        text = SHARED_PREAMBLE_V2.lower()
+        assert "toc" in text
+        assert "consumed" in text or "drilled" in text
+        # The N-A escape valve prevents tick-box behavior on irrelevant sections.
+        assert "not-applicable" in text or "not applicable" in text or "n/a" in text
+
+
 class TestNoRedundantFetches:
     """Verify prompts don't instruct re-fetching data already in analytical_profile."""
 

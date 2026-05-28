@@ -217,6 +217,7 @@ AGENT_ALLOWED_BUILTINS: dict[str, list[str]] = {
 _SYNTHESIS_FIELDS = {
     "agent", "symbol", "confidence", "signal", "key_findings", "open_questions",
     "mandatory_metrics_status",  # data-quality flag from specialists
+    "data_gaps",  # uncapped data-layer gaps (Lever 2 — for synthesis + data-roadmap mining)
     # Business
     "business_model", "moat_strength", "moat_type", "revenue_drivers", "management_quality",
     "company_name", "key_metrics", "key_risks", "industry_growth", "revenue_mix",

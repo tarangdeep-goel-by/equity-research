@@ -405,6 +405,131 @@ class TestExtractSingleDeckImages:
         assert result["extraction_status"] == "not_a_deck"
 
 
+class TestEnsureDeckPdfsFromScreener:
+    """JIT download from Screener concall_ppt URLs — runs as part of Phase 0b.
+
+    Mandated as a prerequisite to extraction so every research/eval/autoeval
+    self-heals deck coverage on first run for any new stock.
+    """
+
+    def test_no_db_no_error(self, vault_home, monkeypatch):
+        """FlowStore unavailable → fail-soft return 0; pipeline must not break."""
+        import flowtracker.research.deck_extractor as deck_mod
+
+        # Force FlowStore() to blow up — simulate DB unreachable
+        class BrokenStore:
+            def __enter__(self): raise RuntimeError("db down")
+            def __exit__(self, *a): pass
+        monkeypatch.setattr("flowtracker.store.FlowStore", lambda *a, **kw: BrokenStore())
+
+        assert deck_mod.ensure_deck_pdfs_from_screener("TESTCO") == 0
+
+    def test_filters_to_fy25_and_above(self, vault_home, monkeypatch):
+        """Periods like 'May 2024' (announces FY24-Q4 results) must be filtered out.
+        Only FY25+ result-quarters should pass the gate to download.
+        """
+        import flowtracker.research.deck_extractor as deck_mod
+        vault_root = vault_home / "vault"
+        monkeypatch.setattr(deck_mod, "_VAULT_BASE", vault_root / "stocks")
+
+        class FakeStore:
+            def __enter__(self_inner): return self_inner
+            def __exit__(self_inner, *a): pass
+            _conn = MagicMock()
+        fake_store = FakeStore()
+        # Mix of FY24 (Apr-May 2024 announces Q4 FY24) and FY25 (Aug 2024 announces Q1 FY25)
+        fake_store._conn.execute.return_value.fetchall.return_value = [
+            ("May 2024", "https://example.com/fy24q4.pdf"),     # FY24 — skip
+            ("Aug 2024", "https://example.com/fy25q1.pdf"),     # FY25-Q1 — keep
+            ("Oct 2025", "https://example.com/fy26q2.pdf"),     # FY26-Q2 — keep
+        ]
+        monkeypatch.setattr("flowtracker.store.FlowStore", lambda *a, **kw: fake_store)
+
+        downloads: list[str] = []
+        def fake_download(url, dest):
+            downloads.append(url)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(b"fake-pdf")
+            return True
+        monkeypatch.setattr(
+            "flowtracker.research.concall_extractor._download_transcript_from_url",
+            fake_download,
+        )
+        from flowtracker.research.deck_extractor import _DeckClassification
+        monkeypatch.setattr(
+            deck_mod, "_classify_deck_pdf",
+            lambda p: _DeckClassification(True, "high", "test", 30, 5000, False),
+        )
+
+        n = deck_mod.ensure_deck_pdfs_from_screener("TESTCO")
+        assert n == 2  # FY25-Q1 + FY26-Q2; NOT the FY24-Q4 one
+        assert "fy24q4.pdf" not in " ".join(downloads)
+        assert any("fy25q1" in u for u in downloads)
+        assert any("fy26q2" in u for u in downloads)
+
+    def test_skips_existing_real_deck(self, vault_home, monkeypatch):
+        """If a quarter already has a real deck on disk, don't re-download."""
+        import flowtracker.research.deck_extractor as deck_mod
+        vault_root = vault_home / "vault"
+        monkeypatch.setattr(deck_mod, "_VAULT_BASE", vault_root / "stocks")
+
+        # Pre-stage a real deck at FY26-Q2
+        existing = vault_root / "stocks" / "TESTCO" / "filings" / "FY26-Q2" / "investor_deck.pdf"
+        existing.parent.mkdir(parents=True, exist_ok=True)
+        existing.write_bytes(b"already-here")
+
+        class FakeStore:
+            def __enter__(self_inner): return self_inner
+            def __exit__(self_inner, *a): pass
+            _conn = MagicMock()
+        fake_store = FakeStore()
+        fake_store._conn.execute.return_value.fetchall.return_value = [
+            ("Oct 2025", "https://example.com/fy26q2.pdf"),
+        ]
+        monkeypatch.setattr("flowtracker.store.FlowStore", lambda *a, **kw: fake_store)
+
+        # _classify_deck_pdf treats the pre-existing one as a real deck — skip download
+        from flowtracker.research.deck_extractor import _DeckClassification
+        monkeypatch.setattr(
+            deck_mod, "_classify_deck_pdf",
+            lambda p: _DeckClassification(True, "high", "test", 30, 5000, False),
+        )
+        called = []
+        monkeypatch.setattr(
+            "flowtracker.research.concall_extractor._download_transcript_from_url",
+            lambda url, dest: (called.append(url) or False),
+        )
+
+        n = deck_mod.ensure_deck_pdfs_from_screener("TESTCO")
+        assert n == 0
+        assert called == []  # no download attempted
+
+
+class TestEnsureDeckDataCallsJit:
+    """Regression: ensure_deck_data must call the JIT downloader first (Phase 0b
+    prereq). Without this wire-up the data layer wouldn't self-heal."""
+
+    def test_ensure_deck_data_calls_screener_pull(self, vault_home, monkeypatch):
+        import flowtracker.research.deck_extractor as deck_mod
+        vault_root = vault_home / "vault"
+        monkeypatch.setattr(deck_mod, "_VAULT_BASE", vault_root / "stocks")
+
+        called_with: dict = {}
+        def fake_jit(symbol, max_quarters=6):
+            called_with["symbol"] = symbol
+            called_with["max_quarters"] = max_quarters
+            return 0
+        monkeypatch.setattr(deck_mod, "ensure_deck_pdfs_from_screener", fake_jit)
+
+        # No PDFs on disk → ensure_deck_data short-circuits to None,
+        # but the JIT call must have happened first.
+        asyncio.run(deck_mod.ensure_deck_data("TESTCO", quarters=4))
+
+        assert called_with["symbol"] == "TESTCO"
+        # max_quarters bumped to DECK_MANDATED_QUARTERS (6) even when quarters=4
+        assert called_with["max_quarters"] == deck_mod.DECK_MANDATED_QUARTERS
+
+
 class TestEnsureDeckDataCacheSkip:
     def test_ensure_deck_data_cached_returns_zero_new(self, vault_home, monkeypatch):
         import flowtracker.research.deck_extractor as deck_mod
