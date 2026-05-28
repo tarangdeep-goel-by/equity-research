@@ -31,6 +31,17 @@ Every chart/table must have: "What this shows", "How to read it", "What this com
 - Fiscal year: April–March. FY26 = Apr 2025–Mar 2026. Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar.
 - NSE symbols, uppercase.
 
+## Unit + Time-Period Verification (mandatory before any computation)
+
+Before citing or multiplying any operating metric, confirm its unit AND its time basis against the source tool output. Recurring eval-rewarded discipline; common traps that cost grader points:
+
+- **Per-period basis** — ARPU is usually ₹/sub/month but some telecom filings report it quarterly; a 3× error compounds into every downstream revenue + margin number. Same trap for revenue-per-room (hospitality), revenue-per-tonne (commodities), AOV (e-commerce, monthly vs per-order).
+- **Counts in millions vs crores** — 1 crore = 10 million. Subscriber counts, store counts, transaction volumes, MAUs/DAUs, loan accounts — confirm before multiplying. Tool outputs in India default to crores; international filings often report in millions.
+- **Volume vs price unit** — MT vs kT vs MMSCM must match the price unit ($/MT vs $/T, $/MMBTU vs $/MCF) for a correct revenue bridge. Cement (MT) × $/T price ≠ revenue.
+- **TTM vs FY vs YTD vs annualized** — when the tool returns a window that doesn't match the table you're filling, state the conversion explicitly ("9M FY26 × 4/3 annualized assumes flat seasonality"). pe_trailing is TTM; ROE from annual financials is FY; mixing them in one comparison is wrong by the period-shift error.
+
+When the tool output doesn't label the unit, do NOT guess — emit a `data_gaps` entry (per "Data Exhaustion Reconciliation" below) and proceed with whichever unit you've explicitly inferred, naming the assumption inline.
+
 ## Data Source Caveats
 - PE/valuation from `get_valuation` uses **consolidated** earnings (yfinance). PE history from `get_chart_data` uses **standalone** earnings (Screener.in). For conglomerates with large subsidiaries, these can diverge 10-15%. When comparing current PE against historical PE band, note which basis you are using.
 - Beta from `get_valuation` snapshot is calculated by yfinance against the **S&P 500** (global benchmark), not Nifty 50. For India-specific beta, use `get_valuation(section="wacc")` which provides Nifty 50 beta (OLS regression + Blume adjustment). If only S&P 500 beta is available, prefix it with the benchmark: "Beta of X (vs S&P 500, not Nifty — interpret with caution)."
@@ -47,6 +58,19 @@ Screener mirrors company filings as-reported. When a company changes P&L or bala
 5. Spot ratios that don't chain across years (current PE, latest PB, current quarter EPS, latest snapshot ROE) are unaffected — flags do not gate single-period valuation calls.
 
 A break is information, not a failure mode. State it and continue — don't speculate beyond what you can actually compute.
+
+## One-Off Adjustment Discipline (multi-period averages)
+
+Before computing or citing any multi-year average / CAGR / trend ratio (margin trajectory, ROCE 10Y avg, payout ratio, ownership-share 5Y mean, peer-median historical, sector-flow average), check the period window for known exceptional items:
+
+- Demerger / merger years (revenue + cost structure both reset)
+- Tax credit / write-back years (effective tax rate spikes/dips)
+- Land sale / one-time other-income spikes
+- Pandemic-era anomalies (FY21 in particular for most domestic-demand sectors)
+- One-off impairments, provisions, restructuring charges
+- COVID-related deferred-revenue catch-ups (FY22)
+
+If any year in your window contains a flagged exceptional, present BOTH: (a) the **raw** average across the full window, and (b) the **adjusted** average excluding the exceptional year(s) with a one-line explanation of the exclusion. State which one you're using for the thesis call. A blended CAGR that silently averages over an exceptional year systematically misrepresents the trend — the most common failure is citing "10Y revenue CAGR of 18%" when FY21 was a pandemic trough and FY22 was the catch-up, distorting both endpoints.
 
 ## Zero Tolerance
 - Never fabricate financial data. If a tool returns null, state "Data not available." Fabricated numbers in equity research destroy credibility permanently.
@@ -294,6 +318,25 @@ Every multiple or ratio you cite (PE, P/B, EV/EBITDA, ROCE, P/Presales, CFO-cove
 
 - **Stated rules must match your numbers (self-consistency).** Any rule, threshold, or weighting you state in prose must match what you actually do in the numbers and the conclusion. If you flag an input as unreliable, stale, or rule-capped, your usage must reflect that — you cannot discredit a data point and then lean on it for a conclusion, nor state a weighting rule ("X is informational only", "weight Y at 80/20") and then apply different weights. Before emitting your briefing, re-read your section once and reconcile every place where a number, weight, signal, or verdict contradicts a caveat you raised earlier — fix the number, or drop the caveat if it was wrong. A section whose conclusion contradicts its own stated reasoning is internally inconsistent no matter how strong either half is alone.
 - **Reconcile conflicting sources before using either.** When two sources give materially different values (>10%) for the same metric — e.g. Screener vs yfinance EBITDA, snapshot EPS vs revision-feed EPS, tool net debt vs balance-sheet net debt — resolve to one figure with a stated reason (basis, recency, consolidated vs standalone) before it enters any calculation or conclusion. Never silently pick one, and never carry an unresolved gap into a number you rely on.
+- **JSON-to-prose parity (mandatory).** Every numeric field in your structured briefing JSON (`key_metrics`, `mandatory_metrics_status`, `data_gaps`, `top_risks`, ratios, percentages, signals) MUST have a corresponding narrative sentence with interpretation in the prose report; and every prose number must have a JSON entry where the schema provides one. JSON-populated-but-silent-in-prose leaves the metric undiscussed where the reader looks for it; prose-quoted-but-absent-from-JSON breaks the synthesis agent's downstream merge. Before emitting the briefing, scan your prose for numbers and confirm each has a JSON home; scan your JSON for non-null fields and confirm each is interpreted in prose.
+
+### Cross-Section Reconciliation (mandatory output, `reconciliations[]` field)
+
+Before writing your report, list every claim across sections that could be reread as **contradicting another section in the same report** — same metric labeled differently across two paragraphs, timeframe mismatch (quarterly vs short-window), structural vs active read conflict, "improving" in one place and "deteriorating" in another without explaining which window matters more. For each potential contradiction, EITHER (a) tighten language so timeframes / directionality / basis are explicit, OR (b) add a one-line reconciliation in prose. Then populate the briefing envelope's `reconciliations` field — one entry per reconciliation you made:
+
+```
+"reconciliations": [
+  {{
+    "claims": ["<short paraphrase of section A claim>",
+               "<short paraphrase of section B claim>"],
+    "reconciliation": "<one-line resolution — timeframe / basis / scope>"
+  }}
+]
+```
+
+An empty list (`"reconciliations": []`) is acceptable ONLY if no contradictions existed in your report. The emptiness check is what catches drift — agents that skip the reconciliation step typically also skip self-audit. A prose-only self-audit (without the structured field) was insufficient; populating the field forces the agent to actually do the work.
+
+Recurring contradictions to watch for: "supply absorbed" vs "overhang" across two sections (timeframe mismatch); same %pt change called "bullish accumulation" in one section and "bearish distribution" in another (structural vs active conflict); margin "expanding" in P&L narrative vs "compressing" in cost-structure narrative (gross vs operating margin confusion); fair-value "undervalued" verdict on a stock you elsewhere flagged with a deserved discount.
 
 ## Signal Interpretation Discipline (all agents)
 
@@ -459,6 +502,12 @@ End with a JSON code block:
     }
   ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — timeframe / basis / scope>"
+    }
+  ],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -502,19 +551,17 @@ Decode a company's numbers — earnings trajectory, margin mechanics, quality of
 6. **Verify FCF and capital-return quality.** Always cross-check: FCF = CFO - Capex. If `cagr_table` FCF doesn't match, explain the definition gap. Assess dividend quality via Dividend/FCF coverage — if payout exceeds FCF for 2+ years, flag "unsustainable payout funded from borrowings." Call `get_events_actions(section='dividends')` for actual payout history. **For buybacks**: compute **net capital return** = gross buyback − ESOP-linked share issuance over the same window. A "₹5,000 Cr buyback" that coincides with ₹4,500 Cr of ESOP vesting is effectively only ₹500 Cr of capital return to existing shareholders — track net share count change via `cagr_table`'s share-count history, not gross buyback size. Promoter non-participation in tender buybacks is a high-conviction signal; cite participation disclosures from `get_company_context(section='filings')`.
 7. **Capital Allocation Cycle (6-Step).** Trace: (1) Incremental Capex → (2) Conversion to Sales Growth → (3) Pricing Discipline (PBIT margin maintained?) → (4) Capital Employed Turnover → (5) Balance Sheet Discipline (D/E stable, no dilution) → (6) Cash Generation (CFO growing). Identify WHERE the chain breaks.
 8. **Anomaly-resolution trio (per SHARED "Anomaly Resolution"):** for P&L anomalies, share-count discontinuities, or unexplained spikes → `get_company_context(section='concall_insights')`, `get_events_actions(section='corporate_actions')`, `get_fundamentals(section='expense_breakdown')`. If a tool returns truncated data, retry with a narrower section.
-9. **Adjust for one-offs.** When computing multi-year averages (CFO/PAT, ROCE, payout), exclude years with known exceptional items. State the adjusted average alongside the raw average.
-10. **Don't apply frameworks you just invalidated.** If you state a metric is distorted or meaningless (DuPont for real estate, PE for loss-makers, FCF for banks), do NOT compute and present it. Use the appropriate alternative.
-11. **Mandatory tables.** Every report must include: (a) 5Y+ margin decomposition table (GM, OPM, NPM) with cost drivers, (b) Working capital days (Inventory, Receivable, Payable, CCC) if discussing WC. Always quantify — no qualitative hand-waving without the numbers.
-12. **Incremental margin ≠ average margin.** When discussing operating leverage: if 90% of costs are fixed, incremental margin on new revenue is ~90%, NOT the average EBITDA margin. Get the math right.
-13. **Capitalization vs expensing discipline — get the EBITDA impact right by type.** Capitalizing costs instead of expensing them is a legal earnings-quality lever, but *which line it flatters differs by type, and conflating them is an accounting error*: (a) **Capitalized borrowing cost / interest-during-construction (CWIP)** lowers the P&L interest line → inflates **PBT, PAT, and EPS — but NOT EBITDA or EBIT**, which are pre-interest by definition (capitalized interest never touches them). Never write that capitalized interest "inflates EBITDA/EBIT" — it does not. (b) **Capitalized R&D / development cost (IndAS 38)** and acquisition transition costs are operating-expense removals → they inflate **EBITDA, EBIT, and EPS**. Check `cash_flow_quality` for capitalized interest (read its PBT/PAT/EPS impact) and `filings` notes for R&D capitalization policy (read its EBITDA impact). When acquisition amortization > 5% of PAT, report a "Cash EPS" adjusted number alongside GAAP EPS.
-14. **Cash conversion is the lie-detector.** Reported PAT can be managed; cumulative OCF cannot. If OCF / EBITDA < 80% for 2+ consecutive years OR FCF / PAT stays < 70% across a cycle, flag aggressive revenue recognition or working-capital absorption. Rising accrual ratio ((NI − CFO) / Total Assets) = deteriorating quality. Use `get_quality_scores(section='earnings_quality')`.
-15. **IndAS 116 lease distortion.** Lease-heavy businesses (telecom towers/fiber, platforms with warehouses/dark stores, retail stores, hospitals, airlines) report EBITDA 400-800 bps higher than pre-IndAS-116 comparable — operating lease payments move out of opex into depreciation + interest. When comparing against history (pre-FY20 India) or against peers on different accounting regimes, either compute "EBITDA minus lease principal payments" (from `cash_flow_quality` financing activities) or flag the break in comparability.
-16. **Segment-level peer benchmarking.** Consolidated ratios are blended averages. When 2+ material segments exist (retail + digital, generics + specialty, mobile + B2B, manufacturing + trading), benchmark EACH segment against its closest pure-play peer — not the company's blended sector median. Extract segment revenue + EBIT from `get_company_context(section='concall_insights', sub_section='financial_metrics')` and compare via `get_peer_sector(section='benchmarks')` per segment.
-17. **Triangulate major conclusions with 2-3 independent signals.** Every major thesis claim — ROE sustainability, margin durability, earnings quality, growth trajectory — must rest on at least 2-3 independent data points, not one suggestive number. Good triangulations: (a) ROE sustainability = DuPont margin driver + FCF/PAT conversion + capex-cycle-phase; (b) margin durability = gross-margin trajectory + cost-structure decomposition + peer incremental-margin gap; (c) earnings quality = F-Score + M-Score + accrual ratio + CFO/EBITDA. A single data point pointing in a direction is a hypothesis; three pointing the same way is analysis. One countervailing data point does NOT flip a 2-of-3 consensus.
-18. **Aggregate across accounting buckets before concluding enterprise-level metrics.** Consolidated PAT excludes JV/associate revenue and EBITDA (only net income flows through via equity method). For companies with material JVs, compute **Look-Through EBITDA** = Consolidated EBITDA + (investor's share × JV EBITDA). For holdco structures, compute **Standalone vs Consolidated debt** separately. For groups with cross-shareholdings, aggregate pledge exposure across all group entities, not just the analyzed ticker. A single-bucket leverage / margin / return metric applied to a multi-bucket legal structure systematically misrepresents the economics.
-19. **Unit and time-period verification gate.** Before citing any operating metric, confirm its unit and its time basis against the tool output. ARPU is typically reported monthly (₹/subscriber/month) but some telecom filings report it quarterly — a 3× error compounds into every downstream revenue and margin calculation. Subscriber counts may be reported in millions or in crores (1 crore = 10 million) depending on the source; confirm before multiplying into ARPU. Volume metrics (MT, kT, MMSCM) must match the price unit for a correct revenue bridge. When the tool output doesn't label the unit, treat the metric as unverified and pose as an open question rather than guessing.
-20. **Subsidiary-value catalysts.** When a material subsidiary is value-relevant (listed stake, imminent IPO, divestment, or segment disclosure change), identify the catalyst that would crystallize or compress its value: ongoing IPO path, parent capital injection, regulatory approval, promoter dilution plan. "CVL contributes ₹X Cr to consolidated PAT" is incomplete without "an IPO pathway exists/does not exist, timing is Y, and at peer multiple Z, standalone value is ₹W Cr vs current embedded contribution." Use `get_events_actions(section='corporate_actions')` and `get_company_context(section='filings')` to surface catalysts before writing the subsidiary section.
-21. **BFSI mandatory-metric set.** For banking/NBFC/insurance coverage, every financials report must quantify — not merely mention — the full regulatory and asset-quality picture: (a) **LCR (Liquidity Coverage Ratio)** vs 100% regulatory floor, (b) **Credit cost (bps)** trajectory across ≥5 quarters with provisioning-cycle context, (c) **Non-interest-income split** — core fee income (advisory, processing, FX) vs treasury/one-off gains vs recoveries — don't estimate the split, extract from `get_company_context(section='concall_insights', sub_section='financial_metrics')` and filings. Missing any of these three leaves the BFSI financial picture incomplete. For mandatory gaps genuinely outside tool coverage, raise as open questions rather than omitting or estimating.
+9. **Don't apply frameworks you just invalidated.** If you state a metric is distorted or meaningless (DuPont for real estate, PE for loss-makers, FCF for banks), do NOT compute and present it. Use the appropriate alternative.
+10. **Mandatory tables.** Every report must include: (a) 5Y+ margin decomposition table (GM, OPM, NPM) with cost drivers, (b) Working capital days (Inventory, Receivable, Payable, CCC) if discussing WC. Always quantify — no qualitative hand-waving without the numbers.
+11. **Incremental margin ≠ average margin.** When discussing operating leverage: if 90% of costs are fixed, incremental margin on new revenue is ~90%, NOT the average EBITDA margin. Get the math right.
+12. **Capitalization vs expensing discipline — get the EBITDA impact right by type.** Capitalizing costs instead of expensing them is a legal earnings-quality lever, but *which line it flatters differs by type, and conflating them is an accounting error*: (a) **Capitalized borrowing cost / interest-during-construction (CWIP)** lowers the P&L interest line → inflates **PBT, PAT, and EPS — but NOT EBITDA or EBIT**, which are pre-interest by definition (capitalized interest never touches them). Never write that capitalized interest "inflates EBITDA/EBIT" — it does not. (b) **Capitalized R&D / development cost (IndAS 38)** and acquisition transition costs are operating-expense removals → they inflate **EBITDA, EBIT, and EPS**. Check `cash_flow_quality` for capitalized interest (read its PBT/PAT/EPS impact) and `filings` notes for R&D capitalization policy (read its EBITDA impact). When acquisition amortization > 5% of PAT, report a "Cash EPS" adjusted number alongside GAAP EPS.
+13. **Cash conversion is the lie-detector.** Reported PAT can be managed; cumulative OCF cannot. If OCF / EBITDA < 80% for 2+ consecutive years OR FCF / PAT stays < 70% across a cycle, flag aggressive revenue recognition or working-capital absorption. Rising accrual ratio ((NI − CFO) / Total Assets) = deteriorating quality. Use `get_quality_scores(section='earnings_quality')`.
+14. **IndAS 116 lease distortion.** Lease-heavy businesses (telecom towers/fiber, platforms with warehouses/dark stores, retail stores, hospitals, airlines) report EBITDA 400-800 bps higher than pre-IndAS-116 comparable — operating lease payments move out of opex into depreciation + interest. When comparing against history (pre-FY20 India) or against peers on different accounting regimes, either compute "EBITDA minus lease principal payments" (from `cash_flow_quality` financing activities) or flag the break in comparability.
+15. **Segment-level peer benchmarking.** Consolidated ratios are blended averages. When 2+ material segments exist (retail + digital, generics + specialty, mobile + B2B, manufacturing + trading), benchmark EACH segment against its closest pure-play peer — not the company's blended sector median. Extract segment revenue + EBIT from `get_company_context(section='concall_insights', sub_section='financial_metrics')` and compare via `get_peer_sector(section='benchmarks')` per segment.
+16. **Triangulate major conclusions with 2-3 independent signals.** Every major thesis claim — ROE sustainability, margin durability, earnings quality, growth trajectory — must rest on at least 2-3 independent data points, not one suggestive number. Good triangulations: (a) ROE sustainability = DuPont margin driver + FCF/PAT conversion + capex-cycle-phase; (b) margin durability = gross-margin trajectory + cost-structure decomposition + peer incremental-margin gap; (c) earnings quality = F-Score + M-Score + accrual ratio + CFO/EBITDA. A single data point pointing in a direction is a hypothesis; three pointing the same way is analysis. One countervailing data point does NOT flip a 2-of-3 consensus.
+17. **Aggregate across accounting buckets before concluding enterprise-level metrics.** Consolidated PAT excludes JV/associate revenue and EBITDA (only net income flows through via equity method). For companies with material JVs, compute **Look-Through EBITDA** = Consolidated EBITDA + (investor's share × JV EBITDA). For holdco structures, compute **Standalone vs Consolidated debt** separately. For groups with cross-shareholdings, aggregate pledge exposure across all group entities, not just the analyzed ticker. A single-bucket leverage / margin / return metric applied to a multi-bucket legal structure systematically misrepresents the economics.
+18. **Subsidiary-value catalysts.** When a material subsidiary is value-relevant (listed stake, imminent IPO, divestment, or segment disclosure change), identify the catalyst that would crystallize or compress its value: ongoing IPO path, parent capital injection, regulatory approval, promoter dilution plan. "CVL contributes ₹X Cr to consolidated PAT" is incomplete without "an IPO pathway exists/does not exist, timing is Y, and at peer multiple Z, standalone value is ₹W Cr vs current embedded contribution." Use `get_events_actions(section='corporate_actions')` and `get_company_context(section='filings')` to surface catalysts before writing the subsidiary section.
+19. **BFSI mandatory-metric set.** For banking/NBFC/insurance coverage, every financials report must quantify — not merely mention — the full regulatory and asset-quality picture: (a) **LCR (Liquidity Coverage Ratio)** vs 100% regulatory floor, (b) **Credit cost (bps)** trajectory across ≥5 quarters with provisioning-cycle context, (c) **Non-interest-income split** — core fee income (advisory, processing, FX) vs treasury/one-off gains vs recoveries — don't estimate the split, extract from `get_company_context(section='concall_insights', sub_section='financial_metrics')` and filings. Missing any of these three leaves the BFSI financial picture incomplete. For mandatory gaps genuinely outside tool coverage, raise as open questions rather than omitting or estimating.
 - **Balance Sheet Loss Recognition** — Check if reserves decreased YoY without corresponding dividend payments. Flag: "Potential loss write-off through balance sheet."
 """
 
@@ -612,6 +659,12 @@ End with a JSON code block:
     }
   ],
   "open_questions": ["<question tied to a metric marked 'attempted' above>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — timeframe / basis / scope>"
+    }
+  ],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -705,16 +758,14 @@ Two correct options when you need a historical flow value:
 4. **Market signals**: Call `get_market_context` for delivery trend, FII/DII flows, and FII/DII streak to separate stock-specific from market-wide moves.
 5. **Sector context**: Call `get_peer_sector` with `section=['benchmarks','sector_flows']` — benchmarks for percentile rankings (is this stock's PE, ROCE, market cap high or low vs sector peers?), sector_flows for macro-vs-micro FII/MF attribution. If your FII analysis raises "is this stock-specific or sector-wide?", `sector_flows` must be cited in the answer, not left as an open question.
 6. **Forward view**: Call `get_estimates` for consensus context to help interpret institutional positioning.
-7. **Cross-section reconciliation pass (MANDATORY output).** Before writing your report, list every claim in Sections 2 (Money Flow), 5 (Risk Signals), and 6 (Institutional Verdict) that could be reread as contradicting another section. For each: (a) tighten language so timeframes / directionality are explicit, OR (b) add a one-line reconciliation in prose. Populate the briefing envelope's `reconciliations` field with each reconciliation you made — an empty list is acceptable only if no contradictions existed. The iter2 prose-only pass wasn't catching contradictions because no output was required; populating the field forces you to actually do the reconciliation.
-
-   Common pitfalls to check:
+7. **Cross-section reconciliation (per SHARED "Cross-Section Reconciliation").** Apply the general rule with ownership-specific pitfalls to check across Sections 2 (Money Flow), 5 (Risk Signals), and 6 (Institutional Verdict):
    - "Supply absorbed" in one section vs "overhang" in another (timeframe mismatch: quarterly vs short-window)
    - Same %pt change called "bullish accumulation" in §2 and "bearish distribution" in §6 (structural vs active read conflict)
    - Quarterly shareholding timeframe and 4-week delivery timeframe used interchangeably
    - Headline % change vs composition change (reclassification ≠ selling; OFS at IPO ≠ insider selling)
    - "FII exit" in §2 and "FII re-entry" in §6 without reconciling which window dominates
 
-   Reconciliation example: "quarterly absorption was clean (§2), but short-window delivery shows residual pressure (§5)" — consistent; two un-reconciled claims are a logical error — the report contradicts itself.
+   Example: "quarterly absorption was clean (§2), but short-window delivery shows residual pressure (§5)" — consistent. Two un-reconciled claims are a logical error — the report contradicts itself.
 8. **Visualize**: Call `render_chart` for `shareholding` (12-quarter ownership trend lines) and `delivery` (delivery % + volume bars, 90 days). Embed the returned markdown in the relevant report sections.
 
 ## Report Sections
@@ -911,6 +962,12 @@ End with a JSON code block:
     }
   ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — timeframe / basis / scope>"
+    }
+  ],
   "signal_direction": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -1048,13 +1105,17 @@ End with a JSON code block:
     }
   ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — timeframe / basis / scope>"
+    }
+  ],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
 
 ## Risk iter1 — Quantification, Leading Indicators, Deck-Primary Risks (new)
-
-**JSON-to-prose parity.** Every metric in the `mandatory_metrics` JSON section of your structured briefing MUST have a corresponding narrative sentence with interpretation in the prose report. JSON-populated-but-silent-in-narrative leaves the risk undiscussed where the reader will look for it. Conversely, any risk you discuss in prose with a specific number should have a JSON entry.
 
 **Framing-quantification symmetry.** Any risk axis you frame (CAC vs LTV, commodity cost vs margin sensitivity, interest coverage, forex exposure) MUST be quantified with specific numbers in your cost-structure / risk-decomposition section. Framing without numbers is hand-waving. Example: "CAC vs LTV pressure" is hand-waving; "marketing spend is 11% of revenue in FY25 vs 8% in FY22 (400 bps expansion); CAC payback extended from 14 months to 22 months per disclosed MAU economics" is a risk axis.
 
@@ -1151,6 +1212,12 @@ End with a JSON code block:
     }
   ],
   "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — timeframe / basis / scope>"
+    }
+  ],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -1260,7 +1327,13 @@ End with a JSON code block:
       "thesis_impact": "<material|informational>"
     }
   ],
-  "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"]
+  "open_questions": ["<question tied to a metric marked 'attempted' above; 3-5 max>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — timeframe / basis / scope>"
+    }
+  ]
 }
 ```
 
