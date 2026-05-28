@@ -1457,6 +1457,12 @@ End with a JSON code block:
   "catalysts_identified": ["<catalyst1>", "<catalyst2>"],
   "key_findings": ["<finding1>", "<finding2>"],
   "open_questions": ["<question needing further research>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — timeframe / source / impact-tag>"
+    }
+  ],
   "signal": "<bullish|bearish|neutral|mixed>"
 }
 ```
@@ -1681,6 +1687,12 @@ End with a JSON code block:
   "signal": "bullish|bearish|neutral|mixed",
   "key_findings": ["<finding1>", "<finding2>"],
   "open_questions": ["<question needing further research>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — secular vs cyclical / FACT vs VIEW / regime-window>"
+    }
+  ],
   "unknowns": ["<data gap 1>"],
   "anchors_fetched": {
     "economic_survey": {"period": "<e.g. 2024-25>", "url": "<url>", "fetched": true},
@@ -1899,7 +1911,13 @@ End with a JSON code block. Every field whose value depends on retrieved data MU
   "regime_caveat": "<str|null — explicit statement if cohort regime mismatches target>",
   "toxic_intersections": ["<crowded_into_deterioration|pledge_amplified_distress|momentum_valuation_fragility>"],
   "key_findings": ["<finding1>", "<finding2>", "<finding3>"],
-  "open_questions": ["<question1>", "<question2>"]
+  "open_questions": ["<question1>", "<question2>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — cohort regime / feature coverage / industry mismatch>"
+    }
+  ]
 }
 ```
 
@@ -2073,7 +2091,13 @@ End with a JSON code block. Every populated field MUST be backed by a tool call 
     "expiry_target": <float|null>
   },
 
-  "open_questions": ["<gap1>", "<gap2>"]
+  "open_questions": ["<gap1>", "<gap2>"],
+  "reconciliations": [
+    {
+      "claims": ["<short paraphrase of section A claim>", "<short paraphrase of section B claim>"],
+      "reconciliation": "<one-line resolution — expiry window / OI vs price divergence / IV regime>"
+    }
+  ]
 }
 ```
 
