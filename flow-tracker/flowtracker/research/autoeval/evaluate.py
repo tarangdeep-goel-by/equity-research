@@ -896,8 +896,8 @@ def print_summary(results: dict[str, AgentEvalResult], target_numeric: int = 90)
 
 def _agent_uses_sector_kpis(agent: str) -> bool:
     """True iff this agent's prompt references the sector_kpis tool/section."""
-    from flowtracker.research.prompts import AGENT_PROMPTS_V2
-    entry = AGENT_PROMPTS_V2.get(agent)
+    from flowtracker.research.prompts import AGENT_PROMPTS
+    entry = AGENT_PROMPTS.get(agent)
     if not entry:
         return False
     text = "".join(entry) if isinstance(entry, tuple) else entry

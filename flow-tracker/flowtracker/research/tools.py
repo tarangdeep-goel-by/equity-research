@@ -1996,7 +1996,7 @@ async def get_stock_news(args):
     # Previously schema was {a: float, b: float} which caused MCP to reject
     # calculate(operation='expr', a='74 - 47.67') on BHARTIARTL ownership run.
     # inputs_as_of / mcap_as_of are optional timestamp strings for historical-flow
-    # discipline; see Tenet 16 (OWNERSHIP_SYSTEM_V2).
+    # discipline; see Tenet 16 (OWNERSHIP_SYSTEM).
     # years: optional kwarg for cagr operation.
     {
         "type": "object",
@@ -2197,7 +2197,7 @@ async def calculate(args):
 # --- Tool Registry ---
 
 # V2 macro-tools (10 consolidated) + 6 standalone = 16 agent-facing tools
-RESEARCH_TOOLS_V2 = [
+RESEARCH_TOOLS = [
     get_fundamentals, get_quality_scores, get_ownership, get_valuation,
     get_fair_value_analysis, get_peer_sector, get_estimates,
     get_market_context, get_company_context, get_events_actions,
@@ -2206,18 +2206,18 @@ RESEARCH_TOOLS_V2 = [
     get_annual_report, get_deck_insights,
 ]
 
-# V1 agent registries (BUSINESS_TOOLS, *_AGENT_TOOLS, _PEER_TOOLS) removed — see *_AGENT_TOOLS_V2 below
+# V1 agent registries (BUSINESS_TOOLS, *_AGENT_TOOLS, _PEER_TOOLS) removed — see *_AGENT_TOOLS below
 
 # --- V2 Agent Tool Registries (macro-tools) ---
 
-BUSINESS_AGENT_TOOLS_V2 = [
+BUSINESS_AGENT_TOOLS = [
     get_analytical_profile, get_company_context, get_fundamentals,
     get_peer_sector, get_events_actions, get_yahoo_peers, get_screener_peers,
     get_valuation, get_chart_data, save_business_profile, render_chart, calculate,
     get_annual_report, get_deck_insights,
 ]
 
-FINANCIAL_AGENT_TOOLS_V2 = [
+FINANCIAL_AGENT_TOOLS = [
     get_analytical_profile, get_company_context, get_fundamentals,
     get_quality_scores, get_valuation, get_peer_sector,
     get_estimates, get_events_actions, get_fair_value_analysis,
@@ -2226,14 +2226,14 @@ FINANCIAL_AGENT_TOOLS_V2 = [
     get_data_quality_flags,
 ]
 
-OWNERSHIP_AGENT_TOOLS_V2 = [
+OWNERSHIP_AGENT_TOOLS = [
     get_analytical_profile, get_ownership, get_market_context,
     get_peer_sector, get_company_context, get_estimates,
     get_fundamentals, render_chart, calculate,
     get_annual_report,
 ]
 
-VALUATION_AGENT_TOOLS_V2 = [
+VALUATION_AGENT_TOOLS = [
     get_analytical_profile, get_valuation, get_fair_value_analysis,
     get_estimates, get_peer_sector, get_events_actions, get_yahoo_peers, get_screener_peers,
     get_company_context, get_quality_scores, get_fundamentals, get_market_context,
@@ -2242,7 +2242,7 @@ VALUATION_AGENT_TOOLS_V2 = [
     get_data_quality_flags,
 ]
 
-RISK_AGENT_TOOLS_V2 = [
+RISK_AGENT_TOOLS = [
     get_analytical_profile, get_composite_score, get_fundamentals,
     get_quality_scores, get_ownership, get_market_context,
     get_peer_sector, get_company_context, get_events_actions,
@@ -2251,24 +2251,24 @@ RISK_AGENT_TOOLS_V2 = [
     get_fair_value_analysis,  # reverse-DCF for bear-case downside stress
 ]
 
-TECHNICAL_AGENT_TOOLS_V2 = [
+TECHNICAL_AGENT_TOOLS = [
     get_analytical_profile, get_market_context, get_valuation,
     get_ownership, get_peer_sector, get_chart_data, render_chart, calculate,
     get_events_actions,  # earnings / ex-div / corporate-action timing
 ]
 
-SECTOR_AGENT_TOOLS_V2 = [
+SECTOR_AGENT_TOOLS = [
     get_analytical_profile, get_company_context, get_peer_sector,
     get_market_context, get_fundamentals, get_estimates, get_yahoo_peers, get_screener_peers,
     get_valuation, get_chart_data, render_chart, calculate, get_data_quality_flags,
 ]
 
-NEWS_AGENT_TOOLS_V2 = [
+NEWS_AGENT_TOOLS = [
     get_analytical_profile, get_company_context,
     get_stock_news, get_events_actions,
 ]
 
-MACRO_AGENT_TOOLS_V2 = [
+MACRO_AGENT_TOOLS = [
     get_macro_catalog,     # lists available anchors + their heading counts
     get_macro_anchor,      # TOC + section drill for a specific anchor
     get_macro_indicators,  # local-DB CPI/IIP/PMI trend + full G-sec yield curve
@@ -2343,7 +2343,7 @@ async def get_analog_cohort_stats(args):
                        {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-HISTORICAL_ANALOG_AGENT_TOOLS_V2 = [
+HISTORICAL_ANALOG_AGENT_TOOLS = [
     get_setup_feature_vector,
     get_historical_analogs,
     get_analog_cohort_stats,
@@ -2446,7 +2446,7 @@ async def get_futures_basis(args):
                        {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-FNO_POSITIONING_AGENT_TOOLS_V2 = [
+FNO_POSITIONING_AGENT_TOOLS = [
     get_fno_positioning,
     get_oi_history,
     get_option_chain_concentration,
@@ -2464,18 +2464,18 @@ FNO_POSITIONING_AGENT_TOOLS_V2 = [
 # reads). The same SdkMcpTool object can appear in multiple registries, so we
 # dedup by id() and rely on the `_is_error_wrapped` sentinel for idempotency.
 _ALL_TOOL_REGISTRIES = [
-    RESEARCH_TOOLS_V2,
-    BUSINESS_AGENT_TOOLS_V2,
-    FINANCIAL_AGENT_TOOLS_V2,
-    OWNERSHIP_AGENT_TOOLS_V2,
-    VALUATION_AGENT_TOOLS_V2,
-    RISK_AGENT_TOOLS_V2,
-    TECHNICAL_AGENT_TOOLS_V2,
-    SECTOR_AGENT_TOOLS_V2,
-    NEWS_AGENT_TOOLS_V2,
-    MACRO_AGENT_TOOLS_V2,
-    HISTORICAL_ANALOG_AGENT_TOOLS_V2,
-    FNO_POSITIONING_AGENT_TOOLS_V2,
+    RESEARCH_TOOLS,
+    BUSINESS_AGENT_TOOLS,
+    FINANCIAL_AGENT_TOOLS,
+    OWNERSHIP_AGENT_TOOLS,
+    VALUATION_AGENT_TOOLS,
+    RISK_AGENT_TOOLS,
+    TECHNICAL_AGENT_TOOLS,
+    SECTOR_AGENT_TOOLS,
+    NEWS_AGENT_TOOLS,
+    MACRO_AGENT_TOOLS,
+    HISTORICAL_ANALOG_AGENT_TOOLS,
+    FNO_POSITIONING_AGENT_TOOLS,
 ]
 
 _seen_tool_ids: set[int] = set()

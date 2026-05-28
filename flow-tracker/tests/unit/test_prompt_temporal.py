@@ -13,15 +13,15 @@ import re
 import pytest
 
 from flowtracker.research.prompts import (
-    SHARED_PREAMBLE_V2,
+    SHARED_PREAMBLE,
     build_specialist_prompt,
 )
 
 
 def test_preamble_has_unknown_permission_block():
-    assert "When Data Is Missing" in SHARED_PREAMBLE_V2
-    assert "Unknown is permitted" in SHARED_PREAMBLE_V2
-    assert "Fabrication is not" in SHARED_PREAMBLE_V2
+    assert "When Data Is Missing" in SHARED_PREAMBLE
+    assert "Unknown is permitted" in SHARED_PREAMBLE
+    assert "Fabrication is not" in SHARED_PREAMBLE
 
 
 @pytest.mark.parametrize("agent", ["business", "financials", "risk", "valuation", "ownership"])

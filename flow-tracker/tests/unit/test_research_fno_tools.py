@@ -310,7 +310,7 @@ class TestGetFuturesBasis:
 class TestFnoPositioningRegistry:
     def test_registry_includes_five_owned_tools_plus_shared_context(self):
         from flowtracker.research.tools import (
-            FNO_POSITIONING_AGENT_TOOLS_V2,
+            FNO_POSITIONING_AGENT_TOOLS,
             get_company_context,
             get_fii_derivative_flow,
             get_fno_positioning,
@@ -321,13 +321,13 @@ class TestFnoPositioningRegistry:
             get_ownership,
         )
 
-        assert get_fno_positioning in FNO_POSITIONING_AGENT_TOOLS_V2
-        assert get_oi_history in FNO_POSITIONING_AGENT_TOOLS_V2
-        assert get_option_chain_concentration in FNO_POSITIONING_AGENT_TOOLS_V2
-        assert get_fii_derivative_flow in FNO_POSITIONING_AGENT_TOOLS_V2
-        assert get_futures_basis in FNO_POSITIONING_AGENT_TOOLS_V2
+        assert get_fno_positioning in FNO_POSITIONING_AGENT_TOOLS
+        assert get_oi_history in FNO_POSITIONING_AGENT_TOOLS
+        assert get_option_chain_concentration in FNO_POSITIONING_AGENT_TOOLS
+        assert get_fii_derivative_flow in FNO_POSITIONING_AGENT_TOOLS
+        assert get_futures_basis in FNO_POSITIONING_AGENT_TOOLS
         # Shared cross-reference tools
-        assert get_company_context in FNO_POSITIONING_AGENT_TOOLS_V2
-        assert get_ownership in FNO_POSITIONING_AGENT_TOOLS_V2
-        assert get_market_context in FNO_POSITIONING_AGENT_TOOLS_V2
-        assert len(FNO_POSITIONING_AGENT_TOOLS_V2) == 8
+        assert get_company_context in FNO_POSITIONING_AGENT_TOOLS
+        assert get_ownership in FNO_POSITIONING_AGENT_TOOLS
+        assert get_market_context in FNO_POSITIONING_AGENT_TOOLS
+        assert len(FNO_POSITIONING_AGENT_TOOLS) == 8

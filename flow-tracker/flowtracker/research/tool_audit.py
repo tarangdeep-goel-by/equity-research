@@ -73,7 +73,7 @@ _INVALID_ARG_MARKERS = ("invalid", "valid_values", "did you mean", "suggestion")
 def _build_agent_registry_map() -> dict[str, set[str]]:
     """Map agent name -> set of registered (bare) tool names.
 
-    Imports the ``*_AGENT_TOOLS_V2`` registries from
+    Imports the ``*_AGENT_TOOLS`` registries from
     :mod:`flowtracker.research.tools`. Each registry is a list of
     ``SdkMcpTool`` objects exposing a ``.name`` attribute. Agent keys match the
     names used in trace ``agents`` dicts (e.g. "business", "valuation").
@@ -88,17 +88,17 @@ def _build_agent_registry_map() -> dict[str, set[str]]:
         return mapping
 
     registry_by_agent = {
-        "business": "BUSINESS_AGENT_TOOLS_V2",
-        "financials": "FINANCIAL_AGENT_TOOLS_V2",
-        "ownership": "OWNERSHIP_AGENT_TOOLS_V2",
-        "valuation": "VALUATION_AGENT_TOOLS_V2",
-        "risk": "RISK_AGENT_TOOLS_V2",
-        "technical": "TECHNICAL_AGENT_TOOLS_V2",
-        "sector": "SECTOR_AGENT_TOOLS_V2",
-        "news": "NEWS_AGENT_TOOLS_V2",
-        "macro": "MACRO_AGENT_TOOLS_V2",
-        "historical_analog": "HISTORICAL_ANALOG_AGENT_TOOLS_V2",
-        "fno_positioning": "FNO_POSITIONING_AGENT_TOOLS_V2",
+        "business": "BUSINESS_AGENT_TOOLS",
+        "financials": "FINANCIAL_AGENT_TOOLS",
+        "ownership": "OWNERSHIP_AGENT_TOOLS",
+        "valuation": "VALUATION_AGENT_TOOLS",
+        "risk": "RISK_AGENT_TOOLS",
+        "technical": "TECHNICAL_AGENT_TOOLS",
+        "sector": "SECTOR_AGENT_TOOLS",
+        "news": "NEWS_AGENT_TOOLS",
+        "macro": "MACRO_AGENT_TOOLS",
+        "historical_analog": "HISTORICAL_ANALOG_AGENT_TOOLS",
+        "fno_positioning": "FNO_POSITIONING_AGENT_TOOLS",
     }
     for agent, attr in registry_by_agent.items():
         registry = getattr(T, attr, None)
