@@ -547,3 +547,92 @@ class TestPhase1NewSharedRules:
         general rule moved up to SHARED."""
         assert "Cross-section reconciliation (per SHARED" in OWNERSHIP_INSTRUCTIONS
         assert "OFS at IPO ≠ insider selling" in OWNERSHIP_INSTRUCTIONS
+
+
+class TestPhase2PerAgentRules:
+    """Phase 2 of prompt-pattern-transfer: 3 adaptive patterns added per-agent
+    to the weaker specialists (Bus/Sec/Risk/Tech for triangulation;
+    Fin/Risk/Sec for sensitivity; Bus/Fin/Risk/Tech for hypothesis-validation).
+
+    Each pattern lifted from a strong-baseline agent (Val + Fin) and adapted
+    with agent-specific content (signal trios, sensitivity inputs, distortion
+    examples) so the rule matters for the receiving agent.
+    """
+
+    # --- P2.1 Triangulation (2-3 independent signals) ---
+
+    def test_business_has_triangulation_tenet(self):
+        """Business gets a 'Triangulate major conclusions' bullet with
+        moat-sustainability / management-quality / unit-economics trios."""
+        assert "Triangulate major conclusions with 2-3 independent signals" in BUSINESS_SYSTEM
+        assert "Moat sustainability:" in BUSINESS_SYSTEM
+        assert "pricing power" in BUSINESS_SYSTEM
+        assert "capex efficiency" in BUSINESS_SYSTEM
+
+    def test_sector_has_triangulation_tenet(self):
+        """Sector gets 'Triangulate' with industry-direction / cycle-stage /
+        competitive-rotation trios."""
+        assert "Triangulate major conclusions with 2-3 independent signals" in SECTOR_SYSTEM
+        assert "Industry direction:" in SECTOR_SYSTEM
+        assert "capacity utilization" in SECTOR_SYSTEM
+
+    def test_risk_has_triangulation_tenet(self):
+        """Risk gets 'Triangulate' with stress-severity / governance-concern /
+        earnings-quality trios."""
+        assert "Triangulate major risk conclusions with 2-3 independent signals" in RISK_SYSTEM
+        assert "Financial stress severity:" in RISK_SYSTEM
+        assert "leverage trend" in RISK_SYSTEM and "cash buffer" in RISK_SYSTEM
+
+    def test_technical_has_triangulation_tenet(self):
+        """Technical gets 'Triangulate trend-conviction' with delivery /
+        flow / breadth trios."""
+        assert "Triangulate trend-conviction calls with 2-3 independent signals" in TECHNICAL_SYSTEM
+        assert "Accumulation conviction:" in TECHNICAL_SYSTEM
+        assert "delivery %" in TECHNICAL_SYSTEM
+
+    # --- P2.2 Sensitivity on load-bearing assumption ---
+
+    def test_financial_has_sensitivity_tenet(self):
+        """Fin T20 adds sensitivity for RM cost / WC days / interest-rate."""
+        assert "State sensitivity on the single most load-bearing assumption" in FINANCIAL_SYSTEM
+        assert "±200 bps RM" in FINANCIAL_SYSTEM
+        assert "working-capital build" in FINANCIAL_SYSTEM
+
+    def test_risk_has_sensitivity_tenet(self):
+        """Risk gets sensitivity for default-probability / recovery / coverage."""
+        assert "State sensitivity on the single most load-bearing assumption" in RISK_SYSTEM
+        assert "±10% recovery" in RISK_SYSTEM or "2× default rate" in RISK_SYSTEM
+
+    def test_sector_has_sensitivity_tenet(self):
+        """Sector gets sensitivity for industry growth / capacity cycle."""
+        assert "State sensitivity on the single most load-bearing assumption" in SECTOR_SYSTEM
+        assert "industry growth rate" in SECTOR_SYSTEM or "recession vs base" in SECTOR_SYSTEM
+
+    def test_technical_does_NOT_get_sensitivity(self):
+        """Per plan: skip Tech for sensitivity — not a natural fit for
+        chart-based timing analysis."""
+        assert "load-bearing assumption" not in TECHNICAL_SYSTEM
+
+    # --- P2.3 Hypothesis validation (compute the correction) ---
+
+    def test_business_has_hypothesis_validation_tenet(self):
+        assert "Hypothesis validation — compute the correction" in BUSINESS_SYSTEM
+        assert "ex-cash ROCE" in BUSINESS_SYSTEM or "parent-only margin" in BUSINESS_SYSTEM
+
+    def test_financial_has_hypothesis_validation_tenet(self):
+        assert "Hypothesis validation — compute the correction" in FINANCIAL_SYSTEM
+        assert "segment-pure margin" in FINANCIAL_SYSTEM or "ex-strategic-cash ROCE" in FINANCIAL_SYSTEM
+
+    def test_risk_has_hypothesis_validation_tenet(self):
+        assert "Hypothesis validation — compute the correction" in RISK_SYSTEM
+        assert "capitalized interest" in RISK_SYSTEM or "gross slippage rate" in RISK_SYSTEM
+
+    def test_technical_has_hypothesis_validation_tenet(self):
+        assert "Hypothesis validation — compute the correction" in TECHNICAL_SYSTEM
+        assert "ex-block-day rolling delivery" in TECHNICAL_SYSTEM or "active-FII excluding passive" in TECHNICAL_SYSTEM
+
+    def test_sector_keeps_existing_hypothesis_validation(self):
+        """Sector already had 'Hypothesis validation' at L1278 (sector iter2).
+        Phase 2 should NOT duplicate it — leave the existing rule in place."""
+        count = SECTOR_INSTRUCTIONS.count("Hypothesis validation")
+        assert count >= 1, "Sector lost its existing hypothesis-validation rule"
