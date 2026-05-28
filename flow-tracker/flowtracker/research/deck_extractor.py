@@ -698,6 +698,107 @@ async def extract_decks(
     return result
 
 
+# --- JIT download from Screener (mandated as Phase 0b prereq) ---
+
+# Buy-side baseline: every research run wants the last N quarters of deck
+# coverage before agents fire. 6 = ~1.5 FYs, enough to anchor margin/guidance
+# trajectory + segment narrative without bloating cache for stale eras.
+DECK_MANDATED_QUARTERS = 6
+# FY25+ only. A "May 2024" deck reports Q4 FY24 results — old buy-side data.
+# Filter applies to the RESULTING FY quarter, not the announcement month.
+_DECK_MIN_FY = 25
+
+
+def ensure_deck_pdfs_from_screener(symbol: str, max_quarters: int = DECK_MANDATED_QUARTERS) -> int:
+    """Download missing investor-deck PDFs from Screener ``concall_ppt`` URLs.
+
+    Mandated as part of Phase 0b — ``ensure_deck_data`` calls this before
+    finding PDFs on disk, so every research/eval run self-heals its deck
+    coverage. Mirrors ``concall_extractor.ensure_transcript_pdfs``.
+
+    For each of the last N FY25+ quarters that has a Screener ``concall_ppt``
+    URL in ``company_documents``, downloads the PDF to the standard
+    ``{vault}/{S}/filings/{FY-Q}/investor_deck.pdf`` path if it's missing.
+    Applies ``_classify_deck_pdf`` as the gate; Reg-30 cover letters are
+    deleted, real decks are kept. Returns count of fresh real-deck PDFs.
+
+    Fail-soft semantics — Screener unreachable / no URLs in DB → return 0
+    and let the pipeline proceed with whatever was already on disk.
+    """
+    # Late import to avoid a circular dep with concall_extractor.
+    from flowtracker.research.concall_extractor import (
+        _download_transcript_from_url,
+        _screener_period_to_fy_quarter,
+    )
+    from flowtracker.store import FlowStore
+
+    symbol = symbol.upper()
+    vault_base = Path.home() / "vault" / "stocks"
+
+    try:
+        with FlowStore() as store:
+            rows = store._conn.execute(
+                "SELECT period, url FROM company_documents "
+                "WHERE symbol = ? AND doc_type = 'concall_ppt'",
+                (symbol,),
+            ).fetchall()
+    except Exception:  # nosec — DB unavailable should not break the pipeline
+        return 0
+
+    _MONTH = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+              "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+
+    # Filter on the RESULTING FY quarter, sort recent-first, take top N.
+    candidates: list[tuple[tuple[int, int], str, str, str]] = []
+    for period, url in rows:
+        if not url or not isinstance(url, str) or not url.startswith("http"):
+            continue
+        try:
+            mo_str, yr_str = period.split()
+            ym = (int(yr_str), _MONTH[mo_str[:3]])
+            fy_q = _screener_period_to_fy_quarter(period)
+        except (ValueError, KeyError):
+            continue
+        try:
+            fy = int(fy_q[2:4])
+        except (ValueError, IndexError):
+            continue
+        if fy < _DECK_MIN_FY:
+            continue
+        candidates.append((ym, period, fy_q, url))
+    candidates.sort(reverse=True)
+    candidates = candidates[:max_quarters]
+
+    downloaded = 0
+    for _ym, _period, fy_q, url in candidates:
+        dest = vault_base / symbol / "filings" / fy_q / "investor_deck.pdf"
+
+        # Skip if a real deck already lives at the path.
+        if dest.exists():
+            cls = _classify_deck_pdf(dest)
+            if cls.is_deck:
+                continue
+            # else: existing PDF is a known Reg-30 reject; OK to overwrite
+
+        if not _download_transcript_from_url(url, dest):
+            continue
+
+        cls = _classify_deck_pdf(dest)
+        if not cls.is_deck:
+            dest.unlink(missing_ok=True)
+            logger.info("[deck_jit] %s %s: rejected (%s)", symbol, fy_q, cls.reason)
+            continue
+
+        downloaded += 1
+        logger.info("[deck_jit] %s %s: ok (%s, %dpp)",
+                    symbol, fy_q, cls.confidence, cls.pages)
+
+    if downloaded:
+        logger.info("[deck_jit] %s: %d real-deck PDF(s) fetched from Screener",
+                    symbol, downloaded)
+    return downloaded
+
+
 async def ensure_deck_data(
     symbol: str,
     quarters: int = 4,
@@ -706,11 +807,18 @@ async def ensure_deck_data(
 ) -> dict | None:
     """Incremental extraction — only re-extract decks that don't have a cached quarter.
 
-    Reads existing deck_extraction.json, keeps quarters with complete status,
+    Phase 0b prereq: calls ``ensure_deck_pdfs_from_screener`` first so any
+    missing recent decks are pulled from Screener before extraction. Then
+    reads existing deck_extraction.json, keeps quarters with complete status,
     re-runs extraction only for missing quarters or those with extraction_status
     in {failed, partial}.
     """
     symbol = symbol.upper()
+    # Mandated pre-extraction sync — ensures the last ~6 FY25+ quarters'
+    # PDFs are present on disk before extraction. No-op when everything is
+    # already cached or Screener has no concall_ppt URLs for this symbol.
+    ensure_deck_pdfs_from_screener(symbol, max_quarters=max(quarters, DECK_MANDATED_QUARTERS))
+
     pdfs = _find_deck_pdfs(symbol, quarters=quarters)
     if not pdfs:
         logger.info("[deck_ensure] %s: no deck PDFs", symbol)
