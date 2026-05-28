@@ -455,3 +455,95 @@ class TestPhase0DedupedPatterns:
         """All 3 paired 'don't over-read signals' rules live together in a
         dedicated SHARED section so they're discoverable as a unit."""
         assert "## Signal Interpretation Discipline" in SHARED_PREAMBLE
+
+
+class TestPhase1NewSharedRules:
+    """Phase 1 of prompt-pattern-transfer: 4 genuinely-new rules added to
+    SHARED_PREAMBLE so every specialist receives them via inheritance.
+
+    The 4 new patterns:
+      - Unit + Time-Period Verification (was Financial T21; now universal)
+      - One-Off Adjustment Discipline (was Financial T9; now universal)
+      - JSON-to-prose parity (was Risk iter1 first bullet; now universal)
+      - Cross-Section Reconciliation OUTPUT (was Ownership-only; now universal,
+        with mandatory `reconciliations[]` field in every specialist's briefing schema)
+    """
+
+    # --- P1.1 Unit + time-period verification ---
+
+    def test_shared_has_unit_verification_section(self):
+        assert "## Unit + Time-Period Verification" in SHARED_PREAMBLE
+        assert "Per-period basis" in SHARED_PREAMBLE
+        assert "Counts in millions vs crores" in SHARED_PREAMBLE
+        assert "TTM vs FY vs YTD vs annualized" in SHARED_PREAMBLE
+
+    def test_financial_unit_verification_tenet_removed(self):
+        """Was Fin T21 (later T19 post-Phase-0) — now redundant with SHARED."""
+        assert "Unit and time-period verification gate" not in FINANCIAL_SYSTEM, (
+            "Fin still contains pre-Phase-1 unit-verification tenet — should be SHARED-only"
+        )
+
+    # --- P1.2 One-off adjustment discipline ---
+
+    def test_shared_has_one_off_adjustment_section(self):
+        assert "## One-Off Adjustment Discipline" in SHARED_PREAMBLE
+        assert "Demerger / merger years" in SHARED_PREAMBLE
+        assert "Pandemic-era anomalies (FY21" in SHARED_PREAMBLE
+
+    def test_financial_one_off_tenet_removed(self):
+        """Was Fin T9 — now redundant with SHARED."""
+        assert "Adjust for one-offs" not in FINANCIAL_SYSTEM, (
+            "Fin still contains pre-Phase-1 one-off-adjustment tenet — should be SHARED-only"
+        )
+
+    # --- P1.3 JSON-to-prose parity ---
+
+    def test_shared_has_json_prose_parity(self):
+        assert "JSON-to-prose parity" in SHARED_PREAMBLE
+
+    def test_risk_iter1_json_prose_bullet_removed(self):
+        """Was Risk iter1 first bullet — now SHARED-only. Risk INSTRUCTIONS
+        must not re-state the JSON-prose-parity rule."""
+        assert "JSON-to-prose parity" not in RISK_INSTRUCTIONS, (
+            "Risk INSTRUCTIONS still contains the JSON-to-prose-parity bullet — should be SHARED-only"
+        )
+
+    # --- P1.4 Cross-section reconciliation field ---
+
+    def test_shared_has_cross_section_reconciliation_rule(self):
+        assert "### Cross-Section Reconciliation" in SHARED_PREAMBLE
+        # The SHARED rule must include the structured field template + the
+        # "empty list acceptable only if no contradictions" gate.
+        assert '"reconciliations":' in SHARED_PREAMBLE
+        assert "acceptable ONLY if no contradictions" in SHARED_PREAMBLE
+
+    def test_each_specialist_schema_includes_reconciliations_field(self):
+        """The structured-output field is what catches drift — agents that
+        skip the field skip the reconciliation step. Every specialist's
+        JSON schema example MUST include it."""
+        for name, instr in [
+            ("BUSINESS", BUSINESS_INSTRUCTIONS),
+            ("FINANCIAL", FINANCIAL_INSTRUCTIONS),
+            ("OWNERSHIP", OWNERSHIP_INSTRUCTIONS),
+            ("VALUATION", VALUATION_INSTRUCTIONS),
+            ("RISK", RISK_INSTRUCTIONS),
+            ("TECHNICAL", TECHNICAL_INSTRUCTIONS),
+            ("SECTOR", SECTOR_INSTRUCTIONS),
+        ]:
+            assert '"reconciliations":' in instr, (
+                f"{name}_INSTRUCTIONS schema missing reconciliations[] field"
+            )
+            assert '"claims":' in instr, (
+                f"{name} reconciliations entry missing claims field"
+            )
+            assert '"reconciliation":' in instr, (
+                f"{name} reconciliations entry missing reconciliation field"
+            )
+
+    def test_ownership_keeps_specialist_pitfalls_list(self):
+        """Ownership has a workflow step 7 with ownership-specific pitfalls
+        (timeframe mismatch, FII handoff conflicts, OFS vs insider selling).
+        That ownership-specific guidance must survive the dedupe — only the
+        general rule moved up to SHARED."""
+        assert "Cross-section reconciliation (per SHARED" in OWNERSHIP_INSTRUCTIONS
+        assert "OFS at IPO ≠ insider selling" in OWNERSHIP_INSTRUCTIONS
