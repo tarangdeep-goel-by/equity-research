@@ -578,22 +578,30 @@ class TestSectorKpisSkipGuard:
         monkeypatch.setattr(ev, "run_agent", fake_run)
         return calls
 
-    def test_skips_agent_when_sector_kpis_missing(self, monkeypatch, capsys, _no_run_agent):
-        """sector agent uses sector_kpis → SKIP with SKIP_MISSING_KPIS marker."""
+    def test_degrades_not_skips_when_sector_kpis_missing(self, monkeypatch, capsys, _no_run_agent):
+        """sector_kpis missing → DEGRADE GRACEFULLY: the agent still runs + grades
+        (no SKIP — hard-skip hid analysable conglomerates like ADANIENT), w/ a warning."""
         monkeypatch.setattr(ev, "_sector_kpis_populated", lambda _sym: False)
+        monkeypatch.setattr(ev, "read_report", lambda _a, _s: "# Report\n\nbody")
+        monkeypatch.setattr(ev, "read_agent_evidence", lambda _a, _s: "")
+
+        async def fake_eval(agent, stock, sector_type, report_md, evidence=""):
+            return ev.AgentEvalResult(
+                agent=agent, stock=stock, sector=sector_type,
+                grade="B+", grade_numeric=87,
+            )
+
+        monkeypatch.setattr(ev, "eval_with_gemini", fake_eval)
         import asyncio
         result = asyncio.run(ev._eval_sector(
             agent="sector", sector_name="bfsi",
             sector_cfg={"stock": "SUNPHARMA", "type": "Pharma"},
             target_numeric=90, skip_run=False, cycle=0,
         ))
-        assert result.grade == "SKIP"
-        assert "SKIP_MISSING_KPIS" in result.summary
-        assert "SUNPHARMA" in result.summary
-        assert "backfill_sector_kpis.py" in result.summary
-        assert _no_run_agent["count"] == 0, "agent must NOT be invoked when skipped"
+        assert result.grade != "SKIP", "missing KPIs must degrade, not skip"
+        assert _no_run_agent["count"] == 1, "agent must still run despite missing KPIs"
         err = capsys.readouterr().err
-        assert "SKIP: sector_kpis missing for SUNPHARMA" in err
+        assert "sector_kpis missing for SUNPHARMA" in err
 
     def test_runs_agent_when_sector_kpis_present(self, monkeypatch, _no_run_agent):
         """KPIs populated → agent runs normally (no SKIP)."""
