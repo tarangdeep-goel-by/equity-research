@@ -29,6 +29,7 @@ from flowtracker.store_domains.fundamentals import FundamentalsMixin
 from flowtracker.store_domains.holdings import HoldingsMixin
 from flowtracker.store_domains.prices import PricesMixin
 from flowtracker.store_domains.valuation import ValuationMixin
+from flowtracker.store_domains.us_market import UsMarketMixin, US_VALIDATION_UNIVERSE
 
 import logging
 
@@ -1508,6 +1509,155 @@ CREATE TABLE IF NOT EXISTS symbol_registry (
     PRIMARY KEY (symbol, market)
 );
 CREATE INDEX IF NOT EXISTS idx_symbol_registry_market ON symbol_registry(market);
+
+-- ===========================================================================
+-- US add-on (Phase 3) — ALL-NEW us_* tables. US data lives ONLY here; India
+-- tables gain ZERO new rows. Each table carries market (default 'NASDAQ') from
+-- day one and a composite UNIQUE that includes market. Monetary values are in
+-- USD millions (market magnitude_divisor = 1e6); per-share / price values are
+-- raw USD; percentages are in percent form (25.0 = 25%). symbol_registry
+-- (PK symbol, market) is the cross-market hub; symbol may be derived from a
+-- CIK/CUSIP when no live ticker is mapped (institutional_holdings).
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS us_daily_prices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    date TEXT NOT NULL,
+    open REAL,
+    high REAL,
+    low REAL,
+    close REAL,
+    volume INTEGER,
+    adj_close REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, date)
+);
+CREATE INDEX IF NOT EXISTS idx_us_daily_prices_symbol ON us_daily_prices(symbol, market);
+CREATE INDEX IF NOT EXISTS idx_us_daily_prices_date ON us_daily_prices(date);
+
+CREATE TABLE IF NOT EXISTS us_annual_financials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    fiscal_year INTEGER NOT NULL,            -- calendar year (EDGAR fiscal year)
+    revenue REAL,
+    net_income REAL,
+    total_assets REAL,
+    total_equity REAL,
+    total_debt REAL,
+    total_cash REAL,
+    eps REAL,
+    operating_cash_flow REAL,
+    free_cash_flow REAL,
+    shares_outstanding REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, fiscal_year)
+);
+CREATE INDEX IF NOT EXISTS idx_us_annual_financials_symbol ON us_annual_financials(symbol, market);
+
+CREATE TABLE IF NOT EXISTS us_quarterly_financials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    quarter_end TEXT NOT NULL,               -- ISO date
+    fiscal_year INTEGER,
+    fiscal_period TEXT,                      -- Q1 / Q2 / Q3 / Q4 / FY
+    revenue REAL,
+    net_income REAL,
+    eps REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, quarter_end)
+);
+CREATE INDEX IF NOT EXISTS idx_us_quarterly_financials_symbol ON us_quarterly_financials(symbol, market);
+
+CREATE TABLE IF NOT EXISTS us_valuation_snapshot (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    date TEXT NOT NULL,
+    price REAL,
+    market_cap REAL,
+    enterprise_value REAL,
+    pe_trailing REAL,
+    pe_forward REAL,
+    pb REAL,
+    dividend_yield REAL,
+    beta REAL,
+    total_cash REAL,
+    total_debt REAL,
+    free_cash_flow REAL,
+    operating_margin REAL,
+    net_margin REAL,
+    roe REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, date)
+);
+CREATE INDEX IF NOT EXISTS idx_us_valuation_snapshot_symbol ON us_valuation_snapshot(symbol, market);
+
+CREATE TABLE IF NOT EXISTS us_consensus_estimates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    date TEXT NOT NULL,
+    target_mean REAL,
+    target_median REAL,
+    num_analysts INTEGER,
+    recommendation TEXT,
+    forward_pe REAL,
+    forward_eps REAL,
+    eps_current_year REAL,
+    eps_next_year REAL,
+    earnings_growth REAL,
+    current_price REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, date)
+);
+CREATE INDEX IF NOT EXISTS idx_us_consensus_estimates_symbol ON us_consensus_estimates(symbol, market);
+
+CREATE TABLE IF NOT EXISTS us_insider_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    filing_date TEXT,
+    transaction_date TEXT NOT NULL,
+    owner_name TEXT NOT NULL,
+    owner_title TEXT,
+    transaction_code TEXT NOT NULL,          -- Form 4 code: P / S / A / etc.
+    shares REAL NOT NULL,
+    price_per_share REAL,
+    value REAL,
+    shares_owned_after REAL,
+    is_director INTEGER,
+    is_officer INTEGER,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, transaction_date, owner_name, transaction_code, shares)
+);
+CREATE INDEX IF NOT EXISTS idx_us_insider_transactions_symbol ON us_insider_transactions(symbol, market);
+
+CREATE TABLE IF NOT EXISTS us_institutional_holdings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,                    -- may be the CUSIP string if unmapped
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    cusip TEXT,
+    manager_name TEXT,
+    manager_cik TEXT NOT NULL,
+    quarter_end TEXT NOT NULL,
+    shares REAL,
+    value_usd REAL,
+    investment_discretion TEXT,
+    put_call TEXT NOT NULL DEFAULT '',       -- '' sentinel for plain long; SQLite UNIQUE rejects NULL
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, manager_cik, quarter_end, put_call)
+);
+CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_symbol ON us_institutional_holdings(symbol, market);
+CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_cik ON us_institutional_holdings(manager_cik);
 """
 
 
@@ -1609,7 +1759,7 @@ _CURRENCY_COLUMN_TABLES: tuple[str, ...] = (
 )
 
 
-class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, MarketRegistryMixin, ResearchMixin, FundamentalsMixin, HoldingsMixin, PricesMixin, ValuationMixin):
+class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, MarketRegistryMixin, ResearchMixin, FundamentalsMixin, HoldingsMixin, PricesMixin, ValuationMixin, UsMarketMixin):
     """SQLite store for daily FII/DII flows.
 
     Domain methods are progressively being split into mixins under
@@ -1642,6 +1792,7 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         self._migrate_macro_daily()
         self._migrate_market_columns()
         self._migrate_symbol_registry()
+        self._migrate_us_registry()
 
         # Additive domain namespaces (refactor P1.4): store.portfolio.<method>()
         # works alongside the flat store.<method>() API.
@@ -1655,6 +1806,7 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         self.holdings = Namespace(self, HoldingsMixin)
         self.prices = Namespace(self, PricesMixin)
         self.valuation = Namespace(self, ValuationMixin)
+        self.us = Namespace(self, UsMarketMixin)
 
     def _migrate_analytical_snapshot(self) -> None:
         """Add new columns to analytical_snapshot if they don't exist."""
@@ -1836,6 +1988,33 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
             """
         )
         self._conn.commit()
+
+    def _migrate_us_registry(self) -> None:
+        """Add symbol_registry.cik (US add-on, Phase 3). Metadata-only ALTER.
+
+        EDGAR keys filers by CIK; we store it on the cross-market registry so a
+        US symbol row can carry its SEC identifier. Idempotent — guarded by
+        PRAGMA table_info. India rows simply leave cik NULL.
+        """
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(symbol_registry)").fetchall()
+        }
+        if "cik" not in existing:
+            self._conn.execute("ALTER TABLE symbol_registry ADD COLUMN cik TEXT")
+        self._conn.commit()
+
+    def seed_us_validation_universe(self) -> int:
+        """Seed the US validation tickers into symbol_registry (manual helper).
+
+        NOT auto-run in __init__ — call explicitly from tests / setup scripts.
+        Upserts each (symbol, market, cik, sector) via upsert_symbol_registry,
+        which derives currency='USD' and fiscal_year_system='CALENDAR' from the
+        market config. Idempotent on (symbol, market). Returns the row count.
+        """
+        for symbol, market, cik, sector in US_VALIDATION_UNIVERSE:
+            self.upsert_symbol_registry(symbol, market, sector=sector, cik=cik)
+        return len(US_VALIDATION_UNIVERSE)
 
     def _migrate_survivorship_tables(self) -> None:
         """PR-13: idempotent PRAGMA guard for delisted_symbols + unresolved_cliffs."""

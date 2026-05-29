@@ -143,13 +143,15 @@ class MarketRegistryMixin:
         company_name: str | None = None,
         sector: str | None = None,
         gics: str | None = None,
+        cik: str | None = None,
     ) -> None:
         """Insert or update a symbol_registry entry.
 
         Currency + fiscal_year_system are derived from the market config (never
-        passed in). isin/company_name/sector/gics use COALESCE on conflict so a
-        partial update never nulls out existing data; currency/fiscal_year_system/
-        updated_at are always refreshed.
+        passed in). isin/company_name/sector/gics/cik use COALESCE on conflict so
+        a partial update never nulls out existing data; currency/
+        fiscal_year_system/updated_at are always refreshed. ``cik`` is the SEC
+        EDGAR identifier (US add-on, Phase 3) — NULL for India rows.
         """
         from flowtracker.market import Market, market_config
 
@@ -159,17 +161,18 @@ class MarketRegistryMixin:
         self._conn.execute(
             """INSERT INTO symbol_registry
                (symbol, market, isin, company_name, currency, fiscal_year_system,
-                sector, gics, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                sector, gics, cik, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                ON CONFLICT(symbol, market) DO UPDATE SET
                  isin=COALESCE(excluded.isin, symbol_registry.isin),
                  company_name=COALESCE(excluded.company_name, symbol_registry.company_name),
                  sector=COALESCE(excluded.sector, symbol_registry.sector),
                  gics=COALESCE(excluded.gics, symbol_registry.gics),
+                 cik=COALESCE(excluded.cik, symbol_registry.cik),
                  currency=excluded.currency,
                  fiscal_year_system=excluded.fiscal_year_system,
                  updated_at=datetime('now')""",
-            (symbol.upper(), market, isin, company_name, currency, fys, sector, gics),
+            (symbol.upper(), market, isin, company_name, currency, fys, sector, gics, cik),
         )
         self._conn.commit()
 

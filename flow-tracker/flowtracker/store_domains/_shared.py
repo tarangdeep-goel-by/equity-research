@@ -90,6 +90,50 @@ _VALIDATION_RULES: dict[str, dict[str, tuple[float, float]]] = {
 }
 
 
+# US add-on (Phase 3) — USD-millions magnitude bounds for the us_* monetary
+# tables. Values are stored in USD millions (market magnitude_divisor = 1e6),
+# so a $3.5T market cap (Apple) = 3,500,000 mn must fit under the upper bound.
+# Per-share / price values are raw USD. Percentage/ratio fields reuse the
+# currency-agnostic handling (see ``_CURRENCY_AGNOSTIC_FIELDS``); they're listed
+# here so the same [lo, hi] sanity bounds apply. These rules are selected by
+# ``_validate_row`` ONLY when currency == 'USD'; INR/NSE behavior is untouched.
+_USD_VALIDATION_RULES: dict[str, dict[str, tuple[float, float]]] = {
+    "us_annual_financials": {
+        "revenue": (0, 1_000_000),          # up to ~$1T (Walmart ~$650B)
+        "net_income": (-200_000, 300_000),  # losses capped; profits ~$100B+ (Apple)
+        "total_assets": (0, 10_000_000),    # banks (JPM ~$4T)
+        "total_equity": (-200_000, 1_000_000),
+        "total_debt": (0, 1_000_000),
+        "total_cash": (0, 1_000_000),
+        "operating_cash_flow": (-200_000, 300_000),
+        "free_cash_flow": (-200_000, 300_000),
+        "eps": (-1_000, 5_000),             # per-share USD
+        "shares_outstanding": (1_000, 100_000_000_000),
+    },
+    "us_quarterly_financials": {
+        "revenue": (0, 300_000),            # quarterly
+        "net_income": (-100_000, 100_000),
+        "eps": (-1_000, 5_000),
+    },
+    "us_valuation_snapshot": {
+        "price": (0.01, 1_000_000),         # raw USD per share (BRK.A high)
+        "market_cap": (0, 5_000_000),       # up to ~$5T
+        "enterprise_value": (-1_000_000, 6_000_000),
+        "total_cash": (0, 1_000_000),
+        "total_debt": (0, 1_000_000),
+        "free_cash_flow": (-200_000, 300_000),
+        "pe_trailing": (-500, 2000),
+        "pe_forward": (-500, 2000),
+        "pb": (-100, 1000),
+        # Percentage fields (25.0 = 25%) — currency-agnostic bounds.
+        "operating_margin": (-100, 100),
+        "net_margin": (-100, 100),
+        "roe": (-200, 200),
+        "dividend_yield": (0, 50),
+    },
+}
+
+
 # Phase-2 (multi-market) parameterization split.
 #
 # The bounds in ``_VALIDATION_RULES`` above mix two conceptually different
@@ -119,6 +163,8 @@ _CURRENCY_AGNOSTIC_FIELDS: frozenset[str] = frozenset({
     "dividend_yield",
     "pct_of_nav",
     "pe_trailing",
+    "pe_forward",
+    "pb",
 })
 
 
@@ -163,8 +209,21 @@ def _validate_row(
     NSE/INR to preserve existing behavior for callers not yet market-aware.
     """
     errors = []
+    resolved = _resolve_currency(market, currency)
+    is_inr = resolved == "INR"
+    if resolved == "USD" and table in _USD_VALIDATION_RULES:
+        # US add-on (Phase 3): apply the USD-millions ruleset for the us_* tables.
+        # It carries both monetary (USD-magnitude) and percentage/ratio bounds,
+        # so every field in it is checked — the INR crore bounds never apply.
+        # Legacy (India) tables queried with currency='USD' fall through to the
+        # Phase-2 agnostic-only path below (byte-identical behavior).
+        rules = _USD_VALIDATION_RULES[table]
+        for field, (lo, hi) in rules.items():
+            val = row.get(field)
+            if val is not None and (val < lo or val > hi):
+                errors.append(f"{field}={val} outside [{lo}, {hi}]")
+        return errors
     rules = _VALIDATION_RULES.get(table, {})
-    is_inr = _resolve_currency(market, currency) == "INR"
     for field, (lo, hi) in rules.items():
         # Non-INR currencies skip monetary/magnitude bounds (crore-specific);
         # only the currency-agnostic ratio/percentage bounds are checked.
