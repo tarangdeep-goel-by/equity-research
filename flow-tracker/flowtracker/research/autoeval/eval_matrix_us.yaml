@@ -1,0 +1,58 @@
+# US Eval Matrix — P3.6 SCAFFOLD (do NOT run yet)
+#
+# Mirrors eval_matrix.yaml (India) format: sectors -> {stock, type, why} plus a
+# flat agent list. Tickers are the US validation universe seeded by
+# FlowStore.seed_us_validation_universe() (see store_domains/us_market.py).
+# Sectors use GICS-style labels; these map to sector_kpis industry strings via
+# ResearchDataAPI._US_GICS_TO_INDUSTRY for sector/skill detection.
+#
+# IMPORTANT: This is the consumption-layer scaffold ONLY. The baseline US eval
+# run is DEFERRED until after P3.7 (US prompt / sector-skill adaptation) — the
+# specialist prompts are still India-tuned today, so grading now would measure
+# the wrong thing. Do not wire this into eval-all-sectors.sh until P3.7 lands.
+# IMMUTABLE — do not modify during autoeval runs.
+
+target_grade: "A-"
+target_grade_numeric: 90
+max_cycles_per_sector: 3
+
+agents:
+  - business
+  - financials
+  - ownership
+  - valuation
+  - risk
+  - technical
+  - sector
+  # F&O positioning intentionally omitted: NSE-derivatives concept, n/a for US.
+
+sectors:
+  technology_aapl:
+    stock: AAPL
+    type: Consumer hardware / Technology
+    why: "Mega-cap hardware + services mix, capital return, 13F concentration"
+
+  technology_msft:
+    stock: MSFT
+    type: Software / Technology
+    why: "Cloud + software, high margin, deferred revenue, 2nd technology stock for overfitting guard vs AAPL"
+
+  technology_nvda:
+    stock: NVDA
+    type: Semiconductors / Technology
+    why: "AI accelerator cycle, hyper-growth, valuation stress, supply concentration"
+
+  financials_jpm:
+    stock: JPM
+    type: Diversified bank / Financials
+    why: "Money-center bank, NII sensitivity, capital ratios — US-financials read path"
+
+  energy_xom:
+    stock: XOM
+    type: Integrated oil & gas / Energy
+    why: "Cyclical commodity-linked, capex/buyback cadence, upstream-downstream mix"
+
+  health_care_unh:
+    stock: UNH
+    type: Managed care / Health Care
+    why: "Insurer + Optum services, medical-loss ratio, regulatory exposure"

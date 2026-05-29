@@ -208,6 +208,73 @@ def _invalid_enum_error(tool_name: str, param: str, value, valid, args: dict) ->
 
 
 # ---------------------------------------------------------------------------
+# US-market safety (P3.6 consumption wiring)
+#
+# India-only data concepts (FII/DII flows, promoter pledge, MF scheme holdings,
+# F&O positioning, delivery %) have no US equivalent. The underlying
+# ResearchDataAPI methods already return empty for US symbols (via `_is_us`),
+# but an empty India payload is misleading for a US ticker — it reads as "no
+# data found" rather than "this concept does not apply to this market". These
+# helpers let the India-only tools emit an EXPLICIT not-applicable envelope so
+# the agent knows to skip the concept rather than infer a data gap.
+# ---------------------------------------------------------------------------
+
+
+def _market_of(symbol: str) -> str:
+    """Resolve a symbol's market via a short-lived ResearchDataAPI (shares the
+    routed `_market_of` resolver — NASDAQ/NYSE for US listings, else NSE)."""
+    with ResearchDataAPI() as api:
+        return api._market_of(symbol)
+
+
+def _is_us_symbol(symbol: str) -> bool:
+    """True when the symbol resolves to a US listing (NASDAQ / NYSE)."""
+    return _market_of(symbol) in ("NASDAQ", "NYSE")
+
+
+def _us_not_applicable(tool_name: str, concept: str, symbol: str, args: dict) -> dict:
+    """Explicit 'not applicable for US market' envelope for India-only concepts.
+
+    Returns a clean payload (status='not_applicable') rather than a misleading
+    empty India result or an error. Classifies as 'empty' (not 'error') so the
+    is-error wrapper leaves it unflagged — it is a clean terminal answer, not a
+    failure.
+    """
+    from datetime import date
+    payload = {
+        "status": "not_applicable",
+        "market": _market_of(symbol),
+        "symbol": symbol,
+        "reason": (
+            f"{concept} is an India-market concept with no US equivalent; "
+            f"not applicable for US-listed {symbol}."
+        ),
+        "_meta": {
+            "as_of_date": str(date.today()),
+            "status": "not_applicable",
+            "count": 0,
+            "data_freshness": None,
+        },
+    }
+    return _with_dedup(
+        tool_name,
+        {"content": [{"type": "text", "text": json.dumps(payload, default=str)}]},
+        args,
+    )
+
+
+# India-only ownership sections — degrade to not-applicable for US symbols.
+_OWNERSHIP_INDIA_ONLY = frozenset({
+    "mf_holdings", "mf_changes", "mf_conviction", "promoter_pledge",
+    "shareholder_detail", "public_breakdown", "esop", "adr_gdr", "bulk_block",
+})
+# India-only market-context sections — degrade to not-applicable for US symbols.
+_MARKET_CONTEXT_INDIA_ONLY = frozenset({
+    "delivery", "delivery_analysis", "fii_dii_streak", "fii_dii_flows",
+})
+
+
+# ---------------------------------------------------------------------------
 # Section vocabularies — single source of truth shared by the @tool schema enum
 # and the handler-side validation guard (`_validate_sections`). Each tuple lists
 # the routable sections; the trailing sentinels (toc/summary/all) are added
@@ -1208,8 +1275,27 @@ async def get_quality_scores(args):
     return _with_dedup("get_quality_scores", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-def _get_ownership_section(api, symbol, section, args):
-    """Route a single section for get_ownership."""
+def _india_only_section_marker(section: str, market: str) -> dict:
+    """Per-section 'not applicable for US' marker for an India-only section."""
+    return {
+        "status": "not_applicable",
+        "market": market,
+        "reason": (
+            f"'{section}' is an India-market ownership concept with no US "
+            "equivalent (use get_institutional_ownership for US 13F holdings)."
+        ),
+    }
+
+
+def _get_ownership_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_ownership.
+
+    When `is_us` and the section is India-only (MF/pledge/shareholder_detail/
+    public_breakdown/esop/adr_gdr/bulk_block), return an explicit
+    not-applicable marker instead of a misleading empty India payload.
+    """
+    if is_us and section in _OWNERSHIP_INDIA_ONLY:
+        return _india_only_section_marker(section, api._market_of(symbol))
     if section == "shareholding":
         return api.get_shareholding(symbol, args.get("quarters", 20))
     elif section == "changes":
@@ -1280,6 +1366,7 @@ async def get_ownership(args):
     # is what the agent saw).
     section_raw = args.get("section")
     with ResearchDataAPI() as api:
+        is_us = api._is_us(symbol)
         if not section_raw or section_raw in ("toc", "summary"):
             data = api.get_ownership_toc(symbol)
         else:
@@ -1288,8 +1375,13 @@ async def get_ownership(args):
             if err is not None:
                 return err
             if isinstance(section, list):
-                data = {s: _get_ownership_section(api, symbol, s, args) for s in section}
+                data = {s: _get_ownership_section(api, symbol, s, args, is_us) for s in section}
             elif section == "all":
+                def _own(sec, val):
+                    # India-only sections degrade to a not-applicable marker for US.
+                    if is_us and sec in _OWNERSHIP_INDIA_ONLY:
+                        return _india_only_section_marker(sec, api._market_of(symbol))
+                    return val
                 data = {
                     "_warning": (
                         "section='all' returns 80-150K chars and may be truncated by the "
@@ -1299,18 +1391,18 @@ async def get_ownership(args):
                     "shareholding": api.get_shareholding(symbol, args.get("quarters", 12)),
                     "changes": api.get_shareholding_changes(symbol),
                     "insider": api.get_insider_transactions(symbol, args.get("days", 1825)),
-                    "bulk_block": api.get_bulk_block_deals(symbol),
-                    "mf_holdings": api.get_mf_holdings(symbol),
-                    "mf_changes": api.get_mf_holding_changes(symbol),
-                    "shareholder_detail": api.get_shareholder_detail(symbol, args.get("classification")),
-                    "promoter_pledge": api.get_promoter_pledge(symbol),
-                    "mf_conviction": api.get_mf_conviction(symbol),
-                    "adr_gdr": api.get_adr_gdr(symbol),
-                    "public_breakdown": api.get_public_breakdown(symbol, args.get("quarters", 4)),
-                    "esop": api.get_esop_summary(symbol, args.get("fiscal_years", 5)),
+                    "bulk_block": _own("bulk_block", api.get_bulk_block_deals(symbol)),
+                    "mf_holdings": _own("mf_holdings", api.get_mf_holdings(symbol)),
+                    "mf_changes": _own("mf_changes", api.get_mf_holding_changes(symbol)),
+                    "shareholder_detail": _own("shareholder_detail", api.get_shareholder_detail(symbol, args.get("classification"))),
+                    "promoter_pledge": _own("promoter_pledge", api.get_promoter_pledge(symbol)),
+                    "mf_conviction": _own("mf_conviction", api.get_mf_conviction(symbol)),
+                    "adr_gdr": _own("adr_gdr", api.get_adr_gdr(symbol)),
+                    "public_breakdown": _own("public_breakdown", api.get_public_breakdown(symbol, args.get("quarters", 4))),
+                    "esop": _own("esop", api.get_esop_summary(symbol, args.get("fiscal_years", 5))),
                 }
             else:
-                data = _get_ownership_section(api, symbol, section, args)
+                data = _get_ownership_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
@@ -1625,8 +1717,21 @@ async def get_estimates(args):
     return _with_dedup("get_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-def _get_market_context_section(api, symbol, section, args):
-    """Route a single section for get_market_context."""
+def _get_market_context_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_market_context.
+
+    India-only sections (delivery %, FII/DII flows) degrade to an explicit
+    not-applicable marker for US symbols.
+    """
+    if is_us and section in _MARKET_CONTEXT_INDIA_ONLY:
+        return {
+            "status": "not_applicable",
+            "market": api._market_of(symbol),
+            "reason": (
+                f"'{section}' is an India-market concept (NSE bhavcopy delivery / "
+                "FII-DII flows) with no US equivalent."
+            ),
+        }
     if section == "delivery":
         return api.get_delivery_trend(symbol, args.get("days", 30))
     elif section == "macro":
@@ -1686,16 +1791,21 @@ async def get_market_context(args):
     if err is not None:
         return err
     with ResearchDataAPI() as api:
+        is_us = api._is_us(symbol)
         if isinstance(section, list):
-            data = {s: _get_market_context_section(api, symbol, s, args) for s in section}
+            data = {s: _get_market_context_section(api, symbol, s, args, is_us) for s in section}
         elif section == "all":
+            def _mkt(sec, val):
+                if is_us and sec in _MARKET_CONTEXT_INDIA_ONLY:
+                    return _get_market_context_section(api, symbol, sec, args, is_us)
+                return val
             # Compute ADTV (avg daily traded value in ₹ Cr) from bhavcopy turnover
             stock_data = api._store.get_stock_delivery(symbol, days=30)
             turnovers = [r.turnover for r in stock_data if r.turnover and r.turnover > 0]
             adtv_cr = round(sum(turnovers) / len(turnovers) / 1e7, 1) if turnovers else None  # turnover is in ₹, convert to Cr
 
             data = {
-                "delivery": api.get_delivery_trend(symbol, args.get("days", 30)),
+                "delivery": _mkt("delivery", api.get_delivery_trend(symbol, args.get("days", 30))),
                 "adtv_cr": adtv_cr,
                 "adtv_signal": (
                     "severe_liquidity_risk" if adtv_cr is not None and adtv_cr < 5
@@ -1704,18 +1814,72 @@ async def get_market_context(args):
                     else None
                 ),
                 "macro": api.get_macro_snapshot(),
-                "fii_dii_streak": api.get_fii_dii_streak(),
-                "fii_dii_flows": api.get_fii_dii_flows(args.get("days", 30)),
+                "fii_dii_streak": _mkt("fii_dii_streak", api.get_fii_dii_streak()),
+                "fii_dii_flows": _mkt("fii_dii_flows", api.get_fii_dii_flows(args.get("days", 30))),
                 "technicals": api.get_technical_indicators(symbol),
                 "price_performance": api.get_price_performance(symbol),
-                "delivery_analysis": api.get_delivery_analysis(symbol, args.get("days", 90)),
+                "delivery_analysis": _mkt("delivery_analysis", api.get_delivery_analysis(symbol, args.get("days", 90))),
                 "commodities": api.get_commodity_snapshot(),
                 "institutional_consensus": api.get_institutional_consensus(symbol),
             }
         else:
-            data = _get_market_context_section(api, symbol, section, args)
+            data = _get_market_context_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_market_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_institutional_ownership",
+    "US 13F institutional ownership — the managers (funds, advisors) holding this "
+    "US-listed stock, ordered largest USD value first. Each row carries manager_name, "
+    "manager_cik, shares, value_usd, quarter_end, and put_call. This is the US analogue "
+    "of India's MF-scheme/FII shareholding data (SEC Form 13F quarterly filings). "
+    "For an India (NSE) symbol this returns status='not_applicable' — use get_ownership "
+    "(mf_holdings / shareholder_detail) for India instead. Optional: top_n (default 50).",
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "US ticker (NASDAQ/NYSE), uppercase."},
+            "top_n": {"type": "integer", "description": "Cap on managers returned (default 50)."},
+        },
+        "required": ["symbol"],
+    },
+    annotations=READ_ONLY,
+)
+async def get_institutional_ownership(args):
+    symbol = args["symbol"].upper()
+    if not _is_us_symbol(symbol):
+        return _india_not_applicable_13f(symbol, args)
+    with ResearchDataAPI() as api:
+        rows = api.get_institutional_holdings(symbol, args.get("top_n", 50))
+    data = {"symbol": symbol, "holdings": rows}
+    return _with_dedup("get_institutional_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+def _india_not_applicable_13f(symbol: str, args: dict) -> dict:
+    """'n/a for India' envelope for the US-only 13F ownership tool."""
+    from datetime import date
+    payload = {
+        "status": "not_applicable",
+        "market": "NSE",
+        "symbol": symbol,
+        "reason": (
+            "13F institutional ownership is a US SEC filing concept with no India "
+            f"equivalent; not applicable for NSE-listed {symbol}. Use get_ownership "
+            "(mf_holdings / shareholder_detail) for India institutional data."
+        ),
+        "_meta": {
+            "as_of_date": str(date.today()),
+            "status": "not_applicable",
+            "count": 0,
+            "data_freshness": None,
+        },
+    }
+    return _with_dedup(
+        "get_institutional_ownership",
+        {"content": [{"type": "text", "text": json.dumps(payload, default=str)}]},
+        args,
+    )
 
 
 def _get_company_context_section(api, symbol, section, args):
@@ -2231,6 +2395,7 @@ OWNERSHIP_AGENT_TOOLS = [
     get_peer_sector, get_company_context, get_estimates,
     get_fundamentals, render_chart, calculate,
     get_annual_report,
+    get_institutional_ownership,  # US 13F ownership (n/a for India)
 ]
 
 VALUATION_AGENT_TOOLS = [
@@ -2374,6 +2539,8 @@ HISTORICAL_ANALOG_AGENT_TOOLS = [
     annotations=READ_ONLY,
 )
 async def get_fno_positioning(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_fno_positioning", "NSE F&O positioning", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_fno_positioning(args["symbol"])
     if data is None:
@@ -2391,6 +2558,8 @@ async def get_fno_positioning(args):
     annotations=READ_ONLY,
 )
 async def get_oi_history(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_oi_history", "NSE F&O open-interest history", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_oi_history(args["symbol"], args.get("days", 90))
     return _with_dedup("get_oi_history",
@@ -2407,6 +2576,8 @@ async def get_oi_history(args):
     annotations=READ_ONLY,
 )
 async def get_option_chain_concentration(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_option_chain_concentration", "NSE option-chain OI", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_option_chain_concentration(args["symbol"])
     return _with_dedup("get_option_chain_concentration",
@@ -2440,6 +2611,8 @@ async def get_fii_derivative_flow(args):
     annotations=READ_ONLY,
 )
 async def get_futures_basis(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_futures_basis", "NSE spot-futures basis", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_futures_basis(args["symbol"], args.get("days", 30))
     return _with_dedup("get_futures_basis",
