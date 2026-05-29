@@ -1552,6 +1552,28 @@ CREATE TABLE IF NOT EXISTS us_annual_financials (
     operating_cash_flow REAL,
     free_cash_flow REAL,
     shares_outstanding REAL,
+    -- Phase 3.5b: wider native US storage (USD millions unless noted).
+    fiscal_year_end TEXT,                    -- FY-end date string YYYY-MM-DD
+    equity_capital REAL,
+    reserves REAL,
+    borrowings REAL,
+    interest REAL,
+    profit_before_tax REAL,
+    tax REAL,
+    operating_profit REAL,
+    depreciation REAL,
+    num_shares REAL,                         -- raw diluted share count (not millions)
+    net_block REAL,
+    cwip REAL,
+    cash_and_bank REAL,
+    receivables REAL,
+    inventory REAL,
+    other_liabilities REAL,
+    cfi REAL,                                -- cash flow from investing
+    cff REAL,                                -- cash flow from financing
+    rnd_expense REAL,                        -- US-specific
+    stock_based_comp REAL,                   -- US-specific
+    sga REAL,                                -- US-specific
     fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(symbol, market, fiscal_year)
 );
@@ -1793,6 +1815,7 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         self._migrate_market_columns()
         self._migrate_symbol_registry()
         self._migrate_us_registry()
+        self._migrate_us_annual_financials()
 
         # Additive domain namespaces (refactor P1.4): store.portfolio.<method>()
         # works alongside the flat store.<method>() API.
@@ -2002,6 +2025,46 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         }
         if "cik" not in existing:
             self._conn.execute("ALTER TABLE symbol_registry ADD COLUMN cik TEXT")
+        self._conn.commit()
+
+    def _migrate_us_annual_financials(self) -> None:
+        """Add the Phase 3.5b wide columns to us_annual_financials (US add-on).
+
+        Idempotent — guarded by PRAGMA table_info; each missing column is added
+        via ALTER TABLE. US-only table, so India reads/writes are untouched.
+        """
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(us_annual_financials)").fetchall()
+        }
+        new_cols = {
+            "fiscal_year_end": "TEXT",
+            "equity_capital": "REAL",
+            "reserves": "REAL",
+            "borrowings": "REAL",
+            "interest": "REAL",
+            "profit_before_tax": "REAL",
+            "tax": "REAL",
+            "operating_profit": "REAL",
+            "depreciation": "REAL",
+            "num_shares": "REAL",
+            "net_block": "REAL",
+            "cwip": "REAL",
+            "cash_and_bank": "REAL",
+            "receivables": "REAL",
+            "inventory": "REAL",
+            "other_liabilities": "REAL",
+            "cfi": "REAL",
+            "cff": "REAL",
+            "rnd_expense": "REAL",
+            "stock_based_comp": "REAL",
+            "sga": "REAL",
+        }
+        for col_name, col_type in new_cols.items():
+            if col_name not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE us_annual_financials ADD COLUMN {col_name} {col_type}"
+                )
         self._conn.commit()
 
     def seed_us_validation_universe(self) -> int:

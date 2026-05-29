@@ -109,6 +109,28 @@ _USD_VALIDATION_RULES: dict[str, dict[str, tuple[float, float]]] = {
         "free_cash_flow": (-200_000, 300_000),
         "eps": (-1_000, 5_000),             # per-share USD
         "shares_outstanding": (1_000, 100_000_000_000),
+        # Phase 3.5b wide fields — USD millions magnitude (same convention as
+        # revenue/net_income); num_shares is a raw diluted count.
+        "equity_capital": (-200_000, 1_000_000),
+        "reserves": (-500_000, 1_000_000),  # accumulated deficit can be deeply negative
+        "borrowings": (0, 1_000_000),
+        "interest": (-100_000, 200_000),
+        "profit_before_tax": (-200_000, 400_000),
+        "tax": (-200_000, 200_000),
+        "operating_profit": (-200_000, 400_000),
+        "depreciation": (-50_000, 200_000),
+        "num_shares": (1_000, 100_000_000_000),
+        "net_block": (0, 1_000_000),
+        "cwip": (0, 1_000_000),
+        "cash_and_bank": (0, 1_000_000),
+        "receivables": (0, 1_000_000),
+        "inventory": (0, 1_000_000),
+        "other_liabilities": (-200_000, 1_000_000),
+        "cfi": (-500_000, 500_000),
+        "cff": (-500_000, 500_000),
+        "rnd_expense": (0, 200_000),
+        "stock_based_comp": (0, 200_000),
+        "sga": (0, 300_000),
     },
     "us_quarterly_financials": {
         "revenue": (0, 300_000),            # quarterly

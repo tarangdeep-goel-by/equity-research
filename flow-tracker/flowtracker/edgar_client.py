@@ -60,6 +60,37 @@ _ANNUAL_DURATION_TAGS: dict[str, list[str]] = {
         "NetCashProvidedByUsedInOperatingActivities",
         "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
     ],
+    # Phase 3.5b wide fields (duration).
+    "interest": [
+        "InterestExpense",
+        "InterestExpenseDebt",
+        "InterestAndDebtExpense",
+    ],
+    "operating_profit": ["OperatingIncomeLoss"],
+    "tax": ["IncomeTaxExpenseBenefit"],
+    "profit_before_tax": [
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
+    ],
+    "depreciation": [
+        "DepreciationDepletionAndAmortization",
+        "DepreciationAmortizationAndAccretionNet",
+        "DepreciationAndAmortization",
+    ],
+    "rnd_expense": ["ResearchAndDevelopmentExpense"],
+    "stock_based_comp": ["ShareBasedCompensation"],
+    "sga": [
+        "SellingGeneralAndAdministrativeExpense",
+        "GeneralAndAdministrativeExpense",
+    ],
+    "cfi": [
+        "NetCashProvidedByUsedInInvestingActivities",
+        "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations",
+    ],
+    "cff": [
+        "NetCashProvidedByUsedInFinancingActivities",
+        "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations",
+    ],
 }
 # Capex (duration) used to derive free_cash_flow = OCF − capex.
 _CAPEX_TAGS = ["PaymentsToAcquirePropertyPlantAndEquipment"]
@@ -76,7 +107,19 @@ _INSTANT_TAGS: dict[str, list[str]] = {
         "CommonStockSharesOutstanding",
         "WeightedAverageNumberOfDilutedSharesOutstanding",
     ],
+    # Phase 3.5b wide fields (instant).
+    "reserves": ["RetainedEarningsAccumulatedDeficit"],
+    "net_block": ["PropertyPlantAndEquipmentNet"],
+    "cwip": ["ConstructionInProgressGross"],
+    "receivables": ["AccountsReceivableNetCurrent"],
+    "inventory": ["InventoryNet"],
+    "other_liabilities": ["OtherLiabilitiesNoncurrent", "OtherLiabilities"],
+    "num_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"],
 }
+# equity_capital = CommonStockValue + AdditionalPaidInCapital (summed when both
+# present, else whichever is present). Picked component-wise (instant facts).
+_EQUITY_CAPITAL_COMMON_TAGS = ["CommonStockValue"]
+_EQUITY_CAPITAL_APIC_TAGS = ["AdditionalPaidInCapital"]
 # Debt = LongTermDebtNoncurrent + DebtCurrent if available, else LongTermDebt.
 _DEBT_NONCURRENT_TAGS = ["LongTermDebtNoncurrent"]
 _DEBT_CURRENT_TAGS = ["DebtCurrent", "LongTermDebtCurrent"]
@@ -247,24 +290,60 @@ class EdgarClient(SecEdgarBase):
             for fy, val in self._pick_annual_instant(gaap, tags, duration).items():
                 instant.setdefault(fy, {})[field] = val
         debt = self._pick_annual_debt(gaap, duration)
+        # equity_capital components (summed when both present).
+        common_stock = self._pick_annual_instant(gaap, _EQUITY_CAPITAL_COMMON_TAGS, duration)
+        apic = self._pick_annual_instant(gaap, _EQUITY_CAPITAL_APIC_TAGS, duration)
+        # fiscal_year_end: the FY-end date string for each fiscal year (anchored
+        # on the latest instant end in the year, falling back to total_assets).
+        fy_end = self._pick_annual_instant_end(
+            gaap, _INSTANT_TAGS["total_assets"] + _INSTANT_TAGS["total_cash"], duration,
+        )
 
         self._log_unmapped(gaap, symbol)
 
         rows: list[dict] = []
-        years = sorted(set(duration) | set(instant) | set(debt))
+        years = sorted(
+            set(duration) | set(instant) | set(debt)
+            | set(common_stock) | set(apic) | set(fy_end)
+        )
         for fy in years:
             d = duration.get(fy, {})
             i = instant.get(fy, {})
             ocf = d.get("operating_cash_flow")
             cap = capex.get(fy)
             fcf = (ocf - cap) if (ocf is not None and cap is not None) else None
+
+            # Profit-before-tax / tax derivations (fall back when a tag is absent).
+            net_income = d.get("net_income")
+            tax = d.get("tax")
+            pbt = d.get("profit_before_tax")
+            if pbt is None and net_income is not None and tax is not None:
+                pbt = net_income + tax
+            if tax is None and pbt is not None and net_income is not None:
+                tax = pbt - net_income
+
+            # equity_capital = CommonStockValue + AdditionalPaidInCapital (sum when
+            # both present, else whichever is present).
+            cs = common_stock.get(fy)
+            ap = apic.get(fy)
+            if cs is not None and ap is not None:
+                equity_capital = cs + ap
+            elif cs is not None:
+                equity_capital = cs
+            else:
+                equity_capital = None
+
+            # borrowings is an alias of total_debt.
+            borrowings = debt.get(fy)
+
             row = {
                 "symbol": symbol.upper(),
                 "market": market,
                 "currency": "USD",
                 "fiscal_year": fy,
+                "fiscal_year_end": fy_end.get(fy) or f"{fy}-12-31",
                 "revenue": self._to_millions(d.get("revenue")),
-                "net_income": self._to_millions(d.get("net_income")),
+                "net_income": self._to_millions(net_income),
                 "total_assets": self._to_millions(i.get("total_assets")),
                 "total_equity": self._to_millions(i.get("total_equity")),
                 "total_debt": self._to_millions(debt.get(fy)),
@@ -273,6 +352,27 @@ class EdgarClient(SecEdgarBase):
                 "operating_cash_flow": self._to_millions(ocf),
                 "free_cash_flow": self._to_millions(fcf),
                 "shares_outstanding": i.get("shares_outstanding"),  # raw count
+                # Phase 3.5b wide fields.
+                "equity_capital": self._to_millions(equity_capital),
+                "reserves": self._to_millions(i.get("reserves")),
+                "borrowings": self._to_millions(borrowings),
+                "interest": self._to_millions(d.get("interest")),
+                "profit_before_tax": self._to_millions(pbt),
+                "tax": self._to_millions(tax),
+                "operating_profit": self._to_millions(d.get("operating_profit")),
+                "depreciation": self._to_millions(d.get("depreciation")),
+                "num_shares": i.get("num_shares"),  # raw count, not scaled
+                "net_block": self._to_millions(i.get("net_block")),
+                "cwip": self._to_millions(i.get("cwip")),
+                "cash_and_bank": self._to_millions(i.get("total_cash")),
+                "receivables": self._to_millions(i.get("receivables")),
+                "inventory": self._to_millions(i.get("inventory")),
+                "other_liabilities": self._to_millions(i.get("other_liabilities")),
+                "cfi": self._to_millions(d.get("cfi")),
+                "cff": self._to_millions(d.get("cff")),
+                "rnd_expense": self._to_millions(d.get("rnd_expense")),
+                "stock_based_comp": self._to_millions(d.get("stock_based_comp")),
+                "sga": self._to_millions(d.get("sga")),
             }
             rows.append(row)
         return rows
@@ -380,6 +480,30 @@ class EdgarClient(SecEdgarBase):
                     best[fy] = {"val": float(f["val"]), "end": end, "filed": filed}
             if best:
                 return {fy: v["val"] for fy, v in best.items()}
+        return {}
+
+    def _pick_annual_instant_end(
+        self, gaap: dict, tags: list[str], duration: dict[int, dict],
+    ) -> dict[int, str]:
+        """fiscal_year → FY-end date string (YYYY-MM-DD), latest instant per year.
+
+        Mirrors :meth:`_pick_annual_instant` selection (latest ``end`` in the
+        calendar year, then latest-filed) but returns the ``end`` date string
+        used as the fiscal_year_end. First present tag wins.
+        """
+        for tag in tags:
+            best: dict[int, dict] = {}  # fy → {end, filed}
+            for f in self._units(gaap, tag):
+                end = f.get("end")
+                if not end:
+                    continue
+                fy = int(end[:4])
+                filed = f.get("filed", "")
+                cur = best.get(fy)
+                if cur is None or (end, filed) > (cur["end"], cur["filed"]):
+                    best[fy] = {"end": end, "filed": filed}
+            if best:
+                return {fy: v["end"] for fy, v in best.items()}
         return {}
 
     def _pick_annual_debt(self, gaap: dict, duration: dict[int, dict]) -> dict[int, float]:

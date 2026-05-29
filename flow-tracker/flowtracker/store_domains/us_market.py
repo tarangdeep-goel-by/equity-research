@@ -114,6 +114,12 @@ class UsMarketMixin:
         "symbol", "market", "currency", "fiscal_year", "revenue", "net_income",
         "total_assets", "total_equity", "total_debt", "total_cash", "eps",
         "operating_cash_flow", "free_cash_flow", "shares_outstanding",
+        # Phase 3.5b wide columns.
+        "fiscal_year_end", "equity_capital", "reserves", "borrowings",
+        "interest", "profit_before_tax", "tax", "operating_profit",
+        "depreciation", "num_shares", "net_block", "cwip", "cash_and_bank",
+        "receivables", "inventory", "other_liabilities", "cfi", "cff",
+        "rnd_expense", "stock_based_comp", "sga",
     )
 
     def upsert_us_annual_financials(self, rows: list[dict]) -> int:
