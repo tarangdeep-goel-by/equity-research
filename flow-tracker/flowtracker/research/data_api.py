@@ -1046,7 +1046,8 @@ class ResearchDataAPI:
         """
         if self._is_us(symbol):
             rows = self._store.get_us_quarterly_financials(symbol, self._market_of(symbol))
-            return _clean(rows[:quarters])
+            mapped = [self._us_quarterly_to_india(r) for r in rows[:quarters]]
+            return _clean(mapped)
         rows = self._store.get_quarterly_results(symbol, limit=quarters)
         cleaned = _clean([r.model_dump() for r in rows])
         return self._apply_insurance_headline(symbol, cleaned)
@@ -1061,10 +1062,143 @@ class ResearchDataAPI:
         """
         if self._is_us(symbol):
             rows = self._store.get_us_annual_financials(symbol, self._market_of(symbol))
-            return _clean(rows[:years])
+            # Store returns latest-first (fiscal_year DESC) — match India order.
+            mapped = [self._us_annual_to_india(r) for r in rows[:years]]
+            return _clean(mapped)
         rows = self._store.get_annual_financials(symbol, limit=years)
         cleaned = _clean([r.model_dump() for r in rows])
         return self._apply_insurance_headline(symbol, cleaned)
+
+    # --- US → India key adapters (Phase 3.5b, WS-3) ---
+
+    def _us_annual_to_india(self, row: dict) -> dict:
+        """Map a raw ``us_annual_financials`` row to the India ``AnnualFinancials``
+        model_dump key contract so the ~30 forensic methods consume US data
+        unchanged. India paths never reach this — only the ``_is_us`` branch does.
+        """
+        g = row.get  # local alias
+
+        # fiscal_year_end: prefer the US string; else synthesize from fiscal_year.
+        fye = g("fiscal_year_end")
+        if not fye:
+            fy = g("fiscal_year")
+            fye = f"{fy}-12-31" if fy is not None else None
+
+        # Equity reconciliation: forensic code computes total_equity =
+        # equity_capital + reserves. Ensure that identity holds against the
+        # US-reported total_equity whenever it is known (e.g. AAPL reports
+        # total_equity but not the equity_capital/reserves split).
+        equity_capital = g("equity_capital")
+        reserves = g("reserves")
+        total_equity = g("total_equity")
+        if total_equity is not None:
+            if equity_capital is None and reserves is not None:
+                equity_capital = total_equity - reserves
+            elif reserves is None and equity_capital is not None:
+                reserves = total_equity - equity_capital
+            elif equity_capital is None and reserves is None:
+                # Put the whole figure on equity_capital so the sum reconciles.
+                equity_capital = total_equity
+                reserves = 0.0
+
+        cfo = g("operating_cash_flow")
+        cfi = g("cfi")
+        cff = g("cff")
+        net_cash_flow = (
+            cfo + cfi + cff
+            if cfo is not None and cfi is not None and cff is not None
+            else None
+        )
+
+        mapped: dict = {
+            # 1:1 pass-through (WS-2 named US columns to match India keys).
+            "symbol": g("symbol"),
+            "fiscal_year_end": fye,
+            "revenue": g("revenue"),
+            "net_income": g("net_income"),
+            "eps": g("eps"),
+            "operating_profit": g("operating_profit"),
+            "depreciation": g("depreciation"),
+            "interest": g("interest"),
+            "profit_before_tax": g("profit_before_tax"),
+            "tax": g("tax"),
+            "borrowings": g("borrowings"),
+            "other_liabilities": g("other_liabilities"),
+            "total_assets": g("total_assets"),
+            "net_block": g("net_block"),
+            "cwip": g("cwip"),
+            "receivables": g("receivables"),
+            "inventory": g("inventory"),
+            "cash_and_bank": g("cash_and_bank"),
+            "num_shares": g("num_shares"),
+            "cfi": cfi,
+            "cff": cff,
+            # Reconciled equity split.
+            "equity_capital": equity_capital,
+            "reserves": reserves,
+            # Renamed / derived.
+            "cfo": cfo,
+            "net_cash_flow": net_cash_flow,
+            # India-only line items with no US analog — explicit None.
+            "raw_material_cost": None,
+            "power_and_fuel": None,
+            "employee_cost": None,
+            "other_mfr_exp": None,
+            "selling_and_admin": None,
+            "other_expenses_detail": None,
+            "net_premium_earned": None,
+            "investments": None,
+            "other_assets": None,
+            "dividend_amount": None,
+            "total_expenses": None,
+            "other_income": None,
+            "price": None,
+        }
+
+        # Also pass through US extras (harmless; WS-6 US-native funcs use them).
+        for extra in (
+            "total_equity", "total_debt", "total_cash", "free_cash_flow",
+            "shares_outstanding", "rnd_expense", "stock_based_comp", "sga",
+            "fiscal_year", "market", "currency",
+        ):
+            if extra in row:
+                mapped[extra] = row[extra]
+
+        # Mirror the India path's additive headline transform (non-insurer).
+        mapped["headline_revenue"] = mapped["revenue"]
+        return mapped
+
+    def _us_quarterly_to_india(self, row: dict) -> dict:
+        """Map a raw ``us_quarterly_financials`` row to the India
+        ``QuarterlyResult`` model_dump key contract. US quarterly is sparse —
+        only symbol/quarter_end/revenue/net_income/eps are populated.
+        """
+        g = row.get
+        mapped: dict = {
+            "symbol": g("symbol"),
+            "quarter_end": g("quarter_end"),
+            "revenue": g("revenue"),
+            "net_income": g("net_income"),
+            "eps": g("eps"),
+            "gross_profit": None,
+            "operating_income": None,
+            "ebitda": None,
+            "eps_diluted": None,
+            "operating_margin": None,
+            "net_margin": None,
+            "expenses": None,
+            "other_income": None,
+            "depreciation": None,
+            "interest": None,
+            "profit_before_tax": None,
+            "tax_pct": None,
+            "net_premium_earned": None,
+        }
+        for extra in ("fiscal_year", "fiscal_period", "market", "currency"):
+            if extra in row:
+                mapped[extra] = row[extra]
+        mapped["headline_revenue"] = mapped["revenue"]
+        return mapped
 
     def get_data_quality_flags(
         self, symbol: str, min_severity: str = "MEDIUM"

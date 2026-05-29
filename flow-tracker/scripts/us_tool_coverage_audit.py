@@ -42,18 +42,59 @@ def _seed_us(store) -> None:
         US_SYMBOL, US_MARKET, company_name="Apple Inc.",
         sector="Technology", gics="Technology", cik="320193",
     )
+    # 5 fiscal years (2020-2024) of full-column, AAPL-like annuals (USD millions)
+    # so multi-year forensic methods (Piotroski, Beneish, Altman, incremental
+    # ROCE, operating leverage, projections, CAGR) actually compute. Values are
+    # plausible and monotonic-ish; the equity split is left to the WS-3 adapter
+    # to reconcile from total_equity (AAPL reports total_equity, not the split).
+    _ANNUALS = [
+        # fy, revenue, net_income, eps, op_cash, fcf, op_profit, pbt, tax,
+        # depr, total_assets, total_equity, total_debt, total_cash, net_block,
+        # receivables, inventory, other_liab, cfi, cff, rnd, sbc, sga
+        (2020, 274_515.0, 57_411.0, 3.28, 80_674.0, 73_365.0, 66_288.0, 67_091.0,
+         9_680.0, 11_056.0, 323_888.0, 65_339.0, 112_436.0, 38_016.0, 36_766.0,
+         16_120.0, 4_061.0, 105_392.0, -4_289.0, -86_820.0, 18_752.0, 6_829.0, 19_916.0),
+        (2021, 365_817.0, 94_680.0, 5.61, 104_038.0, 92_953.0, 108_949.0, 109_207.0,
+         14_527.0, 11_284.0, 351_002.0, 63_090.0, 124_719.0, 34_940.0, 39_440.0,
+         26_278.0, 6_580.0, 125_481.0, -14_545.0, -93_353.0, 21_914.0, 7_906.0, 21_973.0),
+        (2022, 394_328.0, 99_803.0, 6.11, 122_151.0, 111_443.0, 119_437.0, 119_103.0,
+         19_300.0, 11_104.0, 352_755.0, 50_672.0, 120_069.0, 23_646.0, 42_117.0,
+         28_184.0, 4_946.0, 153_982.0, -22_354.0, -110_749.0, 26_251.0, 9_038.0, 25_094.0),
+        (2023, 383_285.0, 96_995.0, 6.13, 110_543.0, 99_584.0, 114_301.0, 113_736.0,
+         16_741.0, 11_519.0, 352_583.0, 62_146.0, 111_088.0, 29_965.0, 43_715.0,
+         29_508.0, 6_331.0, 145_308.0, 3_705.0, -108_488.0, 29_915.0, 10_833.0, 24_932.0),
+        (2024, 391_035.0, 93_736.0, 6.08, 118_254.0, 108_807.0, 123_216.0, 123_485.0,
+         29_749.0, 11_445.0, 364_980.0, 56_950.0, 106_629.0, 29_943.0, 45_680.0,
+         33_410.0, 7_286.0, 176_392.0, 2_935.0, -121_983.0, 31_370.0, 11_688.0, 26_097.0),
+    ]
     store.upsert_us_annual_financials([
         {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
-         "fiscal_year": 2024, "revenue": 391_035.0, "net_income": 93_736.0,
-         "eps": 6.08, "shares_outstanding": 15_000_000_000},
-        {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
-         "fiscal_year": 2023, "revenue": 383_285.0, "net_income": 96_995.0,
-         "eps": 6.13, "shares_outstanding": 15_550_000_000},
+         "fiscal_year": fy, "fiscal_year_end": f"{fy}-09-28",
+         "revenue": rev, "net_income": ni, "eps": eps,
+         "operating_cash_flow": ocf, "free_cash_flow": fcf,
+         "operating_profit": op, "profit_before_tax": pbt, "tax": tax,
+         "depreciation": depr, "interest": 0.0,
+         "total_assets": ta, "total_equity": te, "total_debt": td,
+         "total_cash": tc, "cash_and_bank": tc, "net_block": nb,
+         "receivables": recv, "inventory": inv, "other_liabilities": ol,
+         "borrowings": td, "cwip": 0.0,
+         "num_shares": 15_000_000_000.0 + (2024 - fy) * 150_000_000.0,
+         "shares_outstanding": 15_000_000_000.0 + (2024 - fy) * 150_000_000.0,
+         "cfi": cfi, "cff": cff,
+         "rnd_expense": rnd, "stock_based_comp": sbc, "sga": sga}
+        for (fy, rev, ni, eps, ocf, fcf, op, pbt, tax, depr, ta, te, td, tc,
+             nb, recv, inv, ol, cfi, cff, rnd, sbc, sga) in _ANNUALS
     ])
     store.upsert_us_quarterly_financials([
         {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
-         "quarter_end": "2024-12-28", "fiscal_year": 2025, "fiscal_period": "Q1",
-         "revenue": 124_300.0, "net_income": 36_330.0, "eps": 2.40},
+         "quarter_end": qe, "fiscal_year": fy, "fiscal_period": fp,
+         "revenue": rev, "net_income": ni, "eps": eps}
+        for (qe, fy, fp, rev, ni, eps) in [
+            ("2024-12-28", 2025, "Q1", 124_300.0, 36_330.0, 2.40),
+            ("2024-09-28", 2024, "Q4", 94_930.0, 14_736.0, 0.97),
+            ("2024-06-29", 2024, "Q3", 85_777.0, 21_448.0, 1.40),
+            ("2024-03-30", 2024, "Q2", 90_753.0, 23_636.0, 1.53),
+        ]
     ])
     store.upsert_us_valuation_snapshot([
         {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",

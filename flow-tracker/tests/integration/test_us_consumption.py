@@ -43,15 +43,55 @@ def _seed_us(store: FlowStore) -> None:
         US_SYMBOL, US_MARKET, company_name="Apple Inc.",
         sector="Technology", gics="Technology", cik="320193",
     )
+    # 5 fiscal years of full-column AAPL-like annuals (USD millions) so the
+    # multi-year forensic methods (Piotroski, Altman, incremental ROCE,
+    # operating leverage, projections) compute. AAPL reports total_equity but
+    # not the equity_capital/reserves split — the WS-3 adapter reconciles it.
+    _ANNUALS = [
+        (2020, 274_515.0, 57_411.0, 3.28, 80_674.0, 73_365.0, 66_288.0, 67_091.0,
+         9_680.0, 11_056.0, 323_888.0, 65_339.0, 112_436.0, 38_016.0, 36_766.0,
+         16_120.0, 4_061.0, 105_392.0, -4_289.0, -86_820.0, 18_752.0, 6_829.0, 19_916.0),
+        (2021, 365_817.0, 94_680.0, 5.61, 104_038.0, 92_953.0, 108_949.0, 109_207.0,
+         14_527.0, 11_284.0, 351_002.0, 63_090.0, 124_719.0, 34_940.0, 39_440.0,
+         26_278.0, 6_580.0, 125_481.0, -14_545.0, -93_353.0, 21_914.0, 7_906.0, 21_973.0),
+        (2022, 394_328.0, 99_803.0, 6.11, 122_151.0, 111_443.0, 119_437.0, 119_103.0,
+         19_300.0, 11_104.0, 352_755.0, 50_672.0, 120_069.0, 23_646.0, 42_117.0,
+         28_184.0, 4_946.0, 153_982.0, -22_354.0, -110_749.0, 26_251.0, 9_038.0, 25_094.0),
+        (2023, 383_285.0, 96_995.0, 6.13, 110_543.0, 99_584.0, 114_301.0, 113_736.0,
+         16_741.0, 11_519.0, 352_583.0, 62_146.0, 111_088.0, 29_965.0, 43_715.0,
+         29_508.0, 6_331.0, 145_308.0, 3_705.0, -108_488.0, 29_915.0, 10_833.0, 24_932.0),
+        (2024, 391_035.0, 93_736.0, 6.08, 118_254.0, 108_807.0, 123_216.0, 123_485.0,
+         29_749.0, 11_445.0, 364_980.0, 56_950.0, 106_629.0, 29_943.0, 45_680.0,
+         33_410.0, 7_286.0, 176_392.0, 2_935.0, -121_983.0, 31_370.0, 11_688.0, 26_097.0),
+    ]
     store.upsert_us_annual_financials([
         {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
-         "fiscal_year": 2024, "revenue": 391_035.0, "net_income": 93_736.0,
-         "eps": 6.08, "shares_outstanding": 15_000_000_000},
+         "fiscal_year": fy, "fiscal_year_end": f"{fy}-09-28",
+         "revenue": rev, "net_income": ni, "eps": eps,
+         "operating_cash_flow": ocf, "free_cash_flow": fcf,
+         "operating_profit": op, "profit_before_tax": pbt, "tax": tax,
+         "depreciation": depr, "interest": 0.0,
+         "total_assets": ta, "total_equity": te, "total_debt": td,
+         "total_cash": tc, "cash_and_bank": tc, "net_block": nb,
+         "receivables": recv, "inventory": inv, "other_liabilities": ol,
+         "borrowings": td, "cwip": 0.0,
+         "num_shares": 15_000_000_000.0 + (2024 - fy) * 150_000_000.0,
+         "shares_outstanding": 15_000_000_000.0 + (2024 - fy) * 150_000_000.0,
+         "cfi": cfi, "cff": cff,
+         "rnd_expense": rnd, "stock_based_comp": sbc, "sga": sga}
+        for (fy, rev, ni, eps, ocf, fcf, op, pbt, tax, depr, ta, te, td, tc,
+             nb, recv, inv, ol, cfi, cff, rnd, sbc, sga) in _ANNUALS
     ])
     store.upsert_us_quarterly_financials([
         {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
-         "quarter_end": "2024-12-28", "fiscal_year": 2025, "fiscal_period": "Q1",
-         "revenue": 124_300.0, "net_income": 36_330.0, "eps": 2.40},
+         "quarter_end": qe, "fiscal_year": fy, "fiscal_period": fp,
+         "revenue": rev, "net_income": ni, "eps": eps}
+        for (qe, fy, fp, rev, ni, eps) in [
+            ("2024-12-28", 2025, "Q1", 124_300.0, 36_330.0, 2.40),
+            ("2024-09-28", 2024, "Q4", 94_930.0, 14_736.0, 0.97),
+            ("2024-06-29", 2024, "Q3", 85_777.0, 21_448.0, 1.40),
+            ("2024-03-30", 2024, "Q2", 90_753.0, 23_636.0, 1.53),
+        ]
     ])
     store.upsert_us_valuation_snapshot([
         {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
@@ -333,3 +373,94 @@ class TestWS5IndiaStillWorks:
         assert not _is_not_applicable(_call(t.get_macro_catalog, {}))
         assert not _is_not_applicable(_call(t.get_macro_indicators, {}))
         assert not _is_not_applicable(_call(t.get_fii_derivative_flow, {}))
+
+
+# --------------------------------------------------------------------------- #
+# 5. WS-3 adapter bridge — US financials map to the India key contract so the
+#    forensic methods consume them unchanged.
+# --------------------------------------------------------------------------- #
+
+
+class TestWS3AdapterBridge:
+    def test_annual_financials_have_india_keys(self, db):
+        from flowtracker.research.data_api import _run_market
+
+        token = _run_market.set(US_MARKET)
+        try:
+            with ResearchDataAPI() as api:
+                rows = api.get_annual_financials(US_SYMBOL)
+        finally:
+            _run_market.reset(token)
+
+        assert rows, "expected mapped US annual rows"
+        # Latest-first, matching the India path.
+        assert rows[0]["fiscal_year_end"] == "2024-09-28"
+        assert rows[1]["fiscal_year_end"] == "2023-09-28"
+
+        top = rows[0]
+        # India model_dump keys must all be present.
+        for key in ("symbol", "fiscal_year_end", "revenue", "net_income",
+                    "operating_profit", "depreciation", "interest",
+                    "profit_before_tax", "tax", "equity_capital", "reserves",
+                    "borrowings", "other_liabilities", "total_assets",
+                    "net_block", "cwip", "receivables", "inventory",
+                    "cash_and_bank", "num_shares", "cfo", "cfi", "cff",
+                    "net_cash_flow", "eps"):
+            assert key in top, f"missing India key: {key}"
+
+        # cfo ← operating_cash_flow (not the raw column name).
+        assert top["cfo"] == 118_254.0
+        # net_cash_flow = cfo + cfi + cff.
+        assert top["net_cash_flow"] == pytest.approx(118_254.0 + 2_935.0 - 121_983.0)
+
+        # Equity reconciliation: equity_capital + reserves == US total_equity.
+        assert top["equity_capital"] + top["reserves"] == pytest.approx(56_950.0)
+        assert top["total_equity"] == 56_950.0
+
+    def test_quarterly_results_have_india_keys(self, db):
+        from flowtracker.research.data_api import _run_market
+
+        token = _run_market.set(US_MARKET)
+        try:
+            with ResearchDataAPI() as api:
+                rows = api.get_quarterly_results(US_SYMBOL)
+        finally:
+            _run_market.reset(token)
+
+        assert rows
+        top = rows[0]
+        for key in ("symbol", "quarter_end", "revenue", "net_income", "eps",
+                    "gross_profit", "operating_income", "ebitda", "eps_diluted",
+                    "operating_margin", "net_margin", "expenses", "other_income",
+                    "depreciation", "interest", "profit_before_tax", "tax_pct",
+                    "net_premium_earned"):
+            assert key in top, f"missing India quarterly key: {key}"
+        assert top["revenue"] == 124_300.0
+        # Sparse fields are explicit None, never KeyError.
+        assert top["ebitda"] is None
+
+    def test_piotroski_routes_for_us(self, db):
+        from flowtracker.research.data_api import _run_market
+
+        token = _run_market.set(US_MARKET)
+        try:
+            with ResearchDataAPI() as api:
+                score = api.get_piotroski_score(US_SYMBOL)
+        finally:
+            _run_market.reset(token)
+
+        assert not score.get("error"), score.get("error")
+        assert isinstance(score.get("score"), int)
+        assert 0 <= score["score"] <= score["max_score"]
+
+    def test_india_annual_financials_unchanged(self, db):
+        # Regression: India path must NOT route through the US mapper.
+        with ResearchDataAPI() as api:
+            rows = api.get_annual_financials("SBIN")
+        assert rows
+        top = rows[0]
+        assert top["symbol"] == "SBIN"
+        # India fiscal year end is March; never the US Sept date.
+        assert top["fiscal_year_end"].endswith("-03-31")
+        # India headline transform still applied.
+        assert "headline_revenue" in top
