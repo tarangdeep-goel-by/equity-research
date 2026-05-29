@@ -9,6 +9,7 @@ from typing import Any
 import yfinance as yf
 
 from flowtracker.fund_models import LiveSnapshot, QuarterlyResult, ValuationSnapshot
+from flowtracker.market import Market, market_symbol, to_aggregate
 
 
 class YFinanceError(Exception):
@@ -16,10 +17,13 @@ class YFinanceError(Exception):
 
 
 def nse_symbol(symbol: str) -> str:
-    """Convert watchlist symbol to yfinance format. TECHM -> TECHM.NS"""
-    if symbol.endswith(".NS") or symbol.endswith(".BO"):
-        return symbol
-    return f"{symbol}.NS"
+    """Convert watchlist symbol to yfinance format. TECHM -> TECHM.NS
+
+    Thin India-default wrapper over :func:`flowtracker.market.market_symbol`;
+    kept for backward compatibility. New code should call ``market_symbol(sym,
+    market)`` directly so US tickers (no suffix) format correctly.
+    """
+    return market_symbol(symbol, Market.NSE)
 
 
 def _safe_get(df: Any, row: str, col: Any) -> float | None:
@@ -39,8 +43,9 @@ def _div100(val: float | None) -> float | None:
 
 
 def _to_cr(val: float | None) -> float | None:
-    """Convert raw rupees to crores (÷1e7)."""
-    return val / 1e7 if val is not None else None
+    """Convert raw rupees to crores (÷1e7). India-default wrapper over
+    :func:`flowtracker.market.to_aggregate`."""
+    return to_aggregate(val, Market.NSE)
 
 
 def _to_pct(val: float | None) -> float | None:

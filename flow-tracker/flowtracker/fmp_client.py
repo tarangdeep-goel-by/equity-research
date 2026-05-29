@@ -18,6 +18,7 @@ from flowtracker.fmp_models import (
     FMPTechnicalIndicator,
 )
 from flowtracker.fund_client import nse_symbol
+from flowtracker.market import Market, to_aggregate
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,9 @@ def _safe_float(val: object) -> float | None:
 
 
 def _to_cr(val: float | None) -> float | None:
-    """Convert raw value to crores (÷1e7)."""
-    return val / 1e7 if val is not None else None
+    """Convert raw value to crores (÷1e7). India-default wrapper over
+    :func:`flowtracker.market.to_aggregate`."""
+    return to_aggregate(val, Market.NSE)
 
 
 def _to_pct(val: float | None) -> float | None:
