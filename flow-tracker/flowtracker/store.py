@@ -3899,8 +3899,18 @@ class FlowStore:
     def upsert_insider_transactions(self, trades: list[InsiderTransaction]) -> int:
         """Insert or replace insider transaction records."""
         cursor = self._conn.cursor()
+        today_iso = date.today().isoformat()
         count = 0
         for t in trades:
+            # NSE occasionally emits future/implausible transaction dates (a
+            # transaction can't be reported before it happens). Reject them so
+            # they never pollute the table. See issue #175.
+            if t.date and t.date > today_iso:
+                _val_logger.warning(
+                    "insider_transactions %s: dropping future-dated row %s > today %s",
+                    t.symbol, t.date, today_iso,
+                )
+                continue
             warnings = _validate_row("insider_transactions", t.model_dump())
             if warnings:
                 _val_logger.warning("insider_transactions %s/%s: %s", t.symbol, t.date, "; ".join(warnings))

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Refresh ADR/GDR program directory + pull USFDA enforcement records for the
+  pharma universe. Runs 1st of every month at 10:30. ADR seed changes rarely
+  and FDA upserts are idempotent, so monthly "mostly no-change" runs are cheap
+  and simpler than a true quarterly cron. Wires the previously-unscheduled
+  adr_programs + fda_inspections feeds (issue #176).
+
+  This is a template: __HOME__ is substituted with $HOME by
+  scripts/install-launch-agents.sh at install time. Do not copy this file
+  to ~/Library/LaunchAgents/ directly — run the install script instead.
+
+  Install:
+      bash scripts/install-launch-agents.sh
+
+  Verify:
+      launchctl list | grep flowtracker.quarterly-adr-fda
+
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.flowtracker.quarterly-adr-fda.plist
+      rm ~/Library/LaunchAgents/com.flowtracker.quarterly-adr-fda.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowtracker.quarterly-adr-fda</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__HOME__/.local/share/flowtracker/scripts/quarterly-adr-fda.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Day</key><integer>1</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>30</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/flowtracker/cron.log</string>
+</dict>
+</plist>

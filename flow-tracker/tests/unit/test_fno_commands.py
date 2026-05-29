@@ -143,6 +143,92 @@ def test_fetch_command_empty_returns_exit_1(
 
 
 # ---------------------------------------------------------------------------
+# fno fetch — gap-fill mode (no --date), issue #174
+# ---------------------------------------------------------------------------
+
+
+@freeze_time("2026-05-29")  # Friday
+def test_fetch_gapfill_empty_db_fetches_trailing_window(
+    tmp_db: Path, store: FlowStore, monkeypatch
+):
+    """No --date + empty DB → fetch the trailing window (default 5 weekdays)."""
+    monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+    cls, inner = _make_fno_client_cm(
+        contracts=[_mk_contract()], participants=[_mk_participant()]
+    )
+
+    with patch("flowtracker.fno_commands.FnoClient", cls):
+        result = runner.invoke(app, ["fno", "fetch"])
+
+    assert result.exit_code == 0, result.output
+    # Mon 25 .. Fri 29 = 5 trading days.
+    assert inner.fetch_fno_bhavcopy.call_count == 5
+    fetched_dates = [c.args[0] for c in inner.fetch_fno_bhavcopy.call_args_list]
+    assert fetched_dates == [date(2026, 5, d) for d in (25, 26, 27, 28, 29)]
+
+
+@freeze_time("2026-05-29")  # Friday
+def test_fetch_gapfill_resumes_after_last_trade_date(
+    tmp_db: Path, store: FlowStore, monkeypatch
+):
+    """No --date → fetch only the missing days since MAX(trade_date)."""
+    monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+    # Last stored day is Wed 27 → only Thu 28 + Fri 29 are missing.
+    store.upsert_fno_contracts([_mk_contract(trade_date=date(2026, 5, 27))])
+    cls, inner = _make_fno_client_cm(
+        contracts=[_mk_contract()], participants=[_mk_participant()]
+    )
+
+    with patch("flowtracker.fno_commands.FnoClient", cls):
+        result = runner.invoke(app, ["fno", "fetch"])
+
+    assert result.exit_code == 0, result.output
+    fetched_dates = [c.args[0] for c in inner.fetch_fno_bhavcopy.call_args_list]
+    assert fetched_dates == [date(2026, 5, 28), date(2026, 5, 29)]
+
+
+@freeze_time("2026-05-29")  # Friday
+def test_fetch_gapfill_large_gap_is_bounded(
+    tmp_db: Path, store: FlowStore, monkeypatch
+):
+    """A gap wider than --days is capped to the trailing window + warns."""
+    monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+    store.upsert_fno_contracts([_mk_contract(trade_date=date(2026, 3, 2))])
+    cls, inner = _make_fno_client_cm(
+        contracts=[_mk_contract()], participants=[_mk_participant()]
+    )
+
+    with patch("flowtracker.fno_commands.FnoClient", cls):
+        result = runner.invoke(app, ["fno", "fetch", "--days", "3"])
+
+    assert result.exit_code == 0, result.output
+    assert "backfill" in result.output.lower()
+    # Bounded to last 3 weekdays: Wed 27, Thu 28, Fri 29.
+    assert inner.fetch_fno_bhavcopy.call_count == 3
+
+
+@freeze_time("2026-05-29")  # Friday
+def test_fetch_gapfill_idempotent_when_current(
+    tmp_db: Path, store: FlowStore, monkeypatch
+):
+    """Gap-fill is idempotent — when the latest day is stored, nothing refetches."""
+    monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+    # Latest stored day == today → resume point is past today, nothing to do.
+    store.upsert_fno_contracts([_mk_contract(trade_date=date(2026, 5, 29))])
+    cls, inner = _make_fno_client_cm(
+        contracts=[_mk_contract()], participants=[_mk_participant()]
+    )
+
+    with patch("flowtracker.fno_commands.FnoClient", cls):
+        result = runner.invoke(app, ["fno", "fetch"])
+
+    assert result.exit_code == 0, result.output
+    # Start resumes after MAX(trade_date)=29 → nothing to fetch.
+    assert inner.fetch_fno_bhavcopy.call_count == 0
+    assert "already present" in result.output
+
+
+# ---------------------------------------------------------------------------
 # fno universe refresh
 # ---------------------------------------------------------------------------
 

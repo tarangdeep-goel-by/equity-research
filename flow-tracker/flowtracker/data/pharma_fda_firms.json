@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "description": "NSE-ticker -> openFDA firm-name mapping for the quarterly FDA-inspections cron (scripts/quarterly-adr-fda.sh). openFDA drug-enforcement records are keyed by firm name, NOT by ticker, so `flowtrack fda fetch` requires the firm string. Issue #176.",
+    "verification_status": "VERIFIED 2026-05-29 against live openFDA (api.fda.gov/drug/enforcement.json, recalling_firm phrase search). Each `firm` below returns on-target records for the listed issuer (typically via its US subsidiary). Re-verify periodically: `flowtrack fda fetch -s <SYM> --firm \"<NAME>\" --limit 5`.",
+    "source_authority": "Indian pharma issuers with a US-market recall footprint. Firm strings chosen to match the recalling_firm value openFDA actually indexes (often the US arm, e.g. ALKEM ships under 'Ascend Laboratories').",
+    "notes": "ALKEM uses its US subsidiary 'Ascend Laboratories' (the parent name returns nothing). Excluded for having no openFDA drug-enforcement records as of 2026-05-29: IPCALAB (historic US import alert), LAURUSLABS (API/CDMO-focused), GLAND, DIVISLAB, MANKIND. Add them if/when they accrue US recalls.",
+    "last_reviewed": "2026-05-29"
+  },
+  "firms": [
+    {"symbol": "SUNPHARMA", "firm": "Sun Pharmaceutical Industries"},
+    {"symbol": "DRREDDY", "firm": "Dr. Reddy's Laboratories"},
+    {"symbol": "CIPLA", "firm": "Cipla"},
+    {"symbol": "LUPIN", "firm": "Lupin"},
+    {"symbol": "AUROPHARMA", "firm": "Aurobindo Pharma"},
+    {"symbol": "ZYDUSLIFE", "firm": "Zydus"},
+    {"symbol": "TORNTPHARM", "firm": "Torrent Pharmaceuticals"},
+    {"symbol": "GLENMARK", "firm": "Glenmark Pharmaceuticals"},
+    {"symbol": "BIOCON", "firm": "Biocon"},
+    {"symbol": "ALKEM", "firm": "Ascend Laboratories"},
+    {"symbol": "GRANULES", "firm": "Granules India"},
+    {"symbol": "NATCOPHARM", "firm": "Natco Pharma"},
+    {"symbol": "STRIDES", "firm": "Strides Pharma"},
+    {"symbol": "WOCKPHARMA", "firm": "Wockhardt"},
+    {"symbol": "JUBLPHARMA", "firm": "Jubilant Cadista"}
+  ]
+}
