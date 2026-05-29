@@ -116,3 +116,30 @@ def test_store_roundtrip_explicit_new_columns(store) -> None:
         "rnd_expense", "stock_based_comp", "sga",
     ):
         assert got[col] == row[col], col
+
+
+def test_quarterly_fiscal_year_from_original_filing():
+    """A prior-quarter restated as a comparative in a later 10-Q carries that
+    later filing's fy in SEC companyfacts. The normalizer must take fy/fp from
+    the ORIGINAL 10-Q (earliest filed) while keeping the freshest value."""
+    from flowtracker.edgar_client import EdgarClient
+
+    facts = {"facts": {"us-gaap": {
+        "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+            # Original FY2025 Q1 10-Q (Dec-2024 quarter), filed Jan 2025.
+            {"form": "10-Q", "fp": "Q1", "fy": 2025,
+             "start": "2024-09-29", "end": "2024-12-28", "val": 124_300_000_000,
+             "filed": "2025-01-30"},
+            # Same Dec-2024 quarter restated as a comparative in the FY2026 Q1
+            # 10-Q (filed Jan 2026) — SEC tags it fy=2026.
+            {"form": "10-Q", "fp": "Q1", "fy": 2026,
+             "start": "2024-09-29", "end": "2024-12-28", "val": 124_350_000_000,
+             "filed": "2026-01-30"},
+        ]}},
+    }}}
+    ec = EdgarClient.__new__(EdgarClient)
+    rows = ec.normalize_quarterly(facts, "AAPL")
+    row = next(r for r in rows if r["quarter_end"] == "2024-12-28")
+    assert row["fiscal_year"] == 2025, "fy must come from the original 10-Q, not the comparative"
+    assert row["fiscal_period"] == "Q1"
+    assert row["revenue"] == 124_350.0, "value should be the freshest (restated) figure"

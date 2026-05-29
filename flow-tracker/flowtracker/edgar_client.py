@@ -530,14 +530,20 @@ class EdgarClient(SecEdgarBase):
         return self._pick_annual_instant(gaap, _DEBT_TOTAL_TAGS, duration)
 
     def _pick_quarterly_duration(self, gaap: dict, tags: list[str]) -> dict[str, dict]:
-        """quarter_end → {val, fy, fp} for the first present tag, latest filing wins.
+        """quarter_end → {val, fy, fp} for the first present tag.
 
         10-Q duration facts with fp in (Q1,Q2,Q3) spanning a single quarter
         (60-100 days) — guards against 6-/9-month cumulative durations that 10-Qs
         also report under the same tag.
+
+        Value: LATEST filing wins (picks up restatements). Fiscal (fy, fp):
+        EARLIEST filing wins. SEC tags each fact with the FILING's fiscal year,
+        so a prior-year comparative restated in a later 10-Q carries that later
+        filing's fy — taking fy/fp from the original 10-Q (earliest ``filed``)
+        keeps the period's true fiscal year instead of drifting +1 each reuse.
         """
         for tag in tags:
-            best: dict[str, dict] = {}  # end → {val, fy, fp, filed}
+            best: dict[str, dict] = {}  # end → {val, val_filed, fy, fp, fy_filed}
             for f in self._units(gaap, tag):
                 if f.get("form") not in _QUARTERLY_FORMS:
                     continue
@@ -552,13 +558,20 @@ class EdgarClient(SecEdgarBase):
                     continue
                 end = f["end"]
                 filed = f.get("filed", "")
-                if end not in best or filed > best[end]["filed"]:
+                cur = best.get(end)
+                if cur is None:
                     best[end] = {
-                        "val": float(f["val"]),
-                        "fy": f.get("fy"),
-                        "fp": fp,
-                        "filed": filed,
+                        "val": float(f["val"]), "val_filed": filed,
+                        "fy": f.get("fy"), "fp": fp, "fy_filed": filed,
                     }
+                else:
+                    if filed > cur["val_filed"]:  # freshest value
+                        cur["val"] = float(f["val"])
+                        cur["val_filed"] = filed
+                    if filed < cur["fy_filed"]:  # original report → true fy/fp
+                        cur["fy"] = f.get("fy")
+                        cur["fp"] = fp
+                        cur["fy_filed"] = filed
             if best:
                 return {
                     end: {"val": v["val"], "fy": v["fy"], "fp": v["fp"]}
