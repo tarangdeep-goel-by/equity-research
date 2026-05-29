@@ -248,3 +248,45 @@ class UsMarketMixin:
         return self._us_get(
             "us_institutional_holdings", symbol, market, "value_usd DESC",
         )
+
+    # -- us_macro_daily (market-wide; symbol-less) --
+
+    _US_MACRO_DAILY_COLS = (
+        "date", "vix", "dxy", "ust_3m", "ust_5y", "ust_10y", "ust_30y",
+        "wti_crude", "brent_crude", "gold",
+    )
+
+    def upsert_us_macro_daily(self, rows: list[dict]) -> int:
+        """Insert or replace US daily macro snapshots. Conflict key: (date).
+
+        Market-wide table (no symbol), so this uses a plain INSERT OR REPLACE
+        keyed on the UNIQUE(date) constraint, mirroring the India
+        ``upsert_macro_snapshots`` pattern rather than the symbol-scoped
+        ``_us_upsert`` helper. Accepts plain dicts keyed by column name (or
+        ``USMacroSnapshot`` instances via ``.model_dump()`` upstream); missing
+        fields persist as NULL.
+        """
+        if not rows:
+            return 0
+        col_sql = ", ".join(self._US_MACRO_DAILY_COLS)
+        placeholders = ", ".join(["?"] * len(self._US_MACRO_DAILY_COLS))
+        sql = (
+            f"INSERT OR REPLACE INTO us_macro_daily ({col_sql}) "
+            f"VALUES ({placeholders})"
+        )
+        cur = self._conn.cursor()
+        count = 0
+        for row in rows:
+            r = dict(row)
+            cur.execute(sql, tuple(r.get(c) for c in self._US_MACRO_DAILY_COLS))
+            count += cur.rowcount
+        self._conn.commit()
+        return count
+
+    def get_us_macro_daily(self, days: int = 7) -> list[dict]:
+        """Most recent ``days`` US macro snapshot rows, newest first."""
+        rows = self._conn.execute(
+            "SELECT * FROM us_macro_daily ORDER BY date DESC LIMIT ?",
+            (days,),
+        ).fetchall()
+        return [dict(r) for r in rows]

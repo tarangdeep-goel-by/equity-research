@@ -281,7 +281,7 @@ _OWNERSHIP_INDIA_ONLY = frozenset({
 })
 # India-only market-context sections — degrade to not-applicable for US symbols.
 _MARKET_CONTEXT_INDIA_ONLY = frozenset({
-    "delivery", "delivery_analysis", "fii_dii_streak", "fii_dii_flows", "macro",
+    "delivery", "delivery_analysis", "fii_dii_streak", "fii_dii_flows",
 })
 # India-only company-context sections (India doc store) — degrade for US symbols.
 # 'info'/'profile' stay routed (info now reads symbol_registry for US).
@@ -881,8 +881,8 @@ async def get_macro_catalog(args):
     annotations=READ_ONLY,
 )
 async def get_macro_indicators(args):
-    if _run_market.get() in ("NASDAQ", "NYSE"):
-        return _us_not_applicable("get_macro_indicators", "India macro indicator time-series (CPI/IIP/PMI/G-sec)", "", args)
+    # data_api routes US (us_macro_daily) vs India (CPI/IIP/PMI/G-sec)
+    # internally based on the run market — no degradation here.
     with ResearchDataAPI() as api:
         data = api.get_macro_indicators(args.get("months", 24))
     return _with_dedup(

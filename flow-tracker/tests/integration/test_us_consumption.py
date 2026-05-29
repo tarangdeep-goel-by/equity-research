@@ -347,7 +347,10 @@ class TestWS5DegradesForUS:
         )
 
     def test_macro_tools_na_for_us_run(self, db):
-        # Macro tools read the run-market ContextVar (no symbol arg).
+        # Macro ANCHOR-doc tools (Fed anchor docs are a later workstream) and
+        # the FII derivative flow tool stay degraded for a US run. The macro
+        # snapshot/indicators path is NO LONGER degraded — it routes to the
+        # us_macro_daily-backed US shape via data_api (feat/us-macro).
         from flowtracker.research.data_api import _run_market
         token = _run_market.set(US_MARKET)
         try:
@@ -355,7 +358,8 @@ class TestWS5DegradesForUS:
             assert _is_not_applicable(
                 _call(t.get_macro_anchor, {"doc_type": "economic_survey"})
             )
-            assert _is_not_applicable(_call(t.get_macro_indicators, {}))
+            # get_macro_indicators now routes US (not n/a) — see TestUSMacro*.
+            assert not _is_not_applicable(_call(t.get_macro_indicators, {}))
             assert _is_not_applicable(_call(t.get_fii_derivative_flow, {}))
         finally:
             _run_market.reset(token)

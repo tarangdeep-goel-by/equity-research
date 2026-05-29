@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 import httpx
 import yfinance as yf
 
-from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit
+from flowtracker.macro_models import MacroSnapshot, MacroSystemCredit, USMacroSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,32 @@ _USDINR_TICKER = "USDINR=X"
 _EURINR_TICKER = "EURINR=X"
 _GBPINR_TICKER = "GBPINR=X"
 _BRENT_TICKER = "BZ=F"
+
+# US macro tickers (US add-on). All free on yfinance (no API key — same as
+# India). CBOE yield indices (^IRX/^FVX/^TNX/^TYX) publish Close as the yield
+# in percent already, so they're stored as-is (matching India gsec_* percent).
+_US_VIX_TICKER = "^VIX"          # CBOE Volatility Index
+_DXY_TICKER = "DX-Y.NYB"         # US Dollar Index
+_UST_3M_TICKER = "^IRX"          # 13-week T-bill yield %
+_UST_5Y_TICKER = "^FVX"          # 5Y Treasury yield %
+_UST_10Y_TICKER = "^TNX"         # 10Y Treasury yield %
+_UST_30Y_TICKER = "^TYX"         # 30Y Treasury yield %
+_WTI_TICKER = "CL=F"             # WTI crude USD/barrel
+_US_BRENT_TICKER = "BZ=F"        # Brent crude USD/barrel
+_GOLD_TICKER = "GC=F"            # Gold USD/oz
+
+# Ticker → USMacroSnapshot field name.
+_US_MACRO_FIELD_MAP: dict[str, str] = {
+    _US_VIX_TICKER: "vix",
+    _DXY_TICKER: "dxy",
+    _UST_3M_TICKER: "ust_3m",
+    _UST_5Y_TICKER: "ust_5y",
+    _UST_10Y_TICKER: "ust_10y",
+    _UST_30Y_TICKER: "ust_30y",
+    _WTI_TICKER: "wti_crude",
+    _US_BRENT_TICKER: "brent_crude",
+    _GOLD_TICKER: "gold",
+}
 
 # Default yfinance ticker set for `fetch_index_prices`. These cover the
 # broad-market and major sectoral indices that have working yfinance
@@ -174,6 +200,48 @@ class MacroClient:
                 gsec_5y=curve.get("5y"),
                 gsec_10y=curve.get("10y"),
                 gsec_30y=curve.get("30y"),
+            ))
+
+        return snapshots
+
+    def fetch_us_macro_snapshot(self, days: int = 5) -> list[USMacroSnapshot]:
+        """Fetch recent N days of US macro data from yfinance (US add-on).
+
+        Mirrors ``fetch_snapshot`` for the US market — batch-downloads each
+        ticker's recent history, one row per trading date with the fields that
+        resolved. A ticker that fails or returns empty leaves its field as
+        ``None`` (resilient — never aborts the whole snapshot). Treasury yields
+        (^IRX/^FVX/^TNX/^TYX) are stored as-is in percent.
+        """
+        period = f"{days}d"
+        data: dict[str, dict[str, float]] = {}
+
+        for ticker_sym, field in _US_MACRO_FIELD_MAP.items():
+            try:
+                hist = yf.Ticker(ticker_sym).history(period=period)
+                for idx, row in hist.iterrows():
+                    d = idx.strftime("%Y-%m-%d")
+                    close = row["Close"]
+                    if close is None or math.isnan(close):
+                        continue
+                    data.setdefault(d, {})[field] = round(close, 4)
+            except Exception as e:
+                logger.warning("Failed to fetch US macro %s: %s", ticker_sym, e)
+
+        snapshots: list[USMacroSnapshot] = []
+        for d in sorted(data.keys()):
+            vals = data[d]
+            snapshots.append(USMacroSnapshot(
+                date=d,
+                vix=vals.get("vix"),
+                dxy=vals.get("dxy"),
+                ust_3m=vals.get("ust_3m"),
+                ust_5y=vals.get("ust_5y"),
+                ust_10y=vals.get("ust_10y"),
+                ust_30y=vals.get("ust_30y"),
+                wti_crude=vals.get("wti_crude"),
+                brent_crude=vals.get("brent_crude"),
+                gold=vals.get("gold"),
             ))
 
         return snapshots

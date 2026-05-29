@@ -882,6 +882,16 @@ class ResearchDataAPI:
         """True when the symbol is a US listing (NASDAQ / NYSE)."""
         return self._market_of(symbol) in ("NASDAQ", "NYSE")
 
+    def _is_us_run(self) -> bool:
+        """True when the current run market is US (NASDAQ / NYSE).
+
+        For market-wide (symbol-less) methods like the macro snapshot, gating
+        is on the run market — instance override (constructor ``market=``) or
+        the ``_run_market`` ContextVar — NOT a per-symbol registry lookup.
+        Returns False (India path) when no US run context is active.
+        """
+        return (self._run_market or _run_market.get()) in ("NASDAQ", "NYSE")
+
     # --- Industry Helpers ---
 
     def _get_industry(self, symbol: str) -> str:
@@ -3040,7 +3050,14 @@ class ResearchDataAPI:
         (credit/deposit YoY growth, C/D ratio, M3 growth) for bank-sector
         macro grounding. ``system_credit`` key is omitted when no WSS rows
         exist.
+
+        US run-market (NASDAQ / NYSE): reads the all-new ``us_macro_daily``
+        table instead (VIX / DXY / UST curve / crude / gold) with the same
+        newest-7 field-by-field coalesce + ``<field>_as_of`` fall-forward
+        shape. India path (default) is unchanged.
         """
+        if self._is_us_run():
+            return self._get_us_macro_snapshot()
         rows = self._store._conn.execute(
             "SELECT * FROM macro_daily ORDER BY date DESC LIMIT 7"
         ).fetchall()
@@ -3090,6 +3107,71 @@ class ResearchDataAPI:
             result["system_credit"] = sc
         return _clean(result)
 
+    # --- US macro routing (US add-on) ---
+
+    _US_MACRO_FIELDS = (
+        "vix", "dxy", "ust_3m", "ust_5y", "ust_10y", "ust_30y",
+        "wti_crude", "brent_crude", "gold",
+    )
+
+    def _get_us_macro_snapshot(self) -> dict:
+        """US run-market macro snapshot from ``us_macro_daily``.
+
+        Same newest-7 field-by-field coalesce + ``<field>_as_of`` fall-forward
+        shape as the India ``get_macro_snapshot`` path. CPI/IIP/PMI and RBI
+        system-credit are India-only and intentionally omitted for US.
+        """
+        rows = self._store._conn.execute(
+            "SELECT * FROM us_macro_daily ORDER BY date DESC LIMIT 7"
+        ).fetchall()
+        if not rows:
+            return {}
+        latest_date = rows[0]["date"]
+        result: dict = {"date": latest_date}
+        keys = set(rows[0].keys())
+        for field in self._US_MACRO_FIELDS:
+            if field not in keys:
+                continue
+            for row in rows:
+                v = row[field]
+                if v is not None:
+                    result[field] = v
+                    if row["date"] != latest_date:
+                        result[f"{field}_as_of"] = row["date"]
+                    break
+        return _clean(result)
+
+    def _get_us_macro_indicators(self, months: int = 24) -> dict:
+        """US run-market macro time-series from ``us_macro_daily``.
+
+        Returns a ``yield_curve`` block (latest UST 3M/5Y/10Y/30Y) and a
+        ``vix_dxy_crude`` block (latest VIX / DXY / WTI / Brent / gold). CPI /
+        IIP / PMI are India-only and set null for US.
+        """
+        snap = self._get_us_macro_snapshot()
+        return _clean({
+            "cpi": None,
+            "iip": None,
+            "pmi": None,
+            "yield_curve": {
+                "latest": {
+                    "date": snap.get("date"),
+                    "ust_3m": snap.get("ust_3m"),
+                    "ust_5y": snap.get("ust_5y"),
+                    "ust_10y": snap.get("ust_10y"),
+                    "ust_30y": snap.get("ust_30y"),
+                } if snap else None,
+            },
+            "vix_dxy_crude": {
+                "date": snap.get("date"),
+                "vix": snap.get("vix"),
+                "dxy": snap.get("dxy"),
+                "wti_crude": snap.get("wti_crude"),
+                "brent_crude": snap.get("brent_crude"),
+                "gold": snap.get("gold"),
+            } if snap else None,
+        })
+
     def get_macro_indicators(self, months: int = 24) -> dict:
         """India macro time-series for the macro agent: CPI / IIP / PMI trend +
         the full G-sec yield-curve history.
@@ -3098,7 +3180,13 @@ class ResearchDataAPI:
         first) plus the daily yield curve over the same horizon. This is the
         local-DB T1 numeric source — the macro agent should cite it for India
         CPI/IIP/PMI/yield numbers instead of WebSearch.
+
+        US run-market (NASDAQ / NYSE): returns a US-shaped dict from
+        ``us_macro_daily`` (``yield_curve`` UST tenors + ``vix_dxy_crude``);
+        CPI/IIP/PMI are India-only and null for US. India path unchanged.
         """
+        if self._is_us_run():
+            return self._get_us_macro_indicators(months)
         months = max(1, int(months))
         cpi_latest = self._store.get_cpi_latest()
         iip_latest = self._store.get_iip_latest()
