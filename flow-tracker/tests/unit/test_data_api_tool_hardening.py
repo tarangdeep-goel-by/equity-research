@@ -146,11 +146,13 @@ class TestCuratedSubsidiaryFallback:
         assert green[0]["source"] == "curated_map"
         assert "confirm" in green[0]["verify_note"].lower()
 
-    def test_db_rows_take_precedence_over_curated(self, api: ResearchDataAPI, monkeypatch):
+    def test_db_table_is_ignored_curated_is_source(self, api: ResearchDataAPI, monkeypatch):
         import sys
         import types
 
-        # Real DB row for NTPC -> curated map must NOT be merged in.
+        # SOTP source is now the curated YAML ONLY. The legacy listed_subsidiaries
+        # DB table (written only by the deleted promoter-surname heuristic) is no
+        # longer consulted, so a DB-seeded row must NOT surface — only curated.
         api._store.upsert_listed_subsidiary("NTPC", "REALSUB", "Real Sub", 70.0, "Sub")
         self._seed_parent_shares(api._store, "NTPC")
         monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(
@@ -158,8 +160,8 @@ class TestCuratedSubsidiaryFallback:
         ))
         out = api.get_listed_subsidiaries("NTPC")
         syms = {s["symbol"] for s in out["subsidiaries"]}
-        assert "REALSUB" in syms
-        assert "NTPCGREEN" not in syms  # curated suppressed when DB has rows
+        assert "NTPCGREEN" in syms      # curated YAML is the source
+        assert "REALSUB" not in syms    # stale DB rows are ignored
 
     def test_sbin_curated_has_two_subsidiaries(self, api: ResearchDataAPI, monkeypatch):
         import sys

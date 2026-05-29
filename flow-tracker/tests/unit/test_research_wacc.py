@@ -13,7 +13,9 @@ from datetime import date, timedelta
 import pytest
 
 from flowtracker.research.wacc import (
+    STATUTORY_TAX_RATE,
     build_wacc_params,
+    compute_cost_of_debt,
     compute_nifty_beta,
 )
 
@@ -183,3 +185,47 @@ class TestBuildWaccParamsNonBFSI:
         assert isinstance(result["cost_of_debt"], dict)
         # WACC blends CoE and CoD, so it should differ from CoE for a leveraged co.
         assert "kd_pretax" in result["cost_of_debt"]
+
+
+class TestCostOfDebtTaxClamp:
+    """Tax-shield must never raise post-tax cost of debt above pre-tax.
+
+    Regression for NTPC-style negative effective tax rates (e.g. -11.66% from
+    deferred-tax credits / regulatory adjustments).
+    """
+
+    def test_cost_of_debt_negative_effective_tax(self):
+        result = compute_cost_of_debt(
+            interest=100.0,
+            borrowings=5000.0,
+            pbt=1000.0,
+            rf=0.07,
+            effective_tax_rate=-0.1166,
+        )
+        assert result["tax_rate_used"] == round(STATUTORY_TAX_RATE, 4)
+        assert result["kd_posttax"] < result["kd_pretax"]
+        assert result["tax_rate_anomalous"] is True
+
+    def test_cost_of_debt_normal_tax(self):
+        result = compute_cost_of_debt(
+            interest=100.0,
+            borrowings=5000.0,
+            pbt=1000.0,
+            rf=0.07,
+            effective_tax_rate=0.25,
+        )
+        assert result["tax_rate_used"] == 0.25
+        assert result["kd_posttax"] < result["kd_pretax"]
+        assert result["tax_rate_anomalous"] is False
+
+    def test_cost_of_debt_unprofitable(self):
+        result = compute_cost_of_debt(
+            interest=100.0,
+            borrowings=5000.0,
+            pbt=-500.0,
+            rf=0.07,
+            effective_tax_rate=0.25,
+        )
+        assert result["tax_rate_used"] == 0.0
+        assert result["kd_posttax"] == result["kd_pretax"]
+        assert result["tax_rate_anomalous"] is False

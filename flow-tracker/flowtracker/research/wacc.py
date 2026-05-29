@@ -167,7 +167,8 @@ def compute_cost_of_debt(
         effective_tax_rate: Actual tax/PBT from financials. If None, uses statutory rate.
 
     Returns:
-        Dict with kd_pretax, kd_posttax, rating, icr, spread_bps, tax_rate_used.
+        Dict with kd_pretax, kd_posttax, rating, icr, spread_bps, tax_rate_used,
+        tax_rate_anomalous.
     """
     if interest <= 0 or borrowings <= 0:
         return {
@@ -192,11 +193,22 @@ def compute_cost_of_debt(
 
     kd_pretax = rf + spread_bps / 10000
 
-    # Tax shield: use effective rate from financials, 0% if unprofitable
-    if effective_tax_rate is not None:
-        marginal_tax = effective_tax_rate if pbt > 0 else 0.0
+    # Tax shield: use effective rate from financials, 0% if unprofitable.
+    # A valid marginal rate lies in [0, STATUTORY_TAX_RATE]. A reported effective
+    # rate outside that range (e.g. NTPC's -11.66% from deferred-tax credits, or an
+    # absurdly high rate) would make the tax shield raise post-tax cost of debt above
+    # pre-tax, which is nonsensical — fall back to the statutory rate and flag it.
+    tax_rate_anomalous = False
+    if pbt <= 0:
+        marginal_tax = 0.0
+    elif effective_tax_rate is not None:
+        if 0.0 <= effective_tax_rate <= STATUTORY_TAX_RATE:
+            marginal_tax = effective_tax_rate
+        else:
+            marginal_tax = STATUTORY_TAX_RATE
+            tax_rate_anomalous = True
     else:
-        marginal_tax = STATUTORY_TAX_RATE if pbt > 0 else 0.0
+        marginal_tax = STATUTORY_TAX_RATE
     kd_posttax = kd_pretax * (1 - marginal_tax)
 
     return {
@@ -206,6 +218,7 @@ def compute_cost_of_debt(
         "icr": round(icr, 2),
         "spread_bps": spread_bps,
         "tax_rate_used": round(marginal_tax, 4),
+        "tax_rate_anomalous": tax_rate_anomalous,
     }
 
 
