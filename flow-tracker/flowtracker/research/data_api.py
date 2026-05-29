@@ -3038,10 +3038,15 @@ class ResearchDataAPI:
         MCP tool shape: ``{"anchors": [{doc_type, title, status, heading_count, url}, ...]}``.
         Used by the macro autoeval grader (``evaluate_macro.py``) to enforce
         anchor exhaustion against ``status == 'complete'`` rows.
+
+        Market-aware: a US run (constructor ``market=`` / ``_run_market``) lists
+        the Fed anchors (``catalog_us.json``); India runs list the India anchors
+        exactly as before.
         """
         from flowtracker.research.macro_anchors import list_current_anchors
 
-        catalog = list_current_anchors()
+        market = "US" if self._is_us_run() else "NSE"
+        catalog = list_current_anchors(market=market)
         return {
             "anchors": [
                 {

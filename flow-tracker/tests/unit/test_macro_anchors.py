@@ -21,10 +21,16 @@ from flowtracker.research import macro_anchors as ma
 from flowtracker.research.macro_anchors import (
     _ANCHORS,
     _SCRAPERS,
+    _US_ANCHORS,
+    _US_SCRAPERS,
+    AnchorSpec,
     _body_text_anchor,
+    _cache_names,
     _find_anchor_section_end,
+    _market_config,
     _match_heading,
     _normalize_heading,
+    ensure_macro_anchors,
     get_anchor_content,
 )
 
@@ -309,3 +315,181 @@ class TestCatalogEntries:
         spec = next(a for a in _ANCHORS if a.doc_type == "rbi_mpc_statement")
         assert "MPC" in spec.title or "Monetary Policy" in spec.title
         assert spec.scraper == "_scrape_rbi_mpc_statement"
+
+
+# ---------------------------------------------------------------------------
+# AnchorSpec.market — default + US tagging
+# ---------------------------------------------------------------------------
+
+class TestAnchorSpecMarket:
+    def test_market_defaults_to_nse(self):
+        spec = AnchorSpec(doc_type="x", title="X")
+        assert spec.market == "NSE"
+
+    def test_all_india_anchors_are_nse(self):
+        # India anchors don't set market explicitly → must all default to NSE.
+        assert all(a.market == "NSE" for a in _ANCHORS)
+
+    def test_all_us_anchors_are_us(self):
+        assert _US_ANCHORS  # non-empty
+        assert all(a.market == "US" for a in _US_ANCHORS)
+
+    def test_us_anchor_doc_types(self):
+        doc_types = {a.doc_type for a in _US_ANCHORS}
+        assert doc_types == {
+            "fomc_statement", "fomc_minutes", "beige_book", "fed_mpr", "fomc_sep",
+        }
+
+    def test_us_scrapers_registered_for_every_us_anchor(self):
+        for a in _US_ANCHORS:
+            assert a.scraper in _US_SCRAPERS, f"{a.doc_type} scraper missing"
+
+
+# ---------------------------------------------------------------------------
+# Market routing — _market_config + _cache_names
+# ---------------------------------------------------------------------------
+
+class TestMarketRouting:
+    def test_nse_config_selects_india(self):
+        anchors, scrapers, catalog_path = _market_config("NSE")
+        assert anchors is _ANCHORS
+        assert scrapers is _SCRAPERS
+        assert catalog_path == ma._CATALOG_PATH
+
+    def test_us_config_selects_fed(self):
+        anchors, scrapers, catalog_path = _market_config("US")
+        assert anchors is _US_ANCHORS
+        assert scrapers is _US_SCRAPERS
+        assert catalog_path == ma._CATALOG_US_PATH
+
+    def test_unknown_market_falls_back_to_india(self):
+        anchors, _, catalog_path = _market_config("ZZ")
+        assert anchors is _ANCHORS
+        assert catalog_path == ma._CATALOG_PATH
+
+    def test_india_cache_names_unprefixed(self):
+        extracted, pdf = _cache_names("rbi_mpr", "NSE")
+        assert extracted == ma._EXTRACTED_DIR / "rbi_mpr"
+        assert pdf == ma._RAW_DIR / "rbi_mpr.pdf"
+
+    def test_us_cache_names_prefixed(self):
+        extracted, pdf = _cache_names("fomc_statement", "US")
+        assert extracted == ma._EXTRACTED_DIR / "us_fomc_statement"
+        assert pdf == ma._RAW_DIR / "us_fomc_statement.pdf"
+
+
+# ---------------------------------------------------------------------------
+# ensure_macro_anchors — market-namespaced, fully mocked (no network)
+# ---------------------------------------------------------------------------
+
+class _FakeResult:
+    """Stands in for doc_extractor.ExtractionResult."""
+    def __init__(self):
+        self.backend = "docling"
+        self.degraded = False
+        self.headings = [{"level": 1, "text": "H", "char_offset": 0}]
+        self.from_cache = False
+
+
+@pytest.fixture
+def macro_dirs(tmp_path, monkeypatch):
+    """Redirect all vault/macro paths into a temp dir so tests never touch the
+    real vault (India catalog.json) and US/India can't collide."""
+    raw = tmp_path / "raw"
+    extracted = tmp_path / "extracted"
+    meta = tmp_path / "meta"
+    monkeypatch.setattr(ma, "_RAW_DIR", raw)
+    monkeypatch.setattr(ma, "_EXTRACTED_DIR", extracted)
+    monkeypatch.setattr(ma, "_META_DIR", meta)
+    monkeypatch.setattr(ma, "_CATALOG_PATH", meta / "catalog.json")
+    monkeypatch.setattr(ma, "_CATALOG_US_PATH", meta / "catalog_us.json")
+    return tmp_path
+
+
+def _stub_download_and_extract(monkeypatch):
+    """Make _download_pdf write a stub PDF + extract_to_markdown write the cache,
+    so ensure_macro_anchors completes without network/Docling."""
+    def fake_download(url, dest, min_bytes=100_000):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"%PDF-1.4 stub")
+        return True
+
+    def fake_extract(pdf_path, cache_dir):
+        from pathlib import Path as _P
+        cd = _P(cache_dir)
+        cd.mkdir(parents=True, exist_ok=True)
+        (cd / "_docling.md").write_text("# H\n\nbody", encoding="utf-8")
+        (cd / "_heading_index.json").write_text(
+            json.dumps({"headings": [{"level": 1, "text": "H", "char_offset": 0}]}),
+            encoding="utf-8",
+        )
+        return _FakeResult()
+
+    monkeypatch.setattr(ma, "_download_pdf", fake_download)
+    monkeypatch.setattr(ma, "extract_to_markdown", fake_extract)
+
+
+class TestEnsureMacroAnchorsUS:
+    def test_us_selects_us_anchors_and_namespaced_cache(self, macro_dirs, monkeypatch):
+        _stub_download_and_extract(monkeypatch)
+        # Stub every US scraper to a fake Fed PDF URL.
+        for name in _US_SCRAPERS:
+            monkeypatch.setitem(_US_SCRAPERS, name, lambda: "https://fed/x.pdf")
+
+        result = ensure_macro_anchors(market="US")
+
+        # Every US doc_type fetched + extracted.
+        assert set(result["anchors_available"]) == {
+            a.doc_type for a in _US_ANCHORS
+        }
+        assert result["anchors_missing"] == []
+        # Cache written under us_ prefix, NOT under bare doc_type.
+        assert (macro_dirs / "extracted" / "us_fomc_statement" / "_docling.md").exists()
+        assert not (macro_dirs / "extracted" / "fomc_statement").exists()
+        assert (macro_dirs / "raw" / "us_fomc_statement.pdf").exists()
+        # US catalog written to catalog_us.json; India catalog.json untouched.
+        assert (macro_dirs / "meta" / "catalog_us.json").exists()
+        assert not (macro_dirs / "meta" / "catalog.json").exists()
+
+    def test_us_url_unavailable_does_not_fail_run(self, macro_dirs, monkeypatch):
+        _stub_download_and_extract(monkeypatch)
+        # One scraper returns None (url_unavailable) — must be graceful.
+        monkeypatch.setitem(_US_SCRAPERS, "_scrape_fomc_sep", lambda: None)
+        for name in _US_SCRAPERS:
+            if name != "_scrape_fomc_sep":
+                monkeypatch.setitem(_US_SCRAPERS, name, lambda: "https://fed/x.pdf")
+
+        result = ensure_macro_anchors(market="US")
+        assert "fomc_sep" in result["anchors_missing"]
+        assert "fomc_statement" in result["anchors_available"]
+        cat = json.loads((macro_dirs / "meta" / "catalog_us.json").read_text())
+        assert cat["anchors"]["fomc_sep"]["status"] == "url_unavailable"
+
+    def test_india_default_writes_india_catalog_only(self, macro_dirs, monkeypatch):
+        _stub_download_and_extract(monkeypatch)
+        # Stub India scrapers + give every India anchor a resolvable URL.
+        for name in _SCRAPERS:
+            monkeypatch.setitem(_SCRAPERS, name, lambda: "https://in/x.pdf")
+        # Patch direct-URL anchors via the download stub (already returns True).
+
+        result = ensure_macro_anchors()  # default market="NSE"
+
+        assert "economic_survey" in result["anchors_available"]
+        # India catalog.json written; US catalog_us.json NOT created.
+        assert (macro_dirs / "meta" / "catalog.json").exists()
+        assert not (macro_dirs / "meta" / "catalog_us.json").exists()
+        # India cache dirs are un-prefixed.
+        assert (macro_dirs / "extracted" / "economic_survey" / "_docling.md").exists()
+        assert not (macro_dirs / "extracted" / "us_economic_survey").exists()
+
+    def test_get_anchor_content_reads_us_namespace(self, macro_dirs, monkeypatch):
+        _stub_download_and_extract(monkeypatch)
+        for name in _US_SCRAPERS:
+            monkeypatch.setitem(_US_SCRAPERS, name, lambda: "https://fed/x.pdf")
+        ensure_macro_anchors(market="US")
+
+        # US content readable via market="US"; same doc_type under NSE is absent.
+        us = get_anchor_content("fomc_statement", market="US")
+        assert us["status"] == "ok"
+        nse = get_anchor_content("fomc_statement", market="NSE")
+        assert nse["status"] == "unavailable"

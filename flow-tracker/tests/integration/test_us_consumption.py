@@ -347,17 +347,29 @@ class TestWS5DegradesForUS:
         )
 
     def test_macro_tools_na_for_us_run(self, db):
-        # Macro ANCHOR-doc tools (Fed anchor docs are a later workstream) and
-        # the FII derivative flow tool stay degraded for a US run. The macro
-        # snapshot/indicators path is NO LONGER degraded — it routes to the
-        # us_macro_daily-backed US shape via data_api (feat/us-macro).
+        # Macro anchor tools now ROUTE to Fed anchors for a US run (feat/us-macro
+        # Fed workstream) — they are no longer degraded. get_macro_catalog lists
+        # the US (catalog_us.json) anchors; get_macro_anchor accepts US doc_types
+        # and rejects India doc_types under a US run. Only the FII derivative
+        # flow tool stays degraded for US. The macro snapshot/indicators path is
+        # also not degraded (routes to the us_macro_daily-backed US shape).
         from flowtracker.research.data_api import _run_market
+        # Reset the cross-call dedup cache so a same-args call earlier in the
+        # suite doesn't turn these into a "[Identical to previous call]" stub
+        # (which isn't JSON and would break _payload). Matches the convention in
+        # test_research_tools.py / test_mcp_tools_extended.py.
+        t._tool_result_cache.set({})
         token = _run_market.set(US_MARKET)
         try:
-            assert _is_not_applicable(_call(t.get_macro_catalog, {}))
-            assert _is_not_applicable(
-                _call(t.get_macro_anchor, {"doc_type": "economic_survey"})
-            )
+            # Catalog routes US (not n/a) — returns the Fed-anchor catalog shape.
+            assert not _is_not_applicable(_call(t.get_macro_catalog, {}))
+            # India doc_type is invalid under a US run → enum error (is_error).
+            india_doc = _call(t.get_macro_anchor, {"doc_type": "economic_survey"})
+            assert "error" in india_doc
+            # US doc_type routes (anchor not cached in test vault → 'unavailable',
+            # NOT 'not_applicable' — the tool is live for US).
+            us_doc = _call(t.get_macro_anchor, {"doc_type": "fomc_statement"})
+            assert not _is_not_applicable(us_doc)
             # get_macro_indicators now routes US (not n/a) — see TestUSMacro*.
             assert not _is_not_applicable(_call(t.get_macro_indicators, {}))
             assert _is_not_applicable(_call(t.get_fii_derivative_flow, {}))

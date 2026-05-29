@@ -421,6 +421,10 @@ _MACRO_ANCHOR_DOC_TYPES = (
     "rbi_mpc_statement", "rbi_ar_assessment", "rbi_ar_economic", "rbi_ar_monetary",
     "irdai_annual_report",
 )
+# US (Fed) macro anchor doc_type enum — used when the run market is US.
+_US_MACRO_ANCHOR_DOC_TYPES = (
+    "fomc_statement", "fomc_minutes", "beige_book", "fed_mpr", "fomc_sep",
+)
 
 # ---------------------------------------------------------------------------
 # Phase 1-B: standalone vocab tools — same single-source-of-truth pattern as the
@@ -821,13 +825,16 @@ get_macro_anchor = tool(
 
 @get_macro_anchor
 async def get_macro_anchor(args):
-    if _run_market.get() in ("NASDAQ", "NYSE"):
-        return _us_not_applicable("get_macro_anchor", "India macro anchor documents", "", args)
+    # Market-aware routing: US runs read Fed anchors (catalog_us.json); India
+    # runs read the India anchors exactly as before.
+    is_us = _run_market.get() in ("NASDAQ", "NYSE")
+    valid = _US_MACRO_ANCHOR_DOC_TYPES if is_us else _MACRO_ANCHOR_DOC_TYPES
+    market = "US" if is_us else "NSE"
     doc_type = args["doc_type"]
-    if doc_type not in _MACRO_ANCHOR_DOC_TYPES:
-        return _invalid_enum_error("get_macro_anchor", "doc_type", doc_type, _MACRO_ANCHOR_DOC_TYPES, args)
+    if doc_type not in valid:
+        return _invalid_enum_error("get_macro_anchor", "doc_type", doc_type, valid, args)
     section = args.get("section")
-    data = get_anchor_content(doc_type, section)
+    data = get_anchor_content(doc_type, section, market=market)
     return _with_dedup(
         "get_macro_anchor",
         {"content": [{"type": "text", "text": json.dumps(data, default=str)}]},
@@ -847,9 +854,9 @@ get_macro_catalog = tool(
 
 @get_macro_catalog
 async def get_macro_catalog(args):
-    if _run_market.get() in ("NASDAQ", "NYSE"):
-        return _us_not_applicable("get_macro_catalog", "India macro anchor documents", "", args)
-    catalog = list_current_anchors()
+    # Market-aware: US runs list Fed anchors; India runs list India anchors.
+    market = "US" if _run_market.get() in ("NASDAQ", "NYSE") else "NSE"
+    catalog = list_current_anchors(market=market)
     summary = {
         "anchors": [
             {
