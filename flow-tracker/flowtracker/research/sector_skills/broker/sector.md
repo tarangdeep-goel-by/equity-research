@@ -12,7 +12,7 @@ Broker P&L is geared to four macro variables; no stock-level narrative is comple
 Broker sector lives through three cycles that often diverge; diagnose each before declaring sector direction:
 
 - **Retail-broker AUM cycle** — 2020-24 expansion phase (pandemic-era retail onboarding, demat accounts 4×, F&O participation peak), 2024+ regulatory-compression phase (SEBI lot-size / margin tightening reset F&O monetisation, activation rates normalising). The next 2-3 years are a post-regulatory-reset rebasing, not a continuation of the 2020-24 expansion.
-- **F&O volume cycle** — peaked 2024 at roughly 6-7× cash-market notional; post-SEBI actions the volumes are rebasing to a structurally lower equilibrium. Calling the next F&O peak requires explicit conviction on retail-options re-engagement despite lot-size and margin changes.
+- **F&O volume cycle** — peaked FY24. Be precise on the denominator: F&O *notional* turnover ran at hundreds of times cash-market turnover (index-option notional ADTV reached ~₹400+ lakh crore vs a far smaller cash ADTV), whereas the often-cited "~6-7×" multiple is *premium* turnover (the actual money paid for options), which is the analytically relevant base — never compare notional F&O to cash and call it a 6-7× cycle. Post-SEBI actions the volumes are rebasing to a structurally lower equilibrium; calling the next F&O peak requires explicit conviction on retail-options re-engagement despite lot-size and margin changes.
 - **Wealth / PMS AUM cycle** — correlates with equity-market level + HNI formation; drawdowns in equity indices of >15% historically compress PMS flows for 4-6 quarters before net-flows rebuild.
 
 State which phase the sector is in for each cycle; a contradictory setup (e.g., retail-broker compression + wealth/PMS tailwind) is the interesting configuration.
@@ -20,11 +20,11 @@ State which phase the sector is in for each cycle; a contradictory setup (e.g., 
 ### Competitive Hierarchy — Tier the Sector
 Sector reports collapse when they treat "broker" as monolithic. Tier the sub-sectors via `get_peer_sector(section='sector_overview')` and `section='peer_metrics')`:
 
-- **Top-3 discount brokers by 12-month active clients** — ZERODHA (unlisted, largest active-client base), GROWW (listed, fastest-scaling digital-first), UPSTOX (unlisted, discount F&O tier), ANGELONE (listed, hybrid discount + MTF book). Active-client share is the revenue-franchise proxy, not gross demat.
+- **Top-3 discount brokers by 12-month active clients** — GROWW (listed; overtook Zerodha to become the largest broker by NSE active clients in Sep 2023 and has led since), ZERODHA (unlisted, #2 by active clients), ANGELONE (listed, hybrid discount + MTF book), UPSTOX (unlisted, discount F&O tier). Active-client share is the revenue-franchise proxy, not gross demat.
 - **Top-2 full-service brokers by revenue** — MOTILALOFS (advisory + wealth-heavy, strong DII-friendly franchise), ICICISEC (bank-owned captive + open-market hybrid, higher governance overhang). Full-service economics rest on research-bundled relationships, not per-order scale.
 - **Bank-owned brokers** — HDFCSEC (captive on HDFC parent liability base), KOTAKSEC (captive on Kotak Mahindra parent), ICICIDIRECT (via ICICISEC structure). Monetisation depends on parent's cross-sell maturity and captive-base penetration.
 - **Wealth / PMS specialists** — listed or listed-adjacent wealth franchises with high AUM-per-employee and low client count. Valuation anchors are P/AUM and fee yield rather than per-client PE.
-- **Depositary-participant duopoly** — CDSL (listed, ~70% market share by accounts) and NSDL (unlisted until its IPO path executes). Utility-like economics, regulated tariffs, very different risk / return profile from broking.
+- **Depository duopoly** — CDSL (listed, ~70%+ market share by demat accounts) and NSDL (listed Aug 2025 on NSE/BSE via a pure offer-for-sale IPO; NSDL leads by value of assets held). Both are *Depositories* (not depository-participants — brokers are the DPs). Utility-like economics, regulated tariffs, very different risk / return profile from broking.
 - **5PAISA** — listed discount-broker cohort; used frequently as a peer comparable for the GROWW / ANGELONE cohort on activation-rate and ARPU benchmarking.
 
 ### Institutional-Flow Patterns — Broker Sub-Sector Specific
@@ -56,12 +56,12 @@ When benchmarking, pull from `get_peer_sector(section='benchmarks')` and state t
 - **Full-service broker** — Assets Under Advisory (AUA) growth, revenue per relationship manager, advisory-revenue share of total, cross-sell ratio, cost-to-income %.
 - **Wealth / PMS** — AUM, net flows, client retention %, blended fee yield (1-2% band), performance-fee share of total.
 - **Bank-owned broker** — captive-vs-open-market client share, cross-sell trail as % of total revenue, parent-bank liability-base penetration.
-- **Depositary participant** — demat accounts (total + incremental), annual maintenance revenue, transaction-fee revenue mix, market share (CDSL vs NSDL split).
+- **Depository** (CDSL, NSDL) — demat accounts (total + incremental), annual maintenance revenue, transaction-fee revenue mix, market share (CDSL leads by accounts, NSDL by asset value).
 
 A number quoted without sector percentile (e.g., "ARPU of ₹3,500") omits whether that is top-quartile, median, or bottom-quartile; the re-rating thesis depends on the percentile, not the absolute.
 
 ### Data-shape Fallback for Sector Context
-If `get_peer_sector(section='sector_overview')` returns a sparse peer set (fewer than 4 comparable names — common for listed Indian discount brokers given ZERODHA and UPSTOX are unlisted) or `section='benchmarks')` returns `null` on a KPI, fall back to `get_peer_sector(section='sector_flows')` for the index-weight context and `get_market_context(section='macro')` for the top-down cycle read. For discount-broker cross-sectionals, note that private-market names like ZERODHA and UPSTOX are the genuine active-client leaders; omitting them creates a distorted peer set. Explicitly state when the peer benchmark excludes unlisted leaders.
+If `get_peer_sector(section='sector_overview')` returns a sparse peer set (fewer than 4 comparable names — common for listed Indian discount brokers given ZERODHA and UPSTOX remain unlisted) or `section='benchmarks')` returns `null` on a KPI, fall back to `get_peer_sector(section='sector_flows')` for the index-weight context and `get_market_context(section='macro')` for the top-down cycle read. For discount-broker cross-sectionals, note that the largest active-client base is GROWW (listed) followed by the unlisted ZERODHA, with UPSTOX also unlisted; omitting the private-market names from a client-share comparison creates a distorted peer set. Explicitly state when the peer benchmark excludes unlisted leaders.
 
 ### Open Questions — Broker Sector-Specific
 - "Where is the sector in the retail-broker AUM cycle, the F&O volume cycle, and the wealth / PMS AUM cycle, and are the three phases aligned or divergent?"

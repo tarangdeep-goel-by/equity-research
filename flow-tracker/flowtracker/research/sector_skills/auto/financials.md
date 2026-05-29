@@ -19,9 +19,12 @@ Auto is high-fixed-cost. During volume upcycles, check if operating leverage is 
 - If EBITDA margin isn't expanding with volume growth, fixed costs are bloating — flag this
 
 ### Subsidy/Incentive Separation (EV manufacturers)
-- Separate **FAME/PLI subsidy income** from core revenue — check `concall_insights`
-- If subsidy >10% of revenue, flag dependency risk (policy expiry, rate cuts)
+- Separate **PM E-DRIVE / PLI subsidy income** from core revenue — check `concall_insights` (FAME-II expired March 2024; the active demand-incentive regime is PM E-DRIVE, with e-2W subsidies sunsetting 31 July 2026 and e-3W/e-buses extended to 31 March 2028)
+- If subsidy >10% of revenue, flag dependency risk (policy expiry, the ₹2,500/kWh e-2W cap, rate cuts)
 - If not disclosed, flag as open question
+
+### GST 2.0 Margin/Demand Sensitivity (Sept 2025)
+- The 56th GST Council (effective 22 Sept 2025) replaced the 28%+cess regime: **18%** on small cars / 2W ≤350cc / 3W, **40%** on large cars / SUVs / 2W >350cc, **5%** on EVs. Model the segment-mix-weighted on-road-price delta into demand and realization — small-car/mass-2W affordability improved while large-SUV pricing rose. Quantify the effective-price change per segment before projecting volume.
 
 ### Capacity Utilization
 - **Capacity utilization %** = production / rated capacity — from `concall_insights`

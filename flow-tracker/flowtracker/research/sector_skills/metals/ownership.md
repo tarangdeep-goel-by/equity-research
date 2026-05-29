@@ -11,10 +11,10 @@
 | **Iron Ore / Coal Mining** (strategic state-owned iron-ore and coal monopolies) | Central Govt monopoly | Strategic resource control | Resource-nationalism; policy pricing |
 
 ### PSU vs Private Structural Split
-PSU metals feature the Government of India as the promoter (20-80% holding). Electricity and mining statutes often create effective floor-holding minimums for strategic assets. Private metals are predominantly family- or group-promoted. Evaluate policy intervention risk for PSUs versus capital-misallocation risk for private groups.
+PSU metals feature the Government of India as the promoter, with holdings that can run up to ~99% (e.g. KIOCL) because PSUs can be granted Minimum Public Shareholding (MPS) exemptions from the 25% public-float rule under the Securities Contracts (Regulation) framework — do not assume a 20-80% band. Private metals are predominantly family- or group-promoted. Evaluate policy intervention risk for PSUs versus capital-misallocation risk for private groups.
 
 ### Promoter Pledge Baseline & Distress Drift
-Private diversified metals maintain a structurally high baseline for promoter pledges to fund group-level acquisitions (diversified mining groups have historically operated at 40-60% pledge). Certain steel specialists maintain very low pledges (established conglomerate-backed primary-steel producers). **Rule:** pledge drift is the primary sector signal for distress. Always execute `get_ownership(section='promoter_pledge')` paired with `margin_call_analysis` for private subtypes.
+Private diversified metals maintain a structurally high baseline for promoter pledges to fund group-level acquisitions (diversified mining groups have historically operated at 40-60% pledge). Certain steel specialists maintain very low pledges (established conglomerate-backed primary-steel producers). **Rule:** pledge drift is the primary sector signal for distress. Always execute `get_ownership(section='promoter_pledge')` paired with `margin_call_analysis` for private subtypes. **Beyond formal pledges:** promoters in private metals also secure offshore debt via Non-Disposal Undertakings (NDUs) and other encumbrances that a naive "pledge %" screen misses — these surface only in the SAST Regulation 31 detailed encumbrance disclosures. Always read the SAST Reg 31 encumbrance detail (not just the pledge headline) to capture NDU-backed margin-call risk.
 
 ### Listed Subsidiary Nexus (SOTP Imperative)
 Private diversified majors frequently hold their most valuable assets through listed subsidiaries (diversified mining parents with listed zinc / oil-and-gas / aluminium-refining subsidiaries; aluminium majors with overseas rolled-products subsidiaries). Ownership analysis must account for holding company discounts and related-party cash sweeps. **Rule:** always run `get_valuation(section='sotp')` to isolate parent vs subsidiary intrinsic ownership value.
@@ -23,16 +23,16 @@ Private diversified majors frequently hold their most valuable assets through li
 Metals ownership is fiercely cyclical. FIIs rotate aggressively into metals at cycle-bottom (LME ratio signal) and exit at cycle-top. DII breakthrough typically lags the commodity top by 2-3 quarters. Track divergence via `get_ownership(section='mf_changes')` + `mf_conviction`.
 
 ### Dividend Policy Variation
-PSU metals act as high-yield vehicles, heavily utilized by GoI to extract cash and position the stock for FPO / OFS. Private diversified metals exhibit highly volatile payout ratios tied to commodity price cycles and group-level debt servicing requirements.
+PSU metals act as high-yield vehicles, heavily utilized by GoI to extract cash and position the stock for FPO / OFS. Private diversified metals exhibit highly volatile payout ratios tied to commodity price cycles and group-level debt servicing requirements. Dividends are not the only extraction channel — audit the RPT disclosures specifically for **brand royalty / brand-license fees and management / shared-service fees paid to unlisted promoter entities** (a classic diversified-group extraction route, e.g. Vedanta-type structures) that bypass minority shareholders without showing up in the payout ratio.
 
 ### Offshore Promoter Vehicles & Cross-Jurisdiction Risk
 Several private diversified metals utilize offshore promoter vehicles (overseas-listed parent holding companies that in turn control the Indian listed entity). Cross-jurisdictional ownership risks involve regulatory overlap (SEBI + UK FCA / NYSE / LSE). Investigate ultimate beneficial ownership via `get_ownership(section='shareholder_detail')`.
 
 ### PSU Divestment Cycles
-GoI frequently uses PSU metals (iron-ore majors, copper producers) to meet annual disinvestment targets. Divestment cycles are budget-announcement-driven and create predictable supply overhangs. Track OFS timelines via `get_events_actions(section='corporate_actions')` (buybacks are extremely rare in metals).
+GoI frequently uses PSU metals (iron-ore majors, copper producers) to meet annual disinvestment targets. Divestment cycles are budget-announcement-driven and create predictable supply overhangs. Track OFS timelines via `get_events_actions(section='corporate_actions')`. Note buybacks are NOT rare among CPSE metals — NMDC, MOIL and Coal India have all run sizeable buybacks, frequently as a vehicle to meet the GoI disinvestment / dividend-and-buyback target; treat a CPSE buyback as a routine cash-return-cum-divestment lever, not an anomaly.
 
 ### Royalty & Resource-Nationalism Overlay
-Mining Acts (e.g., MMDR Act, Coal Bearing Areas Act) impose strict royalty structures and government-nominee-director requirements for strategic minerals. This dilutes effective control of the promoter even when the percentage holding is high. Assess via `get_company_context(section='filings')` for royalty disputes and Supreme Court orders.
+Mining Acts (e.g., MMDR Act, Coal Bearing Areas Act) impose strict royalty structures, lease-renewal and end-use conditions on mineral concessions. (Note: the MMDR Act does *not* mandate government-nominee directors on private mining companies — nominee-director requirements are a PSU ownership trait via the Articles of Association / President-of-India shareholding, not a statutory MMDR levy on private promoters.) Statutory mineral concession terms constrain how freely the asset can be deployed even when the promoter's percentage holding is high. Assess via `get_company_context(section='filings')` for royalty disputes and Supreme Court orders.
 
 ### Short-Report Resilience
 Diversified metals with opaque offshore promoter structures attract short-seller reports (activist short-seller style). Resilience of the ownership base is tested immediately post-publication. Trace the FII trajectory and institutional block deals in the aftermath to gauge terminal risk.
@@ -55,10 +55,10 @@ For family diversified groups, SEBI reports pledges per-entity. The true risk me
 - Where is the FII / DII ratio relative to historical cycle-bottom and cycle-top LME ratios?
 - For PSUs, does the current GoI fiscal deficit mandate an accelerated OFS timeline for this specific asset?
 - Are recent expansions funded by dilutive equity issuance, or is the promoter maintaining their stake via warrants?
-- How much effective control is ceded to the government via statutory nominee directors under the MMDR Act?
+- For PSUs, how much effective control is ceded to the government via President-of-India / Articles-mandated nominee directors (a PSU shareholding trait, not an MMDR statutory requirement)?
 
 ### LTV Computation for Foreign-Debt-Servicing Vehicles
-When pledge data surfaces encumbered shares for a foreign-debt-servicing vehicle (Vedanta Resources for VEDL, similar structures for Hindalco/NALCO parents, Adani group foreign-debt vehicles), ALWAYS compute Loan-to-Value:
+When pledge data surfaces encumbered shares for a foreign-debt-servicing vehicle, ALWAYS compute Loan-to-Value. This pattern applies to genuine offshore-holdco promoters — Vedanta Resources Ltd above VEDL is the canonical case; the Adani group also uses foreign-debt vehicles. Do NOT assume it for every name: HINDALCO has a domestic Aditya Birla promoter and effectively nil pledge, and NALCO is a direct central-government CPSE with no foreign parent vehicle at all. Confirm an offshore-holdco / pledged-collateral structure actually exists before running the LTV math:
 
 `LTV = foreign_debt_usd × USDINR / (encumbered_shares × current_price)`
 
@@ -71,4 +71,4 @@ Typical covenant threshold: margin call triggers when `LTV × 1.3` breached (i.e
 Use `calculate` to derive LTV. Do NOT leave margin-call risk as an open question — all inputs are in your tools. Report headroom to margin call in the Risk Signals section, not as a question.
 
 ### Public-Bucket Sub-Breakdown Pointer for Metals (Tenet 8)
-When Tenet 8 applies — Public > 15% of equity — the retail vs HNI vs Corporate-Bodies split is especially informative in metals because Corporate-Bodies in diversified-metals groups are often inter-group holdcos (second-promoter layer) rather than genuine third-party corporate investors. Until the Phase 3 D4 `public_breakdown` table ships, retrieve the breakdown from the quarterly shareholding pattern filing via the canonical Tenet 8 search (`filings` → `documents` → `concall_insights` → `shareholder_detail` → `balance_sheet_detail`). Flag any Corporate-Bodies concentration >5% aggregate as potential second-promoter-layer risk — in diversified metals groups this is frequently the case.
+When Tenet 8 applies — Public > 15% of equity — the retail vs HNI vs Corporate-Bodies split is especially informative in metals because Corporate-Bodies in diversified-metals groups are often inter-group holdcos (second-promoter layer) rather than genuine third-party corporate investors. Until the Phase 3 D4 `public_breakdown` table ships, retrieve the retail / HNI / Corporate-Bodies split from the quarterly shareholding-pattern filing via `get_ownership(section='shareholder_detail')`. Flag any Corporate-Bodies concentration >5% aggregate as potential second-promoter-layer risk — in diversified metals groups this is frequently the case.

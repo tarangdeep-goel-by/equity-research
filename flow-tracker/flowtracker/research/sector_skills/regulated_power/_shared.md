@@ -9,7 +9,7 @@ This is a regulated power utility. Revenue and returns are governed by CERC/SERC
 
 **Primary Valuation Metrics:**
 - **P/B vs Regulated ROE**: The primary framework. Justified P/B = ROE ÷ Cost of Equity. Available in `get_quality_scores` power section
-- **Dividend Yield vs G-sec Spread**: Regulated utilities are bond-proxies. Spread over 10Y G-sec yield is the key metric. Positive spread = attractive. Available in `get_quality_scores` power section
+- **Dividend Yield vs G-sec Spread**: Regulated utilities are bond-proxies. The relevant metric is the *discount* to the 10Y G-sec yield — re-rated Indian utility dividend yields structurally sit *below* G-sec (~3-5% yield vs ~7% G-sec), so the normal regime is a 200-400 bps discount, not a premium. A positive spread (yield above G-sec) signals distress, a payout-cut risk, or zero growth, not attractiveness. Available in `get_quality_scores` power section
 - **Regulated Equity Base growth**: drives future earnings — check capex plans and CWIP-to-fixed-assets ratio
 
 **Metrics that give misleading results for regulated utilities:**

@@ -31,9 +31,12 @@ Metals companies often sport high dividend yields, but cyclical earnings mean to
 - Inventory days are critical — rising inventory in falling commodity prices = balance sheet risk
 - Receivables quality matters less (spot/short-term contracts)
 
+### Stripping-Cost Capitalization (Ind AS 16 / IFRIC 20)
+- Mining EBITDA can be flattered by deferring production-phase overburden-removal (stripping) costs to the balance sheet instead of expensing them. Audit the Ind AS 16 / IFRIC 20 disclosures in `notes_to_financials`: production-phase stripping should be expensed (only stripping that creates improved future ore access qualifies as a capitalizable asset). A rising "stripping cost asset" alongside expanding mining EBITDA is a red flag — recompute EBITDA expensing the deferred stripping and flag the divergence.
+
 ### Cost-Curve Quartile — Captive RM Integration Drives Cycle Survival
 The single biggest differentiator across global metals and mining operators is **position on the global cost curve** — not margin in the current quarter. A producer in the 1st quartile (lowest-cost 25%) stays profitable even at cycle troughs; a 4th-quartile producer loses money for years at a time. Cost-curve position is overwhelmingly determined by **captive raw material integration**:
-- **Steel**: captive iron ore + coking coal vs merchant buying. Captive ore can be 40-60% cheaper per tonne than merchant spot
+- **Steel**: captive iron ore + coking coal vs merchant buying. Legacy (pre-2015) allocated ore can be 40-60% cheaper per tonne than merchant spot; **post-2015 auctioned mines do not get this** — the auction premium (often 80-150% of IBM ASP) plus royalty + DMF + NMET can erase the advantage entirely. Bifurcate the captive book into legacy vs auctioned and deduct the auction premium before crediting an integration moat
 - **Aluminium**: captive bauxite + captive power (coal-fired or renewable) vs grid-bought. Power is ~35% of smelting cost
 - **Copper / Zinc**: captive mine supply vs concentrate purchased from third parties (TC/RC dependence)
 - Extract the integration profile from `get_company_context(section='concall_insights')` or investor presentations. Peers trading at similar multiples may sit in wildly different cost quartiles — always state the quartile view, not just absolute margin

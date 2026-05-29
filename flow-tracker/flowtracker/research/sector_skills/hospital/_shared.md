@@ -1,7 +1,9 @@
 ## Hospital/Healthcare Sector Caveats
 
-- **ARPOB (Average Revenue Per Occupied Bed)**: the primary operational metric. Drives revenue alongside occupancy
-- **Occupancy Rate**: Compare against peer median via `get_peer_sector(section='benchmarks')` and the company's own trend. New hospital ramp-up takes 3-5 years to mature occupancy
-- **Payor Mix**: Insurance vs out-of-pocket vs government (CGHS/Ayushman). Higher insurance share = better realization
+- **ARPOB (Average Revenue Per Occupied Bed)**: the primary operational metric. Drives revenue alongside occupancy. Three-variable unit economics: ARPOB × Occupancy × ALOS together explain inpatient revenue
+- **Occupancy Rate**: Compare against peer median via `get_peer_sector(section='benchmarks')` and the company's own trend. Occupancy is calculated on **operational (staffed) beds, not total installed capacity** — confusing the two distorts utilization. New hospital ramp-up takes 3-5 years to mature occupancy; track the lag between installed and operationalised beds
+- **ALOS (Average Length of Stay)**: the critical third variable, typically 3-5 days for organised chains. ALOS is **inversely related to ARPOB** — billing is front-loaded with diagnostics and surgery in the first 48 hours, so shorter stays raise both bed turnover and per-day realization. Falling ALOS + rising ARPOB is the healthy combination
+- **Payor Mix**: Insurance vs out-of-pocket vs government (CGHS/AB-PMJAY/ECHS). Realization order is cash/insurance > PMJAY > CGHS > ECHS. Higher insurance/cash share = better realization
 - **EBITDA per bed**: profitability metric normalized for scale. Compare within peer set
-- Standard PE/EV-EBITDA valuation works. Premium for multi-city chains with proven execution
+- **Valuation**: Use EV/EBITDA, but adjust for **Ind AS 116 (Leases)** — for asset-light/leased chains, rent shifts below EBITDA and inflates it (and EV must include lease liabilities), so reported EV/EBITDA is not comparable across asset-heavy (owned) vs asset-light (leased) models without normalisation. Premium for multi-city chains with proven execution
+- **Regulatory pricing overhang**: The Supreme Court's 2024 push (in response to a PIL) for the Centre to notify standardized procedure rates — with a threat to apply CGHS rates (often 40-50% below private list) in the interim — is the single biggest risk to premium ARPOB. Also track Clinical Establishments Act enforcement and NABH accreditation status (a quality signal increasingly required for PM-JAY/state-scheme empanelment and insurer cashless panels)

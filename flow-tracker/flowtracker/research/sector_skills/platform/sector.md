@@ -11,7 +11,7 @@ Platform economics are macro-sensitive in ways that are distinct from traditiona
 ### Sector Cycle Position — Platforms Are Cohort-Specific
 The Indian platform cohort is in a 3-5 year discipline-enforcement phase post the 2022 tech-winter, but different sub-sectors are at different phases within that super-cycle:
 - **Food-delivery** — mature duopoly, category-leader contribution-margin-per-order inflecting positive, operating-EBITDA transition under way. Late-stage unit-economics regime.
-- **Quick-commerce** — scale phase. Top-3 players compete on dark-store density and AOV expansion. Contribution margin per order turned positive for leaders in 2024; EBITDA positive ambition is 2026-27.
+- **Quick-commerce** — scale phase. Top-3 players compete on dark-store density and AOV expansion. The category leader (Blinkit) turned **adjusted-EBITDA positive in Q4 FY24 (March 2024)**; the open question now is *consolidated* (post-ESOP, post-Ind AS 116) profitability and whether laggards in the top-3 can follow, while a fresh land-grab capex cycle (aggressive store additions) has at times pushed adjusted EBITDA back to breakeven/marginal-loss. Frame the EBITDA narrative per-player and distinguish adjusted vs reported.
 - **E-commerce marketplaces** — horizontal top-2 is mature, vertical niches (beauty, fashion, pharmacy, grocery-horizontal) are in growth-to-profitability transition.
 - **Mobility / ride-hailing** — mature top-2 (domestic) competing with global carved-out Indian arms. Unit economics workable; growth modest; monetisation via ads and fintech cross-sell.
 - **Payments** — mature top-3. Post-payments-bank carve-out reset. Revenue diversification into lending distribution, merchant services, and wealth-tech.

@@ -17,8 +17,8 @@ Regulatory risk is concrete in Indian power; tie each risk to the specific autho
 - **CERC (Central Electricity Regulatory Commission)** — tariff orders for inter-state transmission, central-sector thermal, hydro. Current binding framework: **CERC Tariff Regulations 2024-29 block** (ROE 15.5% on equity, 70:30 D/E normative, SHR + APC + NAPAF per-plant norms). Prior-block residual truing-up disputes feed Regulatory Deferral Accounts.
 - **SERCs (State Electricity Regulatory Commissions)** — intra-state transmission, distribution tariff orders for discoms, intra-state renewable PPAs. Order-timing discipline varies widely state-to-state; a single delayed tariff order can push receivables by 60-90 days.
 - **MNRE (Ministry of New and Renewable Energy)** — renewable policy, auction framework via SECI, ISTS waiver eligibility, storage-linked tender rules.
-- **MoP (Ministry of Power)** — coal linkage allocation (SHAKTI policy), plant-load-factor incentive structure, demand forecasts in NEP.
-- **CEA (Central Electricity Authority)** — technical standards, grid code compliance, capacity-planning NEP publication.
+- **MoP (Ministry of Power)** — coal linkage allocation (SHAKTI policy), plant-load-factor incentive structure, overall power-sector policy direction.
+- **CEA (Central Electricity Authority)** — technical standards, grid code compliance, and the **National Electricity Plan (NEP) including the official electricity-demand forecasts** (the NEP and demand projections are published by the CEA, not the MoP).
 
 Named recent rulesets shaping the sector risk-reward:
 - **Electricity (Late Payment Surcharge and Related Matters) Rules 2022** — instituted financial discipline on discom dues to generators; structurally improved IPP receivables post-2022.
@@ -28,6 +28,13 @@ Named recent rulesets shaping the sector risk-reward:
 - **Green Open Access Rules 2022** — large industrial consumers can source renewable directly, bypassing discom; cross-cuts distribution revenue base.
 
 Name the specific regulator and ruleset; vague "per regulations" framing loses the traceability that makes the risk actionable.
+
+### Renewable Execution Risks — ALMM, GNA, FDRE/RTC
+Renewable execution risk is concrete and rule-driven; enforce these checks for any renewable pipeline:
+- **ALMM (Approved List of Models & Manufacturers)** — restricts solar module/cell sourcing to domestically-approved manufacturers for government-supported and most utility-scale projects. It is a supply bottleneck and cost driver: thin domestic cell/module availability can delay COD and compress project IRR. Check whether the developer's pipeline modules are ALMM-compliant and whether sourcing is a binding constraint on the COD calendar.
+- **GNA (General Network Access)** — the transmission-connectivity / evacuation-access framework that dictates whether a renewable project can actually inject into the grid. Without granted GNA/connectivity, commissioned MW cannot be evacuated → curtailment + deemed-generation disputes. Treat evacuation/GNA status as a hard gate on pipeline conversion, not a formality.
+- **FDRE / RTC bidding** — the shift from vanilla solar/wind to **Firm & Dispatchable RE (FDRE)** and **Round-The-Clock (RTC)** tenders bundles mandatory storage (ESS) capex and imposes severe **availability/supply-shortfall penalties** in the PPA. Assess ESS capex assumptions and PPA penalty exposure for every FDRE/RTC win; a developer modelling vanilla-solar economics on an FDRE contract is under-pricing both capex and downside.
+Enforce ALMM (domestic sourcing) + GNA (evacuation access) compliance checks and FDRE/RTC penalty + ESS-capex checks to capture renewable execution and curtailment risk.
 
 ### Operational Risk Concentration
 - **Coal-linkage dependence** for thermal — domestic vs imported share, FSA (fuel supply agreement) coverage %. Plants with >25% imported-coal reliance were stressed in the 2022 spike (imported coal ~₹16,000/ton vs domestic ~₹6,000/ton CV-adjusted); 3 quarters of margin compression resulted.
@@ -43,7 +50,7 @@ Historical regulated-power drawdowns share recurring triggers; use these as the 
 - **Discom-payment-delay crisis (2018-21 parallel)** — industry built ~₹1 Lakh Cr+ in receivables, private IPPs repriced 40-60% over 2 years. Even with LPS Rules 2022 in place, a severe state-fiscal-crunch cycle could partially repeat.
 - **Imported-coal price spike (2022 precedent)** — coal +50% with only 60% pass-through compressed thermal EBITDA by 300-500 bps over 3 quarters. Repeat risk during geopolitical-supply shocks.
 - **RPO renegotiation or PPA cancellation by new state governments post-election** — has occurred in AP, Punjab, Maharashtra in various cycles; causes 20-40% drawdown on affected project value.
-- **Transmission-tariff-order ROE cut at CERC block review** — the 2019-24 block saw ROE reduction vs 2014-19; a further 100-150 bps cut at 2029 review would reprice transmission monopolies by 10-20%.
+- **Transmission-tariff-order ROE cut at CERC block review** — CERC *retained* the base ROE at 15.5% in the 2019-24 block (no cut vs 2014-19); the cut materialised in the **2024-29 block, where transmission ROE was reduced from 15.5% to 15.0%**. A further 100-150 bps cut at the 2029 review would reprice transmission monopolies by 10-20%.
 - **Renewable bid-tariff collapse** — the 2020-21 auction cycle cleared at ~₹1.99-2.55/kWh, stressing pipeline IRR assumptions for projects budgeted at higher tariffs; further compression from storage-bundled auctions could stress lower-tier developers.
 - **Large Regulatory Deferral Account write-down** — a CERC ruling rejecting a ₹5,000-10,000 Cr disputed tariff-claim write-back hits reported net worth + ROE in a single quarter.
 

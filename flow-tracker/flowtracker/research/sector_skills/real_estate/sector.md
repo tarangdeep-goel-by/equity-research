@@ -2,7 +2,7 @@
 
 ### Macro Context — Rates, Affordability, Income Growth, FDI
 Real estate is among the most macro-sensitive sectors; no stock-level narrative is complete without anchoring to the macro regime. Pull the current regime from `get_market_context(section='macro')` and state these five variables explicitly:
-- **Repo rate and home-loan rate trajectory** — the home-loan rate (typically repo + 150-200 bps) is the first-derivative driver of affordability. A 100 bps home-loan rate move shifts the qualifying-income threshold for a ₹1 Cr home-loan by 12-15% — that is the buyer-pool expansion or compression that moves residential presales.
+- **Repo rate and home-loan rate trajectory** — the home-loan rate (typically repo + 150-200 bps) is the first-derivative driver of affordability. A 100 bps home-loan rate move shifts the EMI (and hence the qualifying-income threshold) on a standard 20-year ₹1 Cr loan by roughly **7-8%** (e.g. ~₹868 → ~₹932 EMI per ₹1 lakh moving from 8.5% to 9.5%) — that is the buyer-pool expansion or compression that moves residential presales.
 - **Household income growth** — urban formal-sector wage growth (CII, IT-sector hiring, BFSI services compensation) feeds directly into mid and premium segment demand. Current cycle: premium cohort (top-20% urban income) has expanded 2-3× over the 2020-25 period, which is the structural driver of the premium upcycle.
 - **Urban employment and net migration** — IT-hubs (Bengaluru, Hyderabad, Pune), financial-hubs (Mumbai, GIFT), and capital-city government-services (Delhi-NCR) drive inter-city differentials. Bengaluru's 2023 tech-hiring slowdown hit presales in that micro-market 15-20% while Mumbai was flat.
 - **GDP growth — commercial / office demand anchor** — commercial office absorption correlates 0.6-0.8 with services-GDP growth with a 2-3 quarter lag; warehousing absorption correlates with e-commerce GMV growth and manufacturing PMI.
@@ -26,9 +26,9 @@ Sector reports collapse when they treat "real estate" as monolithic. Tier the su
 - **ARVSMART** sits in an integrated-township category distinct from pure-residential.
 
 ### Institutional-Flow Patterns — Real-Estate-Specific
-Real estate is ~2-3% of Nifty weight; flows have sector-specific mechanics that the sector and ownership agents should both reflect:
+Real estate carries **0% weight in the Nifty 50** (no developer is a Nifty 50 constituent; the ~2% figure applies to the broader Nifty 500 / Nifty Realty index, where DLF, LODHA, GODREJPROP etc. sit); flows have sector-specific mechanics that the sector and ownership agents should both reflect:
 - **FII-active in premium developers and REITs** — foreign long-only funds concentrate in the top-5 by presales and the listed REITs; passive-FII flows arrive on index-rebalance windows.
-- **DII positioning is cycle-dependent** — LIC and large domestic MFs are structurally underweight real estate relative to Nifty weight due to legacy governance concerns; DII accumulation above 10% of holding often marks mid-to-late cycle re-rating and has historically (2010, 2017, 2021) preceded cycle-peak signals within 4-6 quarters (see `ownership.md` DII-breakthrough framing).
+- **DII positioning is cycle-dependent** — LIC and large domestic MFs are structurally underweight real estate relative to its broad-market (Nifty 500) weight due to legacy governance concerns; DII accumulation above 10% of holding often marks mid-to-late cycle re-rating and has historically (2010, 2017, 2021) preceded cycle-peak signals within 4-6 quarters (see `ownership.md` DII-breakthrough framing).
 - **REIT distribution-yield base** — attracts income-seeking retail and insurance-pool capital; distribution-yield compression vs G-sec is the key mood indicator.
 - **PE / sovereign-wealth-fund secondary participation** — Blackstone, Brookfield, GIC, CPPIB, and similar pools are active in REIT sponsor positions and primary office / warehousing transactions; their monetisation cycles (lock-in expiries) create unit-supply overhangs.
 
@@ -40,7 +40,7 @@ Cyclical reads miss the slow-moving structural shifts reshaping real-estate econ
 - **REIT listing pipeline expanding** — EMBASSY (2019) and MINDSPACE (2020) were the first wave; BIRET and NEXUS followed; the **SEBI SM-REIT framework (2024)** brings smaller assets to market and expands the listed-lease-annuity universe.
 - **Warehousing as a thematic** — post-2020 e-commerce GMV growth and post-2020 manufacturing-PLI incentives drive 8-12% annual rent growth in prime logistics micro-markets; warehouse-specialist listed plays are a distinct investable universe.
 - **Data-centre REITs emerging** — AI and cloud workloads drive MW-capacity demand; data-centre specialist listings are at an early stage in Indian markets.
-- **Fractional-ownership / SM-REIT regulation** — SEBI's 2024 SM-REIT framework formalises fractional commercial ownership at the ₹10-50 Cr asset size; it broadens the retail-accessible lease-annuity market.
+- **Fractional-ownership / SM-REIT regulation** — SEBI's 2024 SM-REIT framework formalises fractional commercial ownership at an asset size of **₹50 Cr to ₹500 Cr** per scheme (sitting between unregulated fractional platforms below ₹50 Cr and full REITs at ₹500 Cr+); it broadens the retail-accessible lease-annuity market.
 - **Post-RERA structural improvement** — the unorganised-developer share of new-home sales has compressed from ~70% pre-2017 to ~40-45% in 2024; listed-developer cohort gains structural share every cycle.
 - **Built-to-suit and integrated-township formats** — land-plus-build models are expanding as customer preferences shift toward gated-community living with integrated amenities.
 

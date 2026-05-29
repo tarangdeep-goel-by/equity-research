@@ -5,11 +5,11 @@ The single most common valuation error for Indian brokers is defaulting to an EV
 
 | Subtype | Primary multiple | Commonly-misapplied multiples that fail |
 | :--- | :--- | :--- |
-| **Discount broker** | PE on through-cycle active-client monetisation + Market cap per active client | EV/EBITDA on F&O-peak year, DCF/FCFE (client float corrupts CFO), P/B (book is float) |
+| **Discount broker** | PE on through-cycle active-client monetisation + Market cap per active client | EV/EBITDA on F&O-peak year, DCF/FCFE (client float corrupts CFO), P/B used in isolation (book is small relative to fee-earning power, so P/B looks optically extreme — not because book *is* float) |
 | **Full-service broker** | PE on normalised earnings + P/AUA (% of assets-under-advisory) | EV/Revenue (float distorts EV), peer PE at different monetisation mix |
 | **Wealth / PMS** | PE + P/AUM (% of AUM, typically 4-8%) | EV/EBITDA (performance-fee-spike year mean-reverts), DCF (AUM flows volatile) |
 | **Bank-owned broker** | PE on through-cycle + SOTP contribution to parent | Standalone P/B (captive franchise is not book-driven) |
-| **Depositary participant** (CDSL, NSDL) | PE on stable transaction-fee base + EV/Revenue (monopoly take-rate) | P/B (low book, high float), peer broker PE (DP is utility-like, not cyclical) |
+| **Depository** (CDSL, NSDL — both now listed) | PE on stable transaction-fee base + EV/Revenue (monopoly take-rate) | peer broker PE (a Depository is utility-like, not cyclical). P/B looks very high (8-15×+) because book is small vs fee-earning power — informative, not a red flag |
 
 ### Why FCFE and DCF Fail for Brokers — State This Explicitly
 Client float distorts CFO. Settlement obligations to/from clients flow through operating cash flow and swing by ₹thousands of crores quarter-to-quarter based on trading activity and settlement-day timing, unrelated to the broker's earnings quality. FCFE models produce false-precision terminal values that bear no relationship to distributable cash. A broker's real distributable cash is closer to `PAT − required regulatory capital build − MTF book growth × equity-funding share`; this is not what a mechanical CFO-based FCFE will give. The eval-cycle lesson is: reject FCFE outputs outright for brokers, and use normalized through-cycle PE or active-client-based valuation instead.
@@ -43,7 +43,7 @@ The GROWW-class failure mode has two parts. First, the per-client frame above wa
 
 Second, the balance-sheet revenue legs were left qualitative ("a stable earnings leg", "margin-funding yield") rather than modeled. For brokers with a material client-float book or MTF (margin trading facility) book, build these as **explicit revenue lines**, not adjectives:
 
-- **Float yield** — the broker earns interest on client float (settlement balances, idle client funds, margin deposits parked in liquid instruments). Model it as `float-income = average client-float balance × float yield`. Pull the float balance and the disclosed float/treasury-income line from `get_company_context(section='concall_insights', sub_section='financial_metrics')` or the AR (`get_company_context(section='annual_report', sub_section='other_income')`); the yield tracks short-term rates, so cross-check against the current rate environment. Note that SEBI's tightening on use of client funds caps this leg — model the post-rule run-rate, not the pre-rule one.
+- **Float yield** — the broker earns interest on client float (settlement balances, idle client funds, margin deposits parked in liquid instruments). Model it as `float-income = average client-float balance × float yield`. Pull the float balance and the disclosed float/treasury-income line from `get_company_context(section='concall_insights', sub_section='financial_metrics')` or the AR (`get_company_context(section='annual_report', sub_section='other_income')`); the yield tracks short-term rates, so cross-check against the current rate environment. Note that SEBI's June-2023 EOD upstreaming mandate (all client funds upstreamed to Clearing Corporations at end-of-day) plus secondary-market ASBA (UPI-block, funds stay in the client's bank until settlement) structurally remove the broker's ability to retain and earn on idle client float — model treasury/float income strictly on CC pass-through yields and haircut for ASBA adoption; do NOT carry a pre-rule retained-float run-rate.
 - **MTF-interest contribution** — translate MTF book growth into an interest-income line: `MTF-interest = average MTF book × net MTF spread` (lending rate charged to clients minus the broker's own funding cost). Extract the MTF book size and disclosed MTF-interest income from `get_company_context(section='concall_insights', sub_section='financial_metrics')`; where the book is disclosed but the spread is not, state the spread assumption explicitly and source it from the disclosed lending rate. A fast-growing MTF book is a genuine, capital-funded earnings driver that the through-cycle PE frame must capture — but it consumes regulatory capital, so net it against the capital build (per the FCFE-failure discipline above).
 
 Where either book or its yield/spread is genuinely undisclosed, state the gap rather than imputing — do not fabricate a float balance or an MTF spread to populate the revenue bridge.
@@ -60,8 +60,8 @@ Post-2024 SEBI tightening is not a one-off; the regulatory direction is an ongoi
 ### Sector-Skill Band and Threshold Ranges
 - **Through-cycle PE band**: 15-25× for mature Indian brokers.
 - **Wealth / PMS PE band**: 20-30× (annuity-like fee income carries a premium).
-- **Depositary participant band** (CDSL, NSDL, duopoly): 30-45× (utility-like duopoly premium, regulated rates).
-- **P/B as secondary check**: brokers should trade at a premium to book (2-4× typical) because fee income is capital-light; banks' P/B anchor does not apply.
+- **Depository band** (CDSL, NSDL — the listed duopoly): 30-45× PE (utility-like duopoly premium, regulated rates); P/B sits high (8-15×+) on ~25-30% ROE and is informative rather than a caution flag.
+- **P/B as secondary check**: book value here is shareholder equity (net worth), NOT float — client payables and settlement balances sit in current liabilities and inflate balance-sheet size without touching book value. Because fee income is capital-light and ROEs are high, pure-play discount brokers and the depository duopoly with >25-35% ROE routinely trade at **8-15× P/B** (e.g. CDSL has traded ~13-17× P/B on ~29% ROE); the lower 2-4× range applies only to capital-heavy traditional / full-service brokers. Banks' book-anchored P/B framework does not apply.
 - **>30× PE requires evidence-of-growth**: named new products, disclosed institutional-expansion pipeline, documented wealth-book scale-up — not cyclical peak extrapolation.
 - **IPO / post-listing pricing at 40-60× trailing PE** — recently-listed and upcoming Indian broker IPOs have priced at 40-60× trailing PE, materially above the 15-25× through-cycle band. Treat this as "pricing in flawless execution of structural shifts" (wealth scale-up, ARPU expansion, regulatory stability) and stress-test explicitly against the 15-25× anchor with normalised earnings; do not accept the IPO benchmark as the sector re-rating anchor.
 
@@ -69,7 +69,7 @@ Post-2024 SEBI tightening is not a one-off; the regulatory direction is an ongoi
 - **EV/EBITDA** — client float in EV inflates enterprise value by multiples of real capital; EBITDA mixes proprietary earnings with float-linked interest income.
 - **DCF / FCFE** — client-money flows through CFO corrupt the free cashflow series; terminal value is false-precision.
 - **Trailing PE on F&O-peak year** — mean-reverts on the next SEBI tightening cycle.
-- **P/B** — book is largely float (client margin, settlement balances, MTF funded by own + borrowed capital); book value is not a valuation anchor for fee-income franchises.
+- **P/B in isolation** — book value is shareholder equity (net worth), not float; client margin and settlement balances sit in current liabilities, not in book. The reason P/B is a weak primary anchor for brokers is that fee income is capital-light (high ROE → high but informative P/B of 8-15× for pure-plays), not that "book is float". Use it only as a secondary cross-check alongside ROE.
 - **Peer PE at different monetisation mix** — discount-broker PE vs full-service PE at the same number conceals different durability profiles.
 
 ### Justified-Multiple / Gordon-Growth Discipline — Normalize the Earnings Base First

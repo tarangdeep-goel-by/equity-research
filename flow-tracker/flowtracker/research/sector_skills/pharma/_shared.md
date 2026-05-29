@@ -6,6 +6,13 @@
 - **Note on sub-sectors:** Hospitals, Diagnostics, and CDMO have fundamentally different frameworks
 - Standard PE/DCF valuation works. Growth pharma trades at premium to generics
 
+### USFDA Inspection Classification — Use the Full NAI / VAI / OAI Frame (Not Just "483 vs Warning Letter")
+Every USFDA inspection ends in one of three *final classifications* — do not collapse the spectrum to "got a 483 / got a warning letter":
+- **NAI (No Action Indicated)** — clean; facility in acceptable compliance, usually no 483. Approvals proceed normally.
+- **VAI (Voluntary Action Indicated)** — objectionable conditions found (a 483 *is* typically issued) but FDA accepts voluntary correction and recommends *no* enforcement. **Crucially, VAI does NOT halt approvals** — pending ANDAs/applications from the site can still be approved. A 483 alone is therefore *not* automatically a pipeline-blocking event; the classification is what matters.
+- **OAI (Official Action Indicated)** — unacceptable compliance; high risk of enforcement (Warning Letter, Import Alert, injunction, consent decree). **OAI generally blocks approval of applications tied to that site until reclassified**, and is the binary value-destroying outcome.
+A 483 → (resolved to VAI = benign) or → (OAI = serious). Track the *classification*, not just the 483 count. The **EIR (Establishment Inspection Report)** carries the recommended classification and signals inspection closure.
+
 ### Annual Report & Investor Deck — Pharmaceuticals Specifics
 
 **AR high-signal sections (consult proactively when agent is mandated):**

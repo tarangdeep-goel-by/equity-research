@@ -6,7 +6,7 @@ This company operates across multiple distinct business segments. Single-segment
 Conglomerates need segment-level valuation because blending all segments into one PE or EV/EBITDA produces a meaningless average:
 - Identify each business segment and its revenue/EBIT contribution
 - Value each segment using peer multiples from pure-play comparables
-- Apply 15-25% holding company discount to aggregate value
+- Apply a holding-company discount to aggregate value — for listed Indian holdcos this is typically wide (median ~50-65% to NAV; pure investment holdcos run wider still). Do not default to a token 15-25%; size it from the decomposition table in the valuation skill
 - If segment data is unavailable from tools, state explicitly and pose as open question
 
 **Key Risks for Conglomerates:**
@@ -22,7 +22,7 @@ Conglomerates need segment-level valuation because blending all segments into on
 
 Any conglomerate report (business or valuation) without a SOTP table is structurally incomplete. `get_valuation(section='sotp')` is mandatory for conglomerate coverage. If it returns empty, manual SOTP per the shared-preamble A1.4 tenet is mandatory — use `get_company_context(section='subsidiaries')` + `get_fundamentals(section='revenue_segments')` per subsidiary or segment.
 
-Subsidiary market cap refresh: auto-SOTP may be stale for recently-listed subsidiaries (e.g., HDB Financial Services listed Jul 2025, NTPCGREEN Energy listed 2025, Adani Green / Adani Power / Adani Ports existing listings). Cross-check `get_valuation(sotp)` output against `get_market_context(section='peer_metrics')` or direct symbol lookup when a subsidiary is publicly listed. If the auto-SOTP is stale or missing a listed subsidiary, annotate and recompute the SOTP line.
+Subsidiary market cap refresh: auto-SOTP may be stale for recently-listed subsidiaries (e.g., HDB Financial Services listed Jul 2025, NTPC Green Energy listed Nov 2024, Adani Green / Adani Power / Adani Ports existing listings). Cross-check `get_valuation(sotp)` output against `get_market_context(section='peer_metrics')` or direct symbol lookup when a subsidiary is publicly listed. If the auto-SOTP is stale or missing a listed subsidiary, annotate and recompute the SOTP line.
 
 ## SOTP Verification — Subsidiary vs Promoter-Group Sibling (Cross-Agent, Mandatory)
 

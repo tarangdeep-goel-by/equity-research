@@ -1,7 +1,7 @@
 ## Broker — Risk Agent
 
 ### Sub-type Archetype — Risk Surface Differs by Sub-type
-The dominant risk axis is not the same across broker sub-types. For discount brokers it is SEBI regulatory tightening on F&O and order-flow monetisation; for full-service brokers it is competitive price pressure from discount tier and advisory-revenue compression; for wealth / PMS it is AUM attrition on market drawdowns and performance-fee timing; for bank-owned brokers it is parent-bank credit events propagating to the captive; for depositary participants it is regulated-tariff revision and technology-disruption risk. State the sub-type's dominant risk axis in the opening paragraph before listing generic operational risks.
+The dominant risk axis is not the same across broker sub-types. For discount brokers it is SEBI regulatory tightening on F&O and order-flow monetisation; for full-service brokers it is competitive price pressure from discount tier and advisory-revenue compression; for wealth / PMS it is AUM attrition on market drawdowns and performance-fee timing; for bank-owned brokers it is parent-bank credit events propagating to the captive; for the Depositories (CDSL/NSDL) it is regulated-tariff revision and technology-disruption risk. State the sub-type's dominant risk axis in the opening paragraph before listing generic operational risks.
 
 ### Sector-Specific Governance Red Flags
 Governance stress in brokers surfaces earlier through SEBI correspondence than through board drama. Scan for:
@@ -19,11 +19,11 @@ Regulatory risk for brokers is concrete; tie each risk to the named regulator an
 - **SEBI** — **Broker Regulations** (net-worth requirements, client-funds segregation, margin collection norms), **Research Analyst Regulations** (registration, disclosure, insider-trading surveillance on research staff), **AIF / PMS Regulations** (performance-fee high-water-mark, investor-class segregation), **Insider-Trading Regulations** for broker research personnel.
 - **Recent SEBI changes worth naming explicitly**:
   - **F&O lot-size increase October 2024** — compressed retail-options participation by 20-30% in discount-broker revenue in the first quarter of effect.
-  - **True-to-label expense rule** — forces disclosure of total expense ratio at the scheme level, compressing distribution-trail economics for brokers with heavy MF-distribution books.
+  - **True-to-Label charges circular** (SEBI, 1 Jul 2024, effective 1 Oct 2024) — mandates uniform (non-slab) transaction charges by MIIs and requires charges collected from clients to match charges paid to the MII, eliminating the slab-vs-flat-fee rebate brokers historically pocketed (~8-10% of discount-broker revenue). This is about exchange/MII transaction charges, NOT mutual-fund TER disclosure.
   - **Peak-margin / upfront-margin collection circulars** (Phase 1-4 rolled through 2021-22) — step-changed order economics for retail discount brokers; ADTV impact already absorbed but margin-rule tightening is an ongoing direction.
-  - **Weekly-expiry rationalisation** (under consultation 2024-25) — materially further compression on index-option notional if implemented.
+  - **Single-weekly-expiry-per-exchange rule** (live since 20 Nov 2024, NOT a pending consultation) — each exchange retains weekly expiry for only one index (Nifty on NSE, Sensex on BSE); Bank Nifty / FinNifty / Midcap Select / Bankex / Sensex50 weekly contracts were discontinued. This already removed multiple expiry-day trading sessions per week — a structural, realised compression on index-option volumes, not a prospective one.
 - **NSE / BSE** — Trading-Member rulebook, co-location access norms, technology-audit and outage-reporting requirements.
-- **RBI** — Margin-Trading Funding regulations for brokers operating MTF books; cost-of-funds circular transmission impacts MTF spread.
+- **RBI** — indirect only: policy-rate / liquidity cycle drives the broker's own cost of funds, which transmits to the MTF spread. (The Margin Trading Facility framework itself is issued by **SEBI**, not RBI — do not attribute MTF regulation to RBI.)
 - **IT Ministry / CERT-In** — cyber-incident reporting obligations (6-hour mandatory disclosure); a broker is a SEBI-regulated market intermediary and a CERT-In reporting entity simultaneously.
 
 Name the relevant circular or master-direction when the risk crystallises; vague "per regulations" framing loses the traceability that makes the risk actionable.
@@ -40,7 +40,7 @@ Broker operational risk is technology-heavy and shows up in three vectors:
 ### Bear-Case Scenarios — 20-40% Drawdown Triggers
 Historical broker drawdowns have recurring triggers; use these as the scaffolding for a bear case:
 
-- **SEBI structural tightening on F&O** — the 2024-25 lot-size and margin-rule cycle compressed discount-broker F&O revenue 20-30% in affected quarters; a further weekly-expiry rationalisation in FY26 is the base-case bear. The next SEBI action (index-option expiry consolidation, additional margin tightening, retail-options access curbs) is the default-probability bear-case, not a tail scenario.
+- **SEBI structural tightening on F&O** — the 2024-25 lot-size hike, margin-rule cycle, AND the single-weekly-expiry-per-exchange rule (live 20 Nov 2024) already compressed discount-broker F&O revenue 20-30% in affected quarters. The bear case is the NEXT incremental action (additional margin tightening, further expiry consolidation, retail-options access curbs) layered on top of the already-realised step-down — a default-probability bear-case, not a tail scenario.
 - **COVID-style market shock** — a single-week ADTV drop of 40-50% vaporises F&O revenue; historically broker stocks drop 25-40% in the first two weeks of such shocks before stabilising.
 - **Client-fund segregation SEBI finding** — single-day stock move 10-30%; recovery depends on remediation pace and whether the finding is firm-specific or sector-wide.
 - **Technology outage cluster** — 3+ outages within 6 months correlates with active-client attrition of 5-10% in the following 2 quarters.

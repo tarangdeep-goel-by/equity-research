@@ -26,7 +26,7 @@ Regime break: the FY21-23 China+1 boom lifted specialty EV/EBITDA prints 30-40% 
 ### Cycle Normalization — Don't Extrapolate Peak Margins
 FY22-23 margins are not a valid base. A specialty-chem EBITDA margin of 30% in the boom window normalises to 20-24% through-cycle; applying a specialty PE of 30× on peak-margin earnings delivers ~40-45× on normalised earnings, which is what the re-rating math actually requires. Before applying any multiple:
 1. Compute the through-cycle EBITDA margin (5-7Y average, excluding the FY22-23 boom peak if structurally non-repeatable).
-2. Apply the primary multiple on **normalised EBITDA**, not trailing reported EBITDA.
+2. Apply the primary multiple on **normalised EBITDA**, not trailing reported EBITDA. Before normalising, strip out non-recurring inventory holding gains/losses driven by crude/petchem price swings — a feedstock-spike quarter's reported EBITDA carries inventory revaluation that reverses with prices and will misprice the multiple if left in.
 3. Report both the trailing-EBITDA multiple and the normalised-EBITDA multiple; the gap between them is the cycle premium embedded in the stock.
 
 Route the arithmetic through `calculate` with `through_cycle_margin`, `normalised_ebitda`, and `target_multiple` as named inputs.
@@ -58,7 +58,7 @@ Real specialty chemicals peak at **Fixed Asset Turnover (FAT) of ~1.2-1.8×** (R
 If `get_fair_value_analysis(section='dcf')` is empty (common for FMP Indian coverage across mid-cap specialty), use reverse-DCF on normalised EBITDA and state the assumed `g` and WACC. If `get_valuation(section='band', metric='ev_ebitda')` returns a narrow 2-3Y band, call `get_chart_data(chart_type='pe')` for the deeper history and reconstruct the EV/EBITDA path from EV and EBITDA series where available; flag the reconstruction.
 
 ### Gordon-Style Growth — Carry `g` Through
-For any justified-multiple or reverse-DCF math, the Gordon framework requires an explicit `g` assumption. Realistic sustainable `g` for Indian chemicals sits in the 8-12% range nominal (retention × incremental ROCE gives the steady-state). Dropping `g` to zero when computing `Justified EV/EBITDA = (1 − reinvestment rate) ÷ (WACC − g)` mechanically under-estimates the multiple by 30-50%. State `g` explicitly and carry it through; sensitivity of 1pp on `g` moves the justified multiple materially, so the growth assumption is as load-bearing as the WACC input.
+For any justified-multiple or reverse-DCF math, the Gordon framework requires an explicit `g` assumption. Realistic sustainable `g` for Indian chemicals sits in the 8-12% range nominal (retention × incremental ROCE gives the steady-state). Dropping `g` to zero when computing `Justified EV/EBITDA = (FCFF / EBITDA) ÷ (WACC − g)` mechanically under-estimates the multiple by 30-50%. State `g` explicitly and carry it through; sensitivity of 1pp on `g` moves the justified multiple materially, so the growth assumption is as load-bearing as the WACC input.
 
 ### Open Questions — Chemicals Valuation-Specific
 - "What through-cycle EBITDA margin was used to normalise the multiple, and does it exclude the FY22-23 China+1 boom peak?"

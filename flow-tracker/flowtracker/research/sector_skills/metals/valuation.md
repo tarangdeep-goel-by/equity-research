@@ -35,11 +35,11 @@ This is the valuation-agent discipline that separates a metals framework from a 
 
 ### EV/Ton Nameplate Capacity — Sector Calibration and Validation
 EV per tonne of installed nameplate capacity is the primary cross-validation check; it short-circuits cycle-phase ambiguity because it anchors to physical capacity rather than cyclic earnings. Current sector-calibration ranges (subject to cycle phase):
-- **Integrated steel** — $400-600/t (captive-RM integrated); non-integrated $250-400/t.
+- **Integrated steel** — anchor to greenfield/brownfield replacement cost, which for Indian integrated BF-BOF is ~$800-1,000/t (IIT Bombay benchmark ~$1,000-1,200/t for a new greenfield complex). A traded EV/ton well below replacement cost signals either a cycle-trough discount or a structural cost-curve / leverage problem; well above it signals either captive-RM / specialty premium or valuation stretch. Non-integrated trades at a discount to integrated.
 - **Aluminium** — $2500-3500/t (higher because smelters are power-capex-heavy).
-- **Zinc / lead integrated** — $800-1500/t.
+- **Zinc / lead integrated** — $800-1500/t of refined capacity, but **disable the EV/ton-of-refined-capacity cross-check for integrated zinc/lead miners (e.g. Hindustan Zinc) where >80% of EV is in captive mine reserves** — applying a smelter replacement cost to a mine-heavy integrated producer falsely flags it as overvalued. For those, value on EV/EBITDA + in-ground resource NPV (and byproduct silver credits), not refined-capacity replacement cost.
 - **Copper smelter** — $400-700/t.
-- **Iron-ore** — valued per tonne of reserves ($3-8/t of in-ground reserves for Indian grade at current royalty regime) rather than per tonne of annual output.
+- **Iron-ore** — valued per tonne of reserves (broadly $3-8/t of in-ground reserves for *legacy-allocated* mines at the current royalty regime) rather than per tonne of annual output. **Do not apply this blanket band to post-2015 auctioned mines:** the auction premium (often 80-150% of IBM ASP) plus royalty + DMF + NMET can compress the effective in-ground NPV to near zero, so an auctioned reserve is worth a fraction of a legacy reserve. Bifurcate the reserve base by allocation vintage before applying any ₹/tonne-of-reserves multiple.
 
 Compute: `EV / Nameplate Capacity = Market Cap + Net Debt − Cash (Cr) × 1e7 × USDINR⁻¹ ÷ nameplate capacity in tonnes`. Call `calculate` with explicit named inputs; pull USDINR from `get_market_context(section='macro')`. State the $/tonne alongside the sub-sector range — if the company trades at 2× the range, decompose: is it captive-RM, specialty mix, or valuation stretch?
 
@@ -54,7 +54,7 @@ Every 10% move in the relevant commodity price (HRC for steel, LME primary for a
 | +10% LME aluminium | +40-55% | +30-40% |
 | +15% aluminium power cost | −250-450 bps margin | partial offset if captive power |
 | +25% coking coal (60% pass-through mid-cycle) | −$30-60/t EBITDA on flat-steel producers | −$15-30/t (captive offset ~50%) |
-| CBAM at €70-90/tCO₂ × 2.1-2.4 tCO₂/t (BF-BOF) on EU volume | −€150-200/t on EU-facing tonnes | DRI-EAF (0.8-1.2 tCO₂/t) roughly halves the drag |
+| CBAM at €70-90/tCO₂ × ~2.5-2.8 tCO₂/t (Indian BF-BOF) on EU volume, at FULL phase-in | −€175-250/t on EU-facing tonnes at 100% phase-in (2034); only ~2.5% applies in 2026, scaling up year by year | gas-DRI / scrap-EAF (0.8-1.2 tCO₂/t) roughly halves the drag — but Indian coal-based DRI (~2.0-3.0 tCO₂/t) does not |
 
 Captive-integrated producers show lower sensitivity because part of the RM cost is internal transfer-price-linked. Compute the grid via `calculate` with the current-quarter EBITDA and realization split as named inputs. If a company claims pricing-power resilience, this grid is where the claim is tested. Note that only ~60% of a coking-coal spike is passed through to HRC prices mid-cycle (full pass-through only at peak-demand phase); the residual hits EBITDA directly.
 
@@ -90,4 +90,4 @@ If `get_fundamentals(section='cagr_table')` returns fewer than 7 years of EBITDA
 - "Does the current EV/ton at $X/t reconcile with the sub-sector range after adjusting for captive-RM integration and product mix, or is there a residual gap the decomposition does not explain?"
 - "In the reverse-DCF, what implied HRC / LME price is embedded in the current EV, and is that 20% above, at, or below the 10Y average?"
 - "For integrated producers: what per-vertical through-cycle EBITDA was used in SOTP, and what holding-company discount was applied to listed subsidiaries?"
-- "For export-facing volumes: what CBAM carbon-cost deduction was applied in the valuation, and from which start date in 2026?"
+- "For export-facing volumes: what CBAM carbon-cost deduction was applied, and was the 2026-2034 phase-in schedule modelled (≈2.5% of full cost in 2026, ramping to 100% by 2034) rather than the full per-tonne surcharge from 2026?"

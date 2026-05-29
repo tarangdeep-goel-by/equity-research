@@ -2,7 +2,7 @@
 
 ### Macro Context — Data Consumption, Tele-Density, Regulatory Overhang
 Indian telecom is idiosyncratically shaped by data-consumption growth, tele-density saturation, and a regulatory-levy regime that has no analogue in most other sectors. Pull the current regime from `get_market_context(section='macro')` and the sector-specific drivers, and state these variables explicitly:
-- **Per-user per-month data consumption** — currently 18-25 GB/month for Indian wireless subs, rising. Data-growth is the structural deflation offset to ARPU stagnation; rising GB/sub allows cost-per-GB to fall while EBITDA/sub holds up. Track the trajectory rather than the level.
+- **Per-user per-month data consumption** — crossed ~31 GB/month in 2025 (Nokia MBiT Index 2026, up from ~27.5 GB in 2024), still rising at ~18% 5yr CAGR. Data-growth is the structural deflation offset to ARPU stagnation; rising GB/sub allows cost-per-GB to fall while EBITDA/sub holds up. Track the trajectory rather than the level.
 - **4G → 5G migration pace** — % of active subs on 5G-capable handsets + % of cell-sites 5G-enabled; the mix-shift is the monetisation-enabler.
 - **Smartphone penetration** — saturating at >80% in urban India and rising in rural; the remaining runway is primarily rural feature-phone-to-smartphone conversion and second-SIM activation.
 - **Rural tele-density** — the last-mile growth vector for both wireless and FTTH; National Broadband Mission targets shape rural-rollout economics.
@@ -14,7 +14,7 @@ Indian telecom is idiosyncratically shaped by data-consumption growth, tele-dens
 Indian telecom lives through several overlapping cycles; diagnose each before declaring sector direction:
 - **Oligopoly-consolidation cycle** — the Indian wireless sector has been in consolidation since the 2016 new-entrant-led tariff disruption, which collapsed the market from 10+ operators to 3. Current phase: 3-player stability with one distressed player under AGR / spectrum-conversion overhang.
 - **Tariff-hike cycle** — FY24/25 saw a sequenced sector-wide hike; the market is pricing another cycle within 12-18 months. Sector tariff-cycles move together (the oligopoly coordinates implicitly) — single-operator attempts at unilateral hikes have historically been rolled back.
-- **5G-capex / 5G-monetisation cycle** — 2022-2026 5G rollout peak-capex; the monetisation-lift (ARPU premium for 5G + FWA new-home broadband + enterprise 5G slicing) is the FY+2 and FY+3 earnings-lift variable.
+- **5G-capex / 5G-monetisation cycle** — 2022-2026 5G rollout peak-capex; the monetisation-lift is the FY+2 and FY+3 earnings-lift variable. Note Indian operators do **not** charge a direct 5G ARPU premium — 5G is bundled at 4G price points to drive data-tier upgrades and broad tariff hikes, so 5G monetisation flows through tariff-cycle hikes + data-tier mix-shift + FWA new-home broadband + enterprise 5G slicing, not a standalone 5G price uplift.
 - **Tower-infra capacity-expansion cycle** — 5G densification is extending the tower-build cycle independent of the wireless capex peak; tenancy-ratio expansion is the tower-infra utility-like earnings-lift.
 - **Spectrum-renewal cycle** — 2-5 year cadence; auction outcomes re-price the relative positioning of the 3-operator oligopoly.
 
@@ -31,7 +31,7 @@ Collapsing Indian telecom into one monolithic bucket is the most common sector-r
 State each tier's Nifty / Nifty-Next-50 / mid-cap-index membership and free-float because that shapes the flow dynamics.
 
 ### Institutional-Flow Patterns — Telecom-Specific
-Telecom carries a 3-4% weight in Nifty with heavily-concentrated stock-level weights (one operator alone accounts for most of the sector's index contribution). Flow mechanics to reflect:
+Telecom carries roughly a ~5.3-5.8% weight in the Nifty 50 (Bharti Airtel alone is ~5.9% of the index as of mid-2026), with heavily-concentrated stock-level weights (one operator accounts for almost the entire sector's index contribution). Flow mechanics to reflect:
 - **FII rotation on tariff-cycle and DoT-policy news** — sector-level FII share oscillates with tariff-hike announcements, spectrum-auction outcomes, and Supreme Court / TDSAT rulings on AGR-adjacent issues.
 - **DII positioning is bifurcated** — growth-at-reasonable-price funds overweight the top-2 wireless + listed tower entities; contrarian / deep-value funds hold the distressed third operator betting on a tariff-cycle turn or government-stake rationalisation.
 - **Index-weight dominance** — passive-ETF flows hit the single top-weight operator disproportionately, driving index-rebalance-window mechanics that sector-level reads can miss.

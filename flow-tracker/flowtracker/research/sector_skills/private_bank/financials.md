@@ -16,9 +16,9 @@ Other Income for private banks mixes three streams with very different quality p
 ### SOTP for Conglomerate Bank Groups
 When a private bank owns listed subsidiaries whose combined value exceeds 15% of standalone bank market cap, standalone P/B understates fair value. Call `get_valuation(section='sotp')` and present per-subsidiary valuation:
 
-- **HDFCBANK**: HDB Financial Services (IPO-bound FY26, use implied EV from last private round or comparable NBFC mcap), HDFC AMC (listed — market cap × ownership %), HDFC Life (listed), HDFC ERGO (unlisted — use implied EV from last capital raise or comparable general-insurance multiples)
-- **ICICIBANK**: ICICI Pru Life (listed), ICICI Lombard (listed), ICICI Pru AMC (listed), ICICI Securities (post-delisting offer — use last traded price or implied OFS value)
-- **KOTAKBANK**: Kotak Mahindra AMC (unlisted — very large EV, typical 4-6% AMC mcap-to-AUM on Indian AMCs), Kotak Mahindra Life Insurance (unlisted — VNB-based implied EV), Kotak Securities (unlisted)
+- **HDFCBANK**: HDB Financial Services (listed since July 2025 — use actual traded market cap × ownership %, not an implied private valuation), HDFC AMC (listed — market cap × ownership %), HDFC Life (listed), HDFC ERGO (unlisted — use implied EV from last capital raise or comparable general-insurance multiples)
+- **ICICIBANK**: ICICI Pru Life (listed), ICICI Lombard (listed), ICICI Pru AMC (listed), ICICI Securities (delisted March 2025 via 67:100 swap into ICICI Bank — now a 100% unlisted subsidiary; value on unlisted-broker peer multiples, not a "last traded price")
+- **KOTAKBANK**: Kotak Mahindra AMC (unlisted — very large EV, typical 4-6% AMC mcap-to-AUM on Indian AMCs), Kotak Mahindra Life Insurance (unlisted — value on P/EV, i.e. a multiple of Embedded Value; VNB feeds the appraisal value, not a direct multiple), Kotak Securities (unlisted)
 - **AXISBANK**: Axis AMC (unlisted), Max Life 20% stake post deal (listed Max Financial parent)
 - **Method**: (market-cap or implied-EV) × ownership % → aggregate → apply 20-25% holding-company discount → divide by bank shares outstanding → SOTP per share
 - **Core bank stripping**: `standalone_bank_implied_value = current_mcap − subsidiary_SOTP_value`. Compute implied standalone P/B using **standalone BVPS** (never consolidated — consolidated book includes subsidiary goodwill / investments that distort)
@@ -27,10 +27,12 @@ When a private bank owns listed subsidiaries whose combined value exceeds 15% of
 Headline NIM alone is misleading. The **cause** of NIM level determines whether it's cyclically robust or at risk:
 - **High-CASA-driven NIM** (HDFCBANK historically, ICICIBANK) — stable across rate cycles. Low-cost funding franchise is the moat; NIM is durable
 - **High-yield-asset-driven NIM** (HDFCBANK retail unsecured, KOTAKBANK, IDFCFIRSTB) — earned via higher-yielding unsecured lending (personal loans, credit cards, small-ticket retail). Rate-cycle-sensitive and credit-cost-exposed. Can compress fast if asset-quality cycle turns
-- **In concall**, decompose: `NIM ≈ Yield on advances − Cost of deposits − (Provisions / avg advances)`
+- **NIM is NII ÷ average earning assets** — provisions/credit costs are NOT part of NIM (they are a separate line below NII). Do not net provisions into the margin. In concall, decompose the spread driving NIM as `yield on earning assets − cost of funds`:
   - Track each component QoQ; narrate which component is driving the move
   - Yield-on-advances moves with RBI repo + pricing power; cost-of-deposits moves with CASA mix + bulk-deposit reliance
+  - If diagnosing pre-provision profitability, treat provisions / avg advances (credit cost) as a distinct metric — never subtract it inside NIM
 - Extract via `get_sector_kpis` or `get_company_context(section='concall_insights')`
+- **PSL shortfall / RIDF drag** — fast-growing private banks frequently miss Priority-Sector-Lending sub-targets and are then forced to park the shortfall in low-yielding (typically 2-4%) RIDF (Rural Infrastructure Development Fund) and similar deposits. This is a structural drag on blended yield, NIM, and ROA that is invisible if you only look at the headline advances yield. Probe PSL compliance and the RIDF-deposit balance when a bank's NIM/ROA lags peers despite a high-yield loan mix.
 
 ### Asset Quality — Inherits BFSI, With Private-Bank Texture
 Private banks disclose SMA buckets more consistently than PSU banks. For private banks:

@@ -28,6 +28,9 @@ Because P&L revenue lags reality by years, the actual business metrics live in c
 
 **Data-shape fallback:** if `get_sector_kpis(sub_section='pre_sales_value_cr'|'collections_cr'|'gdv_pipeline_cr'|'unsold_inventory_months')` returns `status='schema_valid_but_unavailable'`, the extractor has not captured that canonical KPI for this developer. Fall back to narrative extraction via `get_company_context(section='concall_insights', sub_section='management_commentary')` and `sub_section='operational_metrics'` — developers typically discuss quarterly pre-sales and collections prominently in opening remarks. Cite the specific quarter and verbatim figure source. Never omit pre-sales from a real-estate financials report because the structured tool lacked it — the narrative contains it.
 
+### Contract Liabilities / Customer Advances — The Audited Leading Indicator
+Pre-sales never hit the P&L under Ind AS 115, but the cash and obligation behind them DO land on the audited balance sheet as **"Contract Liabilities"** (or **"Advances from Customers"**). This is the definitive, audited leading indicator of future reported revenue — it is the locked-in pipeline that will convert to recognised P&L revenue at handover, unlike concall pre-sales which are management-stated and unaudited. Track the QoQ/YoY trajectory of Contract Liabilities from `get_fundamentals(section='balance_sheet_detail')` and `get_fundamentals(section='working_capital')`: a rising balance is booked demand awaiting recognition; a falling balance with flat pre-sales signals the recognition wave is now catching up (revenue inflection ahead) — distinguish the two before reading it as weakness.
+
 ### Cash Flow Is King
 - Compare **Operating Cash Flow** against **Collections**. OCF should track collections closely
 - If OCF << Collections, the company is burning cash on new land/construction faster than collecting
@@ -40,7 +43,7 @@ Because P&L revenue lags reality by years, the actual business metrics live in c
 - `get_quality_scores(section='realestate')` — pre-computed real estate metrics if available
 
 ### Skip or Heavily Adapt Standard Frameworks
-- **DuPont decomposition is misleading** — margin × turnover × leverage computed on Ind-AS 115 revenue produces meaningless numbers. If you include DuPont, compute it on pre-sales (from concalls) not reported revenue
+- **DuPont decomposition is misleading** — margin × turnover × leverage computed on Ind-AS 115 revenue produces meaningless numbers. Do NOT "fix" this by substituting pre-sales into DuPont: PAT (the numerator that flows through margin) is earned on completed/handed-over projects, while pre-sales reflect current bookings 2-4 years ahead of recognition — mixing the two breaks the identity. If you want a forward read, track pre-sales and collections directly as standalone operational metrics rather than forcing them into a DuPont frame
 - **Standard earnings quality checks** (CFO/PAT, accrual ratio) are distorted by project-based cash flows — advances from customers inflate CFO, completion timing distorts PAT
 
 ### Forward-Looking Metrics (from concall_insights)
