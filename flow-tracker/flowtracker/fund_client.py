@@ -9,7 +9,7 @@ from typing import Any
 import yfinance as yf
 
 from flowtracker.fund_models import LiveSnapshot, QuarterlyResult, ValuationSnapshot
-from flowtracker.market import Market, market_symbol
+from flowtracker.market import Market, market_symbol, to_aggregate
 
 
 class YFinanceError(Exception):
@@ -43,8 +43,9 @@ def _div100(val: float | None) -> float | None:
 
 
 def _to_cr(val: float | None) -> float | None:
-    """Convert raw rupees to crores (÷1e7)."""
-    return val / 1e7 if val is not None else None
+    """Convert raw rupees to crores (÷1e7). India-default wrapper over
+    :func:`flowtracker.market.to_aggregate`."""
+    return to_aggregate(val, Market.NSE)
 
 
 def _to_pct(val: float | None) -> float | None:

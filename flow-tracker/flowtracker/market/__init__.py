@@ -95,6 +95,30 @@ def market_symbol(symbol: str, market: Market = DEFAULT_MARKET) -> str:
     return f"{symbol}{MARKETS[market].yfinance_suffix}"
 
 
+def to_aggregate(raw: float | None, market: Market = DEFAULT_MARKET) -> float | None:
+    """Convert a raw native-currency amount to the market's canonical stored
+    aggregate unit. NSE: rupees → crores (÷1e7). US: dollars → millions (÷1e6).
+
+    Generalizes the legacy ``_to_cr`` helpers; with ``market=NSE`` it is
+    behavior-identical (÷1e7). ``None`` passes through.
+    """
+    if raw is None:
+        return None
+    return raw / MARKETS[market].magnitude_divisor
+
+
+def fmt_monetary(value: float | None, market: Market = DEFAULT_MARKET) -> str:
+    """Format an aggregate value with the market's currency symbol + magnitude
+    label. NSE: ``₹1,234.56 Cr``. US: ``$1,234.56 mn``. ``None`` → ``"N/A"``.
+
+    Generalizes ``utils.fmt_crores_label`` (NSE output is identical).
+    """
+    if value is None:
+        return "N/A"
+    cfg = MARKETS[market]
+    return f"{cfg.currency_symbol}{value:,.2f} {cfg.magnitude_label}"
+
+
 def infer_market(ticker: str) -> Market:
     """Reverse-detect the market from a ticker suffix. Bare tickers (no known
     suffix) default to NSE — preserving today's India-only assumption until
@@ -114,4 +138,6 @@ __all__ = [
     "market_config",
     "market_symbol",
     "infer_market",
+    "to_aggregate",
+    "fmt_monetary",
 ]

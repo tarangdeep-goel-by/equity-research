@@ -9,10 +9,13 @@ from flowtracker.market import (
     DEFAULT_MARKET,
     MARKETS,
     Market,
+    fmt_monetary,
     infer_market,
     market_config,
     market_symbol,
+    to_aggregate,
 )
+from flowtracker.utils import fmt_crores_label
 
 
 class TestMarketSymbol:
@@ -90,3 +93,47 @@ class TestMarketConfig:
         assert Market.NSE == "NSE"
         assert f"{Market.NASDAQ}" == "Market.NASDAQ"  # repr form
         assert Market.NASDAQ.value == "NASDAQ"
+
+
+class TestToAggregate:
+    def test_nse_divides_by_crore(self):
+        assert to_aggregate(1e7, Market.NSE) == 1.0
+        assert to_aggregate(82_000_000.0, Market.NSE) == 8.2
+
+    def test_us_divides_by_million(self):
+        assert to_aggregate(1e6, Market.NASDAQ) == 1.0
+
+    def test_none_passes_through(self):
+        assert to_aggregate(None) is None
+
+    def test_default_is_nse(self):
+        assert to_aggregate(1e7) == 1.0
+
+
+class TestFmtMonetary:
+    def test_nse_format(self):
+        assert fmt_monetary(1234.56, Market.NSE) == "₹1,234.56 Cr"
+
+    def test_us_format(self):
+        assert fmt_monetary(1234.56, Market.NASDAQ) == "$1,234.56 mn"
+
+    def test_none_is_na(self):
+        assert fmt_monetary(None) == "N/A"
+
+
+class TestLegacyMonetaryBackcompat:
+    """The legacy India helpers must produce byte-identical output."""
+
+    @pytest.mark.parametrize("v", [1234.56, 0.0, -567.89, 25_000_000.0, None])
+    def test_fmt_crores_label_unchanged(self, v):
+        expected = "N/A" if v is None else f"₹{v:,.2f} Cr"
+        assert fmt_crores_label(v) == expected
+
+    @pytest.mark.parametrize("raw", [1e7, 82_000_000.0, None, 0.0])
+    def test_to_cr_helpers_unchanged(self, raw):
+        from flowtracker.fund_client import _to_cr as fund_to_cr
+        from flowtracker.fmp_client import _to_cr as fmp_to_cr
+
+        expected = None if raw is None else raw / 1e7
+        assert fund_to_cr(raw) == expected
+        assert fmp_to_cr(raw) == expected

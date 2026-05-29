@@ -20,10 +20,14 @@ def fmt_crores(value: float | None) -> str:
 
 
 def fmt_crores_label(value: float | None) -> str:
-    """Format value with rupee sign and Cr suffix: '₹1,234.56 Cr'."""
-    if value is None:
-        return "N/A"
-    return f"₹{value:,.2f} Cr"
+    """Format value with rupee sign and Cr suffix: '₹1,234.56 Cr'.
+
+    India-default wrapper over :func:`flowtracker.market.fmt_monetary`; new code
+    should call ``fmt_monetary(value, market)`` directly for non-INR markets.
+    """
+    from flowtracker.market import Market, fmt_monetary
+
+    return fmt_monetary(value, Market.NSE)
 
 
 def parse_period(period: str) -> int:
