@@ -7,6 +7,7 @@ import statistics
 import logging
 import re
 import xml.etree.ElementTree as ET
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from functools import lru_cache
@@ -19,6 +20,92 @@ from flowtracker.utils import _clean, derive_dii
 
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------- #
+# Run-market context (US add-on, Phase 3.5b / WS-1)
+# --------------------------------------------------------------------------- #
+# The LLM agent never differentiates market — it calls the same tool names with
+# a `symbol`. Market is resolved ONCE per run (server-side) and tools route
+# internally by reading this ContextVar. Default None → callers fall back to
+# per-symbol registry lookup (back-compat: India behavior unchanged).
+_run_market: ContextVar[str | None] = ContextVar("research_run_market", default=None)
+
+_US_MARKET_FLAGS = frozenset({"us", "usa", "nasdaq", "nyse"})
+_IN_MARKET_FLAGS = frozenset({"in", "ind", "india", "nse", "bse"})
+
+
+def _registry_market_of(symbol: str, store: FlowStore) -> str:
+    """Raw registry market lookup: US row (NASDAQ/NYSE) wins, else NSE.
+
+    Honors NO run-context override — this is the pure source-of-truth lookup
+    that override-aware resolvers fall back to.
+    """
+    for market in ("NASDAQ", "NYSE"):
+        if store.get_symbol_registry_entry(symbol, market):
+            return market
+    return "NSE"
+
+
+# US 10Y Treasury fallback (~4.3%) — keeps offline tests/audit deterministic
+# when the live ^TNX fetch is unavailable.
+_US_RF_FALLBACK = 0.043
+
+
+@lru_cache(maxsize=1)
+def _us_risk_free_rate() -> tuple[float, bool]:
+    """US 10-year Treasury yield as a decimal, with a fallback flag.
+
+    Tries live yfinance ``^TNX`` (CBOE 10Y Treasury yield index; the index
+    value is the yield ×10, so value/100 → decimal). On any failure (offline
+    tests, audit, network error) falls back to ``_US_RF_FALLBACK`` (~4.3%).
+
+    Returns ``(rate, used_fallback)``. Cached so a research run hits the network
+    at most once.
+    """
+    try:
+        import yfinance as yf
+
+        tnx = yf.Ticker("^TNX")
+        hist = tnx.history(period="5d")
+        if hist is not None and not hist.empty:
+            last = float(hist["Close"].dropna().iloc[-1])
+            if last > 0:
+                return last / 100.0, False
+    except Exception:  # noqa: BLE001 — offline must be deterministic
+        pass
+    return _US_RF_FALLBACK, True
+
+
+def resolve_run_market(
+    symbol: str,
+    market_flag: str | None = None,
+    *,
+    store: FlowStore | None = None,
+) -> str:
+    """Resolve a research run's market ONCE (hybrid, Decision 1).
+
+    Order: explicit ``market_flag`` wins → else ``symbol_registry`` US row →
+    else ``NSE`` (India default, unchanged). ``--market us`` on an unregistered
+    symbol defaults to NASDAQ.
+    """
+    symbol = (symbol or "").upper()
+    if market_flag:
+        f = market_flag.strip().lower()
+        if f in _IN_MARKET_FLAGS:
+            return "NSE"
+        if f in _US_MARKET_FLAGS:
+            if store is not None:
+                m = _registry_market_of(symbol, store)
+            else:
+                with ResearchDataAPI() as api:
+                    m = _registry_market_of(symbol, api._store)
+            return m if m in ("NASDAQ", "NYSE") else "NASDAQ"
+        # Unknown flag value → fall through to registry inference.
+    if store is not None:
+        return _registry_market_of(symbol, store)
+    with ResearchDataAPI() as api:
+        return _registry_market_of(symbol, api._store)
 
 
 # Tolerance for cross-source share-count agreement. yfinance occasionally lags
@@ -322,6 +409,30 @@ _IT_INDUSTRIES = {
     "Software Products", "Business Process Outsourcing (BPO)/ Knowledge Process Outsourcing (KPO)",
 }
 
+# US add-on (Phase 3.5): GICS-style sector labels (FMP / yfinance) → an
+# industry string already present in SECTOR_KPI_CONFIG, so US symbols resolve a
+# sector key through the same get_sector_for_industry path as India. Keys cover
+# the common GICS spellings; both 11-sector GICS and yfinance variants included.
+_US_GICS_TO_INDUSTRY = {
+    "Technology": "IT - Software",
+    "Information Technology": "IT - Software",
+    "Communication Services": "Telecom - Services",
+    "Financials": "Banks",
+    "Financial Services": "Banks",
+    "Health Care": "Pharmaceuticals",
+    "Healthcare": "Pharmaceuticals",
+    "Energy": "Oil & Gas Integrated",
+    "Materials": "Chemicals",
+    "Basic Materials": "Chemicals",
+    "Industrials": "Industrial Machinery",
+    "Consumer Staples": "FMCG",
+    "Consumer Defensive": "FMCG",
+    "Consumer Discretionary": "Retailing",
+    "Consumer Cyclical": "Retailing",
+    "Utilities": "Power Generation",
+    "Real Estate": "Real Estate - Development",
+}
+
 _GOLD_LOAN_KEYWORDS = {"gold", "muthoot", "manappuram"}
 
 _MICROFINANCE_INDUSTRIES = {
@@ -353,7 +464,7 @@ _CONGLOMERATE_KEYWORDS = {
 class ResearchDataAPI:
     """Unified data access for equity research — wraps FlowStore for agent tools."""
 
-    def __init__(self, store: FlowStore | None = None):
+    def __init__(self, store: FlowStore | None = None, market: str | None = None):
         if store is not None:
             self._store = store
             self._owns_store = False
@@ -361,6 +472,10 @@ class ResearchDataAPI:
             self._store = FlowStore()
             self._store.__enter__()
             self._owns_store = True
+        # Optional run-market override (US add-on, WS-1). When set, every
+        # _market_of() resolves to this market without a registry lookup; when
+        # None, the run-context ContextVar (then registry) decides.
+        self._run_market = market
 
     def close(self):
         if self._owns_store:
@@ -746,10 +861,41 @@ class ResearchDataAPI:
                 pass
         return freshness
 
+    # --- Market resolver (US add-on, Phase 3.5) ---
+
+    def _market_of(self, symbol: str) -> str:
+        """Resolve the market for a symbol.
+
+        Order: instance run-market override (constructor ``market=``) → run
+        ContextVar (``_run_market``, set once per research run) → per-symbol
+        registry lookup. The registry path tries US markets (NASDAQ, NYSE)
+        first, then defaults to 'NSE' — preserving India behavior for every
+        existing symbol (which is never seeded under a US market) when no run
+        context is active.
+        """
+        override = self._run_market or _run_market.get()
+        if override:
+            return override
+        return _registry_market_of(symbol, self._store)
+
+    def _is_us(self, symbol: str) -> bool:
+        """True when the symbol is a US listing (NASDAQ / NYSE)."""
+        return self._market_of(symbol) in ("NASDAQ", "NYSE")
+
     # --- Industry Helpers ---
 
     def _get_industry(self, symbol: str) -> str:
-        """Get industry for a symbol. Prefers yfinance (company_snapshot) over NSE/Screener."""
+        """Get industry for a symbol. Prefers yfinance (company_snapshot) over NSE/Screener.
+
+        US listings resolve their industry from the symbol_registry GICS-style
+        sector (mapped to an existing sector_kpis industry string), so US sector
+        detection routes through the same get_sector_for_industry path as India.
+        """
+        # US add-on: registry sector → sector_kpis industry string.
+        if self._is_us(symbol):
+            us_industry = self._us_industry_from_registry(symbol)
+            if us_industry:
+                return us_industry
         # Primary: yfinance-sourced industry from company_snapshot (better classification)
         row = self._store._conn.execute(
             "SELECT industry FROM company_snapshot WHERE symbol = ?", (symbol,)
@@ -759,6 +905,26 @@ class ResearchDataAPI:
         # Fallback: index_constituents (NSE/Screener)
         info = self.get_company_info(symbol)
         return info.get("industry") or "Unknown"
+
+    def _us_industry_from_registry(self, symbol: str) -> str | None:
+        """Map a US symbol's registry sector/gics to a sector_kpis industry string.
+
+        FMP/yfinance emit GICS-style sector labels ('Technology', 'Financials',
+        'Health Care', etc.). _US_GICS_TO_INDUSTRY maps each to an industry name
+        already present in SECTOR_KPI_CONFIG so get_sector_for_industry resolves
+        a sector key. Returns the raw registry sector string as a last resort.
+        """
+        entry = (
+            self._store.get_symbol_registry_entry(symbol, self._market_of(symbol))
+            or {}
+        )
+        for raw in (entry.get("sector"), entry.get("gics")):
+            if not raw:
+                continue
+            mapped = _US_GICS_TO_INDUSTRY.get(raw.strip())
+            if mapped:
+                return mapped
+        return (entry.get("sector") or entry.get("gics") or "").strip() or None
 
     def _is_bfsi(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _BFSI_INDUSTRIES
@@ -908,6 +1074,10 @@ class ResearchDataAPI:
         falls back to Screener `revenue` with a `data_quality_note`.
         See `_apply_insurance_headline` for the full rule.
         """
+        if self._is_us(symbol):
+            rows = self._store.get_us_quarterly_financials(symbol, self._market_of(symbol))
+            mapped = [self._us_quarterly_to_india(r) for r in rows[:quarters]]
+            return _clean(mapped)
         rows = self._store.get_quarterly_results(symbol, limit=quarters)
         cleaned = _clean([r.model_dump() for r in rows])
         return self._apply_insurance_headline(symbol, cleaned)
@@ -920,9 +1090,282 @@ class ResearchDataAPI:
         falls back to Screener `revenue` with a `data_quality_note`.
         See `_apply_insurance_headline` for the full rule.
         """
+        if self._is_us(symbol):
+            rows = self._store.get_us_annual_financials(symbol, self._market_of(symbol))
+            # Drop phantom annual rows that carry only balance-sheet (instant)
+            # values and no P&L — these arise when a recent interim 10-Q instant
+            # seeds a calendar year with no matching annual 10-K. A real annual
+            # row has revenue or net_income.
+            rows = [r for r in rows if r.get("revenue") is not None or r.get("net_income") is not None]
+            # Store returns latest-first (fiscal_year DESC) — match India order.
+            mapped = [self._us_annual_to_india(r) for r in rows[:years]]
+            return _clean(mapped)
         rows = self._store.get_annual_financials(symbol, limit=years)
         cleaned = _clean([r.model_dump() for r in rows])
         return self._apply_insurance_headline(symbol, cleaned)
+
+    # --- US → India key adapters (Phase 3.5b, WS-3) ---
+
+    def _us_annual_to_india(self, row: dict) -> dict:
+        """Map a raw ``us_annual_financials`` row to the India ``AnnualFinancials``
+        model_dump key contract so the ~30 forensic methods consume US data
+        unchanged. India paths never reach this — only the ``_is_us`` branch does.
+        """
+        g = row.get  # local alias
+
+        # fiscal_year_end: prefer the US string; else synthesize from fiscal_year.
+        fye = g("fiscal_year_end")
+        if not fye:
+            fy = g("fiscal_year")
+            fye = f"{fy}-12-31" if fy is not None else None
+
+        # Equity reconciliation: forensic code computes total_equity =
+        # equity_capital + reserves. Ensure that identity holds against the
+        # US-reported total_equity whenever it is known (e.g. AAPL reports
+        # total_equity but not the equity_capital/reserves split).
+        equity_capital = g("equity_capital")
+        reserves = g("reserves")
+        total_equity = g("total_equity")
+        if total_equity is not None:
+            if equity_capital is None and reserves is not None:
+                equity_capital = total_equity - reserves
+            elif reserves is None and equity_capital is not None:
+                reserves = total_equity - equity_capital
+            elif equity_capital is None and reserves is None:
+                # Put the whole figure on equity_capital so the sum reconciles.
+                equity_capital = total_equity
+                reserves = 0.0
+
+        cfo = g("operating_cash_flow")
+        cfi = g("cfi")
+        cff = g("cff")
+        net_cash_flow = (
+            cfo + cfi + cff
+            if cfo is not None and cfi is not None and cff is not None
+            else None
+        )
+
+        mapped: dict = {
+            # 1:1 pass-through (WS-2 named US columns to match India keys).
+            "symbol": g("symbol"),
+            "fiscal_year_end": fye,
+            "revenue": g("revenue"),
+            "net_income": g("net_income"),
+            "eps": g("eps"),
+            "operating_profit": g("operating_profit"),
+            "depreciation": g("depreciation"),
+            "interest": g("interest"),
+            "profit_before_tax": g("profit_before_tax"),
+            "tax": g("tax"),
+            "borrowings": g("borrowings"),
+            "other_liabilities": g("other_liabilities"),
+            "total_assets": g("total_assets"),
+            "net_block": g("net_block"),
+            "cwip": g("cwip"),
+            "receivables": g("receivables"),
+            "inventory": g("inventory"),
+            "cash_and_bank": g("cash_and_bank"),
+            "num_shares": g("num_shares"),
+            "cfi": cfi,
+            "cff": cff,
+            # Reconciled equity split.
+            "equity_capital": equity_capital,
+            "reserves": reserves,
+            # Renamed / derived.
+            "cfo": cfo,
+            "net_cash_flow": net_cash_flow,
+            # India-only line items with no US analog — explicit None.
+            "raw_material_cost": None,
+            "power_and_fuel": None,
+            "employee_cost": None,
+            "other_mfr_exp": None,
+            "selling_and_admin": None,
+            "other_expenses_detail": None,
+            "net_premium_earned": None,
+            "investments": None,
+            "other_assets": None,
+            "dividend_amount": None,
+            "total_expenses": None,
+            "other_income": None,
+            "price": None,
+        }
+
+        # Also pass through US extras (harmless; WS-6 US-native funcs use them).
+        for extra in (
+            "total_equity", "total_debt", "total_cash", "free_cash_flow",
+            "shares_outstanding", "rnd_expense", "stock_based_comp", "sga",
+            "fiscal_year", "market", "currency",
+        ):
+            if extra in row:
+                mapped[extra] = row[extra]
+
+        # Mirror the India path's additive headline transform (non-insurer).
+        mapped["headline_revenue"] = mapped["revenue"]
+        return mapped
+
+    def _us_quarterly_to_india(self, row: dict) -> dict:
+        """Map a raw ``us_quarterly_financials`` row to the India
+        ``QuarterlyResult`` model_dump key contract. US quarterly is sparse —
+        only symbol/quarter_end/revenue/net_income/eps are populated.
+        """
+        g = row.get
+        mapped: dict = {
+            "symbol": g("symbol"),
+            "quarter_end": g("quarter_end"),
+            "revenue": g("revenue"),
+            "net_income": g("net_income"),
+            "eps": g("eps"),
+            "gross_profit": None,
+            "operating_income": None,
+            "ebitda": None,
+            "eps_diluted": None,
+            "operating_margin": None,
+            "net_margin": None,
+            "expenses": None,
+            "other_income": None,
+            "depreciation": None,
+            "interest": None,
+            "profit_before_tax": None,
+            "tax_pct": None,
+            "net_premium_earned": None,
+        }
+        for extra in ("fiscal_year", "fiscal_period", "market", "currency"):
+            if extra in row:
+                mapped[extra] = row[extra]
+        mapped["headline_revenue"] = mapped["revenue"]
+        return mapped
+
+    # --- US-native functions (Phase 3.5b, WS-6; additive over the rich US data) ---
+
+    def _non_us_not_applicable(self, symbol: str, concept: str) -> dict:
+        """Inverse of the India-only marker: a US-native metric has no India
+        analog, so India symbols get an explicit not_applicable envelope."""
+        return {
+            "status": "not_applicable",
+            "market": self._market_of(symbol),
+            "symbol": symbol,
+            "reason": (
+                f"{concept} is a US-native metric (the underlying line item is "
+                f"not separately disclosed in Indian filings); not applicable for "
+                f"non-US {symbol}."
+            ),
+        }
+
+    def get_rnd_intensity(self, symbol: str) -> dict:
+        """US-native: R&D expense as a % of revenue (R&D intensity) over time + trend.
+
+        Reads the WS-2 ``rnd_expense`` column (surfaced via the WS-3 adapter).
+        Not applicable for India — R&D is not a separately-tracked line item.
+        """
+        if not self._is_us(symbol):
+            return self._non_us_not_applicable(symbol, "R&D intensity")
+        annuals = self.get_annual_financials(symbol, years=10)
+        series = []
+        for a in annuals:
+            rev = a.get("revenue")
+            rnd = a.get("rnd_expense")
+            intensity = round(rnd / rev * 100, 2) if (rnd is not None and rev) else None
+            series.append({
+                "fiscal_year_end": a.get("fiscal_year_end"),
+                "rnd_expense": rnd,
+                "revenue": rev,
+                "rnd_intensity_pct": intensity,
+            })
+        vals = [s["rnd_intensity_pct"] for s in series if s["rnd_intensity_pct"] is not None]
+        latest = vals[0] if vals else None
+        trend = None
+        if len(vals) >= 2:
+            trend = "rising" if vals[0] > vals[-1] else "falling" if vals[0] < vals[-1] else "flat"
+        return {
+            "symbol": symbol, "currency": "USD", "metric": "rnd_intensity",
+            "series": series, "latest_rnd_intensity_pct": latest, "trend": trend,
+        }
+
+    def get_sbc_dilution(self, symbol: str) -> dict:
+        """US-native: stock-based-compensation intensity (% of revenue and net
+        income) plus share-count CAGR as a net-dilution proxy.
+
+        Reads the WS-2 ``stock_based_comp`` + ``num_shares`` columns (surfaced
+        via the WS-3 adapter). Not applicable for India.
+        """
+        if not self._is_us(symbol):
+            return self._non_us_not_applicable(symbol, "Stock-based-comp dilution")
+        annuals = self.get_annual_financials(symbol, years=10)
+        series = []
+        for a in annuals:
+            rev = a.get("revenue")
+            ni = a.get("net_income")
+            sbc = a.get("stock_based_comp")
+            series.append({
+                "fiscal_year_end": a.get("fiscal_year_end"),
+                "stock_based_comp": sbc,
+                "sbc_pct_revenue": round(sbc / rev * 100, 2) if (sbc is not None and rev) else None,
+                "sbc_pct_net_income": round(sbc / ni * 100, 2) if (sbc is not None and ni) else None,
+                "num_shares": a.get("num_shares"),
+            })
+        latest_pct = series[0]["sbc_pct_revenue"] if series else None
+        # Share-count CAGR (oldest -> latest); >0 = net dilution, <0 = buybacks.
+        share_cagr = None
+        net_dilution = None
+        shares = [s["num_shares"] for s in series if s["num_shares"]]
+        if len(shares) >= 2 and shares[-1] and shares[-1] > 0:
+            latest_sh, oldest_sh = shares[0], shares[-1]
+            yrs = len(shares) - 1
+            share_cagr = round(((latest_sh / oldest_sh) ** (1 / yrs) - 1) * 100, 2)
+            net_dilution = latest_sh > oldest_sh
+        return {
+            "symbol": symbol, "currency": "USD", "metric": "sbc_dilution",
+            "series": series, "latest_sbc_pct_revenue": latest_pct,
+            "share_count_cagr_pct": share_cagr, "net_dilution": net_dilution,
+        }
+
+    def _us_dupont_decomposition(self, symbol: str) -> dict:
+        """ROE = net-margin × asset-turnover × equity-multiplier from the
+        WS-3-adapted US annuals (WS-7). Net worth = equity_capital + reserves
+        (the reconciled US total_equity). Returns the same envelope shape as the
+        India path's pure-Screener branch (years[] + effective_window)."""
+        annuals = self.get_annual_financials(symbol, years=10)  # latest-first dicts
+        years: list[dict] = []
+        for i, a in enumerate(annuals):
+            rev = a.get("revenue")
+            ni = a.get("net_income")
+            ta = a.get("total_assets")
+            eq = (a.get("equity_capital") or 0) + (a.get("reserves") or 0)
+            # Average T and T-1 balance-sheet items (T-1 = next, older row).
+            if i + 1 < len(annuals):
+                prev = annuals[i + 1]
+                p_ta = prev.get("total_assets") or 0
+                p_eq = (prev.get("equity_capital") or 0) + (prev.get("reserves") or 0)
+                avg_ta = (ta + p_ta) / 2 if (ta and p_ta > 0) else ta
+                avg_eq = (eq + p_eq) / 2 if p_eq > 0 else eq
+            else:
+                avg_ta, avg_eq = ta, eq
+            if rev and rev > 0 and ni is not None and avg_ta and avg_ta > 0 and avg_eq and avg_eq > 0:
+                npm = ni / rev
+                at = rev / avg_ta
+                em = avg_ta / avg_eq
+                years.append({
+                    "fiscal_year_end": a.get("fiscal_year_end"),
+                    "net_profit_margin": round(npm, 4),
+                    "asset_turnover": round(at, 4),
+                    "equity_multiplier": round(em, 4),
+                    "roe_dupont": round(npm * at * em, 4),
+                    "source": "us_annual",
+                })
+        if not years:
+            return {"source": "us_annual", "data_source": "us_annual", "years": [],
+                    "note": f"No US annual financials available to decompose for {symbol}."}
+        return {
+            "source": "us_annual",
+            "data_source": "us_annual",
+            "years": years,
+            "effective_window": {
+                "start_fy": years[-1]["fiscal_year_end"],
+                "end_fy": years[0]["fiscal_year_end"],
+                "n_years": len(years),
+                "narrowed_due_to": [],
+            },
+        }
 
     def get_data_quality_flags(
         self, symbol: str, min_severity: str = "MEDIUM"
@@ -1101,6 +1544,23 @@ class ResearchDataAPI:
 
     def get_valuation_snapshot(self, symbol: str) -> dict:
         """Latest valuation snapshot (50+ fields: price, PE, PB, EV/EBITDA, margins, etc.)."""
+        if self._is_us(symbol):
+            rows = self._store.get_us_valuation_snapshot(symbol, self._market_of(symbol))
+            if not rows:
+                return {}
+            snap = _clean(rows[0])
+            # get_fcf_yield needs enterprise_value. When the snapshot doesn't
+            # carry one, derive EV = market_cap + total_debt − total_cash from
+            # the latest US-adapted annual (same currency/units as market_cap).
+            if not snap.get("enterprise_value"):
+                mcap = snap.get("market_cap")
+                annual = self.get_annual_financials(symbol, years=1)
+                if mcap and annual:
+                    a = annual[0]
+                    td = a.get("total_debt") or a.get("borrowings") or 0
+                    tc = a.get("total_cash") or a.get("cash_and_bank") or 0
+                    snap["enterprise_value"] = round(mcap + td - tc, 2)
+            return snap
         hist = self._store.get_valuation_history(symbol, days=7)
         if not hist:
             return {}
@@ -1202,6 +1662,8 @@ class ResearchDataAPI:
 
     def get_shareholding(self, symbol: str, quarters: int = 12) -> list[dict]:
         """Quarterly ownership %: FII, DII, MF, Promoter, Public."""
+        if self._is_us(symbol):
+            return []  # India-only concept (NSE XBRL filings) — use get_institutional_holdings for US
         rows = self._store.get_shareholding(symbol, limit=quarters)
         return _clean([
             {"quarter_end": r.quarter_end, "category": r.category, "percentage": r.percentage}
@@ -1391,6 +1853,9 @@ class ResearchDataAPI:
         transactions are aggregated into a tail summary row with net
         buy/sell counts and net value.
         """
+        if self._is_us(symbol):
+            us_rows = self._store.get_us_insider_transactions(symbol, self._market_of(symbol))
+            return _clean(us_rows if top_n is None else us_rows[:top_n])
         rows = self._store.get_insider_by_symbol(symbol, days=days)
         dumped = _clean([r.model_dump() for r in rows])
         if top_n is None or len(dumped) <= top_n:
@@ -1425,6 +1890,29 @@ class ResearchDataAPI:
             "tail_net_value_cr": tail_net_value,
         })
         return kept
+
+    def get_institutional_holdings(self, symbol: str, top_n: int = 50) -> list[dict]:
+        """13F institutional holdings (US-only) — managers holding the stock,
+        shares, USD value, ordered largest value first.
+
+        US add-on (Phase 3.5). India has no 13F-equivalent table, so India
+        symbols return an empty list gracefully (no fabrication).
+        """
+        if not self._is_us(symbol):
+            return []
+        rows = self._store.get_us_institutional_holdings(symbol, self._market_of(symbol))
+        return _clean(rows[:top_n] if top_n else rows)
+
+    def get_us_price_series(self, symbol: str, days: int = 365) -> list[dict]:
+        """Daily OHLCV price series for a US listing (us_daily_prices).
+
+        US add-on (Phase 3.5). Returns most-recent-first rows trimmed to the
+        requested window count. Empty list for India symbols.
+        """
+        if not self._is_us(symbol):
+            return []
+        rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+        return _clean(rows[:days] if days else rows)
 
     def get_bulk_block_deals(self, symbol: str) -> list[dict]:
         """BSE bulk/block deals — large institutional trades."""
@@ -2137,6 +2625,8 @@ class ResearchDataAPI:
 
         Returns list of {"date": str, "delivery_pct": float} sorted oldest-first.
         """
+        if self._is_us(symbol):
+            return []  # Delivery % is an India bhavcopy concept; not applicable to US.
         # Primary: Screener chart Volume_Delivery (weekly, ~20 years of history)
         chart_data = self._store.get_chart_data(symbol, "price")
         for ds in chart_data:
@@ -2307,6 +2797,8 @@ class ResearchDataAPI:
 
     def get_promoter_pledge(self, symbol: str) -> list[dict]:
         """Quarterly promoter pledge % history with margin-call analysis."""
+        if self._is_us(symbol):
+            return []  # Promoter pledge is an India-only disclosure concept.
         rows = self._store.get_promoter_pledge(symbol)
         result = _clean([r.model_dump() for r in rows])
 
@@ -2368,6 +2860,9 @@ class ResearchDataAPI:
 
     def get_consensus_estimate(self, symbol: str) -> dict:
         """Latest analyst consensus: target price, recommendation, forward PE, earnings growth."""
+        if self._is_us(symbol):
+            rows = self._store.get_us_consensus_estimates(symbol, self._market_of(symbol))
+            return _clean(rows[0]) if rows else {}
         est = self._store.get_estimate_latest(symbol)
         return _clean(est.model_dump()) if est else {}
 
@@ -4040,6 +4535,9 @@ class ResearchDataAPI:
         rollover %) when F&O contracts exist for the symbol — required for
         F&O-listed stocks per the technical-agent prompt.
         """
+        if self._is_us(symbol):
+            return self._us_technical_indicators(symbol)
+
         fno = self.get_fno_metrics(symbol)
 
         # Compute local MACD / Bollinger / ADX from bhavcopy. FMP doesn't ship
@@ -4220,6 +4718,83 @@ class ResearchDataAPI:
         note = "MACD/BB/ADX computed locally — FMP source unavailable"
         return out, note
 
+    def _us_technical_indicators(self, symbol: str) -> list[dict]:
+        """US technicals from us_daily_prices using the same local SMA/RSI/MACD/
+        BB/ADX compute path as the India bhavcopy fallback. No FMP, no F&O.
+        """
+        rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+        if not rows:
+            return []
+        # Store returns most-recent first.
+        closes = [float(r["close"]) for r in rows if r.get("close") is not None]
+        if not closes:
+            return []
+        latest = closes[0]
+        result: dict = {"date": rows[0]["date"], "close": latest}
+
+        if len(closes) >= 50:
+            result["sma_50"] = round(sum(closes[:50]) / 50, 2)
+        if len(closes) >= 200:
+            result["sma_200"] = round(sum(closes[:200]) / 200, 2)
+
+        # RSI-14 (Wilder), newest-first diffs.
+        if len(closes) >= 15:
+            gains, losses = [], []
+            for i in range(14):
+                diff = closes[i] - closes[i + 1]
+                gains.append(max(diff, 0))
+                losses.append(max(-diff, 0))
+            avg_gain = sum(gains) / 14
+            avg_loss = sum(losses) / 14
+            if avg_loss > 0:
+                rs = avg_gain / avg_loss
+                result["rsi_14"] = round(100 - (100 / (1 + rs)), 2)
+            else:
+                result["rsi_14"] = 100.0
+
+        if "sma_50" in result:
+            result["price_vs_sma50"] = "above" if latest > result["sma_50"] else "below"
+        if "sma_200" in result:
+            result["price_vs_sma200"] = "above" if latest > result["sma_200"] else "below"
+        if "sma_50" in result and "sma_200" in result:
+            if result["sma_50"] < result["sma_200"]:
+                result["sma_cross"] = "death_cross"
+                result["sma_cross_note"] = "SMA50 below SMA200 — bearish trend signal (death cross)"
+            else:
+                result["sma_cross"] = "golden_cross"
+                result["sma_cross_note"] = "SMA50 above SMA200 — bullish trend signal (golden cross)"
+
+        # MACD / Bollinger / ADX — same recurrences as the India local path,
+        # computed oldest-first.
+        bars = list(reversed(rows))
+        c = [float(b["close"]) for b in bars if b.get("close") is not None]
+        highs = [float(b["high"]) if b.get("high") is not None else float(b["close"]) for b in bars]
+        lows = [float(b["low"]) if b.get("low") is not None else float(b["close"]) for b in bars]
+        n = len(c)
+        if n >= 26 + 9:
+            ema12 = _ema(c, 12)
+            ema26 = _ema(c, 26)
+            macd_line = [a - b for a, b in zip(ema12, ema26)]
+            signal_line = _ema(macd_line, 9)
+            result["macd"] = round(macd_line[-1], 4)
+            result["macd_signal"] = round(signal_line[-1], 4)
+            result["macd_histogram"] = round(macd_line[-1] - signal_line[-1], 4)
+        if n >= 20:
+            window = c[-20:]
+            mid = sum(window) / 20
+            sd = (sum((x - mid) ** 2 for x in window) / 20) ** 0.5
+            result["bollinger_middle"] = round(mid, 2)
+            result["bollinger_upper"] = round(mid + 2 * sd, 2)
+            result["bollinger_lower"] = round(mid - 2 * sd, 2)
+        if n >= 14 * 2 + 1:
+            adx_vals = _adx_wilder(highs, lows, c, period=14)
+            if adx_vals is not None:
+                result["adx"] = round(adx_vals["adx"], 2)
+                result["adx_plus_di"] = round(adx_vals["plus_di"], 2)
+                result["adx_minus_di"] = round(adx_vals["minus_di"], 2)
+
+        return _clean([result])
+
     # ------------------------------------------------------------------
     # Strategy 3 — concall comparable-basis overlay for trend methods.
     # See plans/screener-data-discontinuity.md.
@@ -4334,6 +4909,13 @@ class ResearchDataAPI:
         Hybrid windows (AR covers part, Screener covers older years)
         annotate `data_source: 'mixed'` with `source_per_year`.
         """
+        # US: the AR-five-year / Screener-narrowing machinery below is
+        # India-specific (and self._store.get_annual_financials is the India
+        # table — empty for US). Compute DuPont directly from the WS-3-adapted
+        # US annuals instead.
+        if self._is_us(symbol):
+            return self._us_dupont_decomposition(symbol)
+
         from flowtracker.data_quality import longest_unflagged_window
 
         # Strategy 2: try AR-restated highlights first.
@@ -4551,8 +5133,55 @@ class ResearchDataAPI:
 
     def get_financial_growth_rates(self, symbol: str) -> list[dict]:
         """Pre-computed 1yr/3yr/5yr/10yr growth from FMP."""
+        if self._is_us(symbol):
+            return self._us_growth_rates(symbol)
         rows = self._store.get_fmp_financial_growth(symbol, limit=10)
         return _clean([r.model_dump() for r in rows])
+
+    def _us_growth_rates(self, symbol: str) -> list[dict]:
+        """YoY + CAGR growth for revenue / net_income / eps computed from the
+        US-adapted annual series. Returns the FMP-shaped list contract (one row
+        per fiscal year, latest first, with per-metric YoY *_growth fields).
+        """
+        annuals = self.get_annual_financials(symbol, years=10)  # latest first
+        if len(annuals) < 2:
+            return []
+
+        def _yoy(curr, prev):
+            if curr is None or prev is None or prev == 0:
+                return None
+            return round((curr - prev) / abs(prev) * 100, 2)
+
+        rows: list[dict] = []
+        for i, a in enumerate(annuals):
+            prev = annuals[i + 1] if i + 1 < len(annuals) else None
+            row = {
+                "symbol": symbol,
+                "fiscal_year": a.get("fiscal_year"),
+                "fiscal_year_end": a.get("fiscal_year_end"),
+            }
+            for metric in ("revenue", "net_income", "eps"):
+                row[f"{metric}_growth"] = (
+                    _yoy(a.get(metric), prev.get(metric)) if prev else None
+                )
+            rows.append(row)
+
+        # Multi-year CAGRs on the latest row (3yr/5yr where history allows).
+        def _cagr(metric, years):
+            if len(annuals) <= years:
+                return None
+            end = annuals[0].get(metric)
+            start = annuals[years].get(metric)
+            if end is None or start is None or start <= 0:
+                return None
+            return round(((end / start) ** (1 / years) - 1) * 100, 2)
+
+        if rows:
+            for metric in ("revenue", "net_income", "eps"):
+                rows[0][f"{metric}_cagr_3yr"] = _cagr(metric, 3)
+                rows[0][f"{metric}_cagr_5yr"] = _cagr(metric, 5)
+
+        return _clean(rows)
 
     def get_analyst_grades(self, symbol: str) -> list[dict]:
         """Upgrade/downgrade history from FMP."""
@@ -4580,6 +5209,9 @@ class ResearchDataAPI:
 
         Returns bear/base/bull range, margin of safety %, signal.
         """
+        if self._is_us(symbol):
+            return self._us_fair_value(symbol)
+
         result: dict = {"symbol": symbol}
         bear = bull = None
 
@@ -4686,10 +5318,95 @@ class ResearchDataAPI:
 
         return _clean(result)
 
+    def _us_fair_value(self, symbol: str) -> dict:
+        """US combined fair value from us_valuation_snapshot (price/PE/mcap) +
+        us_consensus_estimates (target mean/high/low, next-year EPS).
+
+        Skips the Screener PE-basis detection branch. Anchors the signal on the
+        consensus mean target vs current price; bear/base/bull come from the
+        consensus low/mean/high range.
+        """
+        market = self._market_of(symbol)
+        snap_rows = self._store.get_us_valuation_snapshot(symbol, market)
+        cons_rows = self._store.get_us_consensus_estimates(symbol, market)
+        snap = snap_rows[0] if snap_rows else {}
+        cons = cons_rows[0] if cons_rows else {}
+
+        result: dict = {"symbol": symbol, "market": market}
+        current_price = snap.get("price")
+        pe_trailing = snap.get("pe_trailing")
+        target_mean = cons.get("target_mean")
+        target_high = cons.get("target_high")
+        target_low = cons.get("target_low")
+        eps_next = cons.get("eps_next_year")
+
+        if pe_trailing:
+            result["pe_trailing"] = pe_trailing
+        # Forward fair value from trailing PE × next-year EPS (a second anchor).
+        pe_fair = None
+        if pe_trailing and eps_next:
+            pe_fair = round(pe_trailing * eps_next, 2)
+            result["pe_forward_fair_value"] = pe_fair
+
+        if target_mean:
+            result["consensus_target"] = target_mean
+            result["consensus_range"] = {"low": target_low, "mean": target_mean, "high": target_high}
+
+        # bear/base/bull range — consensus low/mean/high preferred; fall back to
+        # ±15% around the PE-forward fair value when consensus is absent.
+        if target_low and target_mean and target_high:
+            bear, base, bull = target_low, target_mean, target_high
+        elif pe_fair:
+            bear, base, bull = round(pe_fair * 0.85, 2), pe_fair, round(pe_fair * 1.15, 2)
+        else:
+            bear = base = bull = None
+
+        if base is not None:
+            result["fair_value_range"] = {"bear": bear, "base": base, "bull": bull}
+
+        # Anchor signal on the consensus mean (or base) vs current price.
+        anchor = target_mean or base
+        if current_price and anchor:
+            result["current_price"] = current_price
+            result["combined_fair_value"] = round(anchor, 2)
+            result["margin_of_safety_pct"] = round((anchor - current_price) / anchor * 100, 2)
+            if bear and current_price < bear:
+                result["signal"] = "DEEP VALUE"
+            elif current_price < anchor:
+                result["signal"] = "UNDERVALUED"
+            elif bull and current_price > bull:
+                result["signal"] = "EXPENSIVE"
+            else:
+                result["signal"] = "FAIR VALUE"
+        elif current_price:
+            result["current_price"] = current_price
+            result["signal"] = "INSUFFICIENT DATA"
+
+        return _clean(result)
+
     # --- Company Info ---
 
     def get_company_info(self, symbol: str) -> dict:
-        """Company name and industry from index constituents."""
+        """Company name and industry from index constituents.
+
+        For a US-listed symbol the India index/Screener constituent table is
+        empty, so resolve name/sector/industry from symbol_registry instead —
+        keeps get_company_context[info] routed (not empty) for US.
+        """
+        if self._is_us(symbol):
+            entry = self._store.get_symbol_registry_entry(symbol, self._market_of(symbol))
+            if entry:
+                name = entry.get("company_name") or symbol
+                sector = entry.get("sector")
+                industry = entry.get("gics") or sector or "Unknown"
+                return {
+                    "symbol": symbol,
+                    "name": name,
+                    "company_name": name,
+                    "industry": industry,
+                    "sector": sector,
+                    "market": entry.get("market") or self._market_of(symbol),
+                }
         constituents = self._store.get_index_constituents()
         match = [c for c in constituents if c.symbol == symbol]
         if match:
@@ -5931,6 +6648,21 @@ class ResearchDataAPI:
         Updated weekly by compute-analytics.py.
         """
         import json as _json
+        if self._is_us(symbol):
+            # US has no weekly compute-analytics snapshot — return a graceful
+            # non-error envelope (agents are told to call this first) directing
+            # them to the individual US-routed tools.
+            return {
+                "status": "compute_on_demand",
+                "market": self._market_of(symbol),
+                "symbol": symbol,
+                "note": (
+                    "US analytical snapshot is computed on demand — call the "
+                    "individual tools (get_fundamentals, get_quality_scores, "
+                    "get_valuation, get_fair_value_analysis, get_wacc_params) "
+                    "directly."
+                ),
+            }
         snapshot = self._store.get_analytical_snapshot(symbol)
         if not snapshot:
             return {"error": f"No analytical snapshot for {symbol}. Run compute-analytics.py first."}
@@ -6201,49 +6933,71 @@ class ResearchDataAPI:
     def get_wacc_params(self, symbol: str) -> dict:
         """Dynamic WACC: beta, cost of equity, cost of debt, terminal growth, PE multiples."""
         from flowtracker.research.wacc import build_wacc_params
+        from flowtracker.market import Market
 
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
+        is_us = self._is_us(symbol)
         flags: list[str] = []
 
-        # --- Stock prices (bhavcopy preferred, Screener chart fallback) ---
-        stock_rows = self._store.get_stock_delivery(symbol, days=800)
-        stock_prices = [{"date": r.date, "close": r.close} for r in stock_rows if r.close]
-        # Beta needs 53+ weeks; fall back to Screener chart prices if bhavcopy is thin
-        if len(stock_prices) < 260:  # ~1yr of trading days
-            chart_data = self._store.get_chart_data(symbol, "price")
-            for metric_data in chart_data:
-                if metric_data.get("metric") == "Price":
-                    chart_prices = [
-                        {"date": pt["date"], "close": pt["value"]}
-                        for pt in metric_data.get("values", [])
-                        if pt.get("value")
-                    ]
-                    if len(chart_prices) > len(stock_prices):
-                        stock_prices = chart_prices
-                    break
-        if not stock_prices:
-            flags.append("no_stock_prices")
+        if is_us:
+            # US branch: us_daily_prices for the stock series, ^GSPC for the index
+            # benchmark (likely empty → beta falls back to 1.0 in wacc.py), and a
+            # US 10Y Treasury risk-free rate (^TNX live, 4.3% fallback).
+            px_rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+            stock_prices = [
+                {"date": r["date"], "close": r["close"]}
+                for r in px_rows if r.get("close")
+            ]
+            if not stock_prices:
+                flags.append("no_stock_prices")
+            index_prices = self._store.get_index_prices("^GSPC", days=800)
+            if not index_prices:
+                flags.append("no_index_prices")
+            rf, rf_default = _us_risk_free_rate()
+            if rf_default:
+                flags.append("rf_default")
+            market = Market(self._market_of(symbol))
+        else:
+            market = Market.NSE
+            # --- Stock prices (bhavcopy preferred, Screener chart fallback) ---
+            stock_rows = self._store.get_stock_delivery(symbol, days=800)
+            stock_prices = [{"date": r.date, "close": r.close} for r in stock_rows if r.close]
+            # Beta needs 53+ weeks; fall back to Screener chart prices if bhavcopy is thin
+            if len(stock_prices) < 260:  # ~1yr of trading days
+                chart_data = self._store.get_chart_data(symbol, "price")
+                for metric_data in chart_data:
+                    if metric_data.get("metric") == "Price":
+                        chart_prices = [
+                            {"date": pt["date"], "close": pt["value"]}
+                            for pt in metric_data.get("values", [])
+                            if pt.get("value")
+                        ]
+                        if len(chart_prices) > len(stock_prices):
+                            stock_prices = chart_prices
+                        break
+            if not stock_prices:
+                flags.append("no_stock_prices")
 
-        # --- Index prices (Nifty 500) ---
-        index_prices = self._store.get_index_prices("^CRSLDX", days=800)
-        if not index_prices:
-            flags.append("no_index_prices")
+            # --- Index prices (Nifty 500) ---
+            index_prices = self._store.get_index_prices("^CRSLDX", days=800)
+            if not index_prices:
+                flags.append("no_index_prices")
 
-        # --- Risk-free rate (G-sec 10Y) ---
-        rf = None
-        macro = self._store.get_macro_latest()
-        if macro and macro.gsec_10y:
-            rf = macro.gsec_10y / 100  # stored as %, convert to decimal
-        if rf is None:
-            # Fallback: scan recent macro rows for last non-null G-sec
-            trend = self._store.get_macro_trend(days=30)
-            for snap in trend:
-                if snap.gsec_10y:
-                    rf = snap.gsec_10y / 100
-                    break
-        if rf is None:
-            rf = 0.07  # absolute fallback
-            flags.append("rf_default")
+            # --- Risk-free rate (G-sec 10Y) ---
+            rf = None
+            macro = self._store.get_macro_latest()
+            if macro and macro.gsec_10y:
+                rf = macro.gsec_10y / 100  # stored as %, convert to decimal
+            if rf is None:
+                # Fallback: scan recent macro rows for last non-null G-sec
+                trend = self._store.get_macro_trend(days=30)
+                for snap in trend:
+                    if snap.gsec_10y:
+                        rf = snap.gsec_10y / 100
+                        break
+            if rf is None:
+                rf = 0.07  # absolute fallback
+                flags.append("rf_default")
 
         # --- Financials for ICR ---
         annual = self.get_annual_financials(symbol, years=2)
@@ -6265,8 +7019,13 @@ class ResearchDataAPI:
         mcap = valuation.get("market_cap") or 0
 
         # --- PE band ---
-        pe_band_raw = self.get_valuation_band(symbol, "pe_trailing", days=2500)
-        pe_band = pe_band_raw if pe_band_raw.get("median_val") else None
+        # US has only a point-in-time snapshot (no Screener PE-band time series);
+        # skip the band so wacc.py uses the static-PE fallback.
+        if is_us:
+            pe_band = None
+        else:
+            pe_band_raw = self.get_valuation_band(symbol, "pe_trailing", days=2500)
+            pe_band = pe_band_raw if pe_band_raw.get("median_val") else None
 
         # --- Industry ---
         info = self.get_company_info(symbol)
@@ -6285,6 +7044,7 @@ class ResearchDataAPI:
             industry=industry,
             is_bfsi=is_bfsi,
             effective_tax_rate=eff_tax_rate,
+            market=market,
         )
 
         # Merge data-layer flags
@@ -8001,6 +8761,19 @@ class ResearchDataAPI:
 
     def get_beneish_score(self, symbol: str) -> dict:
         """Beneish M-Score: earnings manipulation probability (8-variable model)."""
+        if self._is_us(symbol):
+            # M-Score needs India gross-margin inputs (raw_material_cost /
+            # employee_cost) that US filings don't carry — genuinely absent.
+            return {
+                "status": "not_applicable",
+                "market": self._market_of(symbol),
+                "symbol": symbol,
+                "reason": (
+                    "Beneish M-Score requires India gross-margin inputs "
+                    "(raw_material_cost / employee_cost) not present in US filings; "
+                    "not applicable for US-listed symbols."
+                ),
+            }
         if self._is_bfsi(symbol) or self._is_insurance(symbol):
             return {"skipped": True, "reason": "M-Score not applicable to banks/NBFCs"}
 
@@ -9619,6 +10392,9 @@ class ResearchDataAPI:
 
         today = date.today()
 
+        if self._is_us(symbol):
+            return self._us_price_performance(symbol)
+
         # Period definitions. 3Y/5Y/Since-Listing exploit the full adj_close
         # history (legacy-bhavcopy backfill spans ~19yr); since-listing is
         # appended below once the earliest available bar is known.
@@ -9736,6 +10512,50 @@ class ResearchDataAPI:
             "industry": industry,
             "outperformer": outperformer,
         }
+
+    def _us_price_performance(self, symbol: str) -> dict:
+        """US own-stock price returns from us_daily_prices.
+
+        Index-relative performance is omitted (no ^GSPC daily series on file for
+        US); returns the symbol's own 1w/1m/3m/6m/1y returns.
+        """
+        from datetime import date, timedelta
+
+        rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+        prices = {r["date"]: r["close"] for r in rows if r.get("close")}
+        if not prices:
+            return {"error": f"No daily price data for {symbol}"}
+
+        latest_date = max(prices.keys())
+        latest_price = prices[latest_date]
+        anchor = date.fromisoformat(latest_date)
+
+        def find_price(target_date):
+            for offset in range(8):
+                d = str(target_date - timedelta(days=offset))
+                if d in prices:
+                    return prices[d]
+            return None
+
+        periods = []
+        for label, days in (("1W", 7), ("1M", 30), ("3M", 90), ("6M", 180), ("1Y", 365)):
+            start = find_price(anchor - timedelta(days=days))
+            if start is None or start <= 0:
+                continue
+            periods.append({
+                "period": label,
+                "stock_return": round((latest_price - start) / start * 100, 2),
+            })
+        if not periods:
+            return {"error": "Insufficient price data to compute returns"}
+
+        return _clean({
+            "symbol": symbol.upper(),
+            "periods": periods,
+            "return_type": "price_return_excl_dividends",
+            "as_of": latest_date,
+            "note": "US own-stock returns; index-relative performance omitted (no ^GSPC series on file).",
+        })
 
     # --- Sector index valuation & performance (index_valuation_daily / index_daily_prices) ---
 

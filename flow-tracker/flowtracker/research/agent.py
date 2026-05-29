@@ -580,8 +580,17 @@ async def _run_specialist(
     model: str | None = None,
     user_prompt: str | None = None,
     effort: str | None = None,
+    market: str | None = None,
 ) -> tuple[BriefingEnvelope, AgentTrace]:
     """Run a single specialist agent. Returns (BriefingEnvelope, AgentTrace)."""
+
+    # Resolve + set the run market ONCE for this agent's context (WS-1). The
+    # in-process MCP tool handlers spawned during the query loop inherit this
+    # ContextVar, so every tool routes to the same market. `market` is the
+    # already-resolved value when called from run_all_agents; standalone callers
+    # (`research run`) resolve here. India default (NSE) leaves behavior intact.
+    from flowtracker.research.data_api import _run_market, resolve_run_market
+    _run_market.set(market or resolve_run_market(symbol))
 
     tools = tools if tools is not None else AGENT_TOOLS.get(name, [])
     # SdkMcpTool instances expose `.name`; plain functions expose `__name__`.
@@ -1498,12 +1507,20 @@ async def run_all_agents(
     verify: bool = True,
     verify_model: str | None = None,
     effort: str | None = None,
+    market: str | None = None,
 ) -> tuple[dict[str, BriefingEnvelope], PipelineTrace]:
     """Run all 8 specialist agents in parallel, optionally verify, return (envelopes, trace)."""
     from flowtracker.research.briefing import PhaseEvent
+    from flowtracker.research.data_api import _run_market, resolve_run_market
     from flowtracker.research.prompts import build_specialist_prompt
 
     symbol = symbol.upper()
+
+    # Resolve the run market ONCE (hybrid: explicit flag → registry US row →
+    # NSE) and set it for this run's context BEFORE the baseline build and the
+    # specialist gather — child tasks inherit the ContextVar at creation time.
+    run_market = resolve_run_market(symbol, market)
+    _run_market.set(run_market)
     agent_names = ["business", "financials", "ownership", "valuation", "risk", "technical", "sector", "news", "macro", "historical_analog", "fno_positioning"]
 
     pipeline_started = datetime.now(timezone.utc).isoformat()
@@ -1549,7 +1566,7 @@ async def run_all_agents(
                 try:
                     envelope, agent_trace = await _run_specialist(
                         name=name, symbol=symbol, system_prompt=sys_prompt, model=model,
-                        effort=effort,
+                        effort=effort, market=run_market,
                         user_prompt=f"{baseline}\n\n{instr}\n\nAnalyze {symbol} for the {name} section of the equity research report.",
                     )
                     last_trace = agent_trace

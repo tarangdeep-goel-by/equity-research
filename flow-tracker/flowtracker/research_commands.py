@@ -272,6 +272,7 @@ def thesis(
     verify_model: Annotated[str | None, typer.Option("--verify-model", help="Override model for verifiers")] = None,
     technical_only: Annotated[bool, typer.Option("--technical", help="Skip explainer, output technical report only")] = False,
     effort: Annotated[str | None, typer.Option("--effort", help="Override effort level: low|medium|high|max")] = None,
+    market: Annotated[str | None, typer.Option("--market", help="Market: 'us' or 'in' (default: auto-detect from symbol registry)")] = None,
 ) -> None:
     """Generate comprehensive multi-agent equity research thesis.
 
@@ -437,6 +438,7 @@ def thesis(
         verify=not skip_verify,
         verify_model=verify_model,
         effort=effort,
+        market=market,
     ))
     # Merge agent-level trace into pipeline trace
     trace.phases.extend(agent_trace.phases)
@@ -687,6 +689,7 @@ def data(
     tool_name: Annotated[str, typer.Argument(help=f"Tool to query: {', '.join(_DATA_TOOLS)}")],
     symbol: Annotated[str, typer.Option("-s", "--symbol", help="Stock symbol")] = "",
     raw: Annotated[bool, typer.Option("--raw", help="Print raw JSON instead of pretty")] = False,
+    market: Annotated[str | None, typer.Option("--market", help="Market: 'us' or 'in' (default: auto-detect from symbol registry)")] = None,
 ) -> None:
     """Query any research data tool directly. Prints JSON output.
 
@@ -752,7 +755,9 @@ def data(
         "sector_valuations": lambda api: api.get_sector_valuations(symbol),
     }
 
-    with ResearchDataAPI() as api:
+    from flowtracker.research.data_api import resolve_run_market
+    run_market = resolve_run_market(symbol, market) if symbol else None
+    with ResearchDataAPI(market=run_market) as api:
         result = method_map[tool_name](api)
 
     if raw:

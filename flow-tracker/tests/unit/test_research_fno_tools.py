@@ -123,7 +123,8 @@ class TestGetFnoPositioning:
             result = await get_fno_positioning.handler({"symbol": "RELIANCE"})
         data = _parse(result)
         assert data == payload
-        assert fake.calls[0] == ("get_fno_positioning", ("RELIANCE",), {})
+        # calls[-1] (not [0]): the US-safety guard does a _market_of lookup first.
+        assert fake.calls[-1] == ("get_fno_positioning", ("RELIANCE",), {})
 
     @pytest.mark.asyncio
     async def test_non_fno_symbol_returns_eligibility_envelope(self):
@@ -137,7 +138,7 @@ class TestGetFnoPositioning:
             "fno_eligible": False,
             "reason": "symbol not in NSE F&O eligibility list",
         }
-        assert fake.calls[0] == ("get_fno_positioning", ("OBSCURECO",), {})
+        assert fake.calls[-1] == ("get_fno_positioning", ("OBSCURECO",), {})
 
 
 # ---------------------------------------------------------------------------
@@ -159,8 +160,8 @@ class TestGetOiHistory:
             result = await get_oi_history.handler({"symbol": "RELIANCE"})
         data = _parse(result)
         assert data == rows
-        # Default days = 90
-        assert fake.calls[0] == ("get_oi_history", ("RELIANCE", 90), {})
+        # Default days = 90 (calls[-1]: US-safety guard does a _market_of lookup first)
+        assert fake.calls[-1] == ("get_oi_history", ("RELIANCE", 90), {})
 
     @pytest.mark.asyncio
     async def test_custom_days_passed_through(self):
@@ -169,7 +170,7 @@ class TestGetOiHistory:
         fake = FakeAPI(overrides={"get_oi_history": []})
         with patch_api(fake):
             await get_oi_history.handler({"symbol": "TCS", "days": 30})
-        assert fake.calls[0] == ("get_oi_history", ("TCS", 30), {})
+        assert fake.calls[-1] == ("get_oi_history", ("TCS", 30), {})
 
     @pytest.mark.asyncio
     async def test_empty_list_for_non_fno_symbol(self):
@@ -206,7 +207,7 @@ class TestGetOptionChainConcentration:
             result = await get_option_chain_concentration.handler({"symbol": "RELIANCE"})
         data = _parse(result)
         assert data == payload
-        assert fake.calls[0] == ("get_option_chain_concentration", ("RELIANCE",), {})
+        assert fake.calls[-1] == ("get_option_chain_concentration", ("RELIANCE",), {})
 
     @pytest.mark.asyncio
     async def test_returns_null_for_non_fno_symbol(self):
@@ -280,7 +281,7 @@ class TestGetFuturesBasis:
         data = _parse(result)
         assert data == rows
         # Default days = 30
-        assert fake.calls[0] == ("get_futures_basis", ("RELIANCE", 30), {})
+        assert fake.calls[-1] == ("get_futures_basis", ("RELIANCE", 30), {})
 
     @pytest.mark.asyncio
     async def test_custom_days(self):
@@ -289,7 +290,7 @@ class TestGetFuturesBasis:
         fake = FakeAPI(overrides={"get_futures_basis": []})
         with patch_api(fake):
             await get_futures_basis.handler({"symbol": "TCS", "days": 90})
-        assert fake.calls[0] == ("get_futures_basis", ("TCS", 90), {})
+        assert fake.calls[-1] == ("get_futures_basis", ("TCS", 90), {})
 
     @pytest.mark.asyncio
     async def test_empty_list_for_non_fno_symbol(self):

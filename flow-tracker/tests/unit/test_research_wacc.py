@@ -12,10 +12,17 @@ from datetime import date, timedelta
 
 import pytest
 
+from flowtracker.market import Market
 from flowtracker.research.wacc import (
+    INDIA_ERP,
     STATUTORY_TAX_RATE,
+    US_ERP,
+    US_STATUTORY_TAX_RATE,
+    SMALL_CAP_THRESHOLD_CR,
+    beta_index_symbol,
     build_wacc_params,
     compute_cost_of_debt,
+    compute_cost_of_equity,
     compute_nifty_beta,
 )
 
@@ -229,3 +236,134 @@ class TestCostOfDebtTaxClamp:
         assert result["tax_rate_used"] == 0.0
         assert result["kd_posttax"] == result["kd_pretax"]
         assert result["tax_rate_anomalous"] is False
+
+
+# --- Market-aware WACC (US support) ---
+
+
+class TestNSEDefaultRegressionLock:
+    """Hard constraint: market=NSE (the default) must be byte-identical to the
+    pre-market-aware behavior."""
+
+    def test_cost_of_equity_nse_default_matches_explicit_india_erp(self):
+        # Passing INDIA_ERP explicitly == omitting erp (config fills it) == market=NSE.
+        a = compute_cost_of_equity(0.07, 1.2, INDIA_ERP, 100000.0)
+        b = compute_cost_of_equity(0.07, 1.2, None, 100000.0, market=Market.NSE)
+        c = compute_cost_of_equity(0.07, 1.2, INDIA_ERP, 100000.0, market=Market.NSE)
+        assert a == b == c
+        # Manual CAPM check, no small-cap premium (mcap above threshold).
+        assert a["ke"] == round(0.07 + 1.2 * INDIA_ERP, 4)
+        assert a["small_cap_premium"] == 0.0
+        assert a["erp"] == INDIA_ERP
+
+    def test_nse_small_cap_premium_unchanged(self):
+        res = compute_cost_of_equity(
+            0.07, 1.0, None, SMALL_CAP_THRESHOLD_CR - 1, market=Market.NSE
+        )
+        assert res["small_cap_premium"] == 0.03
+        assert res["ke"] == round(0.07 + 1.0 * INDIA_ERP + 0.03, 4)
+
+    def test_cost_of_debt_nse_clamp_uses_india_statutory(self):
+        res = compute_cost_of_debt(100.0, 5000.0, 1000.0, 0.07, -0.1, market=Market.NSE)
+        assert res["tax_rate_used"] == round(STATUTORY_TAX_RATE, 4)
+        assert res["tax_rate_anomalous"] is True
+
+    def test_beta_index_nse_is_nifty500(self):
+        assert beta_index_symbol(Market.NSE) == "^CRSLDX"
+        assert beta_index_symbol(Market.BSE) == "^CRSLDX"
+
+
+class TestUSMarketWacc:
+    def test_beta_index_us_is_sp500(self):
+        assert beta_index_symbol(Market.NASDAQ) == "^GSPC"
+        assert beta_index_symbol(Market.NYSE) == "^GSPC"
+
+    def test_cost_of_equity_us_uses_us_erp_no_smallcap(self):
+        # mcap below the INR-crore threshold must NOT trigger a premium for US.
+        res = compute_cost_of_equity(
+            0.043, 1.1, None, mcap_cr=10.0, market=Market.NASDAQ
+        )
+        assert res["erp"] == US_ERP
+        assert res["small_cap_premium"] == 0.0
+        assert res["ke"] == round(0.043 + 1.1 * US_ERP, 4)
+
+    def test_cost_of_debt_us_clamp_uses_us_statutory(self):
+        # Effective rate of 0.30 exceeds the 24% US ceiling → clamp + flag.
+        res = compute_cost_of_debt(
+            100.0, 5000.0, 1000.0, 0.043, 0.30, market=Market.NASDAQ
+        )
+        assert res["tax_rate_used"] == round(US_STATUTORY_TAX_RATE, 4)
+        assert res["tax_rate_anomalous"] is True
+        # 0.24 is fine for India? No — India ceiling is 0.2517, so 0.24 valid there.
+        res_in = compute_cost_of_debt(
+            100.0, 5000.0, 1000.0, 0.07, 0.24, market=Market.NSE
+        )
+        assert res_in["tax_rate_used"] == 0.24
+        assert res_in["tax_rate_anomalous"] is False
+
+    def test_us_large_cap_wacc_in_reasonable_range(self, monkeypatch):
+        """A US large-cap with mocked beta yields Ke/WACC in a sane 7-12% band.
+        Mock the beta regression so no price data / network is needed."""
+        import flowtracker.research.wacc as wacc_mod
+
+        monkeypatch.setattr(
+            wacc_mod,
+            "compute_market_beta",
+            lambda sp, ip, market=Market.NSE: {
+                "raw_beta": 1.05,
+                "blume_beta": 1.03,
+                "r_squared": 0.55,
+                "num_weeks": 104,
+            },
+        )
+
+        result = build_wacc_params(
+            symbol="MSFT",
+            stock_prices=[],  # ignored — beta is mocked
+            index_prices=[],
+            rf=0.043,  # ~US 10Y
+            interest=2000.0,
+            borrowings=80000.0,
+            pbt=900000.0,
+            mcap_cr=3_000_000.0,  # $3T in $mn
+            pe_band=None,
+            industry="Software",
+            is_bfsi=False,
+            effective_tax_rate=0.18,
+            market=Market.NASDAQ,
+        )
+        # ERP/tax came from US config.
+        assert result["cost_of_equity"]["erp"] == US_ERP
+        assert result["cost_of_debt"]["tax_rate_used"] == 0.18  # valid < 0.24
+        # Ke = 0.043 + 1.03*0.046 ≈ 0.0904; no small-cap premium for US.
+        assert result["cost_of_equity"]["small_cap_premium"] == 0.0
+        assert 0.07 <= result["ke"] <= 0.12
+        assert 0.07 <= result["wacc"] <= 0.12
+
+    def test_build_wacc_params_us_selects_us_beta_index_path(self, monkeypatch):
+        """Confirm build_wacc_params forwards market into compute_market_beta so
+        the US beta benchmark (^GSPC) selection applies."""
+        import flowtracker.research.wacc as wacc_mod
+
+        captured = {}
+
+        def fake_beta(sp, ip, market=Market.NSE):
+            captured["market"] = market
+            return {"raw_beta": 1.0, "blume_beta": 1.0, "r_squared": 0.5, "num_weeks": 60}
+
+        monkeypatch.setattr(wacc_mod, "compute_market_beta", fake_beta)
+        build_wacc_params(
+            symbol="AAPL",
+            stock_prices=[],
+            index_prices=[],
+            rf=0.043,
+            interest=0.0,
+            borrowings=0.0,
+            pbt=1000.0,
+            mcap_cr=1_000_000.0,
+            pe_band=None,
+            is_bfsi=True,
+            market=Market.NYSE,
+        )
+        assert captured["market"] == Market.NYSE
+        assert beta_index_symbol(captured["market"]) == "^GSPC"
