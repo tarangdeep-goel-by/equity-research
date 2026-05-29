@@ -228,7 +228,7 @@ Key files in `research/autoeval/`: `evaluate.py` (harness), `eval_matrix.yaml` (
 
 ### Shared Infrastructure
 
-- `store.py` (~4200 lines) — Single `FlowStore` class wrapping SQLite. 50 tables, ~150 methods. DB at `~/.local/share/flowtracker/flows.db`.
+- `store.py` (~2000 lines) — `FlowStore` facade wrapping SQLite (77 tables). Owns the connection, schema DDL (`_SCHEMA`), migrations, and context manager. Domain methods live in **mixins under `store_domains/`** (portfolio, flows, macro, derivatives, market_registry, research, fundamentals, holdings, prices, valuation) which `FlowStore` composes via inheritance — methods are reachable both flat (`store.get_shareholding()`) and namespaced (`store.holdings.get_shareholding()`). Shared validation/CTE helpers live in `store_domains/_shared.py`. DB at `~/.local/share/flowtracker/flows.db`.
 - `screener_client.py` (~1420 lines) — Screener.in HTTP client. 11 API methods: HTML scraping, Excel export, Chart API, Peers API, Shareholders API, Schedules API.
 - `fmp_client.py` — FMP API client (httpx). DCF, technicals, key metrics, growth, analyst grades, price targets. Uses `/stable/` endpoints. Key at `~/.config/flowtracker/fmp.env`.
 - `screener_engine.py` — 8-factor composite scoring engine (ownership, insider, valuation, earnings, quality, delivery, estimates, risk). Valuation factor incorporates DCF margin of safety when FMP data available.

@@ -21,7 +21,7 @@ uv run flowtrack <command>
 ```
 
 Has its own `CLAUDE.md` with full architecture docs — **read it before touching anything in `flow-tracker/`**. Key entry points:
-- `store.py` (~4200 lines) — single `FlowStore` class, 50 tables, ~150 methods
+- `store.py` (~2000 lines) — `FlowStore` facade (connection/schema/migrations); domain methods split into mixins under `store_domains/` (77 tables). Flat + `store.<domain>.*` namespaced access.
 - `screener_client.py` (~1420 lines) — Screener.in HTTP client, 11 API methods
 - `research/` — multi-agent research system (85 MCP tools, 8 specialist agents + news, verification, web research, synthesis, explainer, comparison)
 - DB: `~/.local/share/flowtracker/flows.db`
