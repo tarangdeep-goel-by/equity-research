@@ -322,6 +322,30 @@ _IT_INDUSTRIES = {
     "Software Products", "Business Process Outsourcing (BPO)/ Knowledge Process Outsourcing (KPO)",
 }
 
+# US add-on (Phase 3.5): GICS-style sector labels (FMP / yfinance) → an
+# industry string already present in SECTOR_KPI_CONFIG, so US symbols resolve a
+# sector key through the same get_sector_for_industry path as India. Keys cover
+# the common GICS spellings; both 11-sector GICS and yfinance variants included.
+_US_GICS_TO_INDUSTRY = {
+    "Technology": "IT - Software",
+    "Information Technology": "IT - Software",
+    "Communication Services": "Telecom - Services",
+    "Financials": "Banks",
+    "Financial Services": "Banks",
+    "Health Care": "Pharmaceuticals",
+    "Healthcare": "Pharmaceuticals",
+    "Energy": "Oil & Gas Integrated",
+    "Materials": "Chemicals",
+    "Basic Materials": "Chemicals",
+    "Industrials": "Industrial Machinery",
+    "Consumer Staples": "FMCG",
+    "Consumer Defensive": "FMCG",
+    "Consumer Discretionary": "Retailing",
+    "Consumer Cyclical": "Retailing",
+    "Utilities": "Power Generation",
+    "Real Estate": "Real Estate - Development",
+}
+
 _GOLD_LOAN_KEYWORDS = {"gold", "muthoot", "manappuram"}
 
 _MICROFINANCE_INDUSTRIES = {
@@ -746,10 +770,40 @@ class ResearchDataAPI:
                 pass
         return freshness
 
+    # --- Market resolver (US add-on, Phase 3.5) ---
+
+    def _market_of(self, symbol: str) -> str:
+        """Resolve the market for a symbol via symbol_registry.
+
+        Tries US markets (NASDAQ, NYSE) first, then NSE. Prefers a US market
+        when a US row exists so US listings route to the us_* tables. Defaults
+        to 'NSE' when the symbol has no registry row — preserving India behavior
+        for every existing symbol (which is never seeded into the registry under
+        a US market).
+        """
+        for market in ("NASDAQ", "NYSE"):
+            if self._store.get_symbol_registry_entry(symbol, market):
+                return market
+        return "NSE"
+
+    def _is_us(self, symbol: str) -> bool:
+        """True when the symbol is a US listing (NASDAQ / NYSE)."""
+        return self._market_of(symbol) in ("NASDAQ", "NYSE")
+
     # --- Industry Helpers ---
 
     def _get_industry(self, symbol: str) -> str:
-        """Get industry for a symbol. Prefers yfinance (company_snapshot) over NSE/Screener."""
+        """Get industry for a symbol. Prefers yfinance (company_snapshot) over NSE/Screener.
+
+        US listings resolve their industry from the symbol_registry GICS-style
+        sector (mapped to an existing sector_kpis industry string), so US sector
+        detection routes through the same get_sector_for_industry path as India.
+        """
+        # US add-on: registry sector → sector_kpis industry string.
+        if self._is_us(symbol):
+            us_industry = self._us_industry_from_registry(symbol)
+            if us_industry:
+                return us_industry
         # Primary: yfinance-sourced industry from company_snapshot (better classification)
         row = self._store._conn.execute(
             "SELECT industry FROM company_snapshot WHERE symbol = ?", (symbol,)
@@ -759,6 +813,26 @@ class ResearchDataAPI:
         # Fallback: index_constituents (NSE/Screener)
         info = self.get_company_info(symbol)
         return info.get("industry") or "Unknown"
+
+    def _us_industry_from_registry(self, symbol: str) -> str | None:
+        """Map a US symbol's registry sector/gics to a sector_kpis industry string.
+
+        FMP/yfinance emit GICS-style sector labels ('Technology', 'Financials',
+        'Health Care', etc.). _US_GICS_TO_INDUSTRY maps each to an industry name
+        already present in SECTOR_KPI_CONFIG so get_sector_for_industry resolves
+        a sector key. Returns the raw registry sector string as a last resort.
+        """
+        entry = (
+            self._store.get_symbol_registry_entry(symbol, self._market_of(symbol))
+            or {}
+        )
+        for raw in (entry.get("sector"), entry.get("gics")):
+            if not raw:
+                continue
+            mapped = _US_GICS_TO_INDUSTRY.get(raw.strip())
+            if mapped:
+                return mapped
+        return (entry.get("sector") or entry.get("gics") or "").strip() or None
 
     def _is_bfsi(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _BFSI_INDUSTRIES
@@ -908,6 +982,9 @@ class ResearchDataAPI:
         falls back to Screener `revenue` with a `data_quality_note`.
         See `_apply_insurance_headline` for the full rule.
         """
+        if self._is_us(symbol):
+            rows = self._store.get_us_quarterly_financials(symbol, self._market_of(symbol))
+            return _clean(rows[:quarters])
         rows = self._store.get_quarterly_results(symbol, limit=quarters)
         cleaned = _clean([r.model_dump() for r in rows])
         return self._apply_insurance_headline(symbol, cleaned)
@@ -920,6 +997,9 @@ class ResearchDataAPI:
         falls back to Screener `revenue` with a `data_quality_note`.
         See `_apply_insurance_headline` for the full rule.
         """
+        if self._is_us(symbol):
+            rows = self._store.get_us_annual_financials(symbol, self._market_of(symbol))
+            return _clean(rows[:years])
         rows = self._store.get_annual_financials(symbol, limit=years)
         cleaned = _clean([r.model_dump() for r in rows])
         return self._apply_insurance_headline(symbol, cleaned)
@@ -1101,6 +1181,9 @@ class ResearchDataAPI:
 
     def get_valuation_snapshot(self, symbol: str) -> dict:
         """Latest valuation snapshot (50+ fields: price, PE, PB, EV/EBITDA, margins, etc.)."""
+        if self._is_us(symbol):
+            rows = self._store.get_us_valuation_snapshot(symbol, self._market_of(symbol))
+            return _clean(rows[0]) if rows else {}
         hist = self._store.get_valuation_history(symbol, days=7)
         if not hist:
             return {}
@@ -1202,6 +1285,8 @@ class ResearchDataAPI:
 
     def get_shareholding(self, symbol: str, quarters: int = 12) -> list[dict]:
         """Quarterly ownership %: FII, DII, MF, Promoter, Public."""
+        if self._is_us(symbol):
+            return []  # India-only concept (NSE XBRL filings) — use get_institutional_holdings for US
         rows = self._store.get_shareholding(symbol, limit=quarters)
         return _clean([
             {"quarter_end": r.quarter_end, "category": r.category, "percentage": r.percentage}
@@ -1391,6 +1476,9 @@ class ResearchDataAPI:
         transactions are aggregated into a tail summary row with net
         buy/sell counts and net value.
         """
+        if self._is_us(symbol):
+            us_rows = self._store.get_us_insider_transactions(symbol, self._market_of(symbol))
+            return _clean(us_rows if top_n is None else us_rows[:top_n])
         rows = self._store.get_insider_by_symbol(symbol, days=days)
         dumped = _clean([r.model_dump() for r in rows])
         if top_n is None or len(dumped) <= top_n:
@@ -1425,6 +1513,29 @@ class ResearchDataAPI:
             "tail_net_value_cr": tail_net_value,
         })
         return kept
+
+    def get_institutional_holdings(self, symbol: str, top_n: int = 50) -> list[dict]:
+        """13F institutional holdings (US-only) — managers holding the stock,
+        shares, USD value, ordered largest value first.
+
+        US add-on (Phase 3.5). India has no 13F-equivalent table, so India
+        symbols return an empty list gracefully (no fabrication).
+        """
+        if not self._is_us(symbol):
+            return []
+        rows = self._store.get_us_institutional_holdings(symbol, self._market_of(symbol))
+        return _clean(rows[:top_n] if top_n else rows)
+
+    def get_us_price_series(self, symbol: str, days: int = 365) -> list[dict]:
+        """Daily OHLCV price series for a US listing (us_daily_prices).
+
+        US add-on (Phase 3.5). Returns most-recent-first rows trimmed to the
+        requested window count. Empty list for India symbols.
+        """
+        if not self._is_us(symbol):
+            return []
+        rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+        return _clean(rows[:days] if days else rows)
 
     def get_bulk_block_deals(self, symbol: str) -> list[dict]:
         """BSE bulk/block deals — large institutional trades."""
@@ -2137,6 +2248,8 @@ class ResearchDataAPI:
 
         Returns list of {"date": str, "delivery_pct": float} sorted oldest-first.
         """
+        if self._is_us(symbol):
+            return []  # Delivery % is an India bhavcopy concept; not applicable to US.
         # Primary: Screener chart Volume_Delivery (weekly, ~20 years of history)
         chart_data = self._store.get_chart_data(symbol, "price")
         for ds in chart_data:
@@ -2307,6 +2420,8 @@ class ResearchDataAPI:
 
     def get_promoter_pledge(self, symbol: str) -> list[dict]:
         """Quarterly promoter pledge % history with margin-call analysis."""
+        if self._is_us(symbol):
+            return []  # Promoter pledge is an India-only disclosure concept.
         rows = self._store.get_promoter_pledge(symbol)
         result = _clean([r.model_dump() for r in rows])
 
@@ -2368,6 +2483,9 @@ class ResearchDataAPI:
 
     def get_consensus_estimate(self, symbol: str) -> dict:
         """Latest analyst consensus: target price, recommendation, forward PE, earnings growth."""
+        if self._is_us(symbol):
+            rows = self._store.get_us_consensus_estimates(symbol, self._market_of(symbol))
+            return _clean(rows[0]) if rows else {}
         est = self._store.get_estimate_latest(symbol)
         return _clean(est.model_dump()) if est else {}
 

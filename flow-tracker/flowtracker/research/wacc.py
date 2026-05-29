@@ -8,9 +8,11 @@ from typing import Any
 
 import numpy as np
 
+from flowtracker.market import Market
+
 logger = logging.getLogger(__name__)
 
-# --- Constants ---
+# --- Constants (India / NSE — defaults, unchanged) ---
 INDIA_ERP = 0.0746  # Damodaran July 2025 (latest available as of Apr 2026)
 ERP_LAST_UPDATED = "2025-07"
 STATUTORY_TAX_RATE = 0.2517  # Section 115BAA
@@ -18,6 +20,45 @@ SMALL_CAP_THRESHOLD_CR = 5000  # Market cap in crores
 SMALL_CAP_PREMIUM = 0.03  # 3% small-cap premium
 BETA_FLOOR = 0.5
 BETA_CAP = 2.5
+
+# --- US constants ---
+# US_ERP: Damodaran's implied ERP for the mature US market has hovered in the
+# 4.3–5.5% band over the last decade; 4.6% is a defensible mid-cycle mature-market
+# value (Damodaran "Implied ERP" series, S&P 500). Lower than INDIA_ERP because
+# the US is a developed market with no country-risk add-on.
+US_ERP = 0.046
+# US_STATUTORY_TAX_RATE: 21% federal corporate rate (TCJA) plus an average ~3%
+# state corporate income tax → ~24% blended marginal rate used for the tax shield.
+US_STATUTORY_TAX_RATE = 0.24
+
+# S&P 500 yfinance ticker — the beta benchmark for US listings (an index, so no
+# market_symbol suffix logic applies).
+SP500_INDEX = "^GSPC"
+NIFTY500_INDEX = "^CRSLDX"  # beta benchmark used for NSE/BSE
+
+# Per-market WACC config: (erp, statutory_tax_rate, beta_index).
+# Anything not listed falls back to the NSE (India) row via _wacc_config().
+_WACC_CONFIG: dict[Market, tuple[float, float, str]] = {
+    Market.NSE: (INDIA_ERP, STATUTORY_TAX_RATE, NIFTY500_INDEX),
+    Market.BSE: (INDIA_ERP, STATUTORY_TAX_RATE, NIFTY500_INDEX),
+    Market.NASDAQ: (US_ERP, US_STATUTORY_TAX_RATE, SP500_INDEX),
+    Market.NYSE: (US_ERP, US_STATUTORY_TAX_RATE, SP500_INDEX),
+}
+
+
+def _wacc_config(market: Market = Market.NSE) -> tuple[float, float, str]:
+    """Return (erp, statutory_tax_rate, beta_index) for a market.
+
+    Defaults to the NSE/India row, keeping every legacy (market-less) call
+    byte-identical to the pre-market-aware behavior.
+    """
+    return _WACC_CONFIG.get(market, _WACC_CONFIG[Market.NSE])
+
+
+def beta_index_symbol(market: Market = Market.NSE) -> str:
+    """The benchmark ticker for beta regression in ``market`` (Nifty 500 for
+    NSE/BSE, S&P 500 ``^GSPC`` for US)."""
+    return _wacc_config(market)[2]
 
 # ICR-to-Spread table (Damodaran EM, basis points)
 _ICR_SPREAD_TABLE: list[tuple[float, str, int]] = [
@@ -39,15 +80,24 @@ _ICR_SPREAD_TABLE: list[tuple[float, str, int]] = [
 ]
 
 
-def compute_nifty_beta(
+def compute_market_beta(
     stock_prices: list[dict[str, Any]],
     index_prices: list[dict[str, Any]],
+    market: Market = Market.NSE,
 ) -> dict[str, Any]:
-    """Compute CAPM beta of a stock against Nifty using weekly log returns.
+    """Compute CAPM beta of a stock against its market benchmark using weekly
+    log returns.
+
+    The regression is market-agnostic — ``index_prices`` is whichever benchmark
+    series the caller fetched for ``market`` (Nifty 500 for NSE/BSE, S&P 500 for
+    US, see ``beta_index_symbol``). The ``market`` arg is accepted for symmetry
+    with the rest of the WACC API and future market-specific tuning; it does not
+    alter the math today.
 
     Args:
         stock_prices: List of {"date": "YYYY-MM-DD", "close": float} for the stock.
         index_prices: List of {"date": "YYYY-MM-DD", "close": float} for the index.
+        market: Listing venue (defaults to NSE).
 
     Returns:
         Dict with raw_beta, blume_beta, r_squared, num_weeks on success,
@@ -117,27 +167,50 @@ def compute_nifty_beta(
     }
 
 
+def compute_nifty_beta(
+    stock_prices: list[dict[str, Any]],
+    index_prices: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Backward-compatible alias for ``compute_market_beta`` against the NSE
+    (Nifty) benchmark. Kept so existing callers stay byte-identical."""
+    return compute_market_beta(stock_prices, index_prices, market=Market.NSE)
+
+
 def compute_cost_of_equity(
     rf: float,
     beta: float,
-    erp: float,
+    erp: float | None = None,
     mcap_cr: float | None = None,
+    market: Market = Market.NSE,
 ) -> dict[str, Any]:
     """Compute cost of equity using CAPM with optional small-cap premium.
 
     Args:
         rf: Risk-free rate (e.g. 0.07 for 7%).
         beta: Adjusted beta.
-        erp: Equity risk premium (e.g. 0.0746).
-        mcap_cr: Market cap in crores, used to determine small-cap premium.
+        erp: Equity risk premium. If None, taken from the market config
+            (INDIA_ERP for NSE/BSE, US_ERP for US).
+        mcap_cr: Market cap in the market's aggregate unit (₹ crores for India,
+            $ millions for US), used for the small-cap premium.
+        market: Listing venue (defaults to NSE).
 
     Returns:
         Dict with ke, rf, beta, erp, small_cap_premium.
+
+    Small-cap premium: the SMALL_CAP_THRESHOLD_CR cutoff is denominated in INR
+    crores, so it is only meaningful for India. For US markets the small-cap
+    premium is disabled (no defensible USD-millions equivalent without scope
+    creep); US Ke is plain CAPM = Rf + Beta×ERP.
     """
+    cfg_erp = _wacc_config(market)[0]
+    if erp is None:
+        erp = cfg_erp
+
     ke = rf + beta * erp
     premium = 0.0
 
-    if mcap_cr is not None and mcap_cr < SMALL_CAP_THRESHOLD_CR:
+    is_india = market in (Market.NSE, Market.BSE)
+    if is_india and mcap_cr is not None and mcap_cr < SMALL_CAP_THRESHOLD_CR:
         premium = SMALL_CAP_PREMIUM
         ke += premium
 
@@ -156,20 +229,24 @@ def compute_cost_of_debt(
     pbt: float,
     rf: float,
     effective_tax_rate: float | None = None,
+    market: Market = Market.NSE,
 ) -> dict[str, Any]:
     """Compute cost of debt via synthetic credit rating from ICR.
 
     Args:
-        interest: Interest expense (crores).
-        borrowings: Total borrowings (crores).
-        pbt: Profit before tax (crores).
+        interest: Interest expense (market aggregate unit).
+        borrowings: Total borrowings (market aggregate unit).
+        pbt: Profit before tax (market aggregate unit).
         rf: Risk-free rate.
         effective_tax_rate: Actual tax/PBT from financials. If None, uses statutory rate.
+        market: Listing venue (defaults to NSE). Selects the statutory tax-rate
+            ceiling for the tax-shield clamp.
 
     Returns:
         Dict with kd_pretax, kd_posttax, rating, icr, spread_bps, tax_rate_used,
         tax_rate_anomalous.
     """
+    statutory_tax = _wacc_config(market)[1]
     if interest <= 0 or borrowings <= 0:
         return {
             "kd_pretax": 0,
@@ -194,7 +271,7 @@ def compute_cost_of_debt(
     kd_pretax = rf + spread_bps / 10000
 
     # Tax shield: use effective rate from financials, 0% if unprofitable.
-    # A valid marginal rate lies in [0, STATUTORY_TAX_RATE]. A reported effective
+    # A valid marginal rate lies in [0, statutory_tax]. A reported effective
     # rate outside that range (e.g. NTPC's -11.66% from deferred-tax credits, or an
     # absurdly high rate) would make the tax shield raise post-tax cost of debt above
     # pre-tax, which is nonsensical — fall back to the statutory rate and flag it.
@@ -202,13 +279,13 @@ def compute_cost_of_debt(
     if pbt <= 0:
         marginal_tax = 0.0
     elif effective_tax_rate is not None:
-        if 0.0 <= effective_tax_rate <= STATUTORY_TAX_RATE:
+        if 0.0 <= effective_tax_rate <= statutory_tax:
             marginal_tax = effective_tax_rate
         else:
-            marginal_tax = STATUTORY_TAX_RATE
+            marginal_tax = statutory_tax
             tax_rate_anomalous = True
     else:
-        marginal_tax = STATUTORY_TAX_RATE
+        marginal_tax = statutory_tax
     kd_posttax = kd_pretax * (1 - marginal_tax)
 
     return {
@@ -356,6 +433,7 @@ def build_wacc_params(
     industry: str | None = None,
     is_bfsi: bool = False,
     effective_tax_rate: float | None = None,
+    market: Market = Market.NSE,
 ) -> dict[str, Any]:
     """Orchestrate full WACC parameter computation for a stock.
 
@@ -375,12 +453,18 @@ def build_wacc_params(
         industry: Company industry string.
         is_bfsi: Whether the company is BFSI (uses CoE instead of WACC).
         effective_tax_rate: Actual tax/PBT from financials for accurate debt tax shield.
+        market: Listing venue (defaults to NSE). Selects ERP, statutory tax rate,
+            and the beta benchmark via the per-market WACC config. ``index_prices``
+            must be the matching benchmark series (Nifty 500 for India, S&P 500
+            ``^GSPC`` for US — see ``beta_index_symbol``).
 
     Returns:
         Consolidated dict with all WACC parameters and reliability flags.
     """
+    erp, _, _ = _wacc_config(market)
+
     # --- Beta ---
-    beta_result = compute_nifty_beta(stock_prices, index_prices)
+    beta_result = compute_market_beta(stock_prices, index_prices, market=market)
 
     if "error" in beta_result:
         logger.warning("%s: beta computation failed (%s), using 1.0", symbol, beta_result["error"])
@@ -391,7 +475,7 @@ def build_wacc_params(
         beta_defaulted = False
 
     # --- Cost of equity ---
-    coe_result = compute_cost_of_equity(rf, beta_value, INDIA_ERP, mcap_cr)
+    coe_result = compute_cost_of_equity(rf, beta_value, erp, mcap_cr, market=market)
 
     # --- Cost of debt (skip for BFSI) ---
     if is_bfsi:
@@ -399,7 +483,9 @@ def build_wacc_params(
         wacc_result = None
         wacc_value = coe_result["ke"]
     else:
-        cod_result = compute_cost_of_debt(interest, borrowings, pbt, rf, effective_tax_rate)
+        cod_result = compute_cost_of_debt(
+            interest, borrowings, pbt, rf, effective_tax_rate, market=market
+        )
         wacc_result = compute_wacc(coe_result["ke"], cod_result["kd_posttax"], mcap_cr, borrowings)
         wacc_value = wacc_result["wacc"]
 
