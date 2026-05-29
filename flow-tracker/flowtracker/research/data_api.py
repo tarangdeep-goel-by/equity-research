@@ -3005,8 +3005,47 @@ class ResearchDataAPI:
         Explicit fallback when the Yahoo peer set from get_peer_comparison
         looks sector-mismatched. Returns raw Screener rows (CMP, P/E, MCap,
         ROCE, div_yield, quarterly sales/NP with YoY variance).
+
+        Size-band filter (2026-05-29 eval fix): Screener groups some names with
+        wildly off-size peers — ADANIENT (₹3.8L Cr) came back alongside ₹11 Cr /
+        ₹407 Cr micro-caps because of its "Thermal Coal" tag. For large/mid-cap
+        subjects (mcap > ₹10,000 Cr) we drop peer rows whose market cap is < 5%
+        of the subject's. The self-row and Screener's summary/median row (no
+        peer_symbol) are always kept. The filter is skipped if it would remove
+        every real peer with NO peer surviving — but for a genuinely
+        peerless conglomerate, returning just self+median (rather than micro-cap
+        noise) is the correct, honest outcome.
         """
-        return self._store.get_peers(symbol)
+        peers = self._store.get_peers(symbol)
+        if not peers:
+            return peers
+
+        def _mc(row: dict) -> float:
+            try:
+                return float(row.get("market_cap") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        sym_u = symbol.upper()
+        self_mc = next(
+            (_mc(p) for p in peers if (p.get("peer_symbol") or "").upper() == sym_u and _mc(p) > 0),
+            0.0,
+        ) or max((_mc(p) for p in peers), default=0.0)
+
+        # Only filter when the subject is large/mid-cap enough that micro-cap
+        # peers are clearly noise. Small-cap subjects keep their (similarly
+        # small) peer set untouched — the 5% floor scales with the subject.
+        if self_mc <= 10_000:
+            return peers
+
+        floor = self_mc * 0.05
+        kept: list[dict] = []
+        for p in peers:
+            is_self = (p.get("peer_symbol") or "").upper() == sym_u
+            is_summary = not p.get("peer_symbol")  # Screener "Median: N Co." row
+            if is_self or is_summary or _mc(p) >= floor:
+                kept.append(p)
+        return kept
 
     def get_shareholder_detail(
         self, symbol: str, classification: str | None = None, top_n: int = 20,

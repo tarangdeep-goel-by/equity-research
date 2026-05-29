@@ -186,7 +186,13 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
         ],
     },
     "metals_and_mining": {
-        "industries": ["Iron & Steel", "Non-Ferrous Metals", "Mining & Mineral products", "Steel", "Copper", "Aluminum", "Other Industrial Metals & Mining"],
+        # "Thermal Coal" / "Coal" added 2026-05-29 per eval feedback: ADANIENT
+        # (and pure coal traders/miners) are tagged "Thermal Coal" by Screener and
+        # previously mapped to NO sector → get_sector_kpis returned an empty
+        # framework. Coal traders/miners share the volume / realization-per-ton /
+        # cost-per-ton / e-auction-premium KPIs below. (Conglomerate flagships like
+        # ADANIENT additionally get the conglomerate prompt playbook for SOTP.)
+        "industries": ["Iron & Steel", "Non-Ferrous Metals", "Mining & Mineral products", "Steel", "Copper", "Aluminum", "Other Industrial Metals & Mining", "Thermal Coal", "Coal"],
         "kpis": [
             {"key": "production_volume_kt", "label": "Production Volume", "unit": "kt", "description": "Total production in Kilo Tonnes"},
             {"key": "sales_volume_kt", "label": "Sales Volume", "unit": "kt", "description": "Total volume sold in Kilo Tonnes"},
@@ -268,6 +274,9 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             # Tier-2 additions 2026-04-24 per Gemini review — merchant pricing + FGD mandate
             {"key": "merchant_sales_mix_pct", "label": "Merchant Sales Mix %", "unit": "pct", "description": "Merchant / exchange sales (IEX) as % of total volume — IEX rates hitting Rs 10/unit; un-tied capacity is where operating leverage sits (Tata Power, JSW Energy)"},
             {"key": "fgd_capex_cr", "label": "FGD Capex", "unit": "cr", "description": "Flue Gas Desulfurization capex in crores (regulatory mandate for thermal plants) — material capex drag until completion"},
+            # Tier-3 additions 2026-05-29 per eval feedback (NTPC) — regulated-RoE economics
+            {"key": "regulated_roe_pct", "label": "Regulated RoE %", "unit": "pct", "description": "Allowed return on regulated equity (CERC norm, ~15.5% + incentives) — the core earnings driver for regulated utilities; pair with regulated_equity_cr"},
+            {"key": "regulatory_deferral_account_cr", "label": "Regulatory Deferral Account", "unit": "cr", "description": "RDA / regulatory deferral balance in crores (income recognised but not yet billed, or timing differences awaiting tariff true-up) — a material earnings-quality item for regulated utilities; track the balance + YoY movement, NOT just the latest reported P&L", "aliases": ["rda_cr", "regulatory_income_cr", "deferred_tariff_cr"]},
         ],
     },
     "oil_and_gas": {
