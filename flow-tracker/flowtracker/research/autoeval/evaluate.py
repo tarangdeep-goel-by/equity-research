@@ -959,19 +959,16 @@ async def _eval_sector(agent: str, sector_name: str, sector_cfg: dict,
 
     print(f"--- {agent} / {stock} ({sector_name}) ---")
 
-    # Pre-run data guard: if agent uses sector_kpis but symbol has no extracted
-    # KPIs, SKIP the pair so the gap is visible instead of silently degrading
-    # the report. Only triggers when sector framework exists (industry covered).
+    # Pre-run data guard: if the agent uses sector_kpis but the symbol has no
+    # extracted KPIs, DEGRADE GRACEFULLY — run + grade anyway (the thin sector-KPI
+    # section dents the grade) rather than hard-SKIP (which vanished the agent and
+    # hid genuinely-analysable conglomerates like ADANIENT). Warn so the gap is
+    # still visible in logs; backfill_sector_kpis.py remains the proper fix.
     if _agent_uses_sector_kpis(agent) and not _sector_kpis_populated(stock):
-        msg = (
-            f"SKIP: sector_kpis missing for {stock}, "
-            f"run scripts/backfill_sector_kpis.py --symbols {stock} to populate."
-        )
-        print(f"  [WARN] {msg}", file=sys.stderr)
-        return AgentEvalResult(
-            agent=agent, stock=stock, sector=sector_type,
-            grade="SKIP", grade_numeric=0,
-            summary=f"SKIP_MISSING_KPIS: {msg}",
+        print(
+            f"  [WARN] sector_kpis missing for {stock} — running {agent} anyway "
+            f"(grade will reflect the gap; backfill_sector_kpis.py --symbols {stock} to fix).",
+            file=sys.stderr,
         )
 
     # Pre-run eligibility guard: fno_positioning is scoped to F&O-eligible

@@ -600,9 +600,30 @@ for _ind, _sector in _INDUSTRY_ALIASES.items():
     _INDUSTRY_TO_SECTOR.setdefault(_ind, _sector)
 
 
+# Per-symbol sector overrides — for stocks the external taxonomy MISLABELS and
+# that no industry→sector rule can fix (esp. conglomerates Yahoo tags by their
+# standalone arm). Override wins over the industry map. This is the override
+# layer of the canonical resolver (plans/canonical-sector-resolver.md), scoped to
+# symbols. e.g. ADANIENT is tagged "Thermal Coal" (→metals) but is the Adani
+# group incubator → conglomerate.
+_SYMBOL_SECTOR_OVERRIDES: dict[str, str] = {
+    "ADANIENT": "conglomerate",
+}
+
+
 def get_sector_for_industry(industry: str) -> str | None:
     """Map an NSE/Screener/yfinance industry name to a sector key."""
     return _INDUSTRY_TO_SECTOR.get(industry)
+
+
+def get_sector_for_symbol(symbol: str, industry: str | None = None) -> str | None:
+    """Resolve a SYMBOL to a sector: per-symbol override first, then its industry
+    label. The symbol-aware entry point consumers should prefer over
+    get_sector_for_industry when a symbol is in hand."""
+    ov = _SYMBOL_SECTOR_OVERRIDES.get((symbol or "").upper())
+    if ov:
+        return ov
+    return get_sector_for_industry(industry or "")
 
 
 def get_kpis_for_industry(industry: str) -> list[dict] | None:
