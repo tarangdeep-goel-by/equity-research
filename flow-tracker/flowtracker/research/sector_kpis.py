@@ -469,19 +469,139 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
             {"key": "ebitda_margin_pct", "label": "EBITDA Margin %", "unit": "pct", "description": "Operating EBITDA margin (pre-depreciation + aircraft lease for airlines)"},
         ],
     },
+    # --- New sectors added 2026-05-29 from full-universe coverage audit ---
+    "textiles": {
+        "industries": ["Textile Manufacturing", "Apparel Manufacturing", "Footwear & Accessories", "Textiles - Apparel", "Other Textile Products", "Apparel Retail"],
+        "kpis": [
+            {"key": "capacity_utilization_pct", "label": "Capacity Utilization %", "unit": "pct", "description": "Spindle/loom/garment capacity utilization"},
+            {"key": "realization_per_unit_rs", "label": "Realization", "unit": "rs", "description": "Net realization per kg (yarn) / per metre (fabric) / per piece (garment)"},
+            {"key": "cotton_yarn_spread_rs", "label": "Cotton-Yarn Spread", "unit": "rs", "description": "Yarn price minus cotton cost — core spinning margin driver"},
+            {"key": "export_revenue_pct", "label": "Export Mix %", "unit": "pct", "description": "Exports as % of revenue (USD/INR + tariff/quota sensitivity)"},
+            {"key": "gross_margin_pct", "label": "Gross Margin %", "unit": "pct", "description": "Revenue minus raw material (cotton/PSF/yarn) as % of revenue"},
+            {"key": "value_added_mix_pct", "label": "Value-Added Mix %", "unit": "pct", "description": "% from garments/home-textiles/technical vs commodity yarn/fabric"},
+        ],
+    },
+    "hospitality": {
+        "industries": ["Lodging", "Resorts & Casinos", "Leisure", "Hotels & Resorts"],
+        "kpis": [
+            {"key": "occupancy_pct", "label": "Occupancy %", "unit": "pct", "description": "Average room occupancy"},
+            {"key": "arr_rs", "label": "ARR", "unit": "rs", "description": "Average Room Rate (₹/room-night)"},
+            {"key": "revpar_rs", "label": "RevPAR", "unit": "rs", "description": "Revenue per available room = ARR × occupancy — the core hotel metric"},
+            {"key": "room_inventory_count", "label": "Room Inventory", "unit": "number", "description": "Total keys (owned + managed); track signed pipeline"},
+            {"key": "managed_mix_pct", "label": "Managed/Franchise Mix %", "unit": "pct", "description": "Asset-light (management/franchise) keys as % of total — margin/RoCE driver"},
+            {"key": "ebitda_margin_pct", "label": "EBITDA Margin %", "unit": "pct", "description": "Operating EBITDA margin"},
+        ],
+    },
+    "media": {
+        "industries": ["Entertainment", "Broadcasting", "Publishing", "Advertising Agencies", "Electronic Gaming & Multimedia"],
+        "kpis": [
+            {"key": "ad_revenue_growth_pct", "label": "Ad Revenue Growth %", "unit": "pct", "description": "YoY advertising revenue growth (cyclical, GDP-linked)"},
+            {"key": "subscription_revenue_pct", "label": "Subscription Mix %", "unit": "pct", "description": "Subscription/recurring as % of revenue (vs ad-cyclical)"},
+            {"key": "content_cost_pct", "label": "Content Cost %", "unit": "pct", "description": "Content/programming spend as % of revenue — key margin lever"},
+            {"key": "subscribers_or_dau", "label": "Subscribers / DAU", "unit": "number", "description": "Paying subscribers (or DAU/MAU for digital)"},
+            {"key": "arpu_rs", "label": "ARPU", "unit": "rs", "description": "Average revenue per user/subscriber"},
+            {"key": "ebitda_margin_pct", "label": "EBITDA Margin %", "unit": "pct", "description": "Operating EBITDA margin"},
+        ],
+    },
+    "paper_packaging": {
+        "industries": ["Packaging & Containers", "Paper & Paper Products", "Lumber & Wood Production"],
+        "kpis": [
+            {"key": "realization_per_ton_rs", "label": "Realization per Ton", "unit": "rs", "description": "Net realization per tonne"},
+            {"key": "capacity_utilization_pct", "label": "Capacity Utilization %", "unit": "pct", "description": "Production as % of installed capacity"},
+            {"key": "input_cost_per_ton_rs", "label": "Input Cost per Ton", "unit": "rs", "description": "Wood/pulp/waste-paper + energy cost per tonne"},
+            {"key": "sales_volume_kt", "label": "Sales Volume", "unit": "kt", "description": "Volume sold in kilo-tonnes"},
+            {"key": "ebitda_per_ton_rs", "label": "EBITDA per Ton", "unit": "rs", "description": "EBITDA / volume — core paper/packaging metric"},
+            {"key": "value_added_mix_pct", "label": "Value-Added Mix %", "unit": "pct", "description": "% from premium/specialty/flexible packaging vs commodity paper"},
+        ],
+    },
+    "conglomerate": {
+        "industries": ["Conglomerates", "Diversified", "Trading"],
+        "kpis": [
+            {"key": "segment_count", "label": "Reportable Segments", "unit": "number", "description": "Number of Ind AS 108 reportable segments"},
+            {"key": "largest_segment_revenue_pct", "label": "Largest Segment %", "unit": "pct", "description": "Revenue concentration in the biggest segment"},
+            {"key": "segment_ebitda_mix_pct", "label": "Segment EBITDA Mix %", "unit": "pct", "description": "EBITDA split across segments — the SOTP value driver"},
+            {"key": "net_debt_to_ebitda_x", "label": "Net Debt/EBITDA", "unit": "x", "description": "Consolidated leverage (key for leveraged infra incubators)"},
+            {"key": "intercompany_rpt_pct", "label": "Intra-group RPT %", "unit": "pct", "description": "Related-party transactions as % of revenue/net worth — tunneling check"},
+            {"key": "listed_subsidiary_value_pct", "label": "Listed-Sub Value %", "unit": "pct", "description": "% of SOTP value in listed subs vs unlisted/incubating segments"},
+        ],
+    },
+    "education": {
+        "industries": ["Education & Training Services"],
+        "kpis": [
+            {"key": "enrollment_count", "label": "Enrollment", "unit": "number", "description": "Total active students/learners enrolled"},
+            {"key": "fee_realization_per_student_rs", "label": "Fee Realization", "unit": "rs", "description": "Average fee/revenue per student"},
+            {"key": "capacity_utilization_pct", "label": "Capacity Utilization %", "unit": "pct", "description": "Seat/centre utilization"},
+            {"key": "centers_count", "label": "Centres/Campuses", "unit": "number", "description": "Operating centres/campuses; track additions"},
+            {"key": "online_mix_pct", "label": "Online/Digital Mix %", "unit": "pct", "description": "Online/hybrid revenue as % of total"},
+            {"key": "ebitda_margin_pct", "label": "EBITDA Margin %", "unit": "pct", "description": "Operating EBITDA margin"},
+        ],
+    },
 }
 
 # --- Lookup helpers ---
 
-# Flat mapping: industry name → sector key
+# De-alias map: yfinance/Yahoo industry label → an EXISTING sector key. Built from
+# the 2026-05-29 full-universe coverage audit (76 unmapped labels / ~1,000 stocks).
+# These are variants of sectors we already have — listing them here (instead of
+# stuffing each sector's `industries`) keeps one auditable place for the long tail.
+_INDUSTRY_ALIASES: dict[str, str] = {
+    # capital_goods / industrials
+    "Engineering & Construction": "capital_goods", "Specialty Industrial Machinery": "capital_goods",
+    "Electrical Equipment & Parts": "capital_goods", "Building Products & Equipment": "capital_goods",
+    "Metal Fabrication": "capital_goods", "Communication Equipment": "capital_goods",
+    "Farm & Heavy Construction Machinery": "capital_goods", "Tools & Accessories": "capital_goods",
+    "Infrastructure Operations": "capital_goods", "Industrial Distribution": "capital_goods",
+    "Business Equipment & Supplies": "capital_goods", "Pollution & Treatment Controls": "capital_goods",
+    "Security & Protection Services": "capital_goods", "Scientific & Technical Instruments": "capital_goods",
+    "Semiconductor Equipment & Materials": "capital_goods", "Specialty Business Services": "capital_goods",
+    "Staffing & Employment Services": "capital_goods", "Consulting Services": "capital_goods",
+    "Waste Management": "capital_goods", "Electronics & Computer Distribution": "capital_goods",
+    "Computer Hardware": "capital_goods",
+    # chemicals
+    "Agricultural Inputs": "chemicals",
+    # fmcg / consumer staples
+    "Confectioners": "fmcg", "Beverages - Wineries & Distilleries": "fmcg", "Beverages - Brewers": "fmcg",
+    "Farm Products": "fmcg", "Tobacco": "fmcg", "Food Distribution": "fmcg",
+    # consumer durables
+    "Furnishings, Fixtures & Appliances": "consumer_durables",
+    # retail
+    "Luxury Goods": "retail", "Discount Stores": "retail", "Home Improvement Retail": "retail",
+    "Pharmaceutical Retailers": "retail", "Grocery Stores": "retail",
+    # logistics
+    "Integrated Freight & Logistics": "logistics", "Marine Shipping": "logistics",
+    "Railroads": "logistics", "Airports & Air Services": "logistics", "Rental & Leasing Services": "logistics",
+    # power & utilities
+    "Solar": "power_and_utilities", "Utilities - Renewable": "power_and_utilities",
+    "Utilities - Regulated Gas": "power_and_utilities", "Gas Transmission/Marketing": "power_and_utilities",
+    "Utilities - Regulated Water": "power_and_utilities",
+    # nbfcs
+    "Mortgage Finance": "nbfcs", "Financial Conglomerates": "nbfcs", "Credit Services": "nbfcs",
+    # amc / capital markets
+    "Financial Data & Stock Exchanges": "amc_capital_markets",
+    # insurance
+    "Insurance - Reinsurance": "insurance", "Insurance Brokers": "insurance", "Healthcare Plans": "insurance",
+    # hospitals / healthcare
+    "Diagnostics & Research": "hospitals", "Medical Instruments & Supplies": "hospitals",
+    "Medical Devices": "hospitals", "Medical Distribution": "hospitals",
+    # oil & gas
+    "Oil & Gas Equipment & Services": "oil_and_gas",
+    # metals & mining
+    "Coking Coal": "metals_and_mining", "Other Precious Metals & Mining": "metals_and_mining",
+    # real estate
+    "Real Estate - Diversified": "real_estate",
+}
+
+# Flat mapping: industry name → sector key (config industries first, then aliases)
 _INDUSTRY_TO_SECTOR: dict[str, str] = {}
 for _sector, _cfg in SECTOR_KPI_CONFIG.items():
     for _ind in _cfg["industries"]:
         _INDUSTRY_TO_SECTOR[_ind] = _sector
+for _ind, _sector in _INDUSTRY_ALIASES.items():
+    _INDUSTRY_TO_SECTOR.setdefault(_ind, _sector)
 
 
 def get_sector_for_industry(industry: str) -> str | None:
-    """Map an NSE/Screener industry name to a sector key."""
+    """Map an NSE/Screener/yfinance industry name to a sector key."""
     return _INDUSTRY_TO_SECTOR.get(industry)
 
 
