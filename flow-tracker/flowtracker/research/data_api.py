@@ -47,6 +47,36 @@ def _registry_market_of(symbol: str, store: FlowStore) -> str:
     return "NSE"
 
 
+# US 10Y Treasury fallback (~4.3%) — keeps offline tests/audit deterministic
+# when the live ^TNX fetch is unavailable.
+_US_RF_FALLBACK = 0.043
+
+
+@lru_cache(maxsize=1)
+def _us_risk_free_rate() -> tuple[float, bool]:
+    """US 10-year Treasury yield as a decimal, with a fallback flag.
+
+    Tries live yfinance ``^TNX`` (CBOE 10Y Treasury yield index; the index
+    value is the yield ×10, so value/100 → decimal). On any failure (offline
+    tests, audit, network error) falls back to ``_US_RF_FALLBACK`` (~4.3%).
+
+    Returns ``(rate, used_fallback)``. Cached so a research run hits the network
+    at most once.
+    """
+    try:
+        import yfinance as yf
+
+        tnx = yf.Ticker("^TNX")
+        hist = tnx.history(period="5d")
+        if hist is not None and not hist.empty:
+            last = float(hist["Close"].dropna().iloc[-1])
+            if last > 0:
+                return last / 100.0, False
+    except Exception:  # noqa: BLE001 — offline must be deterministic
+        pass
+    return _US_RF_FALLBACK, True
+
+
 def resolve_run_market(
     symbol: str,
     market_flag: str | None = None,
@@ -1379,7 +1409,21 @@ class ResearchDataAPI:
         """Latest valuation snapshot (50+ fields: price, PE, PB, EV/EBITDA, margins, etc.)."""
         if self._is_us(symbol):
             rows = self._store.get_us_valuation_snapshot(symbol, self._market_of(symbol))
-            return _clean(rows[0]) if rows else {}
+            if not rows:
+                return {}
+            snap = _clean(rows[0])
+            # get_fcf_yield needs enterprise_value. When the snapshot doesn't
+            # carry one, derive EV = market_cap + total_debt − total_cash from
+            # the latest US-adapted annual (same currency/units as market_cap).
+            if not snap.get("enterprise_value"):
+                mcap = snap.get("market_cap")
+                annual = self.get_annual_financials(symbol, years=1)
+                if mcap and annual:
+                    a = annual[0]
+                    td = a.get("total_debt") or a.get("borrowings") or 0
+                    tc = a.get("total_cash") or a.get("cash_and_bank") or 0
+                    snap["enterprise_value"] = round(mcap + td - tc, 2)
+            return snap
         hist = self._store.get_valuation_history(symbol, days=7)
         if not hist:
             return {}
@@ -4354,6 +4398,9 @@ class ResearchDataAPI:
         rollover %) when F&O contracts exist for the symbol — required for
         F&O-listed stocks per the technical-agent prompt.
         """
+        if self._is_us(symbol):
+            return self._us_technical_indicators(symbol)
+
         fno = self.get_fno_metrics(symbol)
 
         # Compute local MACD / Bollinger / ADX from bhavcopy. FMP doesn't ship
@@ -4533,6 +4580,83 @@ class ResearchDataAPI:
 
         note = "MACD/BB/ADX computed locally — FMP source unavailable"
         return out, note
+
+    def _us_technical_indicators(self, symbol: str) -> list[dict]:
+        """US technicals from us_daily_prices using the same local SMA/RSI/MACD/
+        BB/ADX compute path as the India bhavcopy fallback. No FMP, no F&O.
+        """
+        rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+        if not rows:
+            return []
+        # Store returns most-recent first.
+        closes = [float(r["close"]) for r in rows if r.get("close") is not None]
+        if not closes:
+            return []
+        latest = closes[0]
+        result: dict = {"date": rows[0]["date"], "close": latest}
+
+        if len(closes) >= 50:
+            result["sma_50"] = round(sum(closes[:50]) / 50, 2)
+        if len(closes) >= 200:
+            result["sma_200"] = round(sum(closes[:200]) / 200, 2)
+
+        # RSI-14 (Wilder), newest-first diffs.
+        if len(closes) >= 15:
+            gains, losses = [], []
+            for i in range(14):
+                diff = closes[i] - closes[i + 1]
+                gains.append(max(diff, 0))
+                losses.append(max(-diff, 0))
+            avg_gain = sum(gains) / 14
+            avg_loss = sum(losses) / 14
+            if avg_loss > 0:
+                rs = avg_gain / avg_loss
+                result["rsi_14"] = round(100 - (100 / (1 + rs)), 2)
+            else:
+                result["rsi_14"] = 100.0
+
+        if "sma_50" in result:
+            result["price_vs_sma50"] = "above" if latest > result["sma_50"] else "below"
+        if "sma_200" in result:
+            result["price_vs_sma200"] = "above" if latest > result["sma_200"] else "below"
+        if "sma_50" in result and "sma_200" in result:
+            if result["sma_50"] < result["sma_200"]:
+                result["sma_cross"] = "death_cross"
+                result["sma_cross_note"] = "SMA50 below SMA200 — bearish trend signal (death cross)"
+            else:
+                result["sma_cross"] = "golden_cross"
+                result["sma_cross_note"] = "SMA50 above SMA200 — bullish trend signal (golden cross)"
+
+        # MACD / Bollinger / ADX — same recurrences as the India local path,
+        # computed oldest-first.
+        bars = list(reversed(rows))
+        c = [float(b["close"]) for b in bars if b.get("close") is not None]
+        highs = [float(b["high"]) if b.get("high") is not None else float(b["close"]) for b in bars]
+        lows = [float(b["low"]) if b.get("low") is not None else float(b["close"]) for b in bars]
+        n = len(c)
+        if n >= 26 + 9:
+            ema12 = _ema(c, 12)
+            ema26 = _ema(c, 26)
+            macd_line = [a - b for a, b in zip(ema12, ema26)]
+            signal_line = _ema(macd_line, 9)
+            result["macd"] = round(macd_line[-1], 4)
+            result["macd_signal"] = round(signal_line[-1], 4)
+            result["macd_histogram"] = round(macd_line[-1] - signal_line[-1], 4)
+        if n >= 20:
+            window = c[-20:]
+            mid = sum(window) / 20
+            sd = (sum((x - mid) ** 2 for x in window) / 20) ** 0.5
+            result["bollinger_middle"] = round(mid, 2)
+            result["bollinger_upper"] = round(mid + 2 * sd, 2)
+            result["bollinger_lower"] = round(mid - 2 * sd, 2)
+        if n >= 14 * 2 + 1:
+            adx_vals = _adx_wilder(highs, lows, c, period=14)
+            if adx_vals is not None:
+                result["adx"] = round(adx_vals["adx"], 2)
+                result["adx_plus_di"] = round(adx_vals["plus_di"], 2)
+                result["adx_minus_di"] = round(adx_vals["minus_di"], 2)
+
+        return _clean([result])
 
     # ------------------------------------------------------------------
     # Strategy 3 — concall comparable-basis overlay for trend methods.
@@ -4865,8 +4989,55 @@ class ResearchDataAPI:
 
     def get_financial_growth_rates(self, symbol: str) -> list[dict]:
         """Pre-computed 1yr/3yr/5yr/10yr growth from FMP."""
+        if self._is_us(symbol):
+            return self._us_growth_rates(symbol)
         rows = self._store.get_fmp_financial_growth(symbol, limit=10)
         return _clean([r.model_dump() for r in rows])
+
+    def _us_growth_rates(self, symbol: str) -> list[dict]:
+        """YoY + CAGR growth for revenue / net_income / eps computed from the
+        US-adapted annual series. Returns the FMP-shaped list contract (one row
+        per fiscal year, latest first, with per-metric YoY *_growth fields).
+        """
+        annuals = self.get_annual_financials(symbol, years=10)  # latest first
+        if len(annuals) < 2:
+            return []
+
+        def _yoy(curr, prev):
+            if curr is None or prev is None or prev == 0:
+                return None
+            return round((curr - prev) / abs(prev) * 100, 2)
+
+        rows: list[dict] = []
+        for i, a in enumerate(annuals):
+            prev = annuals[i + 1] if i + 1 < len(annuals) else None
+            row = {
+                "symbol": symbol,
+                "fiscal_year": a.get("fiscal_year"),
+                "fiscal_year_end": a.get("fiscal_year_end"),
+            }
+            for metric in ("revenue", "net_income", "eps"):
+                row[f"{metric}_growth"] = (
+                    _yoy(a.get(metric), prev.get(metric)) if prev else None
+                )
+            rows.append(row)
+
+        # Multi-year CAGRs on the latest row (3yr/5yr where history allows).
+        def _cagr(metric, years):
+            if len(annuals) <= years:
+                return None
+            end = annuals[0].get(metric)
+            start = annuals[years].get(metric)
+            if end is None or start is None or start <= 0:
+                return None
+            return round(((end / start) ** (1 / years) - 1) * 100, 2)
+
+        if rows:
+            for metric in ("revenue", "net_income", "eps"):
+                rows[0][f"{metric}_cagr_3yr"] = _cagr(metric, 3)
+                rows[0][f"{metric}_cagr_5yr"] = _cagr(metric, 5)
+
+        return _clean(rows)
 
     def get_analyst_grades(self, symbol: str) -> list[dict]:
         """Upgrade/downgrade history from FMP."""
@@ -4894,6 +5065,9 @@ class ResearchDataAPI:
 
         Returns bear/base/bull range, margin of safety %, signal.
         """
+        if self._is_us(symbol):
+            return self._us_fair_value(symbol)
+
         result: dict = {"symbol": symbol}
         bear = bull = None
 
@@ -4989,6 +5163,72 @@ class ResearchDataAPI:
             if bear and current_price < bear:
                 result["signal"] = "DEEP VALUE"
             elif current_price < combined:
+                result["signal"] = "UNDERVALUED"
+            elif bull and current_price > bull:
+                result["signal"] = "EXPENSIVE"
+            else:
+                result["signal"] = "FAIR VALUE"
+        elif current_price:
+            result["current_price"] = current_price
+            result["signal"] = "INSUFFICIENT DATA"
+
+        return _clean(result)
+
+    def _us_fair_value(self, symbol: str) -> dict:
+        """US combined fair value from us_valuation_snapshot (price/PE/mcap) +
+        us_consensus_estimates (target mean/high/low, next-year EPS).
+
+        Skips the Screener PE-basis detection branch. Anchors the signal on the
+        consensus mean target vs current price; bear/base/bull come from the
+        consensus low/mean/high range.
+        """
+        market = self._market_of(symbol)
+        snap_rows = self._store.get_us_valuation_snapshot(symbol, market)
+        cons_rows = self._store.get_us_consensus_estimates(symbol, market)
+        snap = snap_rows[0] if snap_rows else {}
+        cons = cons_rows[0] if cons_rows else {}
+
+        result: dict = {"symbol": symbol, "market": market}
+        current_price = snap.get("price")
+        pe_trailing = snap.get("pe_trailing")
+        target_mean = cons.get("target_mean")
+        target_high = cons.get("target_high")
+        target_low = cons.get("target_low")
+        eps_next = cons.get("eps_next_year")
+
+        if pe_trailing:
+            result["pe_trailing"] = pe_trailing
+        # Forward fair value from trailing PE × next-year EPS (a second anchor).
+        pe_fair = None
+        if pe_trailing and eps_next:
+            pe_fair = round(pe_trailing * eps_next, 2)
+            result["pe_forward_fair_value"] = pe_fair
+
+        if target_mean:
+            result["consensus_target"] = target_mean
+            result["consensus_range"] = {"low": target_low, "mean": target_mean, "high": target_high}
+
+        # bear/base/bull range — consensus low/mean/high preferred; fall back to
+        # ±15% around the PE-forward fair value when consensus is absent.
+        if target_low and target_mean and target_high:
+            bear, base, bull = target_low, target_mean, target_high
+        elif pe_fair:
+            bear, base, bull = round(pe_fair * 0.85, 2), pe_fair, round(pe_fair * 1.15, 2)
+        else:
+            bear = base = bull = None
+
+        if base is not None:
+            result["fair_value_range"] = {"bear": bear, "base": base, "bull": bull}
+
+        # Anchor signal on the consensus mean (or base) vs current price.
+        anchor = target_mean or base
+        if current_price and anchor:
+            result["current_price"] = current_price
+            result["combined_fair_value"] = round(anchor, 2)
+            result["margin_of_safety_pct"] = round((anchor - current_price) / anchor * 100, 2)
+            if bear and current_price < bear:
+                result["signal"] = "DEEP VALUE"
+            elif current_price < anchor:
                 result["signal"] = "UNDERVALUED"
             elif bull and current_price > bull:
                 result["signal"] = "EXPENSIVE"
@@ -6264,6 +6504,21 @@ class ResearchDataAPI:
         Updated weekly by compute-analytics.py.
         """
         import json as _json
+        if self._is_us(symbol):
+            # US has no weekly compute-analytics snapshot — return a graceful
+            # non-error envelope (agents are told to call this first) directing
+            # them to the individual US-routed tools.
+            return {
+                "status": "compute_on_demand",
+                "market": self._market_of(symbol),
+                "symbol": symbol,
+                "note": (
+                    "US analytical snapshot is computed on demand — call the "
+                    "individual tools (get_fundamentals, get_quality_scores, "
+                    "get_valuation, get_fair_value_analysis, get_wacc_params) "
+                    "directly."
+                ),
+            }
         snapshot = self._store.get_analytical_snapshot(symbol)
         if not snapshot:
             return {"error": f"No analytical snapshot for {symbol}. Run compute-analytics.py first."}
@@ -6534,49 +6789,71 @@ class ResearchDataAPI:
     def get_wacc_params(self, symbol: str) -> dict:
         """Dynamic WACC: beta, cost of equity, cost of debt, terminal growth, PE multiples."""
         from flowtracker.research.wacc import build_wacc_params
+        from flowtracker.market import Market
 
         is_bfsi = self._is_bfsi(symbol) or self._is_insurance(symbol)
+        is_us = self._is_us(symbol)
         flags: list[str] = []
 
-        # --- Stock prices (bhavcopy preferred, Screener chart fallback) ---
-        stock_rows = self._store.get_stock_delivery(symbol, days=800)
-        stock_prices = [{"date": r.date, "close": r.close} for r in stock_rows if r.close]
-        # Beta needs 53+ weeks; fall back to Screener chart prices if bhavcopy is thin
-        if len(stock_prices) < 260:  # ~1yr of trading days
-            chart_data = self._store.get_chart_data(symbol, "price")
-            for metric_data in chart_data:
-                if metric_data.get("metric") == "Price":
-                    chart_prices = [
-                        {"date": pt["date"], "close": pt["value"]}
-                        for pt in metric_data.get("values", [])
-                        if pt.get("value")
-                    ]
-                    if len(chart_prices) > len(stock_prices):
-                        stock_prices = chart_prices
-                    break
-        if not stock_prices:
-            flags.append("no_stock_prices")
+        if is_us:
+            # US branch: us_daily_prices for the stock series, ^GSPC for the index
+            # benchmark (likely empty → beta falls back to 1.0 in wacc.py), and a
+            # US 10Y Treasury risk-free rate (^TNX live, 4.3% fallback).
+            px_rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+            stock_prices = [
+                {"date": r["date"], "close": r["close"]}
+                for r in px_rows if r.get("close")
+            ]
+            if not stock_prices:
+                flags.append("no_stock_prices")
+            index_prices = self._store.get_index_prices("^GSPC", days=800)
+            if not index_prices:
+                flags.append("no_index_prices")
+            rf, rf_default = _us_risk_free_rate()
+            if rf_default:
+                flags.append("rf_default")
+            market = Market(self._market_of(symbol))
+        else:
+            market = Market.NSE
+            # --- Stock prices (bhavcopy preferred, Screener chart fallback) ---
+            stock_rows = self._store.get_stock_delivery(symbol, days=800)
+            stock_prices = [{"date": r.date, "close": r.close} for r in stock_rows if r.close]
+            # Beta needs 53+ weeks; fall back to Screener chart prices if bhavcopy is thin
+            if len(stock_prices) < 260:  # ~1yr of trading days
+                chart_data = self._store.get_chart_data(symbol, "price")
+                for metric_data in chart_data:
+                    if metric_data.get("metric") == "Price":
+                        chart_prices = [
+                            {"date": pt["date"], "close": pt["value"]}
+                            for pt in metric_data.get("values", [])
+                            if pt.get("value")
+                        ]
+                        if len(chart_prices) > len(stock_prices):
+                            stock_prices = chart_prices
+                        break
+            if not stock_prices:
+                flags.append("no_stock_prices")
 
-        # --- Index prices (Nifty 500) ---
-        index_prices = self._store.get_index_prices("^CRSLDX", days=800)
-        if not index_prices:
-            flags.append("no_index_prices")
+            # --- Index prices (Nifty 500) ---
+            index_prices = self._store.get_index_prices("^CRSLDX", days=800)
+            if not index_prices:
+                flags.append("no_index_prices")
 
-        # --- Risk-free rate (G-sec 10Y) ---
-        rf = None
-        macro = self._store.get_macro_latest()
-        if macro and macro.gsec_10y:
-            rf = macro.gsec_10y / 100  # stored as %, convert to decimal
-        if rf is None:
-            # Fallback: scan recent macro rows for last non-null G-sec
-            trend = self._store.get_macro_trend(days=30)
-            for snap in trend:
-                if snap.gsec_10y:
-                    rf = snap.gsec_10y / 100
-                    break
-        if rf is None:
-            rf = 0.07  # absolute fallback
-            flags.append("rf_default")
+            # --- Risk-free rate (G-sec 10Y) ---
+            rf = None
+            macro = self._store.get_macro_latest()
+            if macro and macro.gsec_10y:
+                rf = macro.gsec_10y / 100  # stored as %, convert to decimal
+            if rf is None:
+                # Fallback: scan recent macro rows for last non-null G-sec
+                trend = self._store.get_macro_trend(days=30)
+                for snap in trend:
+                    if snap.gsec_10y:
+                        rf = snap.gsec_10y / 100
+                        break
+            if rf is None:
+                rf = 0.07  # absolute fallback
+                flags.append("rf_default")
 
         # --- Financials for ICR ---
         annual = self.get_annual_financials(symbol, years=2)
@@ -6598,8 +6875,13 @@ class ResearchDataAPI:
         mcap = valuation.get("market_cap") or 0
 
         # --- PE band ---
-        pe_band_raw = self.get_valuation_band(symbol, "pe_trailing", days=2500)
-        pe_band = pe_band_raw if pe_band_raw.get("median_val") else None
+        # US has only a point-in-time snapshot (no Screener PE-band time series);
+        # skip the band so wacc.py uses the static-PE fallback.
+        if is_us:
+            pe_band = None
+        else:
+            pe_band_raw = self.get_valuation_band(symbol, "pe_trailing", days=2500)
+            pe_band = pe_band_raw if pe_band_raw.get("median_val") else None
 
         # --- Industry ---
         info = self.get_company_info(symbol)
@@ -6618,6 +6900,7 @@ class ResearchDataAPI:
             industry=industry,
             is_bfsi=is_bfsi,
             effective_tax_rate=eff_tax_rate,
+            market=market,
         )
 
         # Merge data-layer flags
@@ -8334,6 +8617,19 @@ class ResearchDataAPI:
 
     def get_beneish_score(self, symbol: str) -> dict:
         """Beneish M-Score: earnings manipulation probability (8-variable model)."""
+        if self._is_us(symbol):
+            # M-Score needs India gross-margin inputs (raw_material_cost /
+            # employee_cost) that US filings don't carry — genuinely absent.
+            return {
+                "status": "not_applicable",
+                "market": self._market_of(symbol),
+                "symbol": symbol,
+                "reason": (
+                    "Beneish M-Score requires India gross-margin inputs "
+                    "(raw_material_cost / employee_cost) not present in US filings; "
+                    "not applicable for US-listed symbols."
+                ),
+            }
         if self._is_bfsi(symbol) or self._is_insurance(symbol):
             return {"skipped": True, "reason": "M-Score not applicable to banks/NBFCs"}
 
@@ -9952,6 +10248,9 @@ class ResearchDataAPI:
 
         today = date.today()
 
+        if self._is_us(symbol):
+            return self._us_price_performance(symbol)
+
         # Period definitions. 3Y/5Y/Since-Listing exploit the full adj_close
         # history (legacy-bhavcopy backfill spans ~19yr); since-listing is
         # appended below once the earliest available bar is known.
@@ -10069,6 +10368,50 @@ class ResearchDataAPI:
             "industry": industry,
             "outperformer": outperformer,
         }
+
+    def _us_price_performance(self, symbol: str) -> dict:
+        """US own-stock price returns from us_daily_prices.
+
+        Index-relative performance is omitted (no ^GSPC daily series on file for
+        US); returns the symbol's own 1w/1m/3m/6m/1y returns.
+        """
+        from datetime import date, timedelta
+
+        rows = self._store.get_us_daily_prices(symbol, self._market_of(symbol))
+        prices = {r["date"]: r["close"] for r in rows if r.get("close")}
+        if not prices:
+            return {"error": f"No daily price data for {symbol}"}
+
+        latest_date = max(prices.keys())
+        latest_price = prices[latest_date]
+        anchor = date.fromisoformat(latest_date)
+
+        def find_price(target_date):
+            for offset in range(8):
+                d = str(target_date - timedelta(days=offset))
+                if d in prices:
+                    return prices[d]
+            return None
+
+        periods = []
+        for label, days in (("1W", 7), ("1M", 30), ("3M", 90), ("6M", 180), ("1Y", 365)):
+            start = find_price(anchor - timedelta(days=days))
+            if start is None or start <= 0:
+                continue
+            periods.append({
+                "period": label,
+                "stock_return": round((latest_price - start) / start * 100, 2),
+            })
+        if not periods:
+            return {"error": "Insufficient price data to compute returns"}
+
+        return _clean({
+            "symbol": symbol.upper(),
+            "periods": periods,
+            "return_type": "price_return_excl_dividends",
+            "as_of": latest_date,
+            "note": "US own-stock returns; index-relative performance omitted (no ^GSPC series on file).",
+        })
 
     # --- Sector index valuation & performance (index_valuation_daily / index_daily_prices) ---
 

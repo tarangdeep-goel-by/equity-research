@@ -116,6 +116,22 @@ def _seed_us(store: FlowStore) -> None:
          "manager_cik": "1364742", "quarter_end": "2025-03-31",
          "shares": 1_050_000_000.0, "value_usd": 218_000.0},
     ])
+    store.upsert_us_consensus_estimates([
+        {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
+         "date": "2025-05-29", "target_mean": 230.0, "num_analysts": 40,
+         "eps_next_year": 7.50},
+    ])
+    # ~60 daily bars so technicals (MACD/BB/ADX need 30+) + price-perf + WACC
+    # beta have something to read (WS-4).
+    rows = []
+    base = 180.0
+    for i in range(60):
+        d = f"2025-{3 + i // 30:02d}-{1 + i % 28:02d}"
+        px = base + i * 0.4
+        rows.append({"symbol": US_SYMBOL, "market": US_MARKET, "date": d,
+                     "open": px, "high": px + 1, "low": px - 1, "close": px,
+                     "volume": 50_000_000})
+    store.upsert_us_daily_prices(rows)
 
 
 @pytest.fixture
@@ -464,3 +480,138 @@ class TestWS3AdapterBridge:
         assert top["fiscal_year_end"].endswith("-03-31")
         # India headline transform still applied.
         assert "headline_revenue" in top
+
+
+# --------------------------------------------------------------------------- #
+# 6. WS-4 — compute/price gaps routed for US; India-only computes degraded.
+# --------------------------------------------------------------------------- #
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def _us_run():
+    from flowtracker.research.data_api import _run_market
+    token = _run_market.set(US_MARKET)
+    try:
+        yield
+    finally:
+        _run_market.reset(token)
+
+
+class TestWS4ComputeRoutesForUS:
+    def test_wacc_ke_in_us_band(self, db, monkeypatch):
+        # Force the deterministic offline rf fallback (0.043) so the test does
+        # not depend on a live ^TNX fetch.
+        import flowtracker.research.data_api as dapi
+        monkeypatch.setattr(dapi, "_us_risk_free_rate", lambda: (0.043, True))
+        with _us_run(), ResearchDataAPI() as api:
+            w = api.get_wacc_params(US_SYMBOL)
+        ke = w.get("ke")
+        assert ke is not None, "expected a US cost of equity"
+        # rf≈0.043, beta fallback≈1.0, US_ERP=4.6% → Ke in the ~8–11% band.
+        assert 0.07 <= ke <= 0.12, f"Ke {ke} out of US band"
+        # rf-default flag fires when the fallback is used.
+        assert "rf_default" in w.get("reliability_flags", [])
+
+    def test_fair_value_has_signal(self, db):
+        with _us_run(), ResearchDataAPI() as api:
+            fv = api.get_fair_value(US_SYMBOL)
+        assert fv["signal"] in (
+            "DEEP VALUE", "UNDERVALUED", "FAIR VALUE", "EXPENSIVE",
+        ), fv.get("signal")
+        rng = fv["fair_value_range"]
+        assert rng["bear"] < rng["base"] < rng["bull"]
+        assert fv["combined_fair_value"] > 0
+
+    def test_technicals_non_empty_for_us(self, db):
+        with _us_run(), ResearchDataAPI() as api:
+            t_rows = api.get_technical_indicators(US_SYMBOL)
+        assert t_rows, "expected non-empty US technicals"
+        row = t_rows[0]
+        # 60 seeded bars → MACD + Bollinger present.
+        assert row.get("macd") is not None
+        assert row.get("bollinger_upper") is not None
+        assert row.get("rsi_14") is not None
+
+    def test_price_performance_routes_for_us(self, db):
+        with _us_run(), ResearchDataAPI() as api:
+            pp = api.get_price_performance(US_SYMBOL)
+        assert "error" not in pp
+        assert pp["periods"], "expected at least one period return"
+
+    def test_fcf_yield_routes_for_us(self, db):
+        with _us_run(), ResearchDataAPI() as api:
+            fcf = api.get_fcf_yield(US_SYMBOL)
+        # EV now derived in get_valuation_snapshot → no EV error.
+        assert "error" not in fcf, fcf.get("error")
+        assert fcf.get("ev_cr", 0) > 0
+
+    def test_growth_rates_route_for_us(self, db):
+        payload = _call(t.get_fundamentals, {"symbol": US_SYMBOL, "section": "growth_rates"})
+        assert not _is_not_applicable(payload)
+        rows = payload.get("growth_rates", payload) if isinstance(payload, dict) else payload
+        assert rows and rows[0].get("revenue_growth") is not None
+
+    def test_analytical_profile_degrades_for_us(self, db):
+        # Graceful non-error envelope (compute_on_demand), not ERROR.
+        with _us_run(), ResearchDataAPI() as api:
+            prof = api.get_analytical_profile(US_SYMBOL)
+        assert "error" not in prof
+        assert prof.get("status") == "compute_on_demand"
+
+
+class TestWS4IndiaOnlyDegradesForUS:
+    def test_pe_history_na_for_us(self, db):
+        payload = _call(t.get_valuation, {"symbol": US_SYMBOL, "section": "pe_history"})
+        assert _is_not_applicable(payload)
+
+    def test_quarterly_balance_sheet_na_for_us(self, db):
+        payload = _call(t.get_fundamentals, {"symbol": US_SYMBOL, "section": "quarterly_balance_sheet"})
+        assert _is_not_applicable(payload)
+
+    def test_ratios_na_for_us(self, db):
+        payload = _call(t.get_fundamentals, {"symbol": US_SYMBOL, "section": "ratios"})
+        assert _is_not_applicable(payload)
+
+    def test_shareholding_na_for_us(self, db):
+        payload = _call(t.get_ownership, {"symbol": US_SYMBOL, "section": "shareholding"})
+        assert _is_not_applicable(payload)
+
+    def test_beneish_na_for_us(self, db):
+        payload = _call(t.get_quality_scores, {"symbol": US_SYMBOL, "section": "beneish"})
+        assert _is_not_applicable(payload)
+
+    def test_dcf_history_na_for_us(self, db):
+        payload = _call(t.get_fair_value_analysis, {"symbol": US_SYMBOL, "section": "dcf_history"})
+        assert _is_not_applicable(payload)
+
+
+class TestWS4IndiaStillRoutes:
+    """Regression: the same sections/computes return real data for India."""
+
+    def test_pe_history_india_routes(self, db):
+        payload = _call(t.get_valuation, {"symbol": "SBIN", "section": "pe_history"})
+        assert not _is_not_applicable(payload)
+
+    def test_ratios_india_routes(self, db):
+        payload = _call(t.get_fundamentals, {"symbol": "SBIN", "section": "ratios"})
+        assert not _is_not_applicable(payload)
+
+    def test_shareholding_india_routes(self, db):
+        payload = _call(t.get_ownership, {"symbol": "SBIN", "section": "shareholding"})
+        assert not _is_not_applicable(payload)
+
+    def test_beneish_india_not_degraded(self, db):
+        with ResearchDataAPI() as api:
+            score = api.get_beneish_score("SBIN")
+        # India never returns the US not_applicable envelope.
+        assert score.get("status") != "not_applicable"
+
+    def test_wacc_india_uses_gsec_rf(self, db):
+        with ResearchDataAPI() as api:
+            w = api.get_wacc_params("SBIN")
+        # India rf comes from gsec_10y (seeded), not the US Treasury fallback.
+        assert w.get("ke") is not None
+        assert "rf_default" not in w.get("reliability_flags", [])

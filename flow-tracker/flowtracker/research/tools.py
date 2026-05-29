@@ -272,9 +272,12 @@ def _us_not_applicable(tool_name: str, concept: str, symbol: str, args: dict) ->
 
 
 # India-only ownership sections — degrade to not-applicable for US symbols.
+# shareholding/changes are India XBRL shareholding-pattern concepts; US uses
+# 13F via get_institutional_ownership.
 _OWNERSHIP_INDIA_ONLY = frozenset({
     "mf_holdings", "mf_changes", "mf_conviction", "promoter_pledge",
     "shareholder_detail", "public_breakdown", "esop", "adr_gdr", "bulk_block",
+    "shareholding", "changes",
 })
 # India-only market-context sections — degrade to not-applicable for US symbols.
 _MARKET_CONTEXT_INDIA_ONLY = frozenset({
@@ -293,6 +296,25 @@ _ESTIMATES_INDIA_ONLY = frozenset({
 # India-only events/actions sections — genuinely absent for US.
 _EVENTS_ACTIONS_INDIA_ONLY = frozenset({
     "dividends", "corporate_actions", "adjusted_eps",
+})
+# India-only fundamentals sections (Screener efficiency ratios / India P&L
+# expense buckets / sparse US quarterly BS+CF) — degrade for US symbols.
+_FUNDAMENTALS_INDIA_ONLY = frozenset({
+    "ratios", "quarterly_balance_sheet", "quarterly_cash_flow", "expense_breakdown",
+})
+# India-only valuation sections — US has only a point-in-time snapshot (no PE
+# time series) and no FMP India key-metrics history.
+_VALUATION_INDIA_ONLY = frozenset({
+    "pe_history", "key_metrics",
+})
+# India-only ownership sections (XBRL shareholding pattern — US uses 13F via
+# get_institutional_ownership). Added to the existing per-section gate.
+_OWNERSHIP_SHAREHOLDING_INDIA_ONLY = frozenset({
+    "shareholding", "changes",
+})
+# India-only fair-value sections — FMP DCF history (India).
+_FAIR_VALUE_INDIA_ONLY = frozenset({
+    "dcf_history",
 })
 
 
@@ -1053,8 +1075,14 @@ def _enum_toc(sections) -> dict:
     }
 
 
-def _get_fundamentals_section(api, symbol, section, args):
-    """Route a single section for get_fundamentals."""
+def _get_fundamentals_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_fundamentals.
+
+    India-only sections (Screener ratios / India P&L expense buckets / sparse
+    US quarterly BS+CF) degrade to a not-applicable marker for US symbols.
+    """
+    if is_us and section in _FUNDAMENTALS_INDIA_ONLY:
+        return _us_na_section(section, api._market_of(symbol), "Screener.in / India financial schedules")
     if section == "quarterly_results":
         return api.get_quarterly_results(symbol, args.get("quarters", 12))
     elif section == "annual_financials":
@@ -1132,9 +1160,14 @@ async def get_fundamentals(args):
         err = _validate_sections("get_fundamentals", section, _FUNDAMENTALS_SECTIONS + _FUNDAMENTALS_SENTINELS, args)
         if err is not None:
             return err
+        is_us = api._is_us(symbol)
         if isinstance(section, list):
-            data = {s: _get_fundamentals_section(api, symbol, s, args) for s in section}
+            data = {s: _get_fundamentals_section(api, symbol, s, args, is_us) for s in section}
         elif section == "all":
+            def _fund(sec, val):
+                if is_us and sec in _FUNDAMENTALS_INDIA_ONLY:
+                    return _us_na_section(sec, api._market_of(symbol), "Screener.in / India financial schedules")
+                return val
             data = {
                 "_warning": (
                     "section='all' returns ~70K+ chars and may be truncated by the "
@@ -1144,10 +1177,10 @@ async def get_fundamentals(args):
                 ),
                 "quarterly_results": api.get_quarterly_results(symbol, args.get("quarters", 12)),
                 "annual_financials": api.get_annual_financials(symbol, args.get("years", 10)),
-                "ratios": api.get_screener_ratios(symbol, args.get("years", 10)),
-                "quarterly_balance_sheet": api.get_quarterly_balance_sheet(symbol, args.get("quarters", 8)),
-                "quarterly_cash_flow": api.get_quarterly_cash_flow(symbol, args.get("quarters", 8)),
-                "expense_breakdown": api.get_expense_breakdown(symbol, args.get("sub_section", "profit-loss")),
+                "ratios": _fund("ratios", api.get_screener_ratios(symbol, args.get("years", 10))),
+                "quarterly_balance_sheet": _fund("quarterly_balance_sheet", api.get_quarterly_balance_sheet(symbol, args.get("quarters", 8))),
+                "quarterly_cash_flow": _fund("quarterly_cash_flow", api.get_quarterly_cash_flow(symbol, args.get("quarters", 8))),
+                "expense_breakdown": _fund("expense_breakdown", api.get_expense_breakdown(symbol, args.get("sub_section", "profit-loss"))),
                 "growth_rates": api.get_financial_growth_rates(symbol),
                 "capital_allocation": api.get_capital_allocation(symbol, args.get("years", 5)),
                 "rate_sensitivity": api.get_rate_sensitivity(symbol),
@@ -1158,7 +1191,7 @@ async def get_fundamentals(args):
                 "working_capital": api.get_working_capital_cycle(symbol),
             }
         else:
-            data = _get_fundamentals_section(api, symbol, section, args)
+            data = _get_fundamentals_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_fundamentals", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
@@ -1329,6 +1362,18 @@ def _india_only_section_marker(section: str, market: str) -> dict:
     }
 
 
+def _us_na_section(section: str, market: str, concept: str) -> dict:
+    """Generic per-section 'not applicable for US' marker (India-only source)."""
+    return {
+        "status": "not_applicable",
+        "market": market,
+        "reason": (
+            f"'{section}' ({concept}) is an India-market data source with no US "
+            f"equivalent; not applicable for US-listed symbols."
+        ),
+    }
+
+
 def _get_ownership_section(api, symbol, section, args, is_us=False):
     """Route a single section for get_ownership.
 
@@ -1430,8 +1475,8 @@ async def get_ownership(args):
                         "MCP transport. Prefer calling without section for a compact TOC "
                         "first, then drilling into specific sections."
                     ),
-                    "shareholding": api.get_shareholding(symbol, args.get("quarters", 12)),
-                    "changes": api.get_shareholding_changes(symbol),
+                    "shareholding": _own("shareholding", api.get_shareholding(symbol, args.get("quarters", 12))),
+                    "changes": _own("changes", api.get_shareholding_changes(symbol)),
                     "insider": api.get_insider_transactions(symbol, args.get("days", 1825)),
                     "bulk_block": _own("bulk_block", api.get_bulk_block_deals(symbol)),
                     "mf_holdings": _own("mf_holdings", api.get_mf_holdings(symbol)),
@@ -1449,8 +1494,14 @@ async def get_ownership(args):
     return _with_dedup("get_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-def _get_valuation_section(api, symbol, section, args):
-    """Route a single section for get_valuation."""
+def _get_valuation_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_valuation.
+
+    pe_history (time series — US has only a point-in-time snapshot) and
+    key_metrics (FMP India key metrics) degrade for US symbols.
+    """
+    if is_us and section in _VALUATION_INDIA_ONLY:
+        return _us_na_section(section, api._market_of(symbol), "Screener.in / FMP India valuation history")
     if section == "snapshot":
         return api.get_valuation_snapshot(symbol)
     elif section == "band":
@@ -1506,23 +1557,33 @@ async def get_valuation(args):
     if err is not None:
         return err
     with ResearchDataAPI() as api:
+        is_us = api._is_us(symbol)
         if isinstance(section, list):
-            data = {s: _get_valuation_section(api, symbol, s, args) for s in section}
+            data = {s: _get_valuation_section(api, symbol, s, args, is_us) for s in section}
         elif section == "all":
+            def _val(sec, val):
+                if is_us and sec in _VALUATION_INDIA_ONLY:
+                    return _us_na_section(sec, api._market_of(symbol), "Screener.in / FMP India valuation history")
+                return val
             data = {
                 "snapshot": api.get_valuation_snapshot(symbol),
                 "band": api.get_valuation_band(symbol, args.get("metric", "pe_trailing"), args.get("days", 2500)),
-                "pe_history": api.get_pe_history(symbol, args.get("days", 2500)),
-                "key_metrics": api.get_key_metrics_history(symbol, args.get("years", 10)),
+                "pe_history": _val("pe_history", api.get_pe_history(symbol, args.get("days", 2500))),
+                "key_metrics": _val("key_metrics", api.get_key_metrics_history(symbol, args.get("years", 10))),
             }
         else:
-            data = _get_valuation_section(api, symbol, section, args)
+            data = _get_valuation_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_valuation", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-def _get_fair_value_analysis_section(api, symbol, section, args):
-    """Route a single section for get_fair_value_analysis."""
+def _get_fair_value_analysis_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_fair_value_analysis.
+
+    dcf_history (FMP DCF history, India) degrades for US symbols.
+    """
+    if is_us and section in _FAIR_VALUE_INDIA_ONLY:
+        return _us_na_section(section, api._market_of(symbol), "FMP India DCF history")
     if section == "combined":
         return api.get_fair_value(symbol)
     elif section == "dcf":
@@ -1572,18 +1633,22 @@ async def get_fair_value_analysis(args):
     if err is not None:
         return err
     with ResearchDataAPI() as api:
+        is_us = api._is_us(symbol)
         if isinstance(section, list):
-            data = {s: _get_fair_value_analysis_section(api, symbol, s, args) for s in section}
+            data = {s: _get_fair_value_analysis_section(api, symbol, s, args, is_us) for s in section}
         elif section == "all":
             data = {
                 "combined": api.get_fair_value(symbol),
                 "dcf": api.get_dcf_valuation(symbol),
-                "dcf_history": api.get_dcf_history(symbol),
+                "dcf_history": (
+                    _us_na_section("dcf_history", api._market_of(symbol), "FMP India DCF history")
+                    if is_us else api.get_dcf_history(symbol)
+                ),
                 "reverse_dcf": api.get_reverse_dcf(symbol),
                 "projections": api.get_financial_projections(symbol),
             }
         else:
-            data = _get_fair_value_analysis_section(api, symbol, section, args)
+            data = _get_fair_value_analysis_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_fair_value_analysis", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 

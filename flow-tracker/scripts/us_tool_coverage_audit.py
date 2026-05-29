@@ -225,7 +225,7 @@ def _build_arg_variants(tool, section_enum_map: dict) -> list[dict]:
 # --------------------------------------------------------------------------- #
 def _is_not_applicable(payload) -> bool:
     if isinstance(payload, dict):
-        if str(payload.get("status", "")).lower() == "not_applicable":
+        if str(payload.get("status", "")).lower() in ("not_applicable", "compute_on_demand"):
             return True
         meta = payload.get("_meta")
         if isinstance(meta, dict) and str(meta.get("status", "")).lower() == "not_applicable":
