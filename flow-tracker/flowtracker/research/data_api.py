@@ -7,6 +7,7 @@ import statistics
 import logging
 import re
 import xml.etree.ElementTree as ET
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from functools import lru_cache
@@ -19,6 +20,62 @@ from flowtracker.utils import _clean, derive_dii
 
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------- #
+# Run-market context (US add-on, Phase 3.5b / WS-1)
+# --------------------------------------------------------------------------- #
+# The LLM agent never differentiates market — it calls the same tool names with
+# a `symbol`. Market is resolved ONCE per run (server-side) and tools route
+# internally by reading this ContextVar. Default None → callers fall back to
+# per-symbol registry lookup (back-compat: India behavior unchanged).
+_run_market: ContextVar[str | None] = ContextVar("research_run_market", default=None)
+
+_US_MARKET_FLAGS = frozenset({"us", "usa", "nasdaq", "nyse"})
+_IN_MARKET_FLAGS = frozenset({"in", "ind", "india", "nse", "bse"})
+
+
+def _registry_market_of(symbol: str, store: FlowStore) -> str:
+    """Raw registry market lookup: US row (NASDAQ/NYSE) wins, else NSE.
+
+    Honors NO run-context override — this is the pure source-of-truth lookup
+    that override-aware resolvers fall back to.
+    """
+    for market in ("NASDAQ", "NYSE"):
+        if store.get_symbol_registry_entry(symbol, market):
+            return market
+    return "NSE"
+
+
+def resolve_run_market(
+    symbol: str,
+    market_flag: str | None = None,
+    *,
+    store: FlowStore | None = None,
+) -> str:
+    """Resolve a research run's market ONCE (hybrid, Decision 1).
+
+    Order: explicit ``market_flag`` wins → else ``symbol_registry`` US row →
+    else ``NSE`` (India default, unchanged). ``--market us`` on an unregistered
+    symbol defaults to NASDAQ.
+    """
+    symbol = (symbol or "").upper()
+    if market_flag:
+        f = market_flag.strip().lower()
+        if f in _IN_MARKET_FLAGS:
+            return "NSE"
+        if f in _US_MARKET_FLAGS:
+            if store is not None:
+                m = _registry_market_of(symbol, store)
+            else:
+                with ResearchDataAPI() as api:
+                    m = _registry_market_of(symbol, api._store)
+            return m if m in ("NASDAQ", "NYSE") else "NASDAQ"
+        # Unknown flag value → fall through to registry inference.
+    if store is not None:
+        return _registry_market_of(symbol, store)
+    with ResearchDataAPI() as api:
+        return _registry_market_of(symbol, api._store)
 
 
 # Tolerance for cross-source share-count agreement. yfinance occasionally lags
@@ -377,7 +434,7 @@ _CONGLOMERATE_KEYWORDS = {
 class ResearchDataAPI:
     """Unified data access for equity research — wraps FlowStore for agent tools."""
 
-    def __init__(self, store: FlowStore | None = None):
+    def __init__(self, store: FlowStore | None = None, market: str | None = None):
         if store is not None:
             self._store = store
             self._owns_store = False
@@ -385,6 +442,10 @@ class ResearchDataAPI:
             self._store = FlowStore()
             self._store.__enter__()
             self._owns_store = True
+        # Optional run-market override (US add-on, WS-1). When set, every
+        # _market_of() resolves to this market without a registry lookup; when
+        # None, the run-context ContextVar (then registry) decides.
+        self._run_market = market
 
     def close(self):
         if self._owns_store:
@@ -773,18 +834,19 @@ class ResearchDataAPI:
     # --- Market resolver (US add-on, Phase 3.5) ---
 
     def _market_of(self, symbol: str) -> str:
-        """Resolve the market for a symbol via symbol_registry.
+        """Resolve the market for a symbol.
 
-        Tries US markets (NASDAQ, NYSE) first, then NSE. Prefers a US market
-        when a US row exists so US listings route to the us_* tables. Defaults
-        to 'NSE' when the symbol has no registry row — preserving India behavior
-        for every existing symbol (which is never seeded into the registry under
-        a US market).
+        Order: instance run-market override (constructor ``market=``) → run
+        ContextVar (``_run_market``, set once per research run) → per-symbol
+        registry lookup. The registry path tries US markets (NASDAQ, NYSE)
+        first, then defaults to 'NSE' — preserving India behavior for every
+        existing symbol (which is never seeded under a US market) when no run
+        context is active.
         """
-        for market in ("NASDAQ", "NYSE"):
-            if self._store.get_symbol_registry_entry(symbol, market):
-                return market
-        return "NSE"
+        override = self._run_market or _run_market.get()
+        if override:
+            return override
+        return _registry_market_of(symbol, self._store)
 
     def _is_us(self, symbol: str) -> bool:
         """True when the symbol is a US listing (NASDAQ / NYSE)."""

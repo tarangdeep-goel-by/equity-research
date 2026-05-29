@@ -113,6 +113,13 @@ def refresh_us(
         cik, market = _resolve_symbol(store, symbol)
         _log(f"\n[bold]US refresh: {symbol}[/] (market={market}, cik={cik or 'unresolved'})")
 
+        # Register the symbol up front so run-market auto-resolution is reliable
+        # on later runs (WS-1). COALESCE-safe upsert — never nulls existing data.
+        try:
+            store.upsert_symbol_registry(symbol, market, cik=cik)
+        except Exception as e:  # pragma: no cover — registration is best-effort
+            logger.warning("[us_refresh] %s: registry upsert failed: %s", symbol, e)
+
         # --- 1. EDGAR fundamentals (annual + quarterly) ---
         try:
             if not cik:

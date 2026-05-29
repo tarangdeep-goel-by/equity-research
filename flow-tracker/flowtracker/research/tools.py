@@ -9,7 +9,7 @@ from typing import Any, Literal
 from claude_agent_sdk import tool
 from mcp.types import ToolAnnotations
 
-from flowtracker.research.data_api import ResearchDataAPI
+from flowtracker.research.data_api import ResearchDataAPI, _run_market
 from flowtracker.research.macro_anchors import get_anchor_content, list_current_anchors
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True)
@@ -221,8 +221,16 @@ def _invalid_enum_error(tool_name: str, param: str, value, valid, args: dict) ->
 
 
 def _market_of(symbol: str) -> str:
-    """Resolve a symbol's market via a short-lived ResearchDataAPI (shares the
-    routed `_market_of` resolver — NASDAQ/NYSE for US listings, else NSE)."""
+    """Resolve a symbol's market for tool routing.
+
+    Reads the per-run market context first (``_run_market``, set once per
+    research run), so every tool in a run routes to the same market without a
+    registry round-trip. Falls back to a short-lived ResearchDataAPI lookup for
+    direct/non-run use (tests, `research data`) — NASDAQ/NYSE for US listings,
+    else NSE. India default is unchanged."""
+    m = _run_market.get()
+    if m:
+        return m
     with ResearchDataAPI() as api:
         return api._market_of(symbol)
 
