@@ -457,3 +457,151 @@ class TestInsiderTransactions:
 
     def test_get_promoter_buys_empty(self, store: FlowStore):
         assert store.get_promoter_buys() == []
+
+
+# ---------------------------------------------------------------------------
+# WS1 — multi-market dimension: market/currency columns + symbol_registry
+# ---------------------------------------------------------------------------
+
+from flowtracker.store import _MARKET_COLUMN_TABLES, _CURRENCY_COLUMN_TABLES
+from flowtracker.scan_models import IndexConstituent
+
+
+class TestMarketColumns:
+    @pytest.mark.parametrize(
+        "table", ["valuation_snapshot", "shareholding", "daily_stock_data"]
+    )
+    def test_market_column_exists(self, store: FlowStore, table: str):
+        cols = {r[1] for r in store._conn.execute(
+            f"PRAGMA table_info({table})").fetchall()}
+        assert "market" in cols
+
+    def test_all_market_tables_have_market_column(self, store: FlowStore):
+        for table in _MARKET_COLUMN_TABLES:
+            cols = {r[1] for r in store._conn.execute(
+                f"PRAGMA table_info({table})").fetchall()}
+            assert cols, f"{table} does not exist"
+            assert "market" in cols, f"{table} missing market column"
+
+    def test_all_currency_tables_have_currency_column(self, store: FlowStore):
+        for table in _CURRENCY_COLUMN_TABLES:
+            cols = {r[1] for r in store._conn.execute(
+                f"PRAGMA table_info({table})").fetchall()}
+            assert "currency" in cols, f"{table} missing currency column"
+
+    def test_market_defaults_to_nse(self, store: FlowStore):
+        store._conn.execute(
+            "INSERT INTO valuation_snapshot (symbol, date, price) VALUES "
+            "('SBIN', '2024-01-01', 800)"
+        )
+        store._conn.commit()
+        row = store._conn.execute(
+            "SELECT market, currency FROM valuation_snapshot WHERE symbol='SBIN'"
+        ).fetchone()
+        assert row["market"] == "NSE"
+        assert row["currency"] == "INR"
+
+    def test_currency_default_on_daily_stock_data(self, store: FlowStore):
+        store._conn.execute(
+            "INSERT INTO daily_stock_data "
+            "(date, symbol, open, high, low, close, prev_close, volume, turnover) "
+            "VALUES ('2024-01-01', 'SBIN', 1, 1, 1, 100, 99, 10, 1000)"
+        )
+        store._conn.commit()
+        row = store._conn.execute(
+            "SELECT market, currency FROM daily_stock_data WHERE symbol='SBIN'"
+        ).fetchone()
+        assert row["market"] == "NSE"
+        assert row["currency"] == "INR"
+
+    def test_non_currency_table_has_no_currency_column(self, store: FlowStore):
+        cols = {r[1] for r in store._conn.execute(
+            "PRAGMA table_info(shareholding)").fetchall()}
+        assert "currency" not in cols
+
+    def test_migration_is_idempotent(self, store: FlowStore):
+        # Re-running the column migration must not raise (PRAGMA guard).
+        store._migrate_market_columns()
+        store._migrate_market_columns()
+        cols = {r[1] for r in store._conn.execute(
+            "PRAGMA table_info(valuation_snapshot)").fetchall()}
+        # market added exactly once
+        assert sum(1 for c in cols if c == "market") == 1
+
+
+class TestSymbolRegistry:
+    def test_upsert_and_get_roundtrip(self, store: FlowStore):
+        store.upsert_symbol_registry("reliance", company_name="Reliance Industries",
+                                     sector="Energy")
+        entry = store.get_symbol_registry_entry("RELIANCE")
+        assert entry is not None
+        assert entry["symbol"] == "RELIANCE"
+        assert entry["market"] == "NSE"
+        assert entry["company_name"] == "Reliance Industries"
+        assert entry["sector"] == "Energy"
+        # derived from market config
+        assert entry["currency"] == "INR"
+        assert entry["fiscal_year_system"] == "APR_MAR"
+
+    def test_get_missing_returns_none(self, store: FlowStore):
+        assert store.get_symbol_registry_entry("NOPE") is None
+
+    def test_coalesce_preserves_existing_company_name(self, store: FlowStore):
+        store.upsert_symbol_registry("SBIN", company_name="State Bank of India",
+                                     sector="Banks")
+        # later partial upsert with None must not wipe existing fields
+        store.upsert_symbol_registry("SBIN", isin="INE062A01020")
+        entry = store.get_symbol_registry_entry("SBIN")
+        assert entry["company_name"] == "State Bank of India"
+        assert entry["sector"] == "Banks"
+        assert entry["isin"] == "INE062A01020"
+
+    def test_us_market_derives_usd_calendar(self, store: FlowStore):
+        store.upsert_symbol_registry("AAPL", market="NASDAQ", company_name="Apple")
+        entry = store.get_symbol_registry_entry("AAPL", market="NASDAQ")
+        assert entry["currency"] == "USD"
+        assert entry["fiscal_year_system"] == "CALENDAR"
+
+    def test_same_symbol_different_markets_coexist(self, store: FlowStore):
+        store.upsert_symbol_registry("INFY", market="NSE", company_name="Infosys NSE")
+        store.upsert_symbol_registry("INFY", market="NASDAQ", company_name="Infosys ADR")
+        nse = store.get_symbol_registry_entry("INFY", market="NSE")
+        nasdaq = store.get_symbol_registry_entry("INFY", market="NASDAQ")
+        assert nse["company_name"] == "Infosys NSE"
+        assert nse["currency"] == "INR"
+        assert nasdaq["company_name"] == "Infosys ADR"
+        assert nasdaq["currency"] == "USD"
+        all_nasdaq = store.get_symbol_registry(market="NASDAQ")
+        assert [e["symbol"] for e in all_nasdaq] == ["INFY"]
+        assert len(store.get_symbol_registry()) == 2
+
+    def test_seed_backfill_from_source_tables(self, store: FlowStore):
+        store.add_to_watchlist("SBIN", "State Bank")
+        store.upsert_index_constituents([
+            IndexConstituent(symbol="INFY", index_name="NIFTY",
+                             company_name="Infosys", industry="IT"),
+        ])
+        store._migrate_symbol_registry()
+        symbols = {e["symbol"] for e in store.get_symbol_registry()}
+        assert {"SBIN", "INFY"} <= symbols
+        infy = store.get_symbol_registry_entry("INFY")
+        assert infy["company_name"] == "Infosys"
+        assert infy["sector"] == "IT"  # industry mapped into sector
+
+    def test_seed_backfill_is_idempotent(self, store: FlowStore):
+        store.add_to_watchlist("SBIN", "State Bank")
+        store.upsert_index_constituents([
+            IndexConstituent(symbol="INFY", index_name="NIFTY",
+                             company_name="Infosys", industry="IT"),
+        ])
+        store._migrate_symbol_registry()
+        first = len(store.get_symbol_registry())
+        store._migrate_symbol_registry()  # second run must not duplicate
+        second = len(store.get_symbol_registry())
+        assert first == second
+        # exactly one row per (symbol, market)
+        dupes = store._conn.execute(
+            "SELECT symbol, market, COUNT(*) c FROM symbol_registry "
+            "GROUP BY symbol, market HAVING c > 1"
+        ).fetchall()
+        assert dupes == []

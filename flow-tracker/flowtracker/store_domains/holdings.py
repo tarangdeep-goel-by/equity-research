@@ -499,7 +499,10 @@ class HoldingsMixin:
                     t.symbol, t.date, today_iso,
                 )
                 continue
-            warnings = _validate_row("insider_transactions", t.model_dump())
+            warnings = _validate_row(
+                "insider_transactions", t.model_dump(),
+                market=getattr(t, "market", "NSE"), currency=getattr(t, "currency", "INR"),
+            )
             if warnings:
                 _val_logger.warning("insider_transactions %s/%s: %s", t.symbol, t.date, "; ".join(warnings))
             cursor.execute(
@@ -551,7 +554,10 @@ class HoldingsMixin:
         cursor = self._conn.cursor()
         count = 0
         for h in holdings:
-            warnings = _validate_row("mf_scheme_holdings", h.model_dump())
+            warnings = _validate_row(
+                "mf_scheme_holdings", h.model_dump(),
+                market=getattr(h, "market", "NSE"), currency=getattr(h, "currency", "INR"),
+            )
             if warnings:
                 _val_logger.warning("mf_scheme_holdings %s/%s/%s: %s", h.amc, h.month, h.stock_name[:20], "; ".join(warnings))
             cursor.execute(

@@ -11,6 +11,10 @@ stay in ``store.py`` (owned by FlowStore's lifecycle).
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from flowtracker.market import Market
 
 _val_logger = logging.getLogger("flowtracker.validation")
 
@@ -86,11 +90,86 @@ _VALIDATION_RULES: dict[str, dict[str, tuple[float, float]]] = {
 }
 
 
-def _validate_row(table: str, row: dict) -> list[str]:
-    """Return list of validation warnings. Empty = valid."""
+# Phase-2 (multi-market) parameterization split.
+#
+# The bounds in ``_VALIDATION_RULES`` above mix two conceptually different
+# kinds of check:
+#   1. Monetary / absolute-magnitude bounds (revenue, market_cap, price, ...)
+#      — these encode INR-crore magnitudes and only make sense for markets
+#      that store values in crores (NSE/BSE → INR). A USD market_cap of
+#      ``3.5e12`` ($3.5T, e.g. Apple) is perfectly valid yet would blow past
+#      the ₹25L-Cr crore bound, so the crore bounds MUST NOT apply to non-INR
+#      currencies.
+#   2. Ratio / percentage bounds (margins, returns, growth, yields, PE) —
+#      these are currency-independent. A net margin of 250% is nonsense in any
+#      currency, so these bounds apply to every market.
+#
+# ``_CURRENCY_AGNOSTIC_FIELDS`` enumerates the percentage/ratio fields. For
+# INR markets we apply the full ``_VALIDATION_RULES`` (monetary + agnostic) —
+# byte-identical to pre-phase-2 behavior. For any non-INR currency we apply
+# ONLY the agnostic subset (Phase 3 will add per-market monetary rulesets).
+_CURRENCY_AGNOSTIC_FIELDS: frozenset[str] = frozenset({
+    "operating_margin",
+    "net_margin",
+    "gross_margin",
+    "roe",
+    "roa",
+    "revenue_growth",
+    "earnings_growth",
+    "dividend_yield",
+    "pct_of_nav",
+    "pe_trailing",
+})
+
+
+def _resolve_currency(market: "Market | str", currency: str) -> str:
+    """Normalize ``currency`` for an explicit market/currency pair.
+
+    Accepts ``market`` as a ``Market`` enum or a plain string. The currency
+    argument is authoritative (callers pass the row's currency); ``market`` is
+    accepted for symmetry / forward-compat and to let future per-market rules
+    key off it. Returned value is upper-cased for comparison.
+    """
+    # Normalize market to a string in case a future caller keys off it.
+    _ = getattr(market, "value", market)  # tolerate Market enum or str
+    return (currency or "INR").upper()
+
+
+def _validate_row(
+    table: str,
+    row: dict,
+    market: "Market | str" = "NSE",
+    currency: str = "INR",
+) -> list[str]:
+    """Return list of validation warnings for ``row`` in ``table``. Empty = valid.
+
+    Phase-2 (multi-market) parameterization
+    ---------------------------------------
+    Validation is now keyed by market/currency. ``_VALIDATION_RULES`` holds the
+    INR-crore ruleset (used by NSE/BSE). It contains two kinds of bound:
+    currency-specific *monetary* bounds (crore magnitudes) and currency-agnostic
+    *ratio/percentage* bounds (margins, returns, growth, yields, PE — see
+    ``_CURRENCY_AGNOSTIC_FIELDS``).
+
+    * For INR currencies (NSE/BSE): apply the FULL ruleset — identical to the
+      pre-phase-2 behavior, so the same inputs produce the same warnings.
+    * For non-INR currencies (e.g. USD on NASDAQ/NYSE): the crore-magnitude
+      bounds don't apply, so skip the monetary bounds and apply ONLY the
+      currency-agnostic ratio/percentage bounds. (Phase 3 adds a per-market
+      monetary ruleset.)
+
+    ``market`` may be a ``Market`` enum or a string; ``currency`` is the row's
+    currency and is authoritative for which bounds apply. Both default to
+    NSE/INR to preserve existing behavior for callers not yet market-aware.
+    """
     errors = []
     rules = _VALIDATION_RULES.get(table, {})
+    is_inr = _resolve_currency(market, currency) == "INR"
     for field, (lo, hi) in rules.items():
+        # Non-INR currencies skip monetary/magnitude bounds (crore-specific);
+        # only the currency-agnostic ratio/percentage bounds are checked.
+        if not is_inr and field not in _CURRENCY_AGNOSTIC_FIELDS:
+            continue
         val = row.get(field)
         if val is not None and (val < lo or val > hi):
             errors.append(f"{field}={val} outside [{lo}, {hi}]")

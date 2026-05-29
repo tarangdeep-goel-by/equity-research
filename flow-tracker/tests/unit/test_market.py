@@ -55,6 +55,50 @@ class TestNseSymbolBackcompat:
         assert nse_symbol(raw) == expected
 
 
+class TestMarketAwareClientCallSites:
+    """The yfinance/FMP call sites now route through market_symbol with a
+    defaulted market param. Default (NSE) must be byte-identical to the old
+    nse_symbol behavior; passing a US market must drop the suffix."""
+
+    def test_fund_client_ticker_default_is_nse(self):
+        from unittest.mock import patch
+
+        from flowtracker.fund_client import FundClient
+
+        with patch("flowtracker.fund_client.yf.Ticker") as mock_ticker:
+            FundClient()._ticker("RELIANCE")
+            mock_ticker.assert_called_once_with("RELIANCE.NS")
+
+    def test_fund_client_ticker_nasdaq_unsuffixed(self):
+        from unittest.mock import patch
+
+        from flowtracker.fund_client import FundClient
+
+        with patch("flowtracker.fund_client.yf.Ticker") as mock_ticker:
+            FundClient()._ticker("MSFT", Market.NASDAQ)
+            mock_ticker.assert_called_once_with("MSFT")
+
+    def test_estimates_client_default_is_nse(self):
+        from unittest.mock import MagicMock, patch
+
+        from flowtracker.estimates_client import EstimatesClient
+
+        with patch("flowtracker.estimates_client.yf.Ticker") as mock_ticker:
+            mock_ticker.return_value = MagicMock(info={})
+            EstimatesClient().fetch_estimates("RELIANCE")
+            mock_ticker.assert_called_once_with("RELIANCE.NS")
+
+    def test_estimates_client_nasdaq_unsuffixed(self):
+        from unittest.mock import MagicMock, patch
+
+        from flowtracker.estimates_client import EstimatesClient
+
+        with patch("flowtracker.estimates_client.yf.Ticker") as mock_ticker:
+            mock_ticker.return_value = MagicMock(info={})
+            EstimatesClient().fetch_estimates("MSFT", Market.NASDAQ)
+            mock_ticker.assert_called_once_with("MSFT")
+
+
 class TestInferMarket:
     def test_ns_suffix(self):
         assert infer_market("RELIANCE.NS") == Market.NSE

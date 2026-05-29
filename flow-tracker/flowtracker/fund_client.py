@@ -170,8 +170,8 @@ class FundClient:
         self._info_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._cache_ttl = 300  # 5 minutes
 
-    def _ticker(self, symbol: str) -> yf.Ticker:
-        yf_sym = nse_symbol(symbol)
+    def _ticker(self, symbol: str, market: Market = Market.NSE) -> yf.Ticker:
+        yf_sym = market_symbol(symbol, market)
         now = time.time()
         if yf_sym in self._ticker_cache:
             ts, ticker = self._ticker_cache[yf_sym]
@@ -181,14 +181,14 @@ class FundClient:
         self._ticker_cache[yf_sym] = (now, ticker)
         return ticker
 
-    def _info(self, symbol: str) -> dict[str, Any]:
-        yf_sym = nse_symbol(symbol)
+    def _info(self, symbol: str, market: Market = Market.NSE) -> dict[str, Any]:
+        yf_sym = market_symbol(symbol, market)
         now = time.time()
         if yf_sym in self._info_cache:
             ts, info = self._info_cache[yf_sym]
             if now - ts < self._cache_ttl:
                 return info
-        ticker = self._ticker(symbol)
+        ticker = self._ticker(symbol, market)
         info = ticker.info or {}
         if not info or info.get("quoteType") is None:
             raise YFinanceError(f"No data found for {symbol}")
@@ -407,7 +407,7 @@ class FundClient:
             shares_outstanding=info.get("sharesOutstanding"),
         )
 
-    def fetch_yahoo_peers(self, symbol: str) -> list[dict]:
+    def fetch_yahoo_peers(self, symbol: str, market: Market = Market.NSE) -> list[dict]:
         """Fetch Yahoo Finance recommended similar stocks.
 
         Returns list of dicts: [{peer_symbol: str, score: float}, ...].
@@ -416,7 +416,7 @@ class FundClient:
         """
         import httpx
 
-        yf_sym = nse_symbol(symbol)
+        yf_sym = market_symbol(symbol, market)
         url = f"https://query2.finance.yahoo.com/v6/finance/recommendationsbysymbol/{yf_sym}"
         try:
             resp = httpx.get(url, timeout=10.0, headers={"User-Agent": "Mozilla/5.0"})

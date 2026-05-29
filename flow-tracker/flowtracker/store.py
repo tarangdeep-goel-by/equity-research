@@ -1495,7 +1495,118 @@ CREATE TABLE IF NOT EXISTS pmi_monthly (
 );
 CREATE INDEX IF NOT EXISTS idx_pmi_monthly_period
     ON pmi_monthly(period DESC);
+CREATE TABLE IF NOT EXISTS symbol_registry (
+    symbol             TEXT NOT NULL,
+    market             TEXT NOT NULL DEFAULT 'NSE',
+    isin               TEXT,
+    company_name       TEXT,
+    currency           TEXT NOT NULL DEFAULT 'INR',
+    fiscal_year_system TEXT NOT NULL DEFAULT 'APR_MAR',
+    sector             TEXT,
+    gics               TEXT,
+    updated_at         TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (symbol, market)
+);
+CREATE INDEX IF NOT EXISTS idx_symbol_registry_market ON symbol_registry(market);
 """
+
+
+# --- Multi-market dimension (WS1) --------------------------------------------
+# Tables keyed to a single equity symbol that gain a stored `market` column.
+# Country-macro / industry-aggregate tables and config/cache/audit tables are
+# intentionally EXCLUDED (they are not per-symbol equity data). `symbol_registry`
+# itself is excluded (it already carries market in its PK).
+_MARKET_COLUMN_TABLES: tuple[str, ...] = (
+    "shareholding",
+    "index_constituents",
+    "promoter_pledge",
+    "commodity_prices",
+    "quarterly_results",
+    "valuation_snapshot",
+    "annual_financials",
+    "standalone_financials",
+    "data_quality_flags",
+    "daily_stock_data",
+    "bulk_block_deals",
+    "insider_transactions",
+    "consensus_estimates",
+    "earnings_surprises",
+    "screener_ratios",
+    "screener_charts",
+    "peer_comparison",
+    "shareholder_detail",
+    "financial_schedules",
+    "company_profiles",
+    "company_documents",
+    "fmp_dcf",
+    "fmp_technical_indicators",
+    "fmp_key_metrics",
+    "fmp_financial_growth",
+    "fmp_analyst_grades",
+    "fmp_price_targets",
+    "portfolio_holdings",
+    "alerts",
+    "sector_benchmarks",
+    "corporate_actions",
+    "historical_states",
+    "analog_forward_returns",
+    "estimate_revisions",
+    "quarterly_balance_sheet",
+    "quarterly_cash_flow",
+    "analytical_snapshot",
+    "listed_subsidiaries",
+    "company_snapshot",
+    "peer_links",
+    "ar_esop_summary",
+    "ar_five_year_summary",
+    "adr_gdr_outstanding",
+    "adr_programs",
+    "fda_inspections",
+    "surveillance_flags",
+    "shareholding_breakdown",
+    "screener_ids",
+    "watchlist",
+    "delisted_symbols",
+    "unresolved_cliffs",
+    "fno_universe",
+    "fno_contracts",
+    "ipo_listings",
+)
+
+# Monetary SUBSET of _MARKET_COLUMN_TABLES — tables holding native-currency
+# amounts (price / market_cap / value / cash / debt / revenue / income / etc.).
+# Tables that hold only ratios, percentages, day-counts, scores, or share counts
+# are excluded (currency is meaningless for them).
+_CURRENCY_COLUMN_TABLES: tuple[str, ...] = (
+    "commodity_prices",
+    "quarterly_results",
+    "valuation_snapshot",
+    "annual_financials",
+    "standalone_financials",
+    "daily_stock_data",
+    "bulk_block_deals",
+    "insider_transactions",
+    "consensus_estimates",
+    "earnings_surprises",
+    "screener_charts",
+    "peer_comparison",
+    "financial_schedules",
+    "fmp_dcf",
+    "fmp_key_metrics",
+    "fmp_price_targets",
+    "portfolio_holdings",
+    "sector_benchmarks",
+    "corporate_actions",
+    "estimate_revisions",
+    "quarterly_balance_sheet",
+    "quarterly_cash_flow",
+    "analytical_snapshot",
+    "company_snapshot",
+    "ar_esop_summary",
+    "ar_five_year_summary",
+    "fno_contracts",
+    "ipo_listings",
+)
 
 
 class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, MarketRegistryMixin, ResearchMixin, FundamentalsMixin, HoldingsMixin, PricesMixin, ValuationMixin):
@@ -1529,6 +1640,8 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         self._migrate_fno_tables()
         self._migrate_survivorship_tables()
         self._migrate_macro_daily()
+        self._migrate_market_columns()
+        self._migrate_symbol_registry()
 
         # Additive domain namespaces (refactor P1.4): store.portfolio.<method>()
         # works alongside the flat store.<method>() API.
@@ -1672,6 +1785,56 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
                 self._conn.execute(
                     f"ALTER TABLE macro_daily ADD COLUMN {col_name} {col_type}"
                 )
+        self._conn.commit()
+
+    def _migrate_market_columns(self) -> None:
+        """Add `market` (+ `currency` for monetary tables) to equity tables.
+
+        Data-safe: ALTER ADD COLUMN is metadata-only in SQLite; the constant
+        NOT NULL DEFAULT means existing rows materialize 'NSE'/'INR' for free —
+        zero full-table writes (critical on the 4.5M-row daily_stock_data).
+        Idempotent: PRAGMA table_info guards every column add.
+        """
+        cur = self._conn.cursor()
+        for table in _MARKET_COLUMN_TABLES:
+            cols = {r[1] for r in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+            if not cols:
+                continue
+            if "market" not in cols:
+                cur.execute(
+                    f"ALTER TABLE {table} ADD COLUMN market TEXT NOT NULL DEFAULT 'NSE'"
+                )
+        for table in _CURRENCY_COLUMN_TABLES:
+            cols = {r[1] for r in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+            if not cols:
+                continue
+            if "currency" not in cols:
+                cur.execute(
+                    f"ALTER TABLE {table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'INR'"
+                )
+        self._conn.commit()
+
+    def _migrate_symbol_registry(self) -> None:
+        """Seed symbol_registry from existing symbol-bearing tables (Tier A).
+
+        Additive INSERT OR IGNORE; (symbol, market) PK makes it idempotent —
+        re-runs never duplicate and never touch existing scraped rows.
+        """
+        self._conn.executescript(
+            """
+            INSERT OR IGNORE INTO symbol_registry (symbol, market, company_name, sector)
+            SELECT u.symbol, 'NSE', MAX(u.company_name), MAX(u.sector)
+            FROM (
+                SELECT symbol, NULL AS company_name, NULL AS sector FROM company_profiles
+                UNION ALL SELECT symbol, company_name, industry FROM index_constituents
+                UNION ALL SELECT symbol, NULL, NULL FROM screener_ids
+                UNION ALL SELECT symbol, name, industry FROM company_snapshot
+                UNION ALL SELECT symbol, company_name, NULL FROM watchlist
+            ) AS u
+            WHERE u.symbol IS NOT NULL AND u.symbol <> ''
+            GROUP BY u.symbol;
+            """
+        )
         self._conn.commit()
 
     def _migrate_survivorship_tables(self) -> None:

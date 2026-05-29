@@ -17,8 +17,7 @@ from flowtracker.fmp_models import (
     FMPPriceTarget,
     FMPTechnicalIndicator,
 )
-from flowtracker.fund_client import nse_symbol
-from flowtracker.market import Market, to_aggregate
+from flowtracker.market import Market, market_symbol, to_aggregate
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +116,9 @@ class FMPClient:
             logger.warning("FMP request failed: %s %s -- %s", path, params, e)
             return []
 
-    def fetch_dcf(self, symbol: str) -> FMPDcfValue | None:
+    def fetch_dcf(self, symbol: str, market: Market = Market.NSE) -> FMPDcfValue | None:
         """Fetch current DCF intrinsic value."""
-        data = self._get(f"/discounted-cash-flow/{nse_symbol(symbol)}")
+        data = self._get(f"/discounted-cash-flow/{market_symbol(symbol, market)}")
         if not data:
             return None
         d = data[0]
@@ -130,10 +129,10 @@ class FMPClient:
             stock_price=_safe_float(d.get("Stock Price")),
         )
 
-    def fetch_dcf_history(self, symbol: str, limit: int = 10) -> list[FMPDcfValue]:
+    def fetch_dcf_history(self, symbol: str, limit: int = 10, market: Market = Market.NSE) -> list[FMPDcfValue]:
         """Fetch historical DCF values."""
         data = self._get(
-            f"/historical-discounted-cash-flow-statement/{nse_symbol(symbol)}",
+            f"/historical-discounted-cash-flow-statement/{market_symbol(symbol, market)}",
             {"period": "annual"},
         )
         results = []
@@ -148,10 +147,11 @@ class FMPClient:
 
     def fetch_technical_indicator(
         self, symbol: str, indicator: str = "rsi", period: int = 14,
+        market: Market = Market.NSE,
     ) -> list[FMPTechnicalIndicator]:
         """Fetch a single technical indicator series."""
         data = self._get(
-            f"/technical_indicator/daily/{nse_symbol(symbol)}",
+            f"/technical_indicator/daily/{market_symbol(symbol, market)}",
             {"type": indicator, "period": period},
         )
         results = []
@@ -164,17 +164,17 @@ class FMPClient:
             ))
         return results
 
-    def fetch_technicals_all(self, symbol: str) -> list[FMPTechnicalIndicator]:
+    def fetch_technicals_all(self, symbol: str, market: Market = Market.NSE) -> list[FMPTechnicalIndicator]:
         """Fetch RSI, SMA-50, SMA-200, MACD, ADX for a symbol."""
         all_indicators: list[FMPTechnicalIndicator] = []
 
         # RSI (14-period)
-        all_indicators.extend(self.fetch_technical_indicator(symbol, "rsi", 14))
+        all_indicators.extend(self.fetch_technical_indicator(symbol, "rsi", 14, market))
         time.sleep(0.5)
 
         # SMA 50
         data = self._get(
-            f"/technical_indicator/daily/{nse_symbol(symbol)}",
+            f"/technical_indicator/daily/{market_symbol(symbol, market)}",
             {"type": "sma", "period": 50},
         )
         for d in data[:1]:
@@ -186,7 +186,7 @@ class FMPClient:
 
         # SMA 200
         data = self._get(
-            f"/technical_indicator/daily/{nse_symbol(symbol)}",
+            f"/technical_indicator/daily/{market_symbol(symbol, market)}",
             {"type": "sma", "period": 200},
         )
         for d in data[:1]:
@@ -197,18 +197,18 @@ class FMPClient:
         time.sleep(0.5)
 
         # MACD
-        all_indicators.extend(self.fetch_technical_indicator(symbol, "macd", 14))
+        all_indicators.extend(self.fetch_technical_indicator(symbol, "macd", 14, market))
         time.sleep(0.5)
 
         # ADX
-        all_indicators.extend(self.fetch_technical_indicator(symbol, "adx", 14))
+        all_indicators.extend(self.fetch_technical_indicator(symbol, "adx", 14, market))
 
         return all_indicators
 
-    def fetch_key_metrics(self, symbol: str, limit: int = 10) -> list[FMPKeyMetrics]:
+    def fetch_key_metrics(self, symbol: str, limit: int = 10, market: Market = Market.NSE) -> list[FMPKeyMetrics]:
         """Fetch key financial metrics (annual)."""
         data = self._get(
-            f"/key-metrics/{nse_symbol(symbol)}",
+            f"/key-metrics/{market_symbol(symbol, market)}",
             {"period": "annual", "limit": limit},
         )
         results = []
@@ -254,10 +254,10 @@ class FMPClient:
             ))
         return results
 
-    def fetch_financial_growth(self, symbol: str, limit: int = 10) -> list[FMPFinancialGrowth]:
+    def fetch_financial_growth(self, symbol: str, limit: int = 10, market: Market = Market.NSE) -> list[FMPFinancialGrowth]:
         """Fetch financial growth rates (annual)."""
         data = self._get(
-            f"/financial-growth/{nse_symbol(symbol)}",
+            f"/financial-growth/{market_symbol(symbol, market)}",
             {"period": "annual", "limit": limit},
         )
         results = []
@@ -286,9 +286,9 @@ class FMPClient:
             ))
         return results
 
-    def fetch_analyst_grades(self, symbol: str) -> list[FMPAnalystGrade]:
+    def fetch_analyst_grades(self, symbol: str, market: Market = Market.NSE) -> list[FMPAnalystGrade]:
         """Fetch analyst grade changes."""
-        data = self._get(f"/grade/{nse_symbol(symbol)}")
+        data = self._get(f"/grade/{market_symbol(symbol, market)}")
         results = []
         for d in data:
             results.append(FMPAnalystGrade(
@@ -300,9 +300,9 @@ class FMPClient:
             ))
         return results
 
-    def fetch_price_targets(self, symbol: str) -> list[FMPPriceTarget]:
+    def fetch_price_targets(self, symbol: str, market: Market = Market.NSE) -> list[FMPPriceTarget]:
         """Fetch analyst price targets."""
-        data = self._get(f"/price-target/{nse_symbol(symbol)}")
+        data = self._get(f"/price-target/{market_symbol(symbol, market)}")
         results = []
         for d in data:
             results.append(FMPPriceTarget(
@@ -315,27 +315,27 @@ class FMPClient:
             ))
         return results
 
-    def fetch_all(self, symbol: str) -> dict:
+    def fetch_all(self, symbol: str, market: Market = Market.NSE) -> dict:
         """Fetch all FMP data for a symbol. Returns dict of all data types."""
-        dcf = self.fetch_dcf(symbol)
+        dcf = self.fetch_dcf(symbol, market)
         time.sleep(0.5)
 
-        dcf_history = self.fetch_dcf_history(symbol)
+        dcf_history = self.fetch_dcf_history(symbol, market=market)
         time.sleep(0.5)
 
-        technicals = self.fetch_technicals_all(symbol)
+        technicals = self.fetch_technicals_all(symbol, market)
         time.sleep(0.5)
 
-        key_metrics = self.fetch_key_metrics(symbol)
+        key_metrics = self.fetch_key_metrics(symbol, market=market)
         time.sleep(0.5)
 
-        financial_growth = self.fetch_financial_growth(symbol)
+        financial_growth = self.fetch_financial_growth(symbol, market=market)
         time.sleep(0.5)
 
-        analyst_grades = self.fetch_analyst_grades(symbol)
+        analyst_grades = self.fetch_analyst_grades(symbol, market)
         time.sleep(0.5)
 
-        price_targets = self.fetch_price_targets(symbol)
+        price_targets = self.fetch_price_targets(symbol, market)
 
         return {
             "dcf": dcf,

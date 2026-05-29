@@ -9,7 +9,7 @@ from datetime import date
 import yfinance as yf
 
 from flowtracker.estimates_models import ConsensusEstimate, EarningsSurprise
-from flowtracker.fund_client import nse_symbol
+from flowtracker.market import Market, market_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +71,10 @@ def _extract_cy_ny_eps(ticker) -> tuple[float | None, float | None]:
 class EstimatesClient:
     """Client for consensus estimates via yfinance."""
 
-    def fetch_estimates(self, symbol: str) -> ConsensusEstimate | None:
+    def fetch_estimates(self, symbol: str, market: Market = Market.NSE) -> ConsensusEstimate | None:
         """Fetch analyst estimates for a single stock."""
         try:
-            ticker = yf.Ticker(nse_symbol(symbol))
+            ticker = yf.Ticker(market_symbol(symbol, market))
             info = ticker.info or {}
 
             if not info or info.get("quoteType") is None:
@@ -104,10 +104,10 @@ class EstimatesClient:
             logger.warning("Failed to fetch estimates for %s: %s", symbol, e)
             return None
 
-    def fetch_surprises(self, symbol: str) -> list[EarningsSurprise]:
+    def fetch_surprises(self, symbol: str, market: Market = Market.NSE) -> list[EarningsSurprise]:
         """Fetch earnings surprises for a single stock."""
         try:
-            ticker = yf.Ticker(nse_symbol(symbol))
+            ticker = yf.Ticker(market_symbol(symbol, market))
 
             # Try quarterly_earnings first (more reliable)
             try:
@@ -182,10 +182,10 @@ class EstimatesClient:
             logger.warning("Failed to fetch surprises for %s: %s", symbol, e)
             return []
 
-    def fetch_estimate_revisions(self, symbol: str) -> dict | None:
+    def fetch_estimate_revisions(self, symbol: str, market: Market = Market.NSE) -> dict | None:
         """Fetch EPS trend + revision counts from yfinance."""
         try:
-            ticker = yf.Ticker(nse_symbol(symbol))
+            ticker = yf.Ticker(market_symbol(symbol, market))
 
             eps_trend = ticker.eps_trend
             eps_revisions = ticker.eps_revisions
@@ -275,10 +275,10 @@ class EstimatesClient:
             logger.warning("Failed to fetch estimate revisions for %s: %s", symbol, e)
             return None
 
-    def fetch_events_calendar(self, symbol: str) -> dict | None:
+    def fetch_events_calendar(self, symbol: str, market: Market = Market.NSE) -> dict | None:
         """Fetch upcoming events calendar: earnings date, ex-dividend, consensus estimates."""
         try:
-            ticker = yf.Ticker(nse_symbol(symbol))
+            ticker = yf.Ticker(market_symbol(symbol, market))
             cal = ticker.calendar
             if cal is None or (hasattr(cal, "empty") and cal.empty):
                 return None
@@ -348,10 +348,10 @@ class EstimatesClient:
             logger.warning("Failed to fetch events calendar for %s: %s", symbol, e)
             return None
 
-    def fetch_revenue_estimates(self, symbol: str) -> dict | None:
+    def fetch_revenue_estimates(self, symbol: str, market: Market = Market.NSE) -> dict | None:
         """Fetch consensus revenue estimates from yfinance."""
         try:
-            ticker = yf.Ticker(nse_symbol(symbol))
+            ticker = yf.Ticker(market_symbol(symbol, market))
             rev_est = ticker.revenue_estimate
             if rev_est is None or (hasattr(rev_est, "empty") and rev_est.empty):
                 return None
@@ -383,10 +383,10 @@ class EstimatesClient:
             logger.warning("Failed to fetch revenue estimates for %s: %s", symbol, e)
             return None
 
-    def fetch_growth_estimates(self, symbol: str) -> dict | None:
+    def fetch_growth_estimates(self, symbol: str, market: Market = Market.NSE) -> dict | None:
         """Fetch growth estimates (stock vs index) from yfinance."""
         try:
-            ticker = yf.Ticker(nse_symbol(symbol))
+            ticker = yf.Ticker(market_symbol(symbol, market))
             growth_est = ticker.growth_estimates
             if growth_est is None or (hasattr(growth_est, "empty") and growth_est.empty):
                 return None
@@ -398,7 +398,7 @@ class EstimatesClient:
             index_col = None
             for c in cols:
                 cl = str(c).lower()
-                if "stock" in cl or nse_symbol(symbol).replace(".NS", "") in str(c):
+                if "stock" in cl or market_symbol(symbol, market).replace(".NS", "") in str(c):
                     stock_col = c
                 elif "index" in cl or "industry" in cl:
                     index_col = c
@@ -443,7 +443,7 @@ class EstimatesClient:
             return None
 
     def fetch_batch(
-        self, symbols: list[str],
+        self, symbols: list[str], market: Market = Market.NSE,
     ) -> tuple[list[ConsensusEstimate], list[EarningsSurprise]]:
         """Fetch estimates and surprises for multiple stocks."""
         estimates: list[ConsensusEstimate] = []
@@ -452,11 +452,11 @@ class EstimatesClient:
         for i, symbol in enumerate(symbols):
             logger.info("Fetching estimates %d/%d: %s", i + 1, len(symbols), symbol)
 
-            est = self.fetch_estimates(symbol)
+            est = self.fetch_estimates(symbol, market)
             if est:
                 estimates.append(est)
 
-            surps = self.fetch_surprises(symbol)
+            surps = self.fetch_surprises(symbol, market)
             surprises.extend(surps)
 
             if i < len(symbols) - 1:
