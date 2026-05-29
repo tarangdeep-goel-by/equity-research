@@ -309,6 +309,7 @@ Full API map: `docs/screener-api-map.md`. Source authority rules: `docs/data-sou
 - `quarterly-filings.sh` — Concall + investor deck download for Nifty index stocks (25th of Feb/May/Aug/Nov 10am IST)
 - `compute-analytics.py` — Weekly analytics computation (Sunday 9pm IST)
 - `monthly-macro-eval.sh` — Macro autoeval over rolling last-3 dates from `eval_matrix_macro.yaml` (2nd & 17th of each month, 14:00 IST)
+- `quarterly-adr-fda.sh` — ADR/GDR program directory refresh (bundled seed) + USFDA enforcement records for the 15-name pharma universe in `flowtracker/data/pharma_fda_firms.json` (1st of month 10:30 IST; `install-launch-agents.sh`). Firm strings are openFDA `recalling_firm` phrases verified live (note: some issuers index under their US arm, e.g. ALKEM → "Ascend Laboratories"); re-verify periodically as recall footprints change.
 - `setup-crons.sh` — Registers all LaunchAgent plists
 
 Ad-hoc scripts (not scheduled): `backfill_fii_dii.py`, `backfill_fundamentals.py`, `backfill_quarterly_nse.py`, `backfill_universe_fundamentals.py` (Screener.in fundamentals for every liquid NSE EQ symbol beyond Nifty 500), `backfill_universe_corporate_actions.py` (yfinance splits/bonuses/dividends across all symbols with price history, then `recompute_adj_close`), `backfill-index-prices.py`, `backfill-nifty250.py`, `batch-download-filings.py`, `check-freshness.py`, `migrate-pct.py`, `migrate-units.py`.

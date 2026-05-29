@@ -433,6 +433,25 @@ class TestInsiderTransactions:
         assert buys[0].person_name == "Rajesh"
         assert buys[0].transaction_type == "Buy"
 
+    def test_upsert_drops_future_dated_rows(self, store: FlowStore):
+        """Future-dated rows are rejected at ingestion (issue #175)."""
+        today = date.today()
+        future = (today + timedelta(days=180)).isoformat()
+        trades = [
+            InsiderTransaction(date=today.isoformat(), symbol="SBIN",
+                               person_name="Rajesh", person_category="Promoters",
+                               transaction_type="Buy", quantity=100000,
+                               value=82000000.0, mode="Market Purchase"),
+            InsiderTransaction(date=future, symbol="CAMPUS",
+                               person_name="Future Guy", person_category="Promoters",
+                               transaction_type="Buy", quantity=50000,
+                               value=40000000.0, mode="Market Purchase"),
+        ]
+        count = store.upsert_insider_transactions(trades)
+        assert count == 1  # only the valid (today) row persisted
+        assert store.get_insider_by_symbol("CAMPUS", days=3650) == []
+        assert len(store.get_insider_by_symbol("SBIN", days=365)) == 1
+
     def test_get_insider_empty(self, store: FlowStore):
         assert store.get_insider_by_symbol("SBIN") == []
 

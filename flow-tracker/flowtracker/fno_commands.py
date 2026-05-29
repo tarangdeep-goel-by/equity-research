@@ -48,6 +48,55 @@ def _fmt(val: object, suffix: str = "") -> str:
     return f"{val}{suffix}"
 
 
+def _trading_days_back(end: date, n: int) -> list[date]:
+    """The `n` most recent weekdays ending on/before `end` (oldest first)."""
+    days: list[date] = []
+    cur = end
+    while len(days) < n:
+        if cur.weekday() < 5:
+            days.append(cur)
+        cur -= timedelta(days=1)
+    days.reverse()
+    return days
+
+
+def _gap_fill_targets(store: FlowStore, today: date, trailing: int) -> list[date]:
+    """Trading days to fetch in default (gap-fill) mode.
+
+    Detects missing weekdays since the last stored ``trade_date`` so a cron
+    that ran early (before EOD F&O publication) or skipped a day self-heals on
+    the next run, instead of permanently leaving a gap (issue #174). Bounded to
+    the last ``trailing`` trading days — larger historical gaps should use
+    ``fno backfill``. When the table is empty, returns the trailing window.
+    """
+    floor_days = _trading_days_back(today, trailing)
+    floor = floor_days[0]
+    row = store._conn.execute(
+        "SELECT MAX(trade_date) AS d FROM fno_contracts"
+    ).fetchone()
+    last = date.fromisoformat(row["d"]) if row and row["d"] else None
+
+    if last is None:
+        start = floor
+    else:
+        start = last + timedelta(days=1)
+        if start < floor:
+            console.print(
+                f"[yellow]F&O data is behind since {last.isoformat()} "
+                f"(> {trailing} trading days). Fetching the last {trailing} only; "
+                f"run `flowtrack fno backfill` to fill the full gap.[/]"
+            )
+            start = floor
+
+    targets: list[date] = []
+    cur = start
+    while cur <= today:
+        if cur.weekday() < 5:
+            targets.append(cur)
+        cur += timedelta(days=1)
+    return targets
+
+
 # ---------------------------------------------------------------------------
 # 1. fno fetch
 # ---------------------------------------------------------------------------
@@ -55,28 +104,73 @@ def _fmt(val: object, suffix: str = "") -> str:
 @app.command()
 def fetch(
     date_str: Annotated[
-        str | None, typer.Option("--date", help="Date as YYYY-MM-DD (default: today)")
+        str | None, typer.Option("--date", help="Single day as YYYY-MM-DD (default: gap-fill mode)")
     ] = None,
+    days: Annotated[
+        int,
+        typer.Option(
+            "--days",
+            help="Gap-fill mode (no --date): fetch missing trading days since the "
+            "last stored date, bounded to this many trailing trading days.",
+        ),
+    ] = 5,
 ) -> None:
-    """Fetch F&O bhavcopy + participant OI for a single trading day."""
-    target = _parse_date(date_str) if date_str else date.today()
+    """Fetch F&O bhavcopy + participant OI.
+
+    With ``--date``: fetch that single trading day.
+    Without ``--date``: gap-fill every missing trading day since the last stored
+    ``trade_date`` (idempotent, skips days already present), bounded to the last
+    ``--days`` trading days. This makes the daily cron self-healing — a run that
+    fires before EOD F&O publication, or a missed day, is picked up next run
+    instead of leaving a permanent gap (issue #174).
+    """
+    single = date_str is not None
+
     try:
         with FnoClient() as client, FlowStore() as store:
-            contracts = client.fetch_fno_bhavcopy(target)
-            participants = client.fetch_participant_oi(target)
-            if not contracts and not participants:
-                console.print(
-                    f"[yellow]No F&O data for {target.isoformat()} "
-                    f"(holiday/weekend?)[/]"
-                )
-                raise typer.Exit(1)
-            contracts_upserted = store.upsert_fno_contracts(contracts)
-            participants_upserted = store.upsert_fno_participant_oi(participants)
+            if single:
+                targets = [_parse_date(date_str)]
+            else:
+                targets = _gap_fill_targets(store, date.today(), days)
+
+            fetched = 0
+            skipped = 0
+            contracts_upserted = 0
+            participants_upserted = 0
+
+            for target in targets:
+                if not single:
+                    existing = store._conn.execute(
+                        "SELECT COUNT(*) FROM fno_contracts WHERE trade_date = ?",
+                        (target.isoformat(),),
+                    ).fetchone()[0]
+                    if existing > 0:
+                        skipped += 1
+                        continue
+
+                contracts = client.fetch_fno_bhavcopy(target)
+                participants = client.fetch_participant_oi(target)
+                if not contracts and not participants:
+                    if single:
+                        console.print(
+                            f"[yellow]No F&O data for {target.isoformat()} "
+                            f"(holiday/weekend?)[/]"
+                        )
+                        raise typer.Exit(1)
+                    # Default mode: empty day is a holiday the calendar missed.
+                    continue
+                contracts_upserted += store.upsert_fno_contracts(contracts)
+                participants_upserted += store.upsert_fno_participant_oi(participants)
+                fetched += 1
     except FnoFetchError as e:
         console.print(f"[red]{e}[/]")
         raise typer.Exit(1)
 
-    table = Table(title=f"F&O Fetch — {target.isoformat()}")
+    if single:
+        title = f"F&O Fetch — {targets[0].isoformat()}"
+    else:
+        title = f"F&O Fetch — gap-fill ({fetched} day(s), {skipped} already present)"
+    table = Table(title=title)
     table.add_column("metric")
     table.add_column("count", justify="right")
     table.add_row("bhavcopy contracts", f"{contracts_upserted:,}")

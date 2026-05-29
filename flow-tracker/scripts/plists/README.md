@@ -18,6 +18,7 @@ All jobs log to `$HOME/.local/share/flowtracker/cron.log`.
 | `com.flowtracker.monthly-macro-eval` | 2nd & 17th of month 14:00 | `scripts/monthly-macro-eval.sh` |
 | `com.flowtracker.monthly-gst` | 2nd of month 12:00 | `scripts/monthly-gst.sh` |
 | `com.flowtracker.monthly-macro` | 16th of month 13:00 | `scripts/monthly-macro.sh` (CPI/IIP via dbnomics + PMI seed) |
+| `com.flowtracker.quarterly-adr-fda` | 1st of month 10:30 | `scripts/quarterly-adr-fda.sh` (ADR/GDR seed + USFDA inspections for pharma universe) |
 
 ## Install
 
