@@ -1640,18 +1640,19 @@ class TestSubsidiaryContributionWithData:
 
 
 class TestListedSubsidiariesWithMapping:
-    def test_seeded_mapping_but_no_shares(self, api, populated_store: FlowStore):
-        # Seed a parent→sub mapping. yfinance will be called live which can
-        # be slow — but when parent has no shares_outstanding, the method
-        # returns None before any HTTP call.
+    def test_db_table_is_no_longer_a_source(self, api, populated_store: FlowStore):
+        # SOTP source is now the curated YAML ONLY. The `listed_subsidiaries`
+        # DB table was written exclusively by the deleted promoter-surname
+        # heuristic, so it is intentionally NOT consulted any more — a
+        # DB-seeded, non-curated symbol must return None (no leakage of stale
+        # auto-detected rows). Curated parents are covered in
+        # test_listed_subsidiaries_curated.py.
         populated_store.upsert_listed_subsidiary(
             parent_symbol="NOPRICESYM", sub_symbol="CHILD",
             sub_name="Child Co", ownership_pct=60.0,
             relationship="subsidiary",
         )
-        # NOPRICESYM has no valuation_snapshot → shares_outstanding = 0 → None
-        result = api.get_listed_subsidiaries("NOPRICESYM")
-        assert result is None
+        assert api.get_listed_subsidiaries("NOPRICESYM") is None
 
 
 # ---------------------------------------------------------------------------

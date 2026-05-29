@@ -31,6 +31,12 @@ Vague "regulatory risk" framing loses the traceability that makes the risk actio
 - **Technology / platform-shift risk cascading** — a single vertical's disruption (e.g., payment-rails shift impacting a group fintech sub) can cascade through the group when the parent has extended guarantees or funding lines to that sub
 - **Key-customer concentration at subsidiary level** — a group IT-services subsidiary with a top-5-customer concentration > 50% is carrying contract-renewal risk that compounds to the parent via dividend compression, not direct P&L impact
 
+### Corporate Guarantees & Cross-Default — Parent-to-Subsidiary
+For holding-company structures, explicitly check for **corporate guarantees** extended by the parent (or by cash-generating listed entities) to subsidiaries, and for **cross-default clauses** that link the parent's obligations to a subsidiary's (or sister entity's) default. Extract guarantees and contingent-liability schedules from `get_company_context(section='filings', sub_section='notes_to_accounts')`; cross-default and rating-linkage clauses usually sit in the borrowing terms / loan-covenant disclosures. A parent that has guaranteed a weaker subsidiary's debt carries that debt as latent leverage even when it is off the consolidated D/E — and a cross-default can crystallise a parent obligation purely from a subsidiary event.
+
+### Normalized Cash Conversion — Strip Exceptionals Before Judging CFO/PAT
+When assessing cash conversion for a conglomerate, compute **NORMALIZED CFO/PAT** by stripping exceptional items from PAT before forming the ratio — most importantly **one-off stake-sale gains** (subsidiary-IPO / divestment gains), insurance recoveries, and other non-recurring items. A flattering headline CFO/PAT driven by a one-time stake sale masks weak underlying operating cash conversion. State both the headline and the normalized (ex-exceptional) ratio; the normalized figure is the one that informs the quality-of-earnings read. Pull exceptional-item detail from `get_fundamentals(section='annual_financials')` and `get_company_context(section='concall_insights', sub_section='financial_metrics')`.
+
 ### Bear Cases — 30-50% Drawdown Triggers
 Historical conglomerate drawdowns have recurring triggers; use them as the scaffolding for a named bear case, not as generic risks:
 

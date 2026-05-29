@@ -10,6 +10,8 @@ Conglomerates often carry heavy debt across multiple entities. When consolidated
 ### Segment-Level Financial Analysis
 Consolidated numbers are blended averages — decompose where possible:
 - Extract segment revenue, EBIT, and margins from `get_company_context(section='concall_insights')`
+- **Extract segment-level capital employed (or segment assets / liabilities) and segment debt** from the annual-report segment note (`get_company_context(section='filings', sub_section='notes_to_accounts')`) — these are direct inputs to per-segment ROCE, the valuation agent's per-vertical SOTP, and the leverage read. Report them per segment; a conglomerate financials section that gives only consolidated capital employed cannot support a SOTP.
+- For **leveraged infrastructure incubators** (airports, roads, data centres, green-hydrogen — segments with CWIP / Net Block > 0.2), pull the **debt-maturity schedule** explicitly (short-term vs long-term borrowings, maturity walls) — these capital-intensive incubators carry the group's refinancing risk and feed both leverage and SOTP analysis.
 - Identify which segments are capital consumers vs cash generators
 - Cross-subsidization flag: if one segment has negative EBIT but is receiving capex, the profitable segments are funding it
 

@@ -9,6 +9,8 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from functools import lru_cache
+from pathlib import Path
 
 import httpx
 
@@ -25,61 +27,39 @@ logger = logging.getLogger(__name__)
 # fraction, prefer Screener and log a warning so the discrepancy is traceable.
 _SHARE_COUNT_TOLERANCE = 0.05
 
-# Curated parent→listed-subsidiary fallback for SOTP, used only when the
-# `listed_subsidiaries` DB table has no rows for the parent. Each entry carries
-# ONLY ticker + name + relationship + a COARSE stake flagged for verification —
-# no live financials (those go stale; the agent fetches live market cap). The
-# `source`/`verify_note` fields tell the agent to treat the stake as a candidate
-# to confirm against the latest shareholding filing, not as gospel. NSE tickers.
-# Real DB rows always take precedence over this map.
-_CURATED_LISTED_SUBSIDIARIES: dict[str, list[dict]] = {
-    "NTPC": [
-        {
-            "sub_symbol": "NTPCGREEN",
-            "sub_name": "NTPC Green Energy",
-            "parent_ownership_pct": 89.0,
-            "relationship": "listed renewable-energy subsidiary",
-        },
-    ],
-    "BHARTIARTL": [
-        {
-            "sub_symbol": "AIRTELAFRICA",
-            "sub_name": "Airtel Africa",
-            "parent_ownership_pct": 56.0,
-            "relationship": (
-                "listed African telecom subsidiary — LSE-PRIMARY/foreign "
-                "listing, not NSE"
-            ),
-        },
-    ],
-    "HDFCBANK": [
-        {
-            "sub_symbol": "HDB",
-            "sub_name": "HDB Financial Services",
-            "parent_ownership_pct": 94.0,
-            "relationship": "listed NBFC subsidiary (IPO 2025)",
-        },
-    ],
-    "SBIN": [
-        {
-            "sub_symbol": "SBILIFE",
-            "sub_name": "SBI Life Insurance",
-            "parent_ownership_pct": 55.0,
-            "relationship": "listed life-insurance subsidiary",
-        },
-        {
-            "sub_symbol": "SBICARD",
-            "sub_name": "SBI Cards & Payment Services",
-            "parent_ownership_pct": 69.0,
-            "relationship": "listed credit-card subsidiary",
-        },
-    ],
-}
+# Curated parent→listed-subsidiary map for SOTP, loaded from
+# research/data/listed_subsidiaries.yaml. These are PARENT-COMPANY holdings, NOT
+# promoter-group holdings: a listed sibling under common family/trust control is
+# NOT a subsidiary (e.g. ADANIPORTS/ADANIPOWER/ADANIGREEN are held by the Adani
+# family trusts at the GROUP level, NOT by Adani Enterprises — they must never
+# appear under ADANIENT).
+#
+# This curated list is the SINGLE source of truth for listed-SOTP. It replaced a
+# promoter-surname matching heuristic that mislabelled siblings as subsidiaries.
+# The universe needing listed-SOTP is small and stable, so a hand-curated,
+# auditable YAML beats fragile PDF/AOC-1 extraction. Each entry carries ticker +
+# name + relationship + a COARSE stake flagged for verification (no live
+# financials — those go stale; the agent fetches live market cap). To add a
+# company, edit the YAML; no code change needed.
+_CURATED_SUBS_PATH = Path(__file__).parent / "data" / "listed_subsidiaries.yaml"
 _CURATED_SUB_SOURCE = "curated_map"
 _CURATED_SUB_VERIFY_NOTE = (
     "stake approximate — confirm vs latest shareholding filing; "
     "fetch live market cap"
 )
+
+
+@lru_cache(maxsize=1)
+def _load_curated_subsidiaries() -> dict[str, dict]:
+    """Load the curated holdco→subsidiary map from YAML (cached). Maps each
+    PARENT symbol to a dict {note: str|None, subsidiaries: list[dict]}."""
+    if not _CURATED_SUBS_PATH.exists():
+        return {}
+    import yaml
+
+    with open(_CURATED_SUBS_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return {str(k).upper(): (v or {}) for k, v in data.items()}
 
 
 def _is_bridged(flag: dict, *, required_parent: str | None = None) -> bool:
@@ -590,125 +570,80 @@ class ResearchDataAPI:
             s = ResearchDataAPI._SOTP_SUFFIX_PAT.sub("", s).strip()
         return re.sub(r"\s+", " ", s)
 
-    def _discover_recent_listings(self, days: int = 180) -> list[dict]:
-        """Symbols whose earliest daily_stock_data row is within the last `days` (cap 540)."""
-        days = max(1, min(int(days), 540))
-        rows = self._store._conn.execute(
-            "SELECT symbol, MIN(date) AS listed_on, COUNT(*) AS observations "
-            "FROM daily_stock_data GROUP BY symbol "
-            "HAVING listed_on >= DATE('now', '-' || ? || ' days') "
-            "ORDER BY listed_on DESC",
-            (days,),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-    def _find_promoter_owned_children(
-        self, parent_symbol: str, candidate_symbols: list[str], min_pct: float = 50.0,
-    ) -> list[dict]:
-        """Latest-quarter promoter rows whose holder_name contains parent name (>= min_pct)."""
-        parent_key = self._clean_company_name(
-            self.get_company_info(parent_symbol).get("company_name", "") or ""
-        )
-        if not parent_key:
-            return []
-        conn = self._store._conn
-        hits: list[dict] = []
-        for sym in candidate_symbols:
-            sym_u = sym.upper()
-            qrow = conn.execute(
-                "SELECT MAX(quarter) AS q FROM shareholder_detail "
-                "WHERE symbol = ? AND classification LIKE 'Promoter%'",
-                (sym_u,),
-            ).fetchone()
-            if not qrow or not qrow["q"]:
-                logger.debug("auto_discovery: no named promoter rows for %s", sym_u)
-                continue
-            last_q = qrow["q"]
-            for pr in conn.execute(
-                "SELECT holder_name, percentage FROM shareholder_detail "
-                "WHERE symbol = ? AND classification LIKE 'Promoter%' AND quarter = ?",
-                (sym_u, last_q),
-            ).fetchall():
-                pct = pr["percentage"] or 0.0
-                if parent_key in self._clean_company_name(pr["holder_name"] or "") and pct >= min_pct:
-                    hits.append({
-                        "symbol": sym_u,
-                        "parent_ownership_pct": round(float(pct), 2),
-                        "promoter_name": pr["holder_name"],
-                        "last_quarter": last_q,
-                    })
-                    break
-        return hits
-
     def get_listed_subsidiaries(self, symbol: str) -> dict | list[dict] | None:
         """Get listed subsidiary valuations for SOTP analysis.
 
-        Reads curated parent→subsidiary mappings, fetches live market caps,
-        and computes per-share value to the parent. PR-14 augments with
-        `auto_discovered_candidates` — recently-listed symbols whose latest
-        promoter row names this parent (substring match, >=50% holding).
-        Returns None only when both curated and auto-discovery yield nothing.
+        Single source: the curated holdco→subsidiary map in
+        research/data/listed_subsidiaries.yaml (PARENT-company holdings, never
+        promoter-group siblings). Each resolved listed entity gets a live market
+        cap + per-share value to the parent. When a parent is in the map with no
+        listed holdings but a `note` (e.g. AEL the incubator), the note is
+        surfaced so the agent builds SOTP from segments instead. Returns None
+        when the symbol isn't curated.
+
+        This replaces the prior promoter-surname heuristic that mislabelled
+        listed promoter-group siblings (e.g. ADANIPORTS under ADANIENT) as
+        subsidiaries — siblings under common family/trust control are NOT
+        subsidiaries unless explicitly curated for this company.
         """
-        subs = self._store.get_listed_subsidiaries(symbol)
-
-        # Curated fallback: only when the DB table has no rows for this parent.
-        # Real DB rows always take precedence. Curated entries carry source +
-        # verify_note so the agent treats the coarse stake as a candidate to
-        # confirm (NTPC, BHARTIARTL, HDFCBANK, SBIN).
-        if not subs:
-            curated = _CURATED_LISTED_SUBSIDIARIES.get(symbol.upper())
-            if curated:
-                subs = [
-                    {
-                        **row,
-                        "source": _CURATED_SUB_SOURCE,
-                        "verify_note": _CURATED_SUB_VERIFY_NOTE,
-                    }
-                    for row in curated
-                ]
-
-        # Always run auto-discovery so recently-listed children surface
-        # even when no curated mapping exists yet.
-        auto_window_days = 180
-        recent = self._discover_recent_listings(days=auto_window_days)
-        curated_subsymbols = {s["sub_symbol"].upper() for s in subs}
-        candidate_syms = [
-            r["symbol"] for r in recent if r["symbol"].upper() not in curated_subsymbols
-        ]
-        recent_idx = {r["symbol"]: r for r in recent}
-        auto_discovered = [
+        entry = _load_curated_subsidiaries().get(symbol.upper())
+        if not entry:
+            return None
+        note = entry.get("note")
+        subs: list[dict] = [
             {
-                "subsidiary": h["symbol"],
-                "symbol": h["symbol"],
-                "parent_ownership_pct": h["parent_ownership_pct"],
-                "promoter_name": h["promoter_name"],
-                "listed_on": recent_idx.get(h["symbol"], {}).get("listed_on"),
-                "last_quarter": h["last_quarter"],
-                "confidence": "auto_discovered_needs_verification",
+                **row,
+                "source": _CURATED_SUB_SOURCE,
+                "verify_note": _CURATED_SUB_VERIFY_NOTE,
             }
-            for h in self._find_promoter_owned_children(symbol, candidate_syms)
+            for row in (entry.get("subsidiaries") or [])
         ]
 
-        def _auto_only_payload() -> dict:
-            return {
-                "subsidiaries": [],
-                "subsidiaries_listed_recently": [],
-                "auto_discovered_candidates": auto_discovered,
+        def _payload(results: list[dict], recently_listed: list[str]) -> dict:
+            payload: dict = {
+                "subsidiaries": results,
+                "subsidiaries_listed_recently": recently_listed,
                 "_meta": {
-                    "freshness_check": "bhavcopy_earliest_date",
-                    "freshness_window_days": auto_window_days,
-                    "auto_discovery_window_days": auto_window_days,
+                    "source": "curated_map",
+                    "freshness_check": (
+                        "bhavcopy_earliest_date"
+                        if self._store._conn.execute(
+                            "SELECT 1 FROM daily_stock_data LIMIT 1"
+                        ).fetchone()
+                        else "unavailable"
+                    ),
+                    "freshness_window_days": 180,
                 },
             }
+            if note:
+                payload["note"] = note
+            return payload
 
         if not subs:
-            return _auto_only_payload() if auto_discovered else None
+            # Curated but no listed holdings (e.g. incubator). Surface the note;
+            # None if there's nothing useful to say.
+            return _payload([], []) if note else None
 
         import yfinance as yf
         parent_shares = self.get_valuation_snapshot(symbol).get("shares_outstanding", 0)
         if not parent_shares:
-            # Curated rows can't be priced — surface auto-discovery if any.
-            return _auto_only_payload() if auto_discovered else None
+            # Can't price stakes — still surface the resolved listed symbols.
+            results = [
+                {
+                    "subsidiary": row["sub_name"],
+                    "symbol": row["sub_symbol"],
+                    "parent_ownership_pct": row["parent_ownership_pct"],
+                    "relationship": row.get("relationship", ""),
+                    "subsidiary_market_cap_cr": None,
+                    "parent_stake_value_cr": None,
+                    "per_share_value": None,
+                    "needs_refresh": True,
+                    **({"source": row["source"]} if row.get("source") else {}),
+                    **({"verify_note": row["verify_note"]} if row.get("verify_note") else {}),
+                }
+                for row in subs
+            ]
+            return _payload(results, [])
 
         recently_listed: list[str] = []
         results = []
@@ -737,6 +672,7 @@ class ResearchDataAPI:
                 }
                 if row.get("source"):
                     entry["source"] = row["source"]
+                if row.get("verify_note"):
                     entry["verify_note"] = row.get("verify_note")
                 if is_recent:
                     entry["recently_listed"] = True
@@ -759,6 +695,7 @@ class ResearchDataAPI:
                 }
                 if row.get("source"):
                     entry["source"] = row["source"]
+                if row.get("verify_note"):
                     entry["verify_note"] = row.get("verify_note")
                 if is_recent:
                     entry["recently_listed"] = True
@@ -766,25 +703,7 @@ class ResearchDataAPI:
                     recently_listed.append(row["sub_name"])
                 results.append(entry)
 
-        if not results:
-            return None
-
-        return {
-            "subsidiaries": results,
-            "subsidiaries_listed_recently": recently_listed,
-            "auto_discovered_candidates": auto_discovered,
-            "_meta": {
-                "freshness_check": (
-                    "bhavcopy_earliest_date"
-                    if self._store._conn.execute(
-                        "SELECT 1 FROM daily_stock_data LIMIT 1"
-                    ).fetchone()
-                    else "unavailable"
-                ),
-                "freshness_window_days": 180,
-                "auto_discovery_window_days": auto_window_days,
-            },
-        }
+        return _payload(results, recently_listed)
 
     # --- Freshness Helpers ---
 
@@ -6224,7 +6143,21 @@ class ResearchDataAPI:
         # Generic manufacturing umbrella: chemicals, industrials, consumer durables, etc.
         if any(kw in raw for kw in ("manufactur", "industrial", "chemical", "machinery", "capital goods")):
             return "manufacturing"
-        return None
+        # Power / energy / utilities — NTPC ("Power Generation") and peers were
+        # falling through to None → 2% unresolved_default despite ~9% actual
+        # D&A. Map to the capital-heavy "energy" token (7% D&A in projections).
+        if any(kw in raw for kw in ("power", "energy", "utilit", "renewable", "transmission", "green energy")):
+            return "energy"
+        # Asset-light FMCG — HUL ("Diversified FMCG") and peers also fell to the
+        # 2% default; FMCG D&A is genuinely low (~1.5%) but it must resolve to a
+        # named token, not the unresolved default.
+        if any(kw in raw for kw in ("fmcg", "consumer staple", "personal care", "household", "packaged food", "diversified fmcg")):
+            return "fmcg"
+        # Belt-and-suspenders: rather than collapsing an unrecognized but
+        # non-empty industry to None (which forces the 2% unresolved_default),
+        # pass the raw lowercased industry through so _resolve_da_strategy's own
+        # substring matching gets a chance (unknown strings → 2% default anyway).
+        return raw
 
     def get_wacc_params(self, symbol: str) -> dict:
         """Dynamic WACC: beta, cost of equity, cost of debt, terminal growth, PE multiples."""

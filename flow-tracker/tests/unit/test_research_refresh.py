@@ -4,7 +4,6 @@ Covers:
 - `_extract_ids_from_html`: regex-based ID extraction from Screener HTML.
 - `_is_fresh`: freshness gate (already partially covered in test_refresh.py, but
   here we add edge cases relevant to the orchestrator).
-- `_detect_parent_subsidiary`: promoter-based parent auto-detection.
 - `refresh_for_research`: end-to-end orchestration with every client mocked.
   - Happy path (all clients succeed cheaply -> mostly empty parses).
   - Freshness short-circuit (pre-populated data skips the refresh).
@@ -28,7 +27,6 @@ import pytest
 
 from flowtracker.fund_models import ValuationSnapshot
 from flowtracker.research.refresh import (
-    _detect_parent_subsidiary,
     _extract_ids_from_html,
     _is_fresh,
     _shareholding_needs_fetch,
@@ -149,112 +147,6 @@ class TestIsFreshEdgeCases:
         )
         populated_store._conn.commit()
         assert _is_fresh(populated_store, "SBIN", "quarterly_results", hours=6) is False
-
-
-# ---------------------------------------------------------------------------
-# _detect_parent_subsidiary
-# ---------------------------------------------------------------------------
-
-
-class TestDetectParentSubsidiary:
-    """Auto-detect subsidiary relationship from promoter list."""
-
-    def test_detects_listed_parent(self, store: FlowStore):
-        """Promoter matches index_constituent → listed_subsidiaries gets a row."""
-        store.upsert_index_constituents([
-            IndexConstituent(
-                symbol="PARENT",
-                index_name="NIFTY 50",
-                company_name="Parentco Holdings Ltd",
-                industry="Holdings",
-            ),
-            IndexConstituent(
-                symbol="SUBCO",
-                index_name="NIFTY 500",
-                company_name="Subsidiary Co Ltd",
-                industry="Services",
-            ),
-        ])
-        shareholders = [
-            {
-                "classification": "Promoters",
-                "holder_name": "Parentco Holdings Ltd",
-                "percentage": 55.0,
-            },
-        ]
-        _detect_parent_subsidiary(store, "SUBCO", shareholders)
-        rows = store._conn.execute(
-            "SELECT parent_symbol, sub_symbol FROM listed_subsidiaries "
-            "WHERE sub_symbol = ?",
-            ("SUBCO",),
-        ).fetchall()
-        assert len(rows) == 1
-        assert rows[0]["parent_symbol"] == "PARENT"
-
-    def test_skips_small_promoter_stake(self, store: FlowStore):
-        """Promoter below 20% threshold is not considered a parent."""
-        store.upsert_index_constituents([
-            IndexConstituent(
-                symbol="PARENT",
-                index_name="NIFTY 50",
-                company_name="Parentco Holdings Ltd",
-                industry="Holdings",
-            ),
-            IndexConstituent(
-                symbol="SUBCO",
-                index_name="NIFTY 500",
-                company_name="Sub Co Ltd",
-                industry="Services",
-            ),
-        ])
-        shareholders = [
-            {
-                "classification": "Promoters",
-                "holder_name": "Parentco Holdings Ltd",
-                "percentage": 5.0,  # below 20
-            },
-        ]
-        _detect_parent_subsidiary(store, "SUBCO", shareholders)
-        rows = store._conn.execute(
-            "SELECT * FROM listed_subsidiaries WHERE sub_symbol = ?",
-            ("SUBCO",),
-        ).fetchall()
-        assert rows == []
-
-    def test_ignores_non_promoter_class(self, store: FlowStore):
-        """Non-promoter classifications are ignored."""
-        store.upsert_index_constituents([
-            IndexConstituent(
-                symbol="PARENT",
-                index_name="NIFTY 50",
-                company_name="Parentco Holdings Ltd",
-                industry="Holdings",
-            ),
-            IndexConstituent(
-                symbol="SUBCO",
-                index_name="NIFTY 500",
-                company_name="Sub Co Ltd",
-                industry="Services",
-            ),
-        ])
-        shareholders = [
-            {
-                "classification": "Public",  # not "Promoters"
-                "holder_name": "Parentco Holdings Ltd",
-                "percentage": 60.0,
-            },
-        ]
-        _detect_parent_subsidiary(store, "SUBCO", shareholders)
-        rows = store._conn.execute(
-            "SELECT * FROM listed_subsidiaries WHERE sub_symbol = ?",
-            ("SUBCO",),
-        ).fetchall()
-        assert rows == []
-
-    def test_swallows_exceptions(self, store: FlowStore):
-        """Bogus shareholder shape must not raise."""
-        # Works fine: no constituents seeded, so no match → no write, no error.
-        _detect_parent_subsidiary(store, "ANYSYM", [{"bad": "data"}])
 
 
 # ---------------------------------------------------------------------------

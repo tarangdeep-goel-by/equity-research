@@ -24,6 +24,10 @@ Consolidated revenue growth is a weighted average that hides the actual story in
 
 Source the per-vertical P&L from `get_company_context(section='concall_insights', sub_section='operational_metrics')` and the revenue split from `get_fundamentals(section='revenue_segments')`. If a vertical >10% has no disclosed unit-level operational metric, flag it as a segment-reporting opacity concern.
 
+**"Others / Miscellaneous" breakout — mandatory above 15%.** Any "Others" or "Miscellaneous" segment contributing **>15% of gross revenue** must be broken out into its distinct constituent businesses — an opaque 15%+ catch-all bucket defeats SOTP and hides cross-subsidy. Decompose it from `get_company_context(section='concall_insights', sub_section='management_commentary')` or the annual-report segment note in `get_company_context(section='filings', sub_section='notes_to_accounts')`; if it cannot be decomposed, name that as a segment-reporting opacity red flag rather than letting it pass.
+
+**SOTP multiples must be sourced, never illustrative.** When this agent contributes SOTP context, cite **specific peer or recent-transaction multiples** with the comparable named (e.g. "specialty-chem arm at 22× EV/EBITDA, in line with [named peer]" or "AMC arm at 4.5% of AUM, per [recent transaction]"). Never use "illustrative", "for example", or placeholder multiples — an unsourced multiple is not a valuation input.
+
 ### Moat Typology — Per-Vertical Moat Is Not Additive
 A conglomerate does not inherit a "combined moat" by summing across verticals — per-vertical moats are independent and the **weakest-vertical moat is often the binding constraint on group ROCE**. Enumerate the moat lens per material vertical (brand strength, distribution density, switching cost, regulatory licence, cost-curve position, scale economics), then answer the meta-question at the parent level: **is there a capital-allocation moat?**
 

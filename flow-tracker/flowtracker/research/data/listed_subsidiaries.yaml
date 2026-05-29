@@ -1,0 +1,172 @@
+# Curated parent -> listed-subsidiary map for Sum-of-the-Parts (SOTP) valuation.
+#
+# SEMANTICS (read before editing):
+#   These are PARENT-COMPANY holdings, NOT promoter-group holdings. A listed
+#   company under common family/trust control (a "sister") is NOT a subsidiary.
+#   e.g. ADANIPORTS / ADANIPOWER / ADANIGREEN are held by the Adani family
+#   trusts at the GROUP level, NOT by Adani Enterprises (AEL) -> they must never
+#   be listed under ADANIENT. Only entities the company ITSELF holds belong here.
+#
+# This file is the single source of truth for listed-SOTP. It replaced a
+# promoter-surname matching heuristic that mislabelled siblings as subsidiaries.
+# The universe that needs listed-SOTP is small and stable, so a hand-curated,
+# auditable list beats fragile PDF/AOC-1 extraction or surname matching.
+#
+# Stakes are flagged approximate via verify_note -> the agent confirms against the
+# latest shareholding filing and fetches live market cap. Keep `as_of` current.
+#
+# Schema per symbol:
+#   <PARENT_NSE_SYMBOL>:
+#     note: "<optional> guidance shown when there are no listed holdings"
+#     subsidiaries:
+#       - sub_symbol: <NSE symbol of the listed holding>
+#         sub_name: "<display name>"
+#         parent_ownership_pct: <float>
+#         relationship: "<short description>"
+#         as_of: "YYYY-MM"
+
+ADANIENT:
+  note: >-
+    Adani Enterprises is the Adani group INCUBATOR. Its material businesses
+    (Airports, Roads, ANIL / green hydrogen, Kutch Copper, Data Centres) are
+    UNLISTED. The listed Adani entities (Ports, Power, Green, Energy Solutions,
+    Total Gas) are promoter-group SIBLINGS held by the family trusts, NOT by
+    AEL — do NOT value them as AEL stakes. Build SOTP from AEL's own segment
+    EBITDA x peer multiples, not group market cap.
+  subsidiaries: []
+
+NTPC:
+  subsidiaries:
+    - sub_symbol: NTPCGREEN
+      sub_name: NTPC Green Energy
+      parent_ownership_pct: 89.0
+      relationship: listed renewable-energy subsidiary
+      as_of: "2026-05"
+
+BHARTIARTL:
+  subsidiaries:
+    - sub_symbol: AIRTELAFRICA
+      sub_name: Airtel Africa
+      parent_ownership_pct: 62.7
+      relationship: >-
+        listed African telecom subsidiary (LSE-primary, not NSE). NOTE: a
+        cashless share-swap announced 2026-05-13 (~Rs 28,220 cr) will raise
+        Bharti's stake to ~79% once completed — confirm whether it has closed.
+      as_of: "2026-05"
+
+HDFCBANK:
+  subsidiaries:
+    - sub_symbol: HDB
+      sub_name: HDB Financial Services
+      parent_ownership_pct: 74.19
+      relationship: listed NBFC subsidiary (IPO Jul-2025; HDFC Bank diluted from 94.09% to 74.19%)
+      as_of: "2026-05"
+    - sub_symbol: HDFCLIFE
+      sub_name: HDFC Life Insurance
+      parent_ownership_pct: 50.27
+      relationship: listed life-insurance subsidiary
+      as_of: "2026-05"
+    - sub_symbol: HDFCAMC
+      sub_name: HDFC Asset Management
+      parent_ownership_pct: 52.4
+      relationship: listed AMC subsidiary
+      as_of: "2026-05"
+
+SBIN:
+  subsidiaries:
+    - sub_symbol: SBILIFE
+      sub_name: SBI Life Insurance
+      parent_ownership_pct: 55.5
+      relationship: listed life-insurance subsidiary (JV with BNP Paribas Cardif)
+      as_of: "2026-05"
+    - sub_symbol: SBICARD
+      sub_name: SBI Cards & Payment Services
+      parent_ownership_pct: 68.6
+      relationship: listed credit-card subsidiary
+      as_of: "2026-05"
+
+LT:
+  subsidiaries:
+    - sub_symbol: LTM
+      sub_name: LTM (formerly LTIMindtree)
+      parent_ownership_pct: 68.6
+      relationship: >-
+        listed IT-services subsidiary. NSE symbol changed LTIM -> LTM eff.
+        2026-02-27; company renamed to LTM Limited.
+      as_of: "2026-05"
+    - sub_symbol: LTTS
+      sub_name: L&T Technology Services
+      parent_ownership_pct: 73.6
+      relationship: listed engineering-R&D subsidiary
+      as_of: "2026-05"
+    - sub_symbol: LTF
+      sub_name: L&T Finance
+      parent_ownership_pct: 66.3
+      relationship: listed NBFC subsidiary (NSE symbol LTF)
+      as_of: "2026-05"
+
+BAJAJFINSV:
+  subsidiaries:
+    - sub_symbol: BAJFINANCE
+      sub_name: Bajaj Finance
+      parent_ownership_pct: 52.49
+      relationship: listed NBFC subsidiary
+      as_of: "2026-05"
+
+ICICIBANK:
+  subsidiaries:
+    - sub_symbol: ICICIPRULI
+      sub_name: ICICI Prudential Life Insurance
+      parent_ownership_pct: 50.89
+      relationship: listed life-insurance subsidiary (JV with Prudential plc)
+      as_of: "2026-05"
+    - sub_symbol: ICICIGI
+      sub_name: ICICI Lombard General Insurance
+      parent_ownership_pct: 48.0
+      relationship: listed general-insurance associate
+      as_of: "2026-05"
+
+GRASIM:
+  subsidiaries:
+    - sub_symbol: ULTRACEMCO
+      sub_name: UltraTech Cement
+      parent_ownership_pct: 57.0
+      relationship: listed cement subsidiary
+      as_of: "2026-05"
+    - sub_symbol: ABCAPITAL
+      sub_name: Aditya Birla Capital
+      parent_ownership_pct: 53.0
+      relationship: listed financial-services subsidiary (Grasim direct stake; promoter group ~67%)
+      as_of: "2026-05"
+
+M&M:
+  subsidiaries:
+    - sub_symbol: TECHM
+      sub_name: Tech Mahindra
+      parent_ownership_pct: 25.33
+      relationship: listed IT-services associate (M&M is the largest shareholder & promoter)
+      as_of: "2026-05"
+
+VEDL:
+  subsidiaries:
+    - sub_symbol: HINDZINC
+      sub_name: Hindustan Zinc
+      parent_ownership_pct: 60.2
+      relationship: >-
+        listed zinc/lead-mining subsidiary. NOTE: Vedanta is paring its stake via
+        OFS (1.59% sold Jan-2026) and a group demerger is in progress — confirm
+        current stake.
+      as_of: "2026-05"
+
+BAJAJHLDNG:
+  subsidiaries:
+    - sub_symbol: BAJAJ-AUTO
+      sub_name: Bajaj Auto
+      parent_ownership_pct: 36.68
+      relationship: listed two-wheeler associate
+      as_of: "2026-05"
+    - sub_symbol: BAJAJFINSV
+      sub_name: Bajaj Finserv
+      parent_ownership_pct: 38.41
+      relationship: listed financial-services associate
+      as_of: "2026-05"

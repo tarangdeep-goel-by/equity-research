@@ -28,6 +28,8 @@ Indian conglomerates do not sit on a single league table; tier by structural arc
 
 Where the stock sits in this hierarchy determines the peer set. A holdco-style name should be compared to other holdcos on discount-vs-NAV, not to operating conglomerates on PE.
 
+**Benchmark against the right index / comparable set — not pure-play micro-caps.** Match a conglomerate flagship against a **diversified / infrastructure index or a SOTP-comparable set of other conglomerates**, not against a single-sector pure-play (and never against a pure-play micro-cap, whose multiple says nothing about a multi-vertical group). When no single-sector KPI framework fits the group, adopt an **"infrastructure conglomerate" KPI lens** — capacity build-out / utilisation across assets, project-pipeline IRRs, consolidated Net Debt / EBITDA with the standalone split, asset-level vs holdco leverage, and holdco discount vs NAV — rather than forcing a mismatched pure-play sector KPI grid onto the group.
+
 ### Institutional Flow — Conglomerate-Specific Patterns
 Conglomerates carry **10-15% of the Nifty weight collectively** (varies with index rebalance cycles). Institutional flow patterns have specific mechanics that the sector and ownership agents must both reflect:
 

@@ -18,6 +18,8 @@ _INDUSTRY_DA_RATIOS: dict[str, tuple[float, str, str | None]] = {
     # Asset-heavy power / energy / renewables (regulatory capex cycles drive high D&A)
     "energy": (0.07, "energy_power_default",
                "Asset-heavy power/renewables — D&A ~7% of revenue per regulatory capex cycles."),
+    # Asset-light FMCG (brands + distribution, low fixed-asset intensity)
+    "fmcg": (0.015, "fmcg_default", "Asset-light FMCG — D&A ~1.5% of revenue."),
     # Asset-light platforms / IT services / insurance / marketplaces
     "it_services": (0.01, "it_services_default",
                     "Industry classified as 'it_services' — D&A 1% of revenue per asset-light routing."),
