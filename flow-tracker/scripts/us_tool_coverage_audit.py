@@ -259,10 +259,18 @@ def main() -> int:
 
     from flowtracker.research import tools as T
     from flowtracker.research.tool_audit import _section_enum_map
+    from flowtracker.research.data_api import _run_market
 
     tools = _unique_tools(T)
     section_enum_map = _section_enum_map()
-    results = asyncio.run(_audit(tools, T.classify_completeness, section_enum_map))
+    # Simulate a US research run so ContextVar-gated tools (macro / FII-derivative
+    # flow, which have no symbol arg) resolve their market the way they do in a
+    # real US run. Symbol-based guards still resolve AAPL via the registry.
+    token = _run_market.set(US_MARKET)
+    try:
+        results = asyncio.run(_audit(tools, T.classify_completeness, section_enum_map))
+    finally:
+        _run_market.reset(token)
 
     counts: dict[str, int] = {"ROUTED": 0, "DEGRADED": 0, "EMPTY_SILENT": 0, "ERROR": 0}
     for r in results:

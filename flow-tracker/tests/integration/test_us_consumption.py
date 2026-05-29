@@ -227,3 +227,109 @@ class TestUSEvalMatrixScaffold:
         # Every sector cell mirrors the India format: stock/type/why.
         for cell in data["sectors"].values():
             assert {"stock", "type", "why"}.issubset(cell.keys())
+
+
+# --------------------------------------------------------------------------- #
+# 4. WS-5 graceful degradation — genuinely-absent-for-US data returns an
+#    explicit not_applicable envelope; India keeps returning real data.
+# --------------------------------------------------------------------------- #
+
+
+class TestWS5DegradesForUS:
+    """Representative INCLUDE-list tools return not_applicable for a US symbol."""
+
+    def test_yahoo_peers_na_for_us(self, db):
+        assert _is_not_applicable(_call(t.get_yahoo_peers, {"symbol": US_SYMBOL}))
+
+    def test_screener_peers_na_for_us(self, db):
+        assert _is_not_applicable(_call(t.get_screener_peers, {"symbol": US_SYMBOL}))
+
+    def test_peer_sector_na_for_us(self, db):
+        # Whole-tool guard: any section degrades for US.
+        assert _is_not_applicable(
+            _call(t.get_peer_sector, {"symbol": US_SYMBOL, "section": "peer_table"})
+        )
+
+    def test_data_quality_flags_na_for_us(self, db):
+        assert _is_not_applicable(_call(t.get_data_quality_flags, {"symbol": US_SYMBOL}))
+
+    def test_chart_data_na_for_us(self, db):
+        assert _is_not_applicable(
+            _call(t.get_chart_data, {"symbol": US_SYMBOL, "chart_type": "price"})
+        )
+
+    def test_annual_report_na_for_us(self, db):
+        assert _is_not_applicable(_call(t.get_annual_report, {"symbol": US_SYMBOL}))
+
+    def test_historical_analogs_na_for_us(self, db):
+        assert _is_not_applicable(_call(t.get_historical_analogs, {"symbol": US_SYMBOL}))
+
+    def test_company_context_documents_na_for_us(self, db):
+        assert _is_not_applicable(
+            _call(t.get_company_context, {"symbol": US_SYMBOL, "section": "filings"})
+        )
+
+    def test_company_context_info_still_routed_for_us(self, db):
+        # info/profile must STAY routed for US (now reads symbol_registry).
+        payload = _call(t.get_company_context, {"symbol": US_SYMBOL, "section": "info"})
+        assert not _is_not_applicable(payload)
+        assert "Apple" in json.dumps(payload)
+
+    def test_estimates_surprises_na_for_us(self, db):
+        assert _is_not_applicable(
+            _call(t.get_estimates, {"symbol": US_SYMBOL, "section": "surprises"})
+        )
+
+    def test_estimates_consensus_still_routed_for_us(self, db):
+        # consensus is EXCLUDE-list — must NOT be degraded for US.
+        payload = _call(t.get_estimates, {"symbol": US_SYMBOL, "section": "consensus"})
+        assert not _is_not_applicable(payload)
+
+    def test_events_dividends_na_for_us(self, db):
+        assert _is_not_applicable(
+            _call(t.get_events_actions, {"symbol": US_SYMBOL, "section": "dividends"})
+        )
+
+    def test_macro_tools_na_for_us_run(self, db):
+        # Macro tools read the run-market ContextVar (no symbol arg).
+        from flowtracker.research.data_api import _run_market
+        token = _run_market.set(US_MARKET)
+        try:
+            assert _is_not_applicable(_call(t.get_macro_catalog, {}))
+            assert _is_not_applicable(
+                _call(t.get_macro_anchor, {"doc_type": "economic_survey"})
+            )
+            assert _is_not_applicable(_call(t.get_macro_indicators, {}))
+            assert _is_not_applicable(_call(t.get_fii_derivative_flow, {}))
+        finally:
+            _run_market.reset(token)
+
+
+class TestWS5IndiaStillWorks:
+    """Regression: India symbols keep returning real (non-degraded) data."""
+
+    def test_peer_sector_india(self, db):
+        payload = _call(t.get_peer_sector, {"symbol": "SBIN", "section": "peer_table"})
+        assert not _is_not_applicable(payload)
+
+    def test_company_context_filings_india(self, db):
+        payload = _call(t.get_company_context, {"symbol": "SBIN", "section": "filings"})
+        assert not _is_not_applicable(payload)
+
+    def test_estimates_surprises_india(self, db):
+        payload = _call(t.get_estimates, {"symbol": "SBIN", "section": "surprises"})
+        assert not _is_not_applicable(payload)
+
+    def test_events_dividends_india(self, db):
+        payload = _call(t.get_events_actions, {"symbol": "SBIN", "section": "dividends"})
+        assert not _is_not_applicable(payload)
+
+    def test_data_quality_flags_india(self, db):
+        payload = _call(t.get_data_quality_flags, {"symbol": "SBIN"})
+        assert not _is_not_applicable(payload)
+
+    def test_macro_tools_india_run(self, db):
+        # No run-market set (India default) → macro tools return real data.
+        assert not _is_not_applicable(_call(t.get_macro_catalog, {}))
+        assert not _is_not_applicable(_call(t.get_macro_indicators, {}))
+        assert not _is_not_applicable(_call(t.get_fii_derivative_flow, {}))

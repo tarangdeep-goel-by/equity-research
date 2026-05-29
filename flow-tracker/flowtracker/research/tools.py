@@ -278,7 +278,21 @@ _OWNERSHIP_INDIA_ONLY = frozenset({
 })
 # India-only market-context sections — degrade to not-applicable for US symbols.
 _MARKET_CONTEXT_INDIA_ONLY = frozenset({
-    "delivery", "delivery_analysis", "fii_dii_streak", "fii_dii_flows",
+    "delivery", "delivery_analysis", "fii_dii_streak", "fii_dii_flows", "macro",
+})
+# India-only company-context sections (India doc store) — degrade for US symbols.
+# 'info'/'profile' stay routed (info now reads symbol_registry for US).
+_COMPANY_CONTEXT_INDIA_ONLY = frozenset({
+    "documents", "business_profile", "filings", "concall_insights",
+    "deck_insights", "annual_report", "sector_kpis",
+})
+# India-only estimates sections — genuinely absent for US (FMP India extras).
+_ESTIMATES_INDIA_ONLY = frozenset({
+    "surprises", "revisions", "analyst_grades",
+})
+# India-only events/actions sections — genuinely absent for US.
+_EVENTS_ACTIONS_INDIA_ONLY = frozenset({
+    "dividends", "corporate_actions", "adjusted_eps",
 })
 
 
@@ -479,6 +493,8 @@ _VALUATION_BAND_METRICS = (
     annotations=READ_ONLY,
 )
 async def get_chart_data(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_chart_data", "Screener.in chart series", args["symbol"], args)
     chart_type = args["chart_type"]
     if chart_type not in _CHART_DATA_TYPES:
         return _invalid_enum_error("get_chart_data", "chart_type", chart_type, _CHART_DATA_TYPES, args)
@@ -497,6 +513,8 @@ async def get_chart_data(args):
 )
 async def get_yahoo_peers(args):
     symbol = args["symbol"].upper()
+    if _is_us_symbol(symbol):
+        return _us_not_applicable("get_yahoo_peers", "India peer comparison", symbol, args)
     with ResearchDataAPI() as api:
         data = api.get_yahoo_peer_comparison(symbol)
     return _with_dedup("get_yahoo_peers", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
@@ -514,6 +532,8 @@ async def get_yahoo_peers(args):
 )
 async def get_screener_peers(args):
     symbol = args["symbol"].upper()
+    if _is_us_symbol(symbol):
+        return _us_not_applicable("get_screener_peers", "Screener.in peer comparison", symbol, args)
     with ResearchDataAPI() as api:
         data = api.get_screener_peers(symbol)
     return _with_dedup("get_screener_peers", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
@@ -566,6 +586,8 @@ async def save_business_profile(args):
     annotations=READ_ONLY,
 )
 async def get_data_quality_flags(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_data_quality_flags", "Screener.in annual-financials reclassification flags", args["symbol"], args)
     min_severity = args.get("min_severity")
     if min_severity is not None and min_severity not in _DATA_QUALITY_SEVERITIES:
         return _invalid_enum_error("get_data_quality_flags", "min_severity", min_severity, _DATA_QUALITY_SEVERITIES, args)
@@ -628,6 +650,8 @@ get_concall_insights = tool(
 
 @get_concall_insights
 async def get_concall_insights(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_concall_insights", "India concall-transcript extraction", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_concall_insights(
             args["symbol"],
@@ -648,6 +672,8 @@ get_deck_insights = tool(
 
 @get_deck_insights
 async def get_deck_insights(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_deck_insights", "India investor-deck extraction", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_deck_insights(
             args["symbol"],
@@ -686,6 +712,8 @@ get_annual_report = tool(
 
 @get_annual_report
 async def get_annual_report(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_annual_report", "India annual-report extraction", args["symbol"], args)
     section = args.get("section")
     if section is not None and section not in _ANNUAL_REPORT_SECTIONS:
         return _invalid_enum_error("get_annual_report", "section", section, _ANNUAL_REPORT_SECTIONS, args)
@@ -744,6 +772,8 @@ get_macro_anchor = tool(
 
 @get_macro_anchor
 async def get_macro_anchor(args):
+    if _run_market.get() in ("NASDAQ", "NYSE"):
+        return _us_not_applicable("get_macro_anchor", "India macro anchor documents", "", args)
     doc_type = args["doc_type"]
     if doc_type not in _MACRO_ANCHOR_DOC_TYPES:
         return _invalid_enum_error("get_macro_anchor", "doc_type", doc_type, _MACRO_ANCHOR_DOC_TYPES, args)
@@ -768,6 +798,8 @@ get_macro_catalog = tool(
 
 @get_macro_catalog
 async def get_macro_catalog(args):
+    if _run_market.get() in ("NASDAQ", "NYSE"):
+        return _us_not_applicable("get_macro_catalog", "India macro anchor documents", "", args)
     catalog = list_current_anchors()
     summary = {
         "anchors": [
@@ -800,6 +832,8 @@ async def get_macro_catalog(args):
     annotations=READ_ONLY,
 )
 async def get_macro_indicators(args):
+    if _run_market.get() in ("NASDAQ", "NYSE"):
+        return _us_not_applicable("get_macro_indicators", "India macro indicator time-series (CPI/IIP/PMI/G-sec)", "", args)
     with ResearchDataAPI() as api:
         data = api.get_macro_indicators(args.get("months", 24))
     return _with_dedup(
@@ -1610,6 +1644,8 @@ def _get_peer_sector_section(api, symbol, section, args):
 )
 async def get_peer_sector(args):
     symbol = args["symbol"]
+    if _is_us_symbol(symbol):
+        return _us_not_applicable("get_peer_sector", "India peer cohort / sector aggregates", symbol, args)
     section_raw = args.get("section")
     with ResearchDataAPI() as api:
         # Default behavior when no section specified: return compact TOC.
@@ -1649,8 +1685,21 @@ async def get_peer_sector(args):
     return _with_dedup("get_peer_sector", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-def _get_estimates_section(api, symbol, section, args):
-    """Route a single section for get_estimates."""
+def _get_estimates_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_estimates.
+
+    India-only sub-sections (surprises / revisions / analyst_grades) degrade to
+    an explicit not-applicable marker for US symbols.
+    """
+    if is_us and section in _ESTIMATES_INDIA_ONLY:
+        return {
+            "status": "not_applicable",
+            "market": api._market_of(symbol),
+            "reason": (
+                f"'{section}' is sourced from India FMP/Screener estimate extras "
+                "with no US equivalent yet."
+            ),
+        }
     if section == "consensus":
         return api.get_consensus_estimate(symbol)
     elif section == "surprises":
@@ -1706,21 +1755,22 @@ async def get_estimates(args):
     if err is not None:
         return err
     with ResearchDataAPI() as api:
+        is_us = api._is_us(symbol)
         if isinstance(section, list):
-            data = {s: _get_estimates_section(api, symbol, s, args) for s in section}
+            data = {s: _get_estimates_section(api, symbol, s, args, is_us) for s in section}
         elif section == "all":
             data = {
                 "consensus": api.get_consensus_estimate(symbol),
-                "surprises": api.get_earnings_surprises(symbol),
-                "revisions": api.get_estimate_revisions(symbol),
+                "surprises": _get_estimates_section(api, symbol, "surprises", args, is_us),
+                "revisions": _get_estimates_section(api, symbol, "revisions", args, is_us),
                 "momentum": api.get_estimate_momentum(symbol),
                 "revenue": api.get_revenue_estimates(symbol),
                 "growth": api.get_growth_estimates(symbol),
-                "analyst_grades": api.get_analyst_grades(symbol),
+                "analyst_grades": _get_estimates_section(api, symbol, "analyst_grades", args, is_us),
                 "price_targets": api.get_price_targets(symbol),
             }
         else:
-            data = _get_estimates_section(api, symbol, section, args)
+            data = _get_estimates_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_estimates", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
@@ -1821,7 +1871,7 @@ async def get_market_context(args):
                     else "adequate" if adtv_cr is not None
                     else None
                 ),
-                "macro": api.get_macro_snapshot(),
+                "macro": _mkt("macro", api.get_macro_snapshot()),
                 "fii_dii_streak": _mkt("fii_dii_streak", api.get_fii_dii_streak()),
                 "fii_dii_flows": _mkt("fii_dii_flows", api.get_fii_dii_flows(args.get("days", 30))),
                 "technicals": api.get_technical_indicators(symbol),
@@ -1890,8 +1940,21 @@ def _india_not_applicable_13f(symbol: str, args: dict) -> dict:
     )
 
 
-def _get_company_context_section(api, symbol, section, args):
-    """Route a single section for get_company_context."""
+def _get_company_context_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_company_context.
+
+    India-only doc-store sections degrade to an explicit not-applicable marker
+    for US symbols. 'info'/'profile' stay routed.
+    """
+    if is_us and section in _COMPANY_CONTEXT_INDIA_ONLY:
+        return {
+            "status": "not_applicable",
+            "market": api._market_of(symbol),
+            "reason": (
+                f"'{section}' reads the India document store (filings / concall / "
+                "deck / annual report / sector KPIs) with no US pipeline yet."
+            ),
+        }
     if section == "info":
         return api.get_company_info(symbol)
     elif section == "profile":
@@ -1995,42 +2058,44 @@ async def get_company_context(args):
         if sub_section not in sub_vocab:
             return _invalid_enum_error("get_company_context", "sub_section", sub_section, sub_vocab, args)
     with ResearchDataAPI() as api:
+        is_us = api._is_us(symbol)
         if isinstance(section, list):
-            data = {s: _get_company_context_section(api, symbol, s, args) for s in section}
+            data = {s: _get_company_context_section(api, symbol, s, args, is_us) for s in section}
         elif section == "all":
+            def _cc(sec):
+                return _get_company_context_section(api, symbol, sec, args, is_us)
             data = {
                 "info": api.get_company_info(symbol),
                 "profile": api.get_company_profile(symbol),
-                "documents": api.get_company_documents(symbol, args.get("doc_type")),
-                "business_profile": _get_company_context_section(api, symbol, "business_profile", args),
-                "concall_insights": api.get_concall_insights(
-                    symbol,
-                    section_filter=args.get("sub_section"),
-                    quarter=args.get("quarter"),
-                    qa_topics=args.get("qa_topics"),
-                ),
-                "deck_insights": api.get_deck_insights(
-                    symbol,
-                    section_filter=args.get("sub_section"),
-                    quarter=args.get("quarter"),
-                    slide_topics=args.get("slide_topics"),
-                ),
-                "annual_report": api.get_annual_report(
-                    symbol,
-                    year=args.get("year"),
-                    section=args.get("sub_section"),
-                ),
-                "sector_kpis": api.get_sector_kpis(symbol, kpi_key=args.get("sub_section")),
-                "filings": api.get_recent_filings(symbol, args.get("limit", 10)),
+                "documents": _cc("documents"),
+                "business_profile": _cc("business_profile"),
+                "concall_insights": _cc("concall_insights"),
+                "deck_insights": _cc("deck_insights"),
+                "annual_report": _cc("annual_report"),
+                "sector_kpis": _cc("sector_kpis"),
+                "filings": _cc("filings"),
             }
         else:
-            data = _get_company_context_section(api, symbol, section, args)
+            data = _get_company_context_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_company_context", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
-def _get_events_actions_section(api, symbol, section, args):
-    """Route a single section for get_events_actions."""
+def _get_events_actions_section(api, symbol, section, args, is_us=False):
+    """Route a single section for get_events_actions.
+
+    India-only sub-sections (dividends / corporate_actions / adjusted_eps)
+    degrade to an explicit not-applicable marker for US symbols.
+    """
+    if is_us and section in _EVENTS_ACTIONS_INDIA_ONLY:
+        return {
+            "status": "not_applicable",
+            "market": api._market_of(symbol),
+            "reason": (
+                f"'{section}' is sourced from India dividend / corporate-action "
+                "history with no US pipeline yet."
+            ),
+        }
     if section == "events":
         return api.get_events_calendar(symbol)
     elif section == "dividends":
@@ -2087,20 +2152,21 @@ async def get_events_actions(args):
     if err is not None:
         return err
     with ResearchDataAPI() as api:
+        is_us = api._is_us(symbol)
         if isinstance(section, list):
-            data = {s: _get_events_actions_section(api, symbol, s, args) for s in section}
+            data = {s: _get_events_actions_section(api, symbol, s, args, is_us) for s in section}
         elif section == "all":
             data = {
                 "events": api.get_events_calendar(symbol),
-                "dividends": api.get_dividend_history(symbol, args.get("years", 10)),
-                "corporate_actions": api.get_corporate_actions(symbol),
-                "adjusted_eps": api.get_adjusted_eps(symbol, args.get("quarters", 12)),
+                "dividends": _get_events_actions_section(api, symbol, "dividends", args, is_us),
+                "corporate_actions": _get_events_actions_section(api, symbol, "corporate_actions", args, is_us),
+                "adjusted_eps": _get_events_actions_section(api, symbol, "adjusted_eps", args, is_us),
                 "catalysts": api.get_upcoming_catalysts(symbol, args.get("days", 90)),
                 "material_events": api.get_material_events(symbol, args.get("days", 365)),
                 "dividend_policy": api.get_dividend_policy(symbol),
             }
         else:
-            data = _get_events_actions_section(api, symbol, section, args)
+            data = _get_events_actions_section(api, symbol, section, args, is_us)
         data = _stamp_meta(data, api, symbol)
     return _with_dedup("get_events_actions", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
@@ -2462,6 +2528,8 @@ MACRO_AGENT_TOOLS = [
     annotations=READ_ONLY,
 )
 async def get_setup_feature_vector(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_setup_feature_vector", "India historical-analog cohort", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_setup_feature_vector(args["symbol"], args.get("as_of_date"))
     return _with_dedup("get_setup_feature_vector",
@@ -2487,6 +2555,8 @@ async def get_historical_analogs(args):
     ``analog_count``, ``relaxation_level`` (0/1/2), ``relaxation_label``
     (strict/industry_only/mcap_only), ``unique_symbols``, ``gross_count``.
     """
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_historical_analogs", "India historical-analog cohort", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_historical_analogs(
             args["symbol"], args.get("k", 20), args.get("as_of_date"),
@@ -2508,6 +2578,8 @@ async def get_historical_analogs(args):
     annotations=READ_ONLY,
 )
 async def get_analog_cohort_stats(args):
+    if _is_us_symbol(args["symbol"]):
+        return _us_not_applicable("get_analog_cohort_stats", "India historical-analog cohort", args["symbol"], args)
     with ResearchDataAPI() as api:
         data = api.get_analog_cohort_stats(
             args["symbol"], args.get("k", 50), args.get("as_of_date"),
@@ -2603,6 +2675,8 @@ async def get_option_chain_concentration(args):
     annotations=READ_ONLY,
 )
 async def get_fii_derivative_flow(args):
+    if _run_market.get() in ("NASDAQ", "NYSE"):
+        return _us_not_applicable("get_fii_derivative_flow", "India FII derivative flow (NSE F&O)", "", args)
     with ResearchDataAPI() as api:
         data = api.get_fii_derivative_flow(args.get("days", 30))
     return _with_dedup("get_fii_derivative_flow",

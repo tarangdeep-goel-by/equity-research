@@ -4869,7 +4869,26 @@ class ResearchDataAPI:
     # --- Company Info ---
 
     def get_company_info(self, symbol: str) -> dict:
-        """Company name and industry from index constituents."""
+        """Company name and industry from index constituents.
+
+        For a US-listed symbol the India index/Screener constituent table is
+        empty, so resolve name/sector/industry from symbol_registry instead —
+        keeps get_company_context[info] routed (not empty) for US.
+        """
+        if self._is_us(symbol):
+            entry = self._store.get_symbol_registry_entry(symbol, self._market_of(symbol))
+            if entry:
+                name = entry.get("company_name") or symbol
+                sector = entry.get("sector")
+                industry = entry.get("gics") or sector or "Unknown"
+                return {
+                    "symbol": symbol,
+                    "name": name,
+                    "company_name": name,
+                    "industry": industry,
+                    "sector": sector,
+                    "market": entry.get("market") or self._market_of(symbol),
+                }
         constituents = self._store.get_index_constituents()
         match = [c for c in constituents if c.symbol == symbol]
         if match:

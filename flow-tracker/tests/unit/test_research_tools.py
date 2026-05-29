@@ -177,7 +177,9 @@ class TestScreenerPhaseTools:
         fake = FakeAPI()
         with patch_api(fake):
             await get_chart_data.handler({"symbol": "SBIN", "chart_type": "pe"})
-        assert fake.calls[0] == ("get_chart_data", ("SBIN", "pe"), {})
+        # _market_of is the US-guard bookkeeping call; assert on the real dispatch.
+        non_meta = [c for c in fake.calls if c[0] != "_market_of"]
+        assert non_meta[0] == ("get_chart_data", ("SBIN", "pe"), {})
 
     @pytest.mark.asyncio
     async def test_yahoo_peers_uppercases_symbol(self):
@@ -187,7 +189,8 @@ class TestScreenerPhaseTools:
         fake = FakeAPI()
         with patch_api(fake):
             await get_yahoo_peers.handler({"symbol": "sbin"})
-        assert fake.calls[0] == ("get_yahoo_peer_comparison", ("SBIN",), {})
+        non_meta = [c for c in fake.calls if c[0] != "_market_of"]
+        assert non_meta[0] == ("get_yahoo_peer_comparison", ("SBIN",), {})
 
 # ---------------------------------------------------------------------------
 # Filings / company info
@@ -261,8 +264,9 @@ class TestSectorKpisAndConcallTools:
         fake = FakeAPI()
         with patch_api(fake):
             await get_concall_insights.handler({"symbol": "SBIN"})
-        assert fake.calls[0][0] == "get_concall_insights"
-        assert fake.calls[0][2] == {
+        non_meta = [c for c in fake.calls if c[0] != "_market_of"]
+        assert non_meta[0][0] == "get_concall_insights"
+        assert non_meta[0][2] == {
             "section_filter": None,
             "quarter": None,
             "qa_topics": None,
@@ -277,7 +281,8 @@ class TestSectorKpisAndConcallTools:
             await get_concall_insights.handler(
                 {"symbol": "SBIN", "sub_section": "operational_metrics"}
             )
-        assert fake.calls[0][2] == {
+        non_meta = [c for c in fake.calls if c[0] != "_market_of"]
+        assert non_meta[0][2] == {
             "section_filter": "operational_metrics",
             "quarter": None,
             "qa_topics": None,
@@ -294,7 +299,8 @@ class TestSectorKpisAndConcallTools:
                 "quarter": "FY26-Q3",
                 "qa_topics": ["margins", "guidance"],
             })
-        assert fake.calls[0][2] == {
+        non_meta = [c for c in fake.calls if c[0] != "_market_of"]
+        assert non_meta[0][2] == {
             "section_filter": None,
             "quarter": "FY26-Q3",
             "qa_topics": ["margins", "guidance"],
