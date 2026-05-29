@@ -119,6 +119,7 @@ def test_refresh_us_pulls_every_source_and_persists(store):
 
     with patch("flowtracker.edgar_client.EdgarClient", return_value=edgar), \
          patch("flowtracker.edgar_ownership.EdgarOwnershipClient", return_value=ownership), \
+         patch("flowtracker.fund_client.FundClient._info", return_value={"sector": "Technology"}), \
          patch("flowtracker.us_ingest.fetch_us_daily_prices", return_value=_price_rows()), \
          patch("flowtracker.us_ingest.fetch_us_valuation_snapshot", return_value=_valuation_row()), \
          patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()):
@@ -128,7 +129,7 @@ def test_refresh_us_pulls_every_source_and_persists(store):
     assert set(summary) == {
         "annual_financials", "quarterly_financials", "daily_prices",
         "valuation_snapshot", "consensus_estimates", "insider_transactions",
-        "institutional_13f",
+        "institutional_13f", "registry_sector",
     }
     assert summary["annual_financials"] == 2
     assert summary["quarterly_financials"] == 1
@@ -167,6 +168,7 @@ def test_refresh_us_failing_source_is_isolated(store):
     # Prices fetch raises — must not stop the other sources from persisting.
     with patch("flowtracker.edgar_client.EdgarClient", return_value=edgar), \
          patch("flowtracker.edgar_ownership.EdgarOwnershipClient", return_value=ownership), \
+         patch("flowtracker.fund_client.FundClient._info", return_value={"sector": "Technology"}), \
          patch("flowtracker.us_ingest.fetch_us_daily_prices", side_effect=RuntimeError("yf down")), \
          patch("flowtracker.us_ingest.fetch_us_valuation_snapshot", return_value=_valuation_row()), \
          patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()):
@@ -197,6 +199,7 @@ def test_refresh_us_resolves_cik_when_unregistered(store):
 
     with patch("flowtracker.edgar_client.EdgarClient", return_value=edgar), \
          patch("flowtracker.edgar_ownership.EdgarOwnershipClient", return_value=ownership), \
+         patch("flowtracker.fund_client.FundClient._info", return_value={"sector": "Technology"}), \
          patch("flowtracker.us_ingest.fetch_us_daily_prices", return_value=_price_rows()), \
          patch("flowtracker.us_ingest.fetch_us_valuation_snapshot", return_value=_valuation_row()), \
          patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()):
@@ -218,6 +221,7 @@ def test_refresh_us_pulls_13f_with_manager_ciks(store):
 
     with patch("flowtracker.edgar_client.EdgarClient", return_value=edgar), \
          patch("flowtracker.edgar_ownership.EdgarOwnershipClient", return_value=ownership), \
+         patch("flowtracker.fund_client.FundClient._info", return_value={"sector": "Technology"}), \
          patch("flowtracker.us_ingest.fetch_us_daily_prices", return_value=_price_rows()), \
          patch("flowtracker.us_ingest.fetch_us_valuation_snapshot", return_value=_valuation_row()), \
          patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()):
@@ -226,3 +230,55 @@ def test_refresh_us_pulls_13f_with_manager_ciks(store):
     ownership.fetch_13f_for_manager.assert_called_once()
     assert summary["institutional_13f"] == 1
     assert len(store.get_us_institutional_holdings("AAPL")) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Bug 4: refresh_us captures the yfinance sector and persists it on the
+# symbol_registry so industry resolves (not "Unknown") downstream.
+# --------------------------------------------------------------------------- #
+
+def test_refresh_us_sets_registry_sector(store):
+    """yfinance sector → symbol_registry.sector/gics, COALESCE-safe, non-fatal."""
+    _seed_registry(store)  # sector pre-seeded; ensure refresh keeps it populated
+    edgar = _edgar_client_mock()
+    ownership = _ownership_client_mock()
+
+    with patch("flowtracker.edgar_client.EdgarClient", return_value=edgar), \
+         patch("flowtracker.edgar_ownership.EdgarOwnershipClient", return_value=ownership), \
+         patch("flowtracker.fund_client.FundClient._info", return_value={"sector": "Technology"}), \
+         patch("flowtracker.us_ingest.fetch_us_daily_prices", return_value=_price_rows()), \
+         patch("flowtracker.us_ingest.fetch_us_valuation_snapshot", return_value=_valuation_row()), \
+         patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()):
+        summary = refresh_us("AAPL", store=store)
+
+    assert summary["registry_sector"] == 1
+    entry = store.get_symbol_registry_entry("AAPL", "NASDAQ")
+    assert entry["sector"] == "Technology"
+    assert entry["gics"] == "Technology"
+
+    # Downstream: get_company_info maps the GICS sector to a sector_kpis
+    # industry string (Technology → IT - Software), not "Unknown".
+    from flowtracker.research.data_api import ResearchDataAPI
+
+    api = ResearchDataAPI(store=store)
+    assert api.get_company_info("AAPL")["industry"] == "IT - Software"
+
+
+def test_refresh_us_sector_pull_non_fatal(store):
+    """A failing yfinance sector pull is reported as skip, never aborts the run."""
+    _seed_registry(store)
+    edgar = _edgar_client_mock()
+    ownership = _ownership_client_mock()
+
+    with patch("flowtracker.edgar_client.EdgarClient", return_value=edgar), \
+         patch("flowtracker.edgar_ownership.EdgarOwnershipClient", return_value=ownership), \
+         patch("flowtracker.fund_client.FundClient._info", side_effect=RuntimeError("yf down")), \
+         patch("flowtracker.us_ingest.fetch_us_daily_prices", return_value=_price_rows()), \
+         patch("flowtracker.us_ingest.fetch_us_valuation_snapshot", return_value=_valuation_row()), \
+         patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()):
+        summary = refresh_us("AAPL", store=store)
+
+    assert summary["registry_sector"] == 0
+    # other sources still persisted
+    assert summary["annual_financials"] == 2
+    assert len(store.get_us_annual_financials("AAPL")) == 2

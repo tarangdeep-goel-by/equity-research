@@ -188,3 +188,99 @@ class TestIndiaRegression:
     def test_shareholding_india_nonempty(self, us_api: ResearchDataAPI):
         rows = us_api.get_shareholding("SBIN")
         assert isinstance(rows, list) and len(rows) > 0
+
+
+# ---------------------------------------------------------------------------
+# Bug 2 & 3: SBC dilution split-discontinuity guard + capital_allocation
+# dividends-not-tracked (US-gated). India regression via populated_store.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def us_ca_api(tmp_db: Path, populated_store: FlowStore, monkeypatch) -> ResearchDataAPI:
+    """US AAPL seed with a 4:1-split-like share-count discontinuity in the
+    num_shares series + SBC + CFO/capex columns, plus India SBIN/INFY fixtures."""
+    store = populated_store
+    store.upsert_symbol_registry(
+        "AAPL", "NASDAQ", company_name="Apple Inc.", sector="Technology",
+        gics="Technology", cik="320193",
+    )
+    # 5 years: pre-2021 rows ~5B shares (pre-split), 2021+ ~16B (post 4:1 split)
+    # → a >40% YoY jump between 2020 and 2021. Net buyback within each regime.
+    annuals = [
+        # fy, rev, ni, eps, shares, sbc, cfo, net_block
+        (2024, 391_035.0, 93_736.0, 6.08, 15_000_000_000.0, 11_688.0, 118_254.0, 45_680.0),
+        (2023, 383_285.0, 96_995.0, 6.13, 15_500_000_000.0, 10_833.0, 110_543.0, 43_715.0),
+        (2022, 394_328.0, 99_803.0, 6.11, 16_000_000_000.0, 9_038.0, 122_151.0, 42_117.0),
+        (2021, 365_817.0, 94_680.0, 5.61, 16_500_000_000.0, 7_906.0, 104_038.0, 39_440.0),
+        (2020, 274_515.0, 57_411.0, 3.28, 5_000_000_000.0, 6_829.0, 80_674.0, 36_766.0),
+    ]
+    store.upsert_us_annual_financials([
+        {"symbol": "AAPL", "market": "NASDAQ", "currency": "USD",
+         "fiscal_year": fy, "fiscal_year_end": f"{fy}-09-28",
+         "revenue": rev, "net_income": ni, "eps": eps, "num_shares": sh,
+         "shares_outstanding": sh, "stock_based_comp": sbc, "cfo": cfo,
+         "operating_cash_flow": cfo, "net_block": nb, "cwip": 0.0,
+         "depreciation": 11_000.0, "cash_and_bank": 30_000.0, "investments": 0.0,
+         "borrowings": 100_000.0}
+        for (fy, rev, ni, eps, sh, sbc, cfo, nb) in annuals
+    ])
+    store.upsert_us_valuation_snapshot([
+        {"symbol": "AAPL", "date": "2025-05-29", "price": 207.5,
+         "market_cap": 3_100_000.0, "pe_trailing": 32.0},
+    ])
+    monkeypatch.setenv("FLOWTRACKER_DB", str(tmp_db))
+    a = ResearchDataAPI(store=store)
+    yield a
+
+
+class TestSbcDilutionDiscontinuity:
+    def test_split_discontinuity_suppresses_net_dilution(self, us_ca_api):
+        sd = us_ca_api.get_sbc_dilution("AAPL")
+        # The 5B → 16.5B jump (2020→2021) is a split, not real dilution.
+        assert sd["net_dilution"] is None
+        assert sd["share_count_cagr_pct"] is None
+        assert "note" in sd and "split" in sd["note"].lower()
+        # Per-year SBC %-of-revenue series stays valid.
+        assert sd["latest_sbc_pct_revenue"] is not None
+        assert all("sbc_pct_revenue" in s for s in sd["series"])
+
+    def test_no_discontinuity_reports_cagr(self, us_ca_api):
+        """Clean (no-split) series still reports CAGR + net_dilution."""
+        # AAPL post-split-only window: shares fall 16.5B → 15B (net buyback).
+        api = us_ca_api
+        api._store.upsert_us_annual_financials([
+            {"symbol": "AAPL", "market": "NASDAQ", "currency": "USD",
+             "fiscal_year": 2020, "fiscal_year_end": "2020-09-28",
+             "revenue": 274_515.0, "net_income": 57_411.0, "eps": 5.5,
+             "num_shares": 17_000_000_000.0, "shares_outstanding": 17_000_000_000.0,
+             "stock_based_comp": 6_829.0, "cfo": 80_674.0},
+        ])
+        sd = api.get_sbc_dilution("AAPL")
+        assert "note" not in sd
+        assert sd["share_count_cagr_pct"] is not None
+        assert sd["net_dilution"] is False  # shares shrank → buybacks
+
+    def test_india_symbol_not_applicable(self, us_ca_api):
+        sd = us_ca_api.get_sbc_dilution("SBIN")
+        assert sd.get("applicable") is False or "not applicable" in str(sd).lower()
+
+
+class TestCapitalAllocationUsDividends:
+    def test_us_dividends_null_not_zero(self, us_ca_api):
+        ca = us_ca_api.get_capital_allocation("AAPL")
+        assert ca.get("dividends_not_tracked") is True
+        assert ca["cumulative"]["dividends"] is None
+        assert ca["cumulative"]["dividends_pct_of_cfo"] is None
+        assert ca["cash_yield_pct"] is None
+        # No $0 dividend claim in the payout trend.
+        for row in ca["payout_trend"]:
+            assert row["dividends_paid"] is None
+            assert row["payout_ratio_pct"] is None
+
+    def test_india_dividends_unchanged(self, us_ca_api):
+        """India path still reports numeric dividends (no not-tracked flag)."""
+        ca = us_ca_api.get_capital_allocation("SBIN")
+        assert "dividends_not_tracked" not in ca
+        # cumulative dividends is a number (possibly 0.0), never None for India.
+        assert isinstance(ca["cumulative"]["dividends"], (int, float))

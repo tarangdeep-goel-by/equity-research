@@ -1317,17 +1317,36 @@ class ResearchDataAPI:
         # Share-count CAGR (oldest -> latest); >0 = net dilution, <0 = buybacks.
         share_cagr = None
         net_dilution = None
+        note = None
         shares = [s["num_shares"] for s in series if s["num_shares"]]
-        if len(shares) >= 2 and shares[-1] and shares[-1] > 0:
+        # EDGAR WeightedAverageNumberOfDilutedSharesOutstanding is as-reported per
+        # year, so a stock split (e.g. AAPL 4:1 in 2020) creates a step
+        # discontinuity in the raw count — pre-split rows are ~4x lower than
+        # post-split. A CAGR across that step is meaningless and would flag a
+        # false net_dilution even for heavy net-buyback names. Guard: if any
+        # consecutive YoY change exceeds ±40%, suppress the CAGR/net_dilution.
+        split_discontinuity = any(
+            prev and prev > 0 and abs(cur / prev - 1) > 0.40
+            for cur, prev in zip(shares, shares[1:])
+        )
+        if split_discontinuity:
+            note = (
+                "share-count discontinuity (likely stock split) — dilution trend "
+                "unavailable from as-reported share counts"
+            )
+        elif len(shares) >= 2 and shares[-1] and shares[-1] > 0:
             latest_sh, oldest_sh = shares[0], shares[-1]
             yrs = len(shares) - 1
             share_cagr = round(((latest_sh / oldest_sh) ** (1 / yrs) - 1) * 100, 2)
             net_dilution = latest_sh > oldest_sh
-        return {
+        result = {
             "symbol": symbol, "currency": "USD", "metric": "sbc_dilution",
             "series": series, "latest_sbc_pct_revenue": latest_pct,
             "share_count_cagr_pct": share_cagr, "net_dilution": net_dilution,
         }
+        if note:
+            result["note"] = note
+        return result
 
     def _us_dupont_decomposition(self, symbol: str) -> dict:
         """ROE = net-margin × asset-turnover × equity-multiplier from the
@@ -5486,7 +5505,15 @@ class ResearchDataAPI:
             if entry:
                 name = entry.get("company_name") or symbol
                 sector = entry.get("sector")
-                industry = entry.get("gics") or sector or "Unknown"
+                # Map the GICS sector to a sector_kpis industry string (e.g.
+                # 'Technology' → 'IT - Software'); falls back to the raw
+                # gics/sector, then "Unknown".
+                industry = (
+                    self._us_industry_from_registry(symbol)
+                    or entry.get("gics")
+                    or sector
+                    or "Unknown"
+                )
                 return {
                     "symbol": symbol,
                     "name": name,
@@ -6975,6 +7002,7 @@ class ResearchDataAPI:
             pe_multiples=pe_multiples,
             shares_override=current_shares or None,
             industry=industry_token,
+            is_us=self._is_us(symbol),
         )
 
     def _resolve_industry_token(self, symbol: str) -> str | None:
@@ -9372,6 +9400,12 @@ class ResearchDataAPI:
         # Use up to `years` most recent years
         data = annual[:years]
 
+        # US: dividends are not ingested (no dividend column in us_annual_financials),
+        # so a $0 figure here is "not tracked", NOT "pays no dividend" (e.g. Apple
+        # pays ~$1/share/yr). Surface dividends as null with a flag rather than a
+        # misleading $0. India path (Screener dividend_amount) unchanged.
+        dividends_not_tracked = self._is_us(symbol)
+
         # Cumulative figures
         total_cfo = sum(d.get("cfo", 0) or 0 for d in data)
         total_dividends = 0
@@ -9384,13 +9418,21 @@ class ResearchDataAPI:
 
             total_dividends += div_paid
 
-            payout_ratio = round(div_paid / ni * 100, 1) if ni and ni > 0 else None
-            dividend_details.append({
-                "fiscal_year": fy,
-                "dividends_paid": round(div_paid, 2),
-                "net_income": round(ni, 2),
-                "payout_ratio_pct": payout_ratio,
-            })
+            if dividends_not_tracked:
+                dividend_details.append({
+                    "fiscal_year": fy,
+                    "dividends_paid": None,
+                    "net_income": round(ni, 2),
+                    "payout_ratio_pct": None,
+                })
+            else:
+                payout_ratio = round(div_paid / ni * 100, 1) if ni and ni > 0 else None
+                dividend_details.append({
+                    "fiscal_year": fy,
+                    "dividends_paid": round(div_paid, 2),
+                    "net_income": round(ni, 2),
+                    "payout_ratio_pct": payout_ratio,
+                })
 
         # Capex: delta_Net_Block + delta_CWIP + Depreciation. Same formula
         # used in get_fcf_yield — keep them in lockstep so FCF figures
@@ -9436,14 +9478,18 @@ class ResearchDataAPI:
         cash_pct_mcap = round(total_cash / market_cap * 100, 1) if market_cap and market_cap > 0 else None
         net_cash_pct_mcap = round(net_cash / market_cap * 100, 1) if market_cap and market_cap > 0 else None
 
-        # Cash yield = dividends / market cap (last year)
-        last_year_div = dividend_details[0]["dividends_paid"] if dividend_details else 0
-        cash_yield = round(last_year_div / market_cap * 100, 2) if market_cap and market_cap > 0 else None
+        # Cash yield = dividends / market cap (last year). Null for US (not tracked).
+        if dividends_not_tracked:
+            cash_yield = None
+        else:
+            last_year_div = dividend_details[0]["dividends_paid"] if dividend_details else 0
+            cash_yield = round(last_year_div / market_cap * 100, 2) if market_cap and market_cap > 0 else None
 
         # Deployment breakdown
         # CFI includes capex + acquisitions + investments
-        # Residual = CFO - capex - dividends = what went to cash/investments/acquisitions
-        residual = total_cfo - total_capex - total_dividends
+        # Residual = CFO - capex - dividends = what went to cash/investments/acquisitions.
+        # For US (dividends not tracked) treat dividends as 0 in the residual.
+        residual = total_cfo - total_capex - (0 if dividends_not_tracked else total_dividends)
 
         result = {
             "symbol": symbol,
@@ -9455,10 +9501,10 @@ class ResearchDataAPI:
                 "divestments": round(total_divestments, 2),
                 "net_capex": round(total_capex, 2),
                 "fcf": round(total_fcf, 2),
-                "dividends": round(total_dividends, 2),
+                "dividends": None if dividends_not_tracked else round(total_dividends, 2),
                 "residual_cash_acquisitions": round(residual, 2),
                 "capex_pct_of_cfo": round(total_gross_capex / total_cfo * 100, 1) if total_cfo > 0 else None,
-                "dividends_pct_of_cfo": round(total_dividends / total_cfo * 100, 1) if total_cfo > 0 else None,
+                "dividends_pct_of_cfo": None if dividends_not_tracked else (round(total_dividends / total_cfo * 100, 1) if total_cfo > 0 else None),
                 "fcf_pct_of_cfo": round(total_fcf / total_cfo * 100, 1) if total_cfo > 0 else None,
             },
             "per_year_fcf": per_year_fcf,
@@ -9477,6 +9523,13 @@ class ResearchDataAPI:
 
         if market_cap:
             result["market_cap"] = market_cap
+
+        if dividends_not_tracked:
+            result["dividends_not_tracked"] = True
+            result["dividends_note"] = (
+                "Dividends are not ingested for US listings — figures shown as null, "
+                "not $0. Do not read absence as 'pays no dividend'."
+            )
 
         if self._is_bfsi(symbol) or self._is_insurance(symbol):
             result["bfsi_investments_caveat"] = (
