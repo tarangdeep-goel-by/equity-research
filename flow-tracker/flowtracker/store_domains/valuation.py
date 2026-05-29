@@ -38,7 +38,10 @@ class ValuationMixin:
             "SELECT pe_trailing FROM valuation_snapshot WHERE symbol = ? AND date = ?",
             (snapshot.symbol, snapshot.date),
         ).fetchone()
-        warnings = _validate_row("valuation_snapshot", snapshot.model_dump())
+        warnings = _validate_row(
+            "valuation_snapshot", snapshot.model_dump(),
+            market=getattr(snapshot, "market", "NSE"), currency=getattr(snapshot, "currency", "INR"),
+        )
         if warnings:
             _val_logger.warning("valuation_snapshot %s/%s: %s", snapshot.symbol, snapshot.date, "; ".join(warnings))
         if existing and existing["pe_trailing"] != snapshot.pe_trailing:
@@ -942,7 +945,10 @@ class ValuationMixin:
         cursor = self._conn.cursor()
         count = 0
         for r in records:
-            warnings = _validate_row("fmp_key_metrics", r.model_dump())
+            warnings = _validate_row(
+                "fmp_key_metrics", r.model_dump(),
+                market=getattr(r, "market", "NSE"), currency=getattr(r, "currency", "INR"),
+            )
             if warnings:
                 _val_logger.warning("fmp_key_metrics %s/%s: %s", r.symbol, r.date, "; ".join(warnings))
             cursor.execute(

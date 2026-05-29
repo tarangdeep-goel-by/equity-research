@@ -25,7 +25,10 @@ class FundamentalsMixin:
                 "SELECT revenue FROM quarterly_results WHERE symbol = ? AND quarter_end = ?",
                 (r.symbol, r.quarter_end),
             ).fetchone()
-            warnings = _validate_row("quarterly_results", r.model_dump())
+            warnings = _validate_row(
+                "quarterly_results", r.model_dump(),
+                market=getattr(r, "market", "NSE"), currency=getattr(r, "currency", "INR"),
+            )
             if warnings:
                 _val_logger.warning("quarterly_results %s/%s: %s", r.symbol, r.quarter_end, "; ".join(warnings))
             if existing and existing["revenue"] != r.revenue:
@@ -79,7 +82,10 @@ class FundamentalsMixin:
                 "SELECT revenue FROM annual_financials WHERE symbol = ? AND fiscal_year_end = ?",
                 (r.symbol, r.fiscal_year_end),
             ).fetchone()
-            warnings = _validate_row("annual_financials", r.model_dump())
+            warnings = _validate_row(
+                "annual_financials", r.model_dump(),
+                market=getattr(r, "market", "NSE"), currency=getattr(r, "currency", "INR"),
+            )
             if warnings:
                 _val_logger.warning("annual_financials %s/%s: %s", r.symbol, r.fiscal_year_end, "; ".join(warnings))
             if existing and existing["revenue"] != r.revenue:
@@ -310,7 +316,10 @@ class FundamentalsMixin:
         """Upsert quarterly balance sheet data."""
         count = 0
         for row in rows:
-            warnings = _validate_row("quarterly_balance_sheet", row)
+            warnings = _validate_row(
+                "quarterly_balance_sheet", row,
+                market=row.get("market", "NSE"), currency=row.get("currency", "INR"),
+            )
             if warnings:
                 _val_logger.warning("quarterly_balance_sheet %s/%s: %s", symbol, row.get("quarter_end"), "; ".join(warnings))
             self._conn.execute(
@@ -347,7 +356,10 @@ class FundamentalsMixin:
         """
         count = 0
         for row in rows:
-            warnings = _validate_row("quarterly_cash_flow", row)
+            warnings = _validate_row(
+                "quarterly_cash_flow", row,
+                market=row.get("market", "NSE"), currency=row.get("currency", "INR"),
+            )
             if warnings:
                 _val_logger.warning("quarterly_cash_flow %s/%s: %s", symbol, row.get("quarter_end"), "; ".join(warnings))
             self._conn.execute(

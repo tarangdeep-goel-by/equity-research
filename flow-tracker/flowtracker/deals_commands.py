@@ -10,6 +10,7 @@ import typer
 from rich.console import Console
 from rich.progress import Progress
 
+from flowtracker.market import MarketCalendar
 from flowtracker.deals_client import DealsClient
 from flowtracker.deals_display import (
     display_deals_summary,
@@ -110,7 +111,7 @@ def backfill(
     days: list[date] = []
     d = start
     while d <= end:
-        if d.weekday() < 5:  # Mon-Fri
+        if MarketCalendar.is_trading_day(d):  # Mon-Fri
             days.append(d)
         d = d + timedelta(days=1)
 

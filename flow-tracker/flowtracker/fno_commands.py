@@ -11,6 +11,7 @@ from rich.progress import track
 from rich.table import Table
 
 from flowtracker.fno_client import FnoClient, FnoFetchError
+from flowtracker.market import MarketCalendar
 from flowtracker.store import FlowStore
 
 app = typer.Typer(
@@ -53,7 +54,7 @@ def _trading_days_back(end: date, n: int) -> list[date]:
     days: list[date] = []
     cur = end
     while len(days) < n:
-        if cur.weekday() < 5:
+        if MarketCalendar.is_trading_day(cur):
             days.append(cur)
         cur -= timedelta(days=1)
     days.reverse()
@@ -91,7 +92,7 @@ def _gap_fill_targets(store: FlowStore, today: date, trailing: int) -> list[date
     targets: list[date] = []
     cur = start
     while cur <= today:
-        if cur.weekday() < 5:
+        if MarketCalendar.is_trading_day(cur):
             targets.append(cur)
         cur += timedelta(days=1)
     return targets
@@ -208,7 +209,7 @@ def backfill(
     days: list[date] = []
     current = start
     while current <= end:
-        if current.weekday() < 5:
+        if MarketCalendar.is_trading_day(current):
             days.append(current)
         current += timedelta(days=1)
 
@@ -439,7 +440,7 @@ def participant(
     trading_days: list[date] = []
     cursor = date.today()
     while len(trading_days) < days:
-        if cursor.weekday() < 5:
+        if MarketCalendar.is_trading_day(cursor):
             trading_days.append(cursor)
         cursor -= timedelta(days=1)
     trading_days.sort()

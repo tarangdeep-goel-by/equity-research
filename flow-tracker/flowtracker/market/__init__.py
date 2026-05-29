@@ -130,6 +130,8 @@ def infer_market(ticker: str) -> Market:
     return DEFAULT_MARKET
 
 
+from flowtracker.market.calendar import MarketCalendar  # noqa: E402
+
 __all__ = [
     "Market",
     "MarketConfig",
@@ -140,4 +142,5 @@ __all__ = [
     "infer_market",
     "to_aggregate",
     "fmt_monetary",
+    "MarketCalendar",
 ]

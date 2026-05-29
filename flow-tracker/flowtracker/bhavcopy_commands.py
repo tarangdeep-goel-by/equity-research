@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
+from flowtracker.market import MarketCalendar
 from flowtracker.bhavcopy_client import BhavcopyClient
 from flowtracker.bhavcopy_display import (
     display_bhavcopy_fetch_result,
@@ -72,7 +73,7 @@ def backfill(
 
     with BhavcopyClient() as client, FlowStore() as store:
         while current <= end:
-            if current.weekday() >= 5:
+            if not MarketCalendar.is_trading_day(current):
                 current += timedelta(days=1)
                 continue
 

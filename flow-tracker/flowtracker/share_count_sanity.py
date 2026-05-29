@@ -19,7 +19,7 @@ from typing import Any
 
 import yfinance as yf
 
-from flowtracker.fund_client import nse_symbol
+from flowtracker.market import Market, market_symbol
 from flowtracker.store import FlowStore
 
 
@@ -35,10 +35,10 @@ def _get_screener_shares(store: FlowStore, symbol: str) -> float | None:
     return float(val) if val is not None else None
 
 
-def _get_yfinance_shares(symbol: str) -> float | None:
+def _get_yfinance_shares(symbol: str, market: Market = Market.NSE) -> float | None:
     """Live yfinance ``sharesOutstanding`` for the symbol (auto-suffixes ``.NS``)."""
     try:
-        ticker = yf.Ticker(nse_symbol(symbol))
+        ticker = yf.Ticker(market_symbol(symbol, market))
         val = ticker.info.get("sharesOutstanding")
     except Exception:
         return None
@@ -63,6 +63,7 @@ def check_share_count_divergence(
     *,
     threshold_pct: float = 10.0,
     store: FlowStore | None = None,
+    market: Market = Market.NSE,
 ) -> dict[str, Any]:
     """Compare Screener vs yfinance shares_outstanding for a single symbol.
 
@@ -87,7 +88,7 @@ def check_share_count_divergence(
         if own_store:
             s.close()
 
-    yfinance = _get_yfinance_shares(symbol)
+    yfinance = _get_yfinance_shares(symbol, market)
 
     if screener is None and yfinance is None:
         return {"symbol": symbol, "status": "both_missing"}

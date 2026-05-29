@@ -25,6 +25,7 @@ from datetime import date, timedelta
 import httpx
 
 from flowtracker.bhavcopy_models import DailyStockData
+from flowtracker.market import MarketCalendar
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,7 @@ class BhavcopyClient:
 
         while current <= end:
             # Skip weekends
-            if current.weekday() >= 5:
+            if not MarketCalendar.is_trading_day(current):
                 current += timedelta(days=1)
                 continue
 

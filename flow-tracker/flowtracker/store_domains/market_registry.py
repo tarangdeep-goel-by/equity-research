@@ -132,6 +132,68 @@ class MarketRegistryMixin:
         ).fetchone()
         return (row["company_id"], row["warehouse_id"]) if row else None
 
+    # --- Symbol Registry (WS1: multi-market dimension) ---
+
+    def upsert_symbol_registry(
+        self,
+        symbol: str,
+        market: str = "NSE",
+        *,
+        isin: str | None = None,
+        company_name: str | None = None,
+        sector: str | None = None,
+        gics: str | None = None,
+    ) -> None:
+        """Insert or update a symbol_registry entry.
+
+        Currency + fiscal_year_system are derived from the market config (never
+        passed in). isin/company_name/sector/gics use COALESCE on conflict so a
+        partial update never nulls out existing data; currency/fiscal_year_system/
+        updated_at are always refreshed.
+        """
+        from flowtracker.market import Market, market_config
+
+        cfg = market_config(Market(market))
+        currency = cfg.currency
+        fys = "APR_MAR" if cfg.fiscal_year_end_month == 3 else "CALENDAR"
+        self._conn.execute(
+            """INSERT INTO symbol_registry
+               (symbol, market, isin, company_name, currency, fiscal_year_system,
+                sector, gics, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+               ON CONFLICT(symbol, market) DO UPDATE SET
+                 isin=COALESCE(excluded.isin, symbol_registry.isin),
+                 company_name=COALESCE(excluded.company_name, symbol_registry.company_name),
+                 sector=COALESCE(excluded.sector, symbol_registry.sector),
+                 gics=COALESCE(excluded.gics, symbol_registry.gics),
+                 currency=excluded.currency,
+                 fiscal_year_system=excluded.fiscal_year_system,
+                 updated_at=datetime('now')""",
+            (symbol.upper(), market, isin, company_name, currency, fys, sector, gics),
+        )
+        self._conn.commit()
+
+    def get_symbol_registry_entry(self, symbol: str, market: str = "NSE") -> dict | None:
+        """Get a single symbol_registry entry as a dict, or None."""
+        row = self._conn.execute(
+            "SELECT * FROM symbol_registry WHERE symbol = ? AND market = ?",
+            (symbol.upper(), market),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_symbol_registry(self, market: str | None = None) -> list[dict]:
+        """Get all symbol_registry entries, optionally filtered by market."""
+        if market:
+            rows = self._conn.execute(
+                "SELECT * FROM symbol_registry WHERE market = ? ORDER BY market, symbol",
+                (market,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM symbol_registry ORDER BY market, symbol"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def upsert_peer_links(self, symbol: str, peers: list[dict]) -> int:
         """Replace all Yahoo peer links for a symbol."""
         symbol = symbol.upper()
