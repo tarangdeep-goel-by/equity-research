@@ -1628,6 +1628,8 @@ CREATE TABLE IF NOT EXISTS us_consensus_estimates (
     date TEXT NOT NULL,
     target_mean REAL,
     target_median REAL,
+    target_high REAL,
+    target_low REAL,
     num_analysts INTEGER,
     recommendation TEXT,
     forward_pe REAL,
@@ -1816,6 +1818,7 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         self._migrate_symbol_registry()
         self._migrate_us_registry()
         self._migrate_us_annual_financials()
+        self._migrate_us_consensus_estimates()
 
         # Additive domain namespaces (refactor P1.4): store.portfolio.<method>()
         # works alongside the flat store.<method>() API.
@@ -2064,6 +2067,24 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
             if col_name not in existing:
                 self._conn.execute(
                     f"ALTER TABLE us_annual_financials ADD COLUMN {col_name} {col_type}"
+                )
+        self._conn.commit()
+
+    def _migrate_us_consensus_estimates(self) -> None:
+        """Add analyst target high/low to us_consensus_estimates (US add-on).
+
+        Idempotent — guarded by PRAGMA table_info. US-only table, so India
+        reads/writes are untouched. Enables the fair_value bear/base/bull range
+        to use the consensus low/mean/high directly.
+        """
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(us_consensus_estimates)").fetchall()
+        }
+        for col_name in ("target_high", "target_low"):
+            if col_name not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE us_consensus_estimates ADD COLUMN {col_name} REAL"
                 )
         self._conn.commit()
 

@@ -1178,6 +1178,8 @@
       'num_analysts',
       'recommendation',
       'symbol',
+      'target_high',
+      'target_low',
       'target_mean',
       'target_median',
     ]),

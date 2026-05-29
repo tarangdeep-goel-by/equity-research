@@ -175,6 +175,7 @@ class UsMarketMixin:
 
     _US_CONSENSUS_COLS = (
         "symbol", "market", "currency", "date", "target_mean", "target_median",
+        "target_high", "target_low",
         "num_analysts", "recommendation", "forward_pe", "forward_eps",
         "eps_current_year", "eps_next_year", "earnings_growth", "current_price",
     )

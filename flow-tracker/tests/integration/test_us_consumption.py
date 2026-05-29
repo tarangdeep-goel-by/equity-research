@@ -118,8 +118,8 @@ def _seed_us(store: FlowStore) -> None:
     ])
     store.upsert_us_consensus_estimates([
         {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
-         "date": "2025-05-29", "target_mean": 230.0, "num_analysts": 40,
-         "eps_next_year": 7.50},
+         "date": "2025-05-29", "target_mean": 230.0, "target_high": 300.0,
+         "target_low": 170.0, "num_analysts": 40, "eps_next_year": 7.50},
     ])
     # ~60 daily bars so technicals (MACD/BB/ADX need 30+) + price-perf + WACC
     # beta have something to read (WS-4).
@@ -693,3 +693,21 @@ class TestWS7LiveDataFixes:
             d = api.get_dupont_decomposition("SBIN")
         # India never takes the us_annual branch.
         assert d.get("data_source") != "us_annual"
+
+
+class TestConsensusTargetRange:
+    def test_fair_value_full_range_from_consensus_high_low(self, db):
+        # target_high/low are now persisted -> fair_value emits the consensus
+        # low/mean/high directly as bear/base/bull (no PE-fallback).
+        with ResearchDataAPI() as api:
+            fv = api.get_fair_value(US_SYMBOL)
+        rng = fv.get("fair_value_range") or {}
+        assert rng.get("bear") == 170.0
+        assert rng.get("base") == 230.0
+        assert rng.get("bull") == 300.0
+        assert fv.get("consensus_range") == {"low": 170.0, "mean": 230.0, "high": 300.0}
+
+    def test_consensus_high_low_round_trip(self, db):
+        with ResearchDataAPI() as api:
+            rows = api._store.get_us_consensus_estimates(US_SYMBOL, US_MARKET)
+        assert rows and rows[0].get("target_high") == 300.0 and rows[0].get("target_low") == 170.0

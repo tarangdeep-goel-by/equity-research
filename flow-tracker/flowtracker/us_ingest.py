@@ -179,6 +179,8 @@ def fetch_us_consensus_estimates(
         "date": est.date,
         "target_mean": est.target_mean,
         "target_median": est.target_median,
+        "target_high": est.target_high,
+        "target_low": est.target_low,
         "num_analysts": est.num_analysts,
         "recommendation": est.recommendation,
         "forward_pe": est.forward_pe,
