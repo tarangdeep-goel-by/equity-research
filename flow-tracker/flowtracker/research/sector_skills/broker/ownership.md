@@ -23,7 +23,13 @@ Bank-subsidiary brokers and AMCs frequently list via carve-outs, creating cross-
 AMC ownership provides steady DII anchoring due to structural domestic financialization. Per FEMA NDI Rules, AMCs are eligible for 100% FDI under the automatic route (contrasting with stringent banking limits). Standalone AMCs operate with diffused institutional ownership, whereas bank-sub AMCs maintain high parent-led promoter minimums. Run `mf_changes` + `mf_conviction` concurrently to gauge peer-DII confidence cycles in listed asset managers.
 
 ### SEBI SECC / D&P Concentration Caps
-Market infrastructure institutions (Exchanges, Depositories, Clearing Corps) are governed by SEBI SECC Regulations (Stock Exchanges and Clearing Corporations) and SEBI D&P Regulations (Depositories and Participants). Aggregate foreign ownership is capped at 49% (FDI 26% + FII 23%). Single-shareholder caps of 5% apply, with explicit exemptions up to 15% for specific regulated financial institutions. A breach or near-breach triggers mandatory offloading or freezes FII accumulation.
+Market infrastructure institutions (Exchanges, Depositories, Clearing Corps) are governed by SEBI SECC Regulations (Stock Exchanges and Clearing Corporations) and SEBI D&P Regulations (Depositories and Participants). Aggregate foreign ownership is capped at 49% as a single composite limit — the old 26% FDI / 23% FII sub-limit split has been abolished (FEM NDI rules), so treat it as one 49% foreign ceiling, not two sub-caps. Single-shareholder caps of 5% apply, with explicit exemptions up to 15% for specific regulated financial institutions. A breach or near-breach triggers mandatory offloading or freezes FII accumulation.
+
+### FPI Concentration Disclosure Threshold (Aug-2023 framework)
+SEBI's enhanced-disclosure rule (circular Aug 2023, effective 1 Nov 2023) requires any FPI holding **>50% of its Indian equity AUM in a single corporate group** to disclose granular beneficial ownership on a full look-through basis to the level of natural persons (exemptions exist for sub-25%-of-global-AUM and no-identified-promoter cases). For family- or conglomerate-promoted legacy brokers where a single FPI builds a concentrated position, monitor accumulation against this 50%-single-group threshold — a breach forces UBO disclosure and can trigger forced realignment/sell-down, a supply risk distinct from ordinary lock-up expiry. Flag it when `shareholder_detail` shows a single FPI's stake concentrating.
+
+### Pledged Pre-IPO Share Lock-in Enforcement (March-2026 ICDR)
+SEBI's ICDR amendment effective 16 Mar 2026 (new Reg 17 sub-reg 2) lets the issuer instruct depositories to mark pledged non-promoter pre-IPO shares as **non-transferable** for the full lock-in period (the restriction survives pledge invocation/release). Practically this closes the loophole where pledged pre-IPO shares could escape lock-in — so when building the post-IPO supply/free-float picture, treat pledged pre-IPO holdings as genuinely locked for their lock-in window rather than assuming they hit the market early.
 
 ### MTF Leverage Signaling & Pledge Distinctions
 Broker Margin Trading Facility (MTF) books are a critical leverage indicator. High MTF growth correlates with peak retail-trader exuberance and often supports FII accumulation / exit theses at cycle tops. **Distinguish** pledged shares held as client collateral from actual promoter pledging of their own equity. Misinterpreting client collateral as financial distress is a common error. Filter via `get_ownership(section='promoter_pledge')` to isolate genuine promoter-equity pledges.
@@ -50,9 +56,8 @@ For any stockbroking/fintech-broker stock listed <730 days ago (recently-listed 
 | :--- | :--- | :--- | :--- |
 | T+30d | Anchor allocation (50% tranche) | X% | locked / expired |
 | T+90d | Anchor allocation (balance 50%) | X% | locked / expired |
-| T+180d | Pre-IPO investor lock — VC roster tier-1 | X% | locked / expired |
-| T+365d | Promoter-group (selling-shareholders) | X% | locked / expired |
-| T+540d | Strategic / founder-tier promoter lock (18m SEBI floor) | X% | locked / expired |
+| T+180d | Pre-IPO investor lock + promoter holding in EXCESS of minimum promoter contribution (6-month SEBI floor) | X% | locked / expired |
+| T+540d | Minimum promoter contribution — 20% of post-issue capital (18-month SEBI floor) | X% | locked / expired |
 
 Dates sourced from the DRHP / RHP cover via `get_company_context(section='filings', query='lock-in|RHP|allotment')`. If unretrievable, raise a SPECIFIC open question citing the DRHP page, not a generic one (see Tenet 19). *Peer instances*: GROWW, ANGELONE, MOTILALOFS (legacy, but post-block-deal windows apply), 5PAISA, ICICIDIRECT (captive-broker carve-out).
 

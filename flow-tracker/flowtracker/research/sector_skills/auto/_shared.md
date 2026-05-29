@@ -3,7 +3,7 @@
 - **Auto is cyclical** — use mid-cycle earnings for valuation, not peak or trough. Current PE may look cheap at cycle peak or expensive at cycle trough
 - **EV transition progress**: % of sales from EVs/hybrids is the key structural metric. Companies with credible EV strategies deserve premium valuations
 - **Dealer inventory days** (from concall): demand leading indicator. Rising inventory = slowing demand. 20-30 days normal for PVs, 40+ concerning
-- **SOTP** for conglomerates (e.g., M&M = auto + farm + financial services, Tata Motors = JLR + India PV + India CV + EV)
+- **SOTP** for conglomerates (e.g., M&M = auto + farm + financial services). Note: Tata Motors demerged into two separately listed entities effective 1 Oct 2025 — TMPV (passenger vehicles + EV + JLR) and TML CV (commercial vehicles, renamed Tata Motors Limited); analyze the relevant entity rather than the old combined "JLR + India PV + India CV + EV" structure
 - **Raw material basket**: Steel, aluminium, rubber, precious metals. Commodity price cycles affect margins with 1-2 quarter lag
 
 ### Annual Report & Investor Deck — Auto Specifics

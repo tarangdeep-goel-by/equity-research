@@ -3,7 +3,7 @@
 ### Power Archetype
 | Subtype | Archetype | Core Regulatory / Ownership Driver | Illustrative Profile |
 | :--- | :--- | :--- | :--- |
-| **PSU generation (central)** | Sovereign Hold | GoI 51%+ floor; 20% aggregate FII cap; Electricity Act 2003 | Central thermal + hydro generators under Ministry of Power |
+| **PSU generation (central)** | Sovereign Hold | GoI 51%+ floor; 100% FDI automatic route (no power-sector FII cap — the 20% cap is PSU-bank-only); Electricity Act 2003 | Central thermal + hydro generators under Ministry of Power |
 | **PSU transmission** | Yield Monopolist | CTU monopoly; CERC-regulated ~15.5% ROE; stable DII / FII yield capture | Central transmission utility |
 | **PSU distribution** | State / Entity Proxy | State-level funding; localized discom distress; rarely directly listed | State discoms held via state holding entities |
 | **Private generation — regulated** | Holdco / Family | CERC / SERC guaranteed ROE; 100% FDI automatic; DII stability | Diversified conglomerate-led regulated power utilities |
@@ -12,10 +12,16 @@
 | **Renewable IPP / wind-solar pure-play** | Capex Turnaround | Component-level exposure; retail / FII momentum driven | Wind-turbine OEMs and solar-pure-play listcos |
 
 ### PSU Sovereignty, Foreign Caps & Divestment Cycles
-Central power PSUs operate under a strict sovereign mandate governed by the Electricity Act 2003 and the PSU Disinvestment Policy, establishing a rigid GoI 51% floor. Actual holdings typically range 51-70%. FEMA NDI Rules impose a 20% aggregate foreign investment limit for listed PSU generation / transmission entities, capping institutional headroom (similar to PSU banks). Ownership faces perpetual supply overhangs via Finance Ministry-driven PSU divestment cycles; budget targets regularly force OFS events across central generation and hydro PSUs. Isolate active divestment from mechanical 20%-cap breaches.
+Central power PSUs operate under a strict sovereign mandate governed by the Electricity Act 2003 and the PSU Disinvestment Policy, establishing a rigid GoI 51% floor (actual holdings typically 51-70%). **There is NO 20% sector foreign-investment cap on power PSUs** — the 20% aggregate FEMA NDI cap applies specifically to *PSU banks*, not power. The power sector (generation, transmission, distribution) sits under **100% FDI on the automatic route** (only power exchanges are capped, at 49%); the binding constraint for a power PSU is therefore the 51% GoI floor, which leaves up to ~49% institutional headroom, not 20%. Ownership faces perpetual supply overhangs via Finance Ministry-driven PSU divestment cycles; budget targets regularly force OFS events across central generation and hydro PSUs. Isolate active divestment from the mechanical 51%-floor / public-float dynamics rather than a non-existent 20% cap.
 
 ### Private Power FDI & Regulated ROE Stability
 Unlike PSUs, the private power sector (generation, transmission, distribution) permits 100% FDI under the automatic route per FEMA NDI Rules. Ownership stability correlates with tariff structures. Entities under CERC / SERC-determined tariffs (benchmarked to ~15.5% ROE norms) deliver predictable cash flows, fostering high DII conviction and low turnover. Merchant / IPP entities exhibit elevated ownership volatility due to commercial tariff exposure + PPA execution risks. Chronic state-discom PPA-receivables delays trigger ownership flight in private power.
+
+### SEBI Minimum Public Shareholding (MPS) — Forced OFS Overhang
+The SEBI **25% Minimum Public Shareholding** rule is a mechanical supply driver for listed PSUs: a PSU with GoI holding above 75% *must* dilute via OFS/QIP to reach ≥25% public float, creating a predictable equity-supply overhang independent of fundamentals. Several power PSUs have historically sat at or above the 75% promoter threshold. Enforce a SEBI 25% MPS compliance check via `shareholder_detail` — any PSU with public float below 25% (or hovering just above it) carries a structural forced-OFS overhang that caps near-term re-rating.
+
+### InvIT / REIT Sponsor Lock-in — Hardcoded Threshold
+For any utility monetizing transmission/renewable assets through an InvIT (or REIT-like vehicle), the binding sponsor-overhang threshold is concrete: **SEBI (InvIT) Regulations 2014, Reg 12(3) — the sponsor + sponsor group must hold a minimum 15% of total units for 3 years from listing** (post-March-2025 amendments: 15% locked for 3 years if the sponsor stays project manager ≥3 years, else 25% locked for 3 years). Use this to size the earliest possible sponsor-stake-monetization window and the unit-supply overhang on the yield vehicle.
 
 ### Promoter Pledge Protocols & Capital Cycles
 Promoter pledging is a critical distress signal in private power. Historical incidents across over-leveraged private IPPs in the previous capex cycle have made high pledge the key-red-flag indicator. Elevated pledges during group restructuring phases require daily tracking. For renewables specialists, ownership dynamics abandon the utility-yield model for aggressive capex execution. Ownership patterns track capacity additions rather than commodity cycles, with frequent QIPs and rights issues during capacity ramps. High FDI inflows target renewable listcos specifically for ESG mandates.
@@ -25,17 +31,17 @@ Value is increasingly fragmented across listed subsidiaries; always run `get_val
 
 ### Mandatory Checklist
 - [ ] Verify GoI holding and proximity to 51% floor for PSUs via `shareholder_detail`
-- [ ] Check foreign aggregate holding against the 20% FEMA limit for PSU generation / transmission
+- [ ] Check GoI holding against the 51% floor (the binding constraint — there is no 20% power-sector FII cap; that cap is PSU-bank-only) and gauge remaining public/institutional float headroom up to ~49%
 - [ ] Execute `promoter_pledge`; flag any private IPP pledge >15% as high risk
 - [ ] Run `mf_changes` + `mf_conviction` to assess DII stability vs PPA risk
 - [ ] Map recent regulatory tariff orders via `filings` (CERC / SERC updates)
 - [ ] Audit state-discom dues and capacity additions via `concall_insights`
-- [ ] Screen for OFS overhangs or rights issues via `corporate_actions`
+- [ ] Screen for OFS overhangs or rights issues via `corporate_actions`; flag SEBI 25% MPS non-compliance (promoter >75%) as a forced-OFS supply overhang
 - [ ] Isolate valuation of listed renewable / green subs via `get_valuation(section='sotp')`
 
 ### Open Questions
 - Does the DII holding pattern reflect pure yield-seeking (regulated ROE) or growth speculation (renewables capex transition)?
-- How close is the central PSU to its 20% FII aggregate cap, and will this force index-rebalancing exclusions?
+- How close is GoI holding to the 51% floor, and how much public-float / institutional headroom (up to ~49%) remains before a further OFS is constrained? (Note: power PSUs have no 20% FII cap — that cap is PSU-bank-only.)
 - Are delays in state-discom PPA receivables visibly degrading mutual-fund conviction in the private IPP?
 - For renewables specialists, is the current FDI / FPI base capable of absorbing the impending QIP equity dilution required for the next gigawatt expansion phase?
 - If the entity is monetising infra through an InvIT / REIT-like vehicle, what is the sponsor's minimum-lock-in status under SEBI REIT/InvIT Regulations 2014?
@@ -51,4 +57,4 @@ When a utility parent has recently listed a green / renewables / InvIT subsidiar
 
 If the subsidiary's `shareholder_detail` returns sparse named-holder data (common for recently-listed entities), flag as a *data limitation* and raise a SPECIFIC open question naming both entities (e.g. *"NTPCGREEN listed under 3 quarters — named FPI roster below 1% disclosure threshold; which named NTPC parent FIIs appear on NTPCGREEN's anchor book?"*).
 
-*Pattern applies to*: NTPC ↔ NTPCGREEN, POWERGRID ↔ IndiGrid InvIT (PGInvIT), Adani Power ↔ Adani Green, Tata Power ↔ Tata Power Renewable subsidiary — same 5-source path whenever a utility-parent narrative invokes a recently-listed green / yield-vehicle subsidiary.
+*Pattern applies to* (verify each relationship type before invoking — they are NOT all parent→listed-subsidiary): NTPC ↔ NTPCGREEN (genuine parent → listed green subsidiary); POWERGRID ↔ **PGInvIT** (POWERGRID's own sponsored InvIT — note IndiGrid/PGInvIT are *separate* InvITs: IndiGrid is sponsored by KKR, ex-Sterlite Power, and is NOT a POWERGRID vehicle); Adani Power ↔ Adani Green (**sister companies** separately promoted by the Adani Group, NOT parent-subsidiary); Tata Power ↔ Tata Power Renewable Energy Ltd (TPREL is an **unlisted** subsidiary — no listed cap table to cross-pull). Same 5-source path applies, but state the actual relationship type (parent-sub vs sister-co vs sponsored-InvIT vs unlisted-sub) before running the cannibalization test.

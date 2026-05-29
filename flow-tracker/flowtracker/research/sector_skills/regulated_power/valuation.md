@@ -1,7 +1,7 @@
 ## Regulated Power — Valuation Agent
 
 ### Sub-type Routing — Primary Multiple Is Not PE
-Regulated utilities earn a CERC/SERC-capped ROE (currently 15.5% on regulated equity per CERC 2024-29 block). PE on earnings of a tariff-order-transition year step-changes optically; EV/EBITDA without WACC normalization hides the regulated-return economics that actually drive book-based valuation. Route to the correct primary multiple by sub-type before pulling any peer comparable:
+Regulated utilities earn a CERC/SERC-capped ROE. The CERC 2024-29 base ROE is **sub-type-specific, not a flat 15.5%**: 15.5% for thermal + run-of-river hydro, **15.0% for transmission**, and **16.5% for storage/pumped-storage hydro** (FGD/emission-control capex earns a separate ROE pegged to SBI MCLR+350 bps, capped at 14%). Use the ROE that binds the specific asset. PE on earnings of a tariff-order-transition year step-changes optically; EV/EBITDA without WACC normalization hides the regulated-return economics that actually drive book-based valuation. Route to the correct primary multiple by sub-type before pulling any peer comparable:
 
 | Subtype | Primary multiple | Commonly-misapplied multiples that fail |
 | :--- | :--- | :--- |
@@ -52,7 +52,7 @@ Regulated-power valuation is especially WACC-sensitive because CoE drives both t
 Do NOT leave some dependent outputs at the original WACC and some at the new — that produces an incoherent fair-value triangle. Route the override through `calculate` with the WACC delta as a named input and recompute all four dependent outputs within the same section.
 
 ### Regulated-ROE Sensitivity — The Single Most Load-Bearing Regulatory Input
-WACC-override propagation above handles the *discount-rate* side. The NTPC-class gap is the other half: the **normative regulated ROE** (currently 15.5% on regulated equity under the CERC 2024-29 block) is itself a regulatory variable that can be revised at the next control-period reset, and the justified P/B is roughly linear in it. A valuation that fixes regulated ROE at the current norm and never sensitises it is silently assuming regulatory permanence — exactly the risk a regulated utility carries. Mandate an explicit regulated-ROE sensitivity:
+WACC-override propagation above handles the *discount-rate* side. The NTPC-class gap is the other half: the **normative regulated ROE** (CERC 2024-29: 15.5% thermal/RoR-hydro, 15.0% transmission, 16.5% storage hydro) is itself a regulatory variable that can be revised at the next control-period reset, and the justified P/B is roughly linear in it. A valuation that fixes regulated ROE at the current norm and never sensitises it is silently assuming regulatory permanence — exactly the risk a regulated utility carries. Mandate an explicit regulated-ROE sensitivity:
 
 - Recompute the justified P/B from `(ROE_reg − g) ÷ (CoE − g)` at **ROE_reg ± 50-100 bps** around the realized base case, and report the resulting fair-value range, not a point estimate. A 100 bps move in normative ROE typically shifts justified P/B by 10-20% at mature-utility inputs — material enough that the base case alone is not defensible.
 - Frame the downside leg concretely: "if CERC revises the normative ROE from 15.5% to 14.5% in the 2029-34 block, justified P/B falls from X× to Y×, implying Z% downside from the current price." Source the current normative ROE and any consultation-paper signals on the next reset from `get_company_context(section='annual_report', sub_section='regulatory')` or `get_company_context(section='concall_insights', sub_section='management_commentary')` where disclosed; if the next-block ROE direction is genuinely not yet signalled, state that and run the sensitivity symmetrically rather than asserting a revision.
@@ -67,6 +67,12 @@ A regulated utility's leverage is structurally set by the regulator (the CERC no
 
 ### DCF Terminal Growth — Anchor to Regulated-RAB Growth, Not GDP
 If doing a manual DCF on a regulated utility, the terminal growth anchor is **regulated-RAB growth** (5-8% nominal), not broad GDP (8-10% nominal). RAB grows through approved capex cycles, not through demand elasticity. For renewable pure-plays with 20-25Y finite PPAs, DCF should run as explicit-period-plus-terminal-zero (the PPA expires and asset value converts to residual land + re-contracting optionality at uncertain merchant rates); do NOT apply a perpetuity-growth terminal on a finite-PPA cash flow.
+
+### Merchant Realization — Cap at the CERC Price Ceiling
+For any IPP with merchant (IEX/exchange-sold) exposure, do NOT let peak-period realization assumptions run unbounded. CERC caps the **market clearing price at ₹12/kWh** on the Day-Ahead and Real-Time markets (the High-Price DAM segment allows up to ₹20/kWh for high-cost generators, but the core I-DAM is capped at ₹12). Modelling merchant cash flows at the spot peaks that appeared during the 2022 shortage (₹20/kWh in some blocks) over-values the merchant book — those peaks are precisely what the ceiling now suppresses. Cap peak merchant realization at the prevailing CERC ceiling and stress the merchant-share of the blended tariff separately from the contracted-PPA share.
+
+### LPS 2022 Scheme Expiry — Normalize the Cash-Flow Tailwind
+The Electricity (LPS) Rules 2022 included a one-time EMI scheme that let discoms clear legacy arrears to generators in instalments — this *artificially boosted* generator collections / CFO over the scheme window as legacy receivables were monetized. The EMI tranche winds down by ~2026. When valuing on trailing or near-term cash flow, **normalize out the legacy-arrears EMI inflow** so the run-rate CFO reflects ongoing billing discipline, not the one-off arrears catch-up. A DCF that capitalizes the elevated scheme-window CFO into perpetuity over-states fair value.
 
 ### Historical Band Context — Regime Shifts to Flag
 P/B band via `get_chart_data(chart_type='pbv')` gives the 5-10Y arc. Regime breaks to state explicitly, not smooth over:

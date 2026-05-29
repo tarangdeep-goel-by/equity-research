@@ -6,7 +6,7 @@ Telecom is capital-intensive and heavily-levered with material non-cash intangib
 | Sub-type | Primary multiple | Secondary | Commonly-misapplied multiples that fail |
 | :--- | :--- | :--- | :--- |
 | **Integrated wireless operator** | EV/EBITDA (10-14× through-cycle for Indian top-3) | OpFCF yield; spectrum-normalised PE | PE (spectrum-amortisation distortion), EV/Revenue (margin dispersion) |
-| **Tower / passive infrastructure** | EV/EBITDA (12-16× — higher than wireless given contracted cash flows) | P/tenancy; dividend yield | PE (D&A-heavy, reports thin accounting profit) |
+| **Tower / passive infrastructure** | EV/EBITDA (~6-8× currently for Indian towers — *de-rated below wireless* on tenant-concentration + Vi-receivables risk, despite contracted cash flows) | P/tenancy; dividend yield | PE (D&A-heavy, reports thin accounting profit) |
 | **Wireline / FTTH** | EV/EBITDA (9-12×) at maturity; EV/Homes-passed pre-maturity | ARPU × penetration NAV | PE during build-out (losses distort) |
 | **Enterprise B2B** | EV/EBITDA (10-14×) with contract-backlog premium | EV/Sales when EBITDA negative | Wireless peer PE (different business) |
 | **5G FWA pure-play** | EV/Subscribers (NAV-like) pre-scale; EV/EBITDA post-scale | Cash runway months | PE (loss-making phase) |
@@ -44,7 +44,7 @@ A report that states EV/EBITDA without also stating OpFCF yield is valuation-inc
 For diversified telecom groups, SOTP is often the biggest valuation lever:
 1. Call `get_valuation(section='sotp')` first for the tool-computed view.
 2. For each **listed subsidiary** (separately-listed tower entity, separately-listed enterprise/tech entity, separately-listed international subsidiary), take market cap × parent stake %.
-3. For each **unlisted vertical**: wireless at EV/EBITDA 10-14×; tower infra at 12-16×; enterprise at 10-14× (with SaaS-like premium for managed-services / cloud exposure); FTTH at 9-12×; digital/payments at revenue-multiple or contribution-margin basis.
+3. For each **unlisted vertical**: wireless at EV/EBITDA 10-14×; tower infra at ~6-8× currently (Indian listed towers trade at this de-rated range — Jefferies/Nomura/CLSA target ~6-6.5× FY28E — on tenant-concentration and Vi-receivables risk; do not default to a 12-16× infra premium); enterprise at 10-14× (with SaaS-like premium for managed-services / cloud exposure); FTTH at 9-12×; digital/payments at revenue-multiple or contribution-margin basis.
 4. Apply a **15-20% holding-company discount** to the aggregate sub-value (telecom HoldCo discounts are narrower than conglomerate discounts because the verticals are operationally interrelated and cross-sold).
 5. Back out implied EV/EBITDA on the standalone wireless core — the market's real view of the core franchise.
 
@@ -54,6 +54,14 @@ If `get_valuation(section='sotp')` returns sparse subsidiary mapping, fall back 
 - **Listed subsidiary (e.g. Airtel Africa — primary listing on the LSE, a foreign listing requiring FX conversion; Indus Towers — listed on the NSE India)** — take its own current market cap × the parent's disclosed stake %. Pull the sub's market cap via `get_valuation(section='snapshot', symbol=SUB_TICKER)` and the stake % from `get_company_context(section='annual_report', sub_section='subsidiaries')` or the concall; do not use book value. If the sub trades on a foreign exchange (Airtel Africa on the LSE), state the FX used to convert to INR.
 - **Unlisted but material (e.g. Nxtra data centres)** — apply a sector multiple: data-centre EV/MW (capacity × ₹/MW for operational + committed MW) or a peer EV/EBITDA from a listed data-centre comparable via `get_peer_sector(section='benchmarks')` or `get_yahoo_peers`. Extract the operational/committed MW and segment EBITDA from `get_company_context(section='concall_insights', sub_section='operational_metrics')` or `(section='annual_report', sub_section='segments')` where disclosed.
 - Where the stake %, the sub's listing/market cap, or the unlisted sub's MW/EBITDA is genuinely undisclosed, state the gap and add it to Open Questions — but a sub that *can* be valued from disclosure must be valued, not flagged.
+
+### Ind AS 116 Lease-Accounting Distortion — Use Pre-Ind AS 116 EBITDA for Tower Unit Economics
+Ind AS 116 capitalises operating leases, which inflates reported EBITDA (lease cost moves below EBITDA) *and* inflates Net Debt (lease liability is added to borrowings) simultaneously. For tower / passive-infra valuation this double-distortion is acute:
+- For tower **unit economics** (EBITDA/tower, EV/EBITDA on the tower core), prefer **pre-Ind AS 116 EBITDA** (or EBITDAaL) so the multiple is comparable to the pre-2019 history and to global peers on different lease regimes.
+- In the **EV→equity bridge**, explicitly include the Ind AS 116 lease liability in Net Debt — do not net it out or double-count it. State whether the EBITDA used is pre- or post-Ind AS 116 and keep the EBITDA basis and the Net-Debt basis consistent (post-116 EBITDA ↔ lease liability in net debt; pre-116 EBITDA ↔ lease liability excluded).
+
+### Normalise Tower EBITDA for Vi-Receivables Provisions Before Applying a Multiple
+Indian tower EBITDA (Indus Towers especially) is distorted by large provisions for doubtful debts on a stressed-operator customer (Vodafone Idea) and subsequent write-backs — e.g., a ~₹51 bn (₹5,100 Cr) FY26 write-back on overdue Vi receivables flattered reported EBITDA. Before applying an EV/EBITDA multiple, normalise out the provision charge / reversal so the multiple is on underlying run-rate EBITDA, and state the normalised vs reported figure. A multiple applied to a write-back-inflated EBITDA over-values the tower entity.
 
 ### Verify Net-Debt Composition Before the EV→Equity Bridge
 The EV→equity bridge above subtracts Net debt — but the BHARTIARTL gap was using the headline net-debt figure without verifying what it contains. For an Indian telco, the headline net-debt line frequently **excludes or inconsistently reports** the two largest quasi-debt items: **deferred spectrum payment liabilities** and **AGR dues**. Before plugging Net debt into the bridge, decompose and verify it:
@@ -73,14 +81,14 @@ At current EV, what subscriber growth + ARPU growth is the market pricing in? Bu
 - Capex: peak-5G phase then normalising to 15-20% of revenue.
 - Terminal growth: 4-5% nominal (GDP-like).
 
-If the implied ARPU path exceeds ₹350 or the implied subscriber growth exceeds 5% sustained for a mature market, the valuation is leaning on growth assumptions that are inconsistent with India's current tele-density curve. Document the implied path and stress-test it.
+Note that ₹300-350 is the *explicitly stated long-term ARPU target* of industry leaders (Bharti management commentary), so an implied path into that band is a standard bull-case assumption, not automatically a red flag. The valuation is leaning on aggressive growth only if the implied ARPU path runs *materially above* ~₹350, or if implied subscriber growth exceeds ~5% sustained for a mature market — those are inconsistent with India's current tele-density curve. Document the implied path and stress-test it against the ₹300-350 stated-target anchor.
 
 ### Peer-Premium / Discount Decomposition
 If the stock trades at an EV/EBITDA premium or discount vs sector median from `get_peer_sector(section='benchmarks')`, decompose the delta into at most five drivers: (a) ARPU delta — ₹15-25 of sustained ARPU advantage justifies 10-20% premium; (b) subscriber-market-share delta — 300-500 bps of share advantage justifies 10-15% premium; (c) spectrum-holding MHz × quality-band — premium coverage-band holdings justify a structural premium; (d) tower-tenancy-ratio delta (for tower-infra sub-type) — 0.2-0.3× tenancy-ratio advantage justifies 15-25% premium; (e) net-debt/EBITDA delta — 0.5-1.0× lower leverage justifies 10-15% premium via lower equity risk. If (a)-(e) together do not account for more than half of the observed premium, the multiple is vulnerable to mean-reversion and the bull case is leaning on re-rating rather than on operational advantage.
 
 ### What Fails for Telecom — Name These Explicitly
 - **Simple PE on reported EPS** — spectrum-amortisation policy differences + one-off gains/losses (tower-monetisation, AGR-related provisions, forex on dollar-denominated debt) distort trailing EPS beyond peer comparability.
-- **EV/Revenue** — EBITDA margin dispersion across sub-types (70-80% for towers vs 45-55% for wireless vs 25-35% for enterprise) is too wide for a single EV/Revenue multiple to be meaningful.
+- **EV/Revenue** — EBITDA margin dispersion across sub-types (~50-55% for towers post Ind AS 116 vs 45-55% for wireless vs 25-35% for enterprise) is too wide for a single EV/Revenue multiple to be meaningful.
 - **P/B** — telecom is asset-heavy but the productive asset is spectrum (amortised) and network (depreciated); book-value bears little relation to replacement or earnings power.
 - **DCF with static capex** — capex is in a 5G-peak phase; using the peak-capex year as steady-state understates terminal FCF materially. Use a capex-normalisation curve (peak → steady state over 3-4 years).
 

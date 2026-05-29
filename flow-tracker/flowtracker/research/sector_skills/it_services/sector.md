@@ -26,10 +26,10 @@ Sector reports collapse when they treat IT services as monolithic. Tier via `get
 
 ### Institutional-Flow Patterns — IT-Specific
 IT services carries 10-12% weight in Nifty, which drives specific flow mechanics that must be reflected in both ownership and sector narrative:
-- **FII-heavy structural allocation to tier-1** — top-3 tier-1s carry 20-35% FII share (direct FPI + ADR aggregation). MSCI EM and FTSE AW index rebalances drive mechanical passive flows.
+- **FII allocation to tier-1 is gated by free float, not uniform** — FII share varies widely by name because high promoter holding caps the free float: TCS carries only ~10-12% FII (Tata Sons ~72%), whereas Infosys (low promoter holding + NYSE ADR aggregation) sits in the 30%+ range. Do not generalise a single "20-35%" band across the tier-1s — check the specific name. MSCI EM and FTSE AW index rebalances drive mechanical passive flows within the free float available.
 - **USD-INR hedging flow overlay** — IT services is the cleanest INR-depreciation hedge in Nifty (dollar revenue, rupee cost base). FII flow timing correlates with USD-INR moves independent of the fundamental narrative. Segregate active fundamental buying from macro FX-hedging flows.
 - **DII rotates counter-cyclically on cycle trough** — domestic MFs increase IT exposure when discretionary cycle troughs and FIIs are de-risking; domestic-institutional share rising 200-400 bps over 2-3 quarters while FII share falls is a cycle-bottom tell.
-- **ADR aggregation on top-tier names** — 10-18% of paid-up capital as ADRs is typical for mega-cap IT; aggregate foreign ownership calculation must combine ADR + direct FPI.
+- **ADR aggregation applies only to names with an ADR program** — among the majors only Infosys and Wipro have NYSE ADRs; TCS and HCLTech do NOT. For Infosys/Wipro, aggregate foreign ownership must combine ADR + direct FPI; for TCS/HCLTech, foreign ownership is the direct FPI figure alone.
 
 Cross-check via `get_market_context(section='fii_dii_flows')` and `section='fii_dii_streak')` before claiming sector-level institutional rotation. A single stock's FII % change is not a sector signal unless corroborated at the index-weight level.
 

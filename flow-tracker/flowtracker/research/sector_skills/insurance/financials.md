@@ -39,10 +39,12 @@ Standard P&L financials are **distorted by actuarial accounting** — reported p
 
 ### Product Mix Drives VNB (Life Insurers) / Combined Ratio (General)
 For life insurers, headline VNB growth is entirely mix-driven. Product categories have radically different margin profiles:
-- **Non-Par / Guaranteed-Return / Protection (term)**: 60-90% VNB margins — highest-value mix
+- **Pure Protection (term)**: 70-100%+ VNB margins — highest-value mix
+- **Non-Par Savings / Guaranteed-Return**: typically 30-50% VNB margins — do NOT lump with protection; this is the bulk of the "non-par" book and its margin is far below pure term
 - **Participating (Par)**: 15-25% VNB margins — mid-tier
 - **ULIP (market-linked)**: 10-18% VNB margins, equity-market sensitive, lower quality
 - A life insurer growing premium strongly in ULIPs while VNB margin compresses is reporting vanity growth. Mix trajectory (Protection / Non-Par share %, QoQ) is the real forward signal
+- **High-ticket non-par tax headwind (Budget 2023)** — maturity proceeds of non-ULIP policies issued on/after 1 Apr 2023 with aggregate annual premium >₹5 lakh are taxable (s.10(10D) exemption withdrawn above the threshold). This structurally caps the high-ticket non-par savings growth that drove margin mix from FY22-23; track the share of >₹5L non-par policies and treat decelerating high-ticket non-par as a structural, not cyclical, headwind
 - Extract product-mix % from `get_company_context(section='concall_insights')` or `sector_kpis`
 
 For general insurers, the blended Combined Ratio masks toxic segments. Motor Third-Party (regulated tariff) routinely runs 130%+ combined (pure loss), Retail Health runs 90-95% (profitable), Group Health runs 100-110% (loss-leader for cross-sell). A CR improvement that is mix-driven (pulling back from Motor TP) is different from one that is pricing/claims-driven — only the latter compounds.
@@ -51,7 +53,7 @@ For general insurers, the blended Combined Ratio masks toxic segments. Motor Thi
 ### Distribution Channel Mix — Banca vs Agency vs Direct vs Broker
 Distribution channel mix determines both cost structure and counterparty risk. Each channel has different implications:
 - **Bancassurance** — low-cost, high-volume; but parent-bank renegotiation risk. Bank-sponsored insurers carry renewal risk on the distribution agreement itself
-- **Agency (tied agents)** — higher-cost (commissions 20-35%), better persistency control, slower growth
+- **Agency (tied agents)** — higher-cost channel, better persistency control, slower growth. Note: IRDAI abolished product-level commission caps in 2023, replacing them with a company-wide Expenses of Management (EoM) limit, so commission rates are now board-set and flexible rather than fixed by product — judge agency cost via the EoM ratio and per-channel acquisition cost, not a fixed cap
 - **Direct (digital + own branches)** — cheapest at scale, but requires tech and customer-acquisition investment in build years
 - **Third-party brokers / corporate agents** — flexible, but thinner margins and lower persistency
 - Extract channel mix % from `get_company_context(section='sector_kpis')` or concall — track trajectory. Heavy banca reliance is a structural vulnerability even when near-term VNB margin is strong

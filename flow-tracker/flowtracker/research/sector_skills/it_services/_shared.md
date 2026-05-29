@@ -6,7 +6,7 @@ This is an Indian IT services company. Standard manufacturing/asset-heavy metric
 - **Constant Currency (CC) Revenue Growth**: the most important metric — reported revenue includes FX tailwinds/headwinds, so CC growth isolates true demand. Always compare CC growth to reported growth
 - **Deal TCV/ACV (Total/Annual Contract Value)**: Forward revenue visibility. Large deal wins are lumpy — use trailing 4Q average. TCV >$1B is a mega-deal
 - **LTM Attrition Rate**: Talent retention — higher attrition increases replacement hiring + training costs, compressing margins. Compare against peer median and the company's own trend via `get_peer_sector(section='benchmarks')`
-- **Utilization Rate**: 82-86% is the sweet spot. Below 80% = bench bloat (margin drag). Above 88% = no capacity for new deals
+- **Utilization Rate**: 82-86% is the sweet spot. Below 80% = bench bloat (margin drag). Above 88% = no capacity for new deals. Utilization is a blended metric — companies report it both *including* and *excluding* trainees; the 82-86% sweet spot applies to the *excluding-trainees* figure, so always specify which basis is being cited. (Onsite/offshore is a revenue/effort split, not a utilization split.)
 - **EBIT Margin**: Track in 50bps bands. Every 100bps margin change on ₹1L Cr revenue = ₹1,000 Cr EBIT impact
 - **Subcontracting Cost %**: Rising = demand exceeds bench (positive short-term, margin pressure). Falling = bench building (positive long-term)
 
@@ -31,7 +31,7 @@ This is an Indian IT services company. Standard manufacturing/asset-heavy metric
 - `segmental` — client-geography split (US/Europe/RoW), vertical split (BFSI/Retail/Mfg/Healthcare), top-5 client concentration (% of revenue).
 - `mdna` — utilization, attrition, on-site/off-site mix, pyramid-cost management, pricing pressure by vertical.
 - `risk_management` — immigration/visa exposure, deal-pipeline seasonality, large-client-concentration risk, currency hedging policy.
-- `notes_to_financials` — contract-asset (unbilled revenue) aging, ESOP cost schedule, deferred-tax on R&D credits.
+- `notes_to_financials` — contract-asset (unbilled revenue) aging, ESOP cost schedule, SEZ (Section 10AA) tax-holiday status and effective-tax-rate (ETR) trajectory. ETR drifts structurally upward as older SEZ units exit their 15-year (5+5+5) holidays, dragging PAT margin even when EBIT is stable; track ETR and model the PAT-margin drag from 10AA expirations. (Indian IT relies on SEZ holidays, not US-style R&D tax credits.)
 - `corporate_governance` — CEO succession context, key technical leadership transitions, ESG/diversity metrics.
 
 **Deck high-signal sub_sections:**
@@ -42,10 +42,10 @@ This is an Indian IT services company. Standard manufacturing/asset-heavy metric
 
 ## IT Services Mandatory Metrics (new)
 
-IT Services business and risk agents MUST cite all of the following for Tier-1 IT reports (TCS, INFY, WIPRO, HCLTECH, TECHM, LTIM):
+IT Services business and risk agents MUST cite all of the following for Tier-1 IT reports (TCS, INFY, WIPRO, HCLTECH, TECHM, LTIM — note: "LTIM" is the LTIMindtree ticker, distinct from "LTM" = Last Twelve Months used for the attrition metric above):
 
 1. Top-5 and Top-10 client concentration (% of revenue)
-2. Utilization rate (onsite / offshore split)
+2. Utilization rate (specify including- vs excluding-trainees basis)
 3. Net headcount additions, latest quarter
 4. Attrition LTM (%)
 

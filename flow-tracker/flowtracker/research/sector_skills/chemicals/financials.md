@@ -9,6 +9,12 @@ Consolidated margin means little for a chemicals company without the specialty/c
 Specialty businesses can pass through RM costs with a 1-2 quarter lag because customers lock in specs, not prices — so gross margin should hold or widen over a full cycle. Commodity businesses get squeezed at both ends (input up, output capped by competition) and GM tracks the spread. The single cleanest test of pricing power: does gross margin widen despite input cost inflation? If yes, pricing power is confirmed empirically, not just claimed on the concall.
 - Compare gross margin trend vs crude/benzene/caustic/ethylene price trends from concall commentary
 
+### Inventory Holding Gains/Losses — Strip Before Normalizing EBITDA
+Chemicals carry 60-90 days of feedstock-linked inventory, so a sharp crude/petchem price move creates large *non-recurring* inventory holding gains (rising prices) or losses (falling prices) that land in reported EBITDA without reflecting underlying spread economics. A quarter of "margin expansion" can be pure inventory gain that reverses the moment prices stabilize, and a "margin collapse" can be an inventory writedown rather than a demand problem. This is the single most common reason a trailing EBITDA multiple misprices a chemicals name.
+- Read concall commentary for management-disclosed inventory gain/loss or "inventory revaluation" callouts; cross-check against the direction of feedstock prices that quarter
+- Strip the estimated holding gain/loss out before computing normalized EBITDA and the multiple — never anchor a valuation to a feedstock-spike quarter's reported EBITDA
+- Distinguish this from genuine spread/mix improvement: holding gains reverse with prices, spread/mix gains persist
+
 ### Capex Cycles & Incremental ROCE — Don't Panic on Asset Turnover Decline
 Chemicals is capex-heavy: ₹500-2,000 Cr plants take 2-3 years to commission and ramp. During the capex build phase, asset turnover drops and ROCE compresses mechanically — this is not a deteriorating business, it's gross block ahead of revenue. The real question is incremental ROCE once the new capacity ramps (typical curve: ~60% utilization in Y1, ~85% by Y3). Penalizing headline ROCE during the build without modeling the ramp misreads the setup entirely.
 - Call `get_quality_scores(section='incremental_roce')` when available, or compute manually via `calculate` using delta-EBIT vs delta-capital-employed
@@ -20,7 +26,7 @@ Chemicals carries high raw material inventory (60-90 days) because of import dep
 - Cross-check the direction against concall commentary before concluding
 
 ### Forex & Export Mix
-Exports often run 30-60% of revenue, so INR depreciation flatters reported growth and appreciation compresses it. Forex gains/losses routinely hit Other Income and can distort PAT — check before extrapolating a quarter's earnings.
+Exports often run 30-60% of revenue, so INR depreciation flatters reported growth and appreciation compresses it. Know where forex sits in the P&L: under Ind AS 21, forex on operating monetary items (trade receivables/payables) is operating in nature and properly belongs above the EBITDA line, while forex on borrowings flows through finance costs — but Indian companies frequently net forex into "Other Income," which distorts both EBITDA and PAT comparisons. Check the placement and the operating-vs-financing split before extrapolating a quarter's earnings; a forex-inflated "Other Income" is not operating profit.
 - Pull FX impact via `get_fundamentals(section='cash_flow_quality')` or concall notes
 - Note the hedging horizon (typically 6-12 months forward); unhedged exporters carry more quarterly volatility
 

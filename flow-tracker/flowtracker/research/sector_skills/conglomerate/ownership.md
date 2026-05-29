@@ -1,7 +1,7 @@
 ## Conglomerate — Ownership Agent
 
 ### Public Float Sub-Breakdown — Mandatory for Conglomerates
-The 'Public' shareholding bucket (the non-promoter, non-institutional holders) lumps together **retail investors (<2 lakh shares), Corporate Bodies/HNIs, and high-networth individuals** — three categories with very different signal value. For conglomerates (large Indian conglomerate groups with complex multi-entity structures), this sub-breakdown is a **mandatory analytical dimension**, not optional colour.
+The 'Public' shareholding bucket (the non-promoter, non-institutional holders) lumps together **retail investors (holdings up to ₹2 lakh nominal share-capital value — defined by value held, not share count), Corporate Bodies/HNIs, and high-networth individuals** — three categories with very different signal value. For conglomerates (large Indian conglomerate groups with complex multi-entity structures), this sub-breakdown is a **mandatory analytical dimension**, not optional colour.
 
 **Why this matters specifically for conglomerates:**
 - Shell companies and related-party entities typically sit inside the 'Corporate Bodies' sub-bucket, not the promoter line
@@ -17,7 +17,7 @@ The 'Public' shareholding bucket (the non-promoter, non-institutional holders) l
 
 | Public sub-category | % | Key names | Signal |
 |---|---|---|---|
-| Retail (<2L shares) | — | (aggregate) | dispersed holder base; low governance concentration |
+| Retail (≤₹2L nominal value) | — | (aggregate) | dispersed holder base; low governance concentration |
 | Corporate Bodies / Trusts | — | top 3 named | material if >5% aggregate; check for related-party linkages |
 | HNIs / high-conc individuals | — | top 3 named | check for deemed-promoter classification history |
 
@@ -32,12 +32,18 @@ Conglomerates often have multiple listed entities within the same group (parent 
 
 Use `get_valuation(section='sotp')` for the listed-subsidiary map. If a group-level FII exit occurs, it usually hits ALL listed entities simultaneously — track the correlation.
 
+### FPI Single-Group Concentration — UBO Look-Through Risk
+SEBI's enhanced-disclosure framework (Aug 2023 circular, effective 1 Nov 2023) requires any FPI holding **>50% of its Indian equity AUM in a single corporate group** (or >₹25,000 Cr total Indian equity AUM) to disclose granular ultimate beneficial owners drilled to the natural-person level, with no de-minimis threshold — or unwind. This bites conglomerate ownership directly: a group-concentrated FPI on the register that cannot/will not make the look-through disclosure faces forced realignment, a latent supply overhang. Check whether any large FPI holder is group-concentrated and flag the look-through/liquidation risk. Note the Mar 2024 exemption: an FPI is relieved if the group's apex company has *no identified promoter* and the FPI is <50% concentrated after excluding that apex holding — relevant for promoter-less flagship structures.
+
+### Minimum Public Shareholding (25%) — Deemed-Promoter Stress Test
+If concentrated Corporate-Body / HNI holders in the Public bucket are later deemed promoter-linked (SEBI proceedings, related-party findings), the reclassification can push effective promoter holding above 75% and breach the mandatory **25% Minimum Public Shareholding (MPS)** floor — triggering compliance action and forced promoter sell-down / delisting-pressure dynamics. Explicitly map concentrated corporate-body holdings against the 25% MPS threshold and state the headroom before any reclassification.
+
 ### Promoter Pledge — Conglomerate-Specific Framing
 The `margin_call_analysis` in `get_ownership(section='promoter_pledge')` already computes trigger prices. For conglomerates:
 
 - Aggregate pledge across group entities, not just the current ticker — a 2% pledge in the parent/flagship entity may look benign until you see 40% in a group power/infrastructure subsidiary
 - Cite the specific pledged-value Cr at current market price, and the net-debt-to-promoter-equity ratio if known
-- Call out **Non-Disposal Undertakings (NDUs)** explicitly — conglomerates are the most common users of NDU structures to bypass pledge disclosure
+- Call out **Non-Disposal Undertakings (NDUs)** explicitly — NDUs are no longer a disclosure loophole: since the SEBI SAST Second Amendment (29 Jul 2019, Reg 28(3)) an NDU falls within "encumbrance" and must be disclosed identically to a pledge. The live flags are (a) encumbrance disclosed as an NDU rather than a pledge to soften optics, and (b) any indication of undisclosed NDUs (a compliance breach, not a legal workaround)
 
 ### Short-Report Resilience Check
 For groups that have been subject to short-seller scrutiny events, include a specific sub-section:

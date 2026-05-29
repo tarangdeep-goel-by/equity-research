@@ -19,7 +19,7 @@ State which phase the sector is in for each of the four cycles; contradictory ph
 ### Competitive Hierarchy — Tier the Sector
 Sector reports collapse when they treat regulated_power as monolithic. Tier the sub-sectors via `get_peer_sector(section='sector_overview')` and `section='peer_metrics'`:
 - **Top-2 PSU thermal generators** — central generation companies with GW-scale fleets, domestic-coal linkage, sovereign credit, dispatch priority.
-- **PSU transmission monopoly** — inter-state transmission with natural-monopoly economics, 25 Cr+ fixed-asset base, stable regulated ROE.
+- **PSU transmission monopoly** — inter-state transmission with natural-monopoly economics, a gross fixed-asset base exceeding **₹2.5 lakh crore** (Power Grid ~₹2.77 lakh Cr gross block), stable regulated ROE (now 15.0% under CERC 2024-29).
 - **PSU renewable operator** — recently-IPO'd renewable arms of PSU parents with multi-GW operational + pipeline book.
 - **Top-3 private IPPs** — diversified conglomerate-led regulated + merchant power with capacity across thermal, hydro, renewable.
 - **Renewable pure-plays** — listed platforms focused on solar + wind with aggressive capex, QIP-funded growth, FII-anchored cap tables.
@@ -27,9 +27,16 @@ Sector reports collapse when they treat regulated_power as monolithic. Tier the 
 - **Power-finance-institution lenders** — dedicated central-PSU power-sector financiers (power-finance, rural-electrification, renewable-dedicated) sit adjacent to the sector as the financiers to distribution, generation, transmission, and renewable projects; their asset quality mirrors sector health directly.
 - **Pumped-Hydro Storage (PHS) operators** — central + state hydro PSUs plus integrated private renewables players sanctioning multi-GW PHS capacity on tolling-style contracts; early-stage listed exposure, but strategically significant as the primary long-duration grid-firming class through 2030.
 
+### Section 62 vs Section 63 — Classify Every Asset Before Valuing It
+The single most important legal distinction in Indian power, and it drives the valuation method directly. Under the Electricity Act 2003:
+- **Section 62 (cost-plus / determined tariff)** — the regulator (CERC/SERC) sets the tariff to guarantee a return (ROE) on the approved regulated asset base. Returns are visible and contracted; **value via P/B anchored to regulated ROE** (the Damodaran `(ROE−g)/(CoE−g)` frame). This is the regime for PSU thermal, transmission, and regulated hydro.
+- **Section 63 (competitive bidding / adopted tariff)** — the tariff is discovered through reverse-auction competitive bidding (e.g., SECI/state solar-wind auctions, UMPP, DBFOT transmission); the regulator merely *adopts* the bid tariff. There is NO guaranteed ROE — the tariff is locked for the PPA tenor and the developer bears execution + cost-overrun risk. **Value via DCF on contracted cash flows**, not P/B-on-RAB. This is the regime for most new renewables, TBCB transmission lines, and merchant/competitively-bid generation.
+
+Classify every generation asset / project in the pipeline as **Section 62 (cost-plus → P/B) or Section 63 (competitive bidding → DCF)** before applying any multiple. A blended utility will have both buckets — value each on its own regime. Applying P/B-on-RAB to a Section 63 bid-tariff asset over-states the safety of returns; applying DCF-with-no-floor to a Section 62 cost-plus asset under-states the regulated guarantee.
+
 ### Institutional-Flow Patterns — Regulated-Power-Specific
 Regulated power runs 2-4% of Nifty 50 weight and 4-7% of broader market-cap index weight, with flow mechanics distinct from BFSI:
-- **FII caution on PSU governance + regulated-cap profile** — the 20% aggregate FEMA NDI cap on PSU-sector equity constrains FII share; FII holding commonly sits below the cap for PSU thermal + transmission.
+- **FII caution on PSU governance + low-float profile** — FII headroom in power PSUs is constrained by the **51% GoI floor** (limiting public float), NOT by a 20% sector FII cap (that cap is PSU-bank-only; power is 100% FDI automatic route). FII holding commonly sits well below available float for PSU thermal + transmission given governance + regulated-return caution.
 - **DII overweight in dividend-yield compounders** — PSU generators + transmission names are core holdings in income-oriented DII schemes given the 200-400 bps G-sec spread proxy.
 - **Passive-ETF exposure in sector-index trackers** — BSE Power Index and CNX Energy constituents drive mechanical passive-flow into top-weight PSU + private utility names.
 - **Sovereign-fund anchoring for PSUs** — LIC, EPFO, and sovereign pools hold structural stakes in PSU generation / transmission, providing floor capital during divestment cycles.
@@ -41,12 +48,13 @@ Cross-check the sector flow via `get_market_context(section='fii_dii_flows')` an
 Cyclical reads miss the slow-moving structural shifts reshaping regulated-power economics over 3-5 years:
 - **Renewable transition acceleration** — the 500 GW non-fossil target by 2030 implies ~40-50 GW/year capacity addition run-rate vs current ~15-20 GW/year; financing + grid-evacuation + land-aggregation are the binding constraints.
 - **Battery-storage integration and ancillary-services market** — CERC's 2022 ancillary-services regulation creates a new revenue line for flexible-generation assets (thermal, pumped-hydro) and a new business model for standalone battery storage; early commercial rollout phase.
-- **Pumped-Hydro Storage (PHS) capacity-build** — PHS is emerging as the primary long-duration (6-12 hour) grid-firming asset class alongside BESS. Central + state PSU hydro operators + integrated private renewables players are sanctioning 5-10 GW of PHS over 2025-30 on tolling-style tariff contracts. Unit economics differ from conventional hydro (round-trip efficiency 70-80%, peak-offpeak price spread, capacity charges) and need a distinct sub-type lens rather than being bucketed with "renewable" or "hydro". CEA's PHS roadmap targets ~18-20 GW by 2032.
+- **Pumped-Hydro Storage (PHS) capacity-build** — PHS is emerging as the primary long-duration (6-12 hour) grid-firming asset class alongside BESS. Central + state PSU hydro operators + integrated private renewables players are sanctioning 5-10 GW of PHS over 2025-30 on tolling-style tariff contracts. Unit economics differ from conventional hydro (round-trip efficiency 70-80%, peak-offpeak price spread, capacity charges) and need a distinct sub-type lens rather than being bucketed with "renewable" or "hydro". CEA's NEP 2022-32 targets **26.69 GW of Pumped Storage Plant (PSP) capacity by 2031-32** (within a total 73.93 GW storage requirement alongside ~47 GW BESS), with ~19 GW the interim target for 2029-30.
 - **Green-hydrogen opportunity** — the National Green Hydrogen Mission (2023) targets 5 MMT/year green-H2 production by 2030, adding a long-duration demand sink for dedicated renewable capacity; uptake depends on electrolyzer + downstream-industrial commercial economics.
 - **Distribution-privatization pilots expanding** — the Delhi + Mumbai private-discom model is being referenced for other metros; a successful replication re-rates listed private-discom names materially.
 - **Green bonds and sustainability-linked financing** — sovereign + corporate green-bond issuance lowers WACC for renewable developers by 50-100 bps vs conventional corporate debt; accelerates renewable pipeline IRR.
 - **Flexible-operation retrofit for thermal** — supercritical + ultra-supercritical thermal is being retrofit for ramp-up/down operation to complement renewable intermittency; reshapes the economic role of thermal from base-load to flexible-reserve.
 - **Time-of-Day tariff rollout** — SERCs rolling out ToD pricing for large consumers; reshapes demand curve and merchant-market price dispersion.
+- **Resource Adequacy (RA) framework** — CEA's mandate for states to publish Resource Adequacy Plans (RAP) is the primary catalyst *forcing discoms to sign new long-term PPAs*. Track state-level RAP compliance as the leading indicator for new long-term PPA tenders (and thus the forward order book for generators); a state behind on its RAP is a near-term PPA-tender pipeline.
 
 Name the structural shift and tie it to the specific sub-type that benefits or is challenged; generic "renewable transition" framing is noise without this tie.
 
@@ -69,5 +77,5 @@ If `get_peer_sector(section='sector_overview')` returns a sparse peer set (fewer
 - "Where is the sector positioned across the renewable-transition, tariff-cycle, coal-cycle, and demand-cycle phases, and are the four aligned or divergent?"
 - "What is the CEA-reported demand-growth YoY for the most recent quarter, and is the demand-supply gap widening or narrowing at peak-demand months?"
 - "Are any CERC / SERC / MNRE draft circulars currently in public consultation that would materially reprice fuel pass-through, tariff-order ROE, or renewable-RPO compliance economics?"
-- "What is the passive-ETF-driven FII flow share vs active FII flow share in regulated_power over the last 4 quarters, given the 20% PSU FEMA cap mechanics?"
+- "What is the passive-ETF-driven FII flow share vs active FII flow share in regulated_power over the last 4 quarters, given the 51% GoI-floor low-float mechanics (not a 20% FII cap, which does not apply to power PSUs)?"
 - "For structural shifts (battery-storage commercial rollout, green-hydrogen commercial economics, distribution-privatization next-pilot): what share of incremental sector-capex is flowing to the new channel vs legacy thermal + conventional renewable?"

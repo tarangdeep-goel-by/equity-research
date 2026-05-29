@@ -25,10 +25,22 @@ Many Indian platforms are shifting business models (e.g., Zomato: food delivery 
 
 ### ESOP Adjustment — Why "Adjusted EBITDA" Understates Real Costs
 New-age companies routinely exclude ESOP costs from "Adjusted EBITDA." ESOPs are real economic cost — they dilute shareholders and would otherwise need to be paid as cash compensation. Excluding them hides the true cost of running the business.
-- Always compute **EBITDA including ESOP costs** (reported EBITDA minus ESOP expense add-back)
-- If the company reports "Adjusted EBITDA" that excludes ESOPs, flag: "Adjusted EBITDA of ₹X Cr excludes ₹Y Cr ESOP costs — true EBITDA is ₹Z Cr"
+- Always anchor on **EBITDA including ESOP costs**. Under Ind AS 102, the ESOP expense is already a charge in the statutory P&L, so *reported/statutory EBITDA already includes the ESOP cost* — do NOT subtract it again (that double-counts). The adjustment runs the other way: companies present an "Adjusted EBITDA" that ADDS BACK the ESOP charge to flatter the number, so true EBITDA = Adjusted EBITDA − ESOP add-back.
+- If the company reports "Adjusted EBITDA" that excludes ESOPs, flag: "Adjusted EBITDA of ₹X Cr adds back ₹Y Cr of ESOP cost — true (ESOP-inclusive) EBITDA is ₹Z Cr"
 - ESOP expense is in `get_fundamentals(section='cost_structure')` under employee costs or as a separate line
 - Annual dilution from ESOPs: check share count growth YoY. >2% annual dilution is material
+
+### Ind AS 116 (Leases) — EBITDA Inflation for Dark-Store / Warehouse-Heavy Models
+For quick-commerce and any fulfilment-heavy platform with a large leased dark-store / warehouse footprint, Ind AS 116 capitalises the leases as right-of-use (ROU) assets. The economic rent is then split out of operating cost and re-routed BELOW EBITDA — into ROU-asset depreciation (D&A) and lease-liability interest (finance cost). Net effect: **reported/adjusted EBITDA is structurally inflated** versus a variable-cost (rent-as-opex) fulfilment model, and the inflation scales with store count. To compare like-for-like and to gauge true cash generation:
+- Compute a **cash-EBITDA** by deducting the principal repayment of lease liabilities (the cash-rent equivalent) from reported EBITDA — pull lease-liability principal/interest from `get_fundamentals(section='cash_flow')` (financing section) and the ROU/lease notes via `get_company_context(section='annual_report', sub_section='notes_to_financials')`.
+- Flag the gap explicitly: "Reported EBITDA ₹X Cr includes the Ind AS 116 benefit of ₹Y Cr (ROU depreciation + lease interest moved below the line); cash-EBITDA after lease principal is ₹Z Cr."
+- This also distorts EV/EBITDA peer comparisons between dark-store-heavy and asset-light platforms — note the lease-accounting basis before comparing multiples.
+
+### GST / Tax Contingent Liabilities on Delivery Fees
+Food-delivery and quick-commerce platforms face live, large retrospective indirect-tax exposure that is often parked in contingent liabilities rather than provisioned. The DGGI / state GST authorities have issued 18% GST demands on **delivery fees** (treated as platform supply rather than pass-through to gig workers) — e.g. ~₹400-800+ Cr show-cause/demand notices to Zomato (incl. a ~₹803 Cr Maharashtra demand for Oct-2019–Mar-2022) and ~₹300+ Cr to Swiggy. These can also recur prospectively (the Council clarification creates an ongoing ~₹180-200 Cr/yr industry liability). Always:
+- Read the **contingent-liabilities note** (`get_company_context(section='annual_report', sub_section='notes_to_financials')`) and recent filings (`get_company_context(section='filings')`) for DGGI/GST/income-tax notices on delivery fees, and total the exposure.
+- Compare the aggregate exposure to the cash + investments balance and to annual operating cash flow — a multi-hundred-crore contingent liability that is not provisioned is a real downside-case hit to net cash and to the valuation floor.
+- Distinguish "disclosed and disputed (contingent)" from "provided for" — an unprovisioned, advanced-stage demand is the more dangerous read.
 
 ### Cash Burn & Balance Sheet
 - Track **quarterly cash burn** = change in cash + investments
@@ -66,11 +78,11 @@ For platforms mid-transition in revenue recognition (1P → 3P accounting, net-t
 - Use **segment-level pass-through revenue** (not consolidated) where possible
 - If concall gives a like-for-like restated prior-period number, use that; otherwise caveat the Rule of 40 score with the accounting-basis note.
 
-Rule of 40 formula still applies: `revenue_growth% + ebitda_margin% ≥ 40`. A platform at 25% real growth and 15% EBITDA margin passes; the same platform reporting 60% headline growth (inflated by 1P→3P gross-up) and 10% margin LOOKS stronger but the underlying unit economics haven't improved.
+Rule of 40 formula still applies: `revenue_growth% + ebitda_margin% ≥ 40`. Direction of the accounting optic matters under Ind AS 115: shifting **3P→1P (agent→principal) grosses revenue UP** (you book the full GMV instead of only the commission), inflating headline growth and depressing margin %; shifting **1P→3P (principal→agent) nets revenue DOWN** (you book only the commission), which optically depresses headline growth while expanding margin %. Either way, strip the accounting effect and benchmark Rule of 40 on like-for-like GOV/bookings growth — a platform whose headline revenue is distorted by a 1P/3P recognition change can look stronger or weaker than its true unit economics warrant.
 
 ## Per-Order Unit Economics Derivation
 When `get_company_context(section='concall_insights', sub_section='operational_metrics')` gives total orders and the financial segment gives segment revenue, DERIVE per-order metrics via `calculate`:
-- **AOV (avg order value)** = `revenue_cr × 1e7 / order_count`
+- **AOV (avg order value)** = `gov_cr × 1e7 / order_count` — AOV is basket size, so the numerator MUST be Gross Order Value (GOV) / GMV, not platform revenue. `revenue_cr × 1e7 / order_count` gives **revenue-per-order** (the platform's cut per order), a different and much smaller metric — never label it AOV. Use revenue-per-order and AOV side-by-side: revenue-per-order ÷ AOV ≈ the realised take-rate per order.
 - **Delivery cost per order** = `delivery_cost_cr × 1e7 / order_count`
 - **Contribution margin per order** = `(AOV − variable_cost_per_order) / AOV × 100`
 

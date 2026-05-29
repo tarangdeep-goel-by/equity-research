@@ -10,7 +10,7 @@ The recurring valuation error in real estate is defaulting to a PE + EV/EBITDA t
 | **Retail-Mall REIT** (NEXUS) | **NOI / Cap rate** (8-10% cap) | Distribution yield, P/NAV | PE on percentage-rent tail in a recovery year |
 | **Integrated developer** (PRESTIGE, BRIGADE, DLF) | **SOTP**: residential NAV + leasing NOI/cap + hospitality multiple | P/NAV consolidated | Single-engine multiple — destroys annuity vs transactional signal |
 | **Land-bank / township** (ANANTRAJ, ARVSMART) | **NAV per acre × monetisation discount** | P/Adj-Book | PE (pre-monetisation), DCF |
-| **Specialty — warehousing / data-centre** (EMBASSY-like specialty, emerging plays) | **NOI / Cap rate** (7-8% warehousing, 9-11% data-centre) | P/FFO, distribution yield | PE on ramp-year earnings |
+| **Specialty — warehousing / data-centre** (EMBASSY-like specialty, emerging plays) | **NOI / Cap rate** (7-8% warehousing, ~7-8.5% data-centre — yields compressed by institutional demand from the legacy 9-11%) | P/FFO, distribution yield | PE on ramp-year earnings |
 
 ### NAV per sqft — The Primary Valuation Metric for Developers
 For residential and land-bank plays, NAV per share is the institutional primary metric. Build it explicitly:
@@ -23,8 +23,14 @@ For residential and land-bank plays, NAV per share is the institutional primary 
 
 Apply a **stage-of-development factor** and a **discount for time and execution risk**: land-bank at acquisition stage carries a 30-40% discount to "at-launch" NAV, under-construction at 10-20% discount, completed inventory at 0-5% discount. Route the arithmetic through `calculate` with `land_bank_sqft`, `market_value_psf`, `net_debt`, `rera_escrow`, `shares_out` as named inputs.
 
+Two deductions that are routinely missed and materially overstate NAV if skipped:
+- **JDA economic split** — for projects sourced via Joint Development Agreements, value only the developer's economic share, NOT the full Gross Development Value (GDV). Explicitly deduct the landowner's area share or revenue share (typically 40-60% to the landowner) from each JDA project's GDV before taking NPV. Valuing JDA projects at full GDV double-counts the landowner's entitlement and inflates developer NAV.
+- **Deferred tax on land-revaluation surplus** — revaluing the historical-cost land bank to current market value creates an unrealised surplus that is taxable on monetisation. Compute and deduct the implied capital-gains tax / deferred tax liability (DTL) on the (market value − book carrying value) uplift before quoting distributable NAV; ignoring it overstates NAV by the full tax wedge on the largest single uplift in the build-up.
+
 ### Realization per sqft Is Mandatory Data — Extract, Don't Just Name
 Prior eval pattern B flagged this for GODREJPROP: realization-per-sqft was named as the "key operational signal" but never extracted into the report. The valuation desk needs the latest-quarter number with source quarter cited, the 8-quarter trajectory, and the segment-mix split. Sources: `get_company_context(section='concall_insights', sub_section='operational_metrics')`, `get_fundamentals(section='revenue_segments')`, or investor-presentation via `filings`. Without this extracted, the valuation model is building presales × realization on an unknown realization and cannot be stress-tested.
+
+**Carpet vs saleable area — reconcile the basis before multiplying.** RERA mandates that sales and area disclosures be on **carpet area**, but developers (and investor decks) frequently quote realization on **saleable / super-built-up area**, which embeds a 30-40% loading factor. If realization-per-sqft and the project/land area inputs in the NAV or presales build are on different bases, the math is overstated by the loading factor. Verify both legs are on the same basis (preferably carpet) and convert with the disclosed loading factor before multiplying area × realization.
 
 ### Presales vs Revenue Lag — Build the Bridge Explicitly
 Under IndAS 115 (transfer of control on possession), revenue is recognised at handover. Presales booked in FY+1 become reported revenue in FY+2 or FY+3 depending on construction cadence. Forecast models need both tracks:
@@ -38,11 +44,11 @@ RERA mandates 70% of customer collections sit in project-specific escrow, releas
 
 ### Cap-Rate Valuation for Commercial / REITs
 For lease-income operators use direct capitalisation: `Value = NOI / cap rate`. Current Indian regime:
-- **Prime Mumbai / Bengaluru / Hyderabad office**: 6-7% cap.
+- **Prime Mumbai / Bengaluru / Hyderabad office**: ~7.5-8.5% cap (a 6-7% cap would imply a near-zero/negative spread to the ~6.5-7% 10Y G-sec, which the market does not pay for Indian office).
 - **Tier-2 office / suburban**: 7-9% cap.
 - **Retail malls**: 8-10% cap (percentage-rent tail adds cap-rate variability).
 - **Warehousing**: 7-8% cap (improving as asset class matures).
-- **Data-centre**: 9-11% cap (wider range reflecting power-tariff and tenancy risk).
+- **Data-centre**: ~7-8.5% cap (institutional demand has compressed yields from the legacy 9-11%; 15-yr NNN hyperscaler development yields ~7.5-8.5%, with power-tariff and tenancy risk keeping the range wider than core office).
 
 Cap rates are regime-sensitive to 10Y G-sec yield — a 100 bps G-sec rally compresses cap rate 50-75 bps, driving 10-15% NAV uplift; the reverse holds on yield spikes. State the current G-sec anchor and the cap-rate spread over it as the macro link.
 
@@ -67,10 +73,10 @@ If the stock trades at a P/NAV (or P/Adj-Book) premium or discount vs sector med
 ### SOTP for Integrated Developers
 For PRESTIGE, BRIGADE, DLF, and other integrated names, SOTP is the lever that re-rates the stock. The residential NAV, leasing NOI/cap-rate block, hospitality multiple, and retail-mall block each have distinct valuation regimes; a single blended multiple loses the annuity-vs-transactional signal. Steps:
 1. Call `get_valuation(section='sotp')` for tool-computed subsidiary / segment value where available.
-2. For the leasing block, apply sub-type cap rate (6-9% office, 8-10% retail) to latest disclosed NOI.
+2. For the leasing block, apply sub-type cap rate (~7.5-8.5% prime office, 7-9% Tier-2/suburban office, 8-10% retail) to latest disclosed NOI.
 3. For the residential block, apply NAV per share as above.
 4. For hospitality, apply EV/Room or EV/EBITDA as applicable.
-5. Apply a **15-20% holding-company discount** to aggregate segment value if the developer is structured as a holdco with listed subsidiaries; zero discount for pure single-entity operator.
+5. Apply a **15-20% holding-company discount** to aggregate segment value where the SOTP is built up from *unlisted* SPVs/JVs that the market cannot directly value (the usual case for DLF, PRESTIGE, BRIGADE — their key arms such as DLF Cyber City / DCCDL are unlisted, not separately listed subsidiaries). A holdco discount in the narrow "listed-subsidiary" sense applies only when an arm is itself separately listed; do not assert listed subsidiaries for these names. Zero discount for a pure single-entity operator.
 6. Back out the implied residential-only multiple — this is the number the market is paying for the core development engine ex-annuity.
 
 ### Data-shape Fallback for Valuation Inputs

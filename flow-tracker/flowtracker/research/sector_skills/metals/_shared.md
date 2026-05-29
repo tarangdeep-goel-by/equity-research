@@ -28,13 +28,13 @@ PE is inverted for commodity companies — the lowest PE often marks the cycle p
 
 Metals equity price action is a lagging derivative of the underlying commodity. Every metals report from the **sector** and **technical** agents must cite:
 - The relevant LME / benchmark commodity spot trend (copper, aluminium, zinc, lead, iron ore 62% Fe, HRC steel, coking coal) for the last 6-12 months, via `get_market_context(section='macro')`. Commodity break of 50-DMA / 200-DMA routinely front-runs equity price action by 3-10 sessions — this is not optional flavour, it is the primary technical input for the sector.
-- The marginal-cost-of-production context: is current commodity price above / below the 2nd-quartile cost curve? Above = full cycle pricing; below = imminent supply rationalization.
+- The marginal-cost-of-production context: where does the current commodity price sit on the cost curve? Above the 4th-quartile (highest-cost marginal producers') breakeven = the whole curve is in the money (full-cycle pricing); once price falls below 4th-quartile breakeven, those marginal producers cut and supply rationalization begins. Sustained pricing below the 2nd-quartile breakeven means even the cost-competitive half is bleeding — capitulation, not just rationalization.
 
 A metals sector or technical report that does NOT open with the commodity trend is structurally incomplete — peer-relative returns and stock-level indicators are secondary to the commodity.
 
 ### EBITDA Cross-Check
 
-For a cyclical, cross-check reported EBITDA against EBITDA-per-tonne (quoted in concall) × production volume. If the recomputation differs by >15%, trust the concall recomputation and flag the divergence (possible one-offs, inventory gains/losses, or stripping-cost capitalization changes).
+For a cyclical, cross-check reported EBITDA against EBITDA-per-tonne (quoted in concall) × **sales volume** (deliveries), not production volume — EBITDA/tonne is realized on what is sold, so multiplying by production ignores inventory build/draw and overstates EBITDA in an inventory-build quarter. If the recomputation differs by >15%, trust the concall recomputation and flag the divergence (possible one-offs, inventory gains/losses, or stripping-cost capitalization changes).
 
 ### Annual Report & Investor Deck — Metals Specifics
 

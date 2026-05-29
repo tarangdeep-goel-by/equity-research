@@ -5,17 +5,17 @@
 
 | Subtype | Primary revenue engine | Dominant axis | Unit of production |
 | :--- | :--- | :--- | :--- |
-| **Discount broker** (ZERODHA-style) | F&O order-flow: `Orders × flat fee (₹15-25/order)` + cash-segment `ADTV_cash × bps × days` | order volume × per-order monetisation | orders per day, active clients, CAC/ARPU |
+| **Discount broker** (ZERODHA-style) | F&O order-flow: `Orders × flat fee (₹15-25/order)` + cash intraday `orders × flat capped fee` (cash delivery is zero-brokerage) | order volume × per-order monetisation | orders per day, active clients, CAC/ARPU |
 | **Full-service broker** (MOTILALOFS, ICICISEC) | bps-on-turnover (cash + F&O tiers) + advisory / research subscription + distribution trail | AUA × yield + relationship monetisation | revenue per relationship manager, AUA growth |
 | **Wealth / PMS** | `AUM × blended fee yield (1-2%)` + performance fee + TER-linked trail | AUM × fee yield | AUM per employee, net flows, client retention |
 | **Bank-owned broker** (HDFCSEC, KOTAKSEC, ICICIDIRECT) | Captive cross-sell on parent's liability franchise + commission + MF distribution trail | parent-base penetration | per-customer cross-sell ratio, bundled revenue |
-| **Depositary participant** (CDSL, NSDL) | Custody fee per demat account + annual maintenance + transaction fee | account count × flat fee | demat accounts, transaction throughput, duopoly share |
+| **Depository** (CDSL, NSDL) | Custody fee per demat account + annual maintenance + transaction fee | account count × flat fee | demat accounts, transaction throughput, duopoly share. *Note: CDSL/NSDL are the two **Depositories**; brokers and banks are the **Depository Participants (DPs)** that interface with clients — do not conflate the two* |
 
 ### Revenue Decomposition — Split Cash from F&O, Do Not Mix Yield Bases
 The single most common modelling error for Indian discount brokers is applying a take-rate-on-notional framework to F&O revenue. Options notional dwarfs cash-market notional while the actual monetisation is per-order at a flat fee. The correct decomposition:
 
 - **Discount broker F&O revenue** = `Number of Orders × Flat fee per order (₹15-25)` — notional turnover is analytically irrelevant for yield calculation. An ADTV-weighted take-rate produces a false-precision number because a single ₹10 Cr Nifty-option trade pays the same ₹20 as a single ₹1 L trade.
-- **Discount broker cash-segment revenue** = `ADTV_cash × bps take-rate × trading days` — cash behaves like an exchange fee line and bps-on-turnover is the right frame here.
+- **Discount broker cash-segment revenue** is order-driven, NOT a bps take-rate on turnover: cash *delivery* is typically zero-brokerage and cash *intraday* is a flat per-order fee (capped, e.g. ₹20 or 0.03%, whichever is lower). Model it as `intraday orders × flat capped fee` — applying a linear `ADTV × bps` to a discount broker's cash segment overstates revenue because delivery contributes ~nil and intraday is fee-capped. (The `ADTV_cash × bps × days` frame applies only to full-service brokers still charging percentage cash brokerage.)
 - **Full-service broker F&O revenue** = `F&O turnover × bps` on some tiers (advisory-backed, HNI books) and per-order on digital tiers — state which tier mix applies before modelling.
 - **Distribution revenue** = MF AUM × trailing commission (10-100 bps per annum depending on scheme class and regulatory TER band) + insurance first-year + AIF/PMS trail.
 - **Margin funding book (MTF) revenue** = book × lending spread (funding cost to client rate, typically 8-12% gross yield with 4-7% spread on own-net-worth funding).
@@ -44,7 +44,7 @@ F&O traders monetise 5-10× MF-only investors; the client-cohort mix matters as 
 ### Capital-Cycle Position — Market-Volume Sensitivity Is Acute
 Broker P&L is directly geared to market-turnover cycles. F&O ADTV swings 40-60% peak-to-trough through a cycle; a 40-50% volume drop in a single quarter is historically documented (COVID shock, 2008 crash reference). Cash-segment ADTV is less volatile but still cyclical with retail participation.
 
-The **2024-25 SEBI tightening regime** (F&O lot-size hike, weekly-expiry rationalisation, higher upfront-margin norms, true-to-label expense rule) is a structural step-down for F&O-heavy models — already compressed discount-broker F&O revenue by 20-30% in the first affected quarters. State the cycle phase (early / mid / late / stressed / regulatory-reset) before forecasting volume growth; extrapolating FY23-24 ADTV peak linearly is the most common forward-projection error.
+The **2024-25 SEBI tightening regime** (F&O lot-size/contract-value hike to ₹15-20 L, single-weekly-expiry-per-exchange rule live since 20 Nov 2024 — only Nifty on NSE and Sensex on BSE retain weekly expiry, the rest discontinued — higher upfront-margin norms, and the True-to-Label charges circular) is a structural step-down for F&O-heavy models — already compressed discount-broker F&O revenue by 20-30% in the first affected quarters. State the cycle phase (early / mid / late / stressed / regulatory-reset) before forecasting volume growth; extrapolating FY23-24 ADTV peak linearly is the most common forward-projection error.
 
 ### Sector-Specific Red Flags for Business Quality
 - **F&O revenue concentration >75%** (discount) or >60% (full-service) — one SEBI circular away from a revenue reset. Cite the F&O-cash split from concall explicitly.

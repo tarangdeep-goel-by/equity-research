@@ -15,7 +15,7 @@ This company is a large or mid-size Indian private-sector bank. The private-bank
 
 ### Foreign Holding Cap — 74% Ceiling Binds
 - Aggregate foreign holding = FDI + FPI + ADR/GDR + NRI; all four combined subject to 74% cap
-- Large private banks often sit close to the cap — HDFCBANK, ICICIBANK, KOTAKBANK, AXISBANK, INDUSINDBK have historically been in the 65-74% aggregate range
+- Aggregate foreign holding has fallen well below the cap post-2022 FPI selling — as of 2025/2026 HDFCBANK and ICICIBANK FII alone sit ~44% each, so aggregate foreign is far from the 74% ceiling. Do NOT assume large private banks are "near the cap"; verify the current aggregate before invoking any cap-proximity narrative. The 65-74% regime was a pre-2022 phenomenon
 - When aggregate >70%, MSCI/FTSE passive rebalance demand is already largely consumed — incremental foreign flow rate plateaus and then depends on active-manager decisions, not index flow
 - ADR/GDR aggregation is mandatory for large private banks — see `private_bank/ownership.md` Tenet 12 framing
 

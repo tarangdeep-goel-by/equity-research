@@ -8,12 +8,12 @@
 | **OEM — Passenger 4W (mass / premium split)** | Volume × Realization × Mix | cycle + segment mix | EBITDA/vehicle: mass ₹30-80k, premium ₹100-200k; per-plant utilization |
 | **OEM — 2W (commuter / premium / scooter)** | Volume × Realization; rural-skewed for commuter | rural real wages + fuel price | EBITDA/vehicle: commuter ₹6-12k, premium ₹40-50k (e.g., Royal Enfield archetype); per-dealer throughput |
 | **OEM — Commercial Vehicle (M&HCV / LCV)** | Volume × Realization; infra-capex linked | infra order-book + freight rates | EBITDA/vehicle ₹150-400k; per-plant utilization |
-| **OEM — 3W (three-wheeler passenger / cargo)** | Volume × Realization × Mix (ICE vs EV); Bajaj/M&M duopoly (fastest-EV-adopting segment in India, >50% EV penetration already achieved) | last-mile logistics demand + EV-mandate tailwind + fuel-parity TCO | EBITDA/vehicle ₹25-45k; per-plant utilization |
+| **OEM — 3W (three-wheeler passenger / cargo)** | Volume × Realization × Mix (ICE vs EV); ICE 3W led by Bajaj (~36% overall) + Piaggio, electric 3W led by Mahindra (fastest-EV-adopting segment in India, ~57% EV penetration in FY25) | last-mile logistics demand + EV-mandate tailwind + fuel-parity TCO | EBITDA/vehicle ₹25-45k; per-plant utilization |
 | **OEM — Tractor / Farm Equipment** | Volume × Realization; monsoon + farm-cycle linked | monsoon + rural real wages | EBITDA/vehicle ₹70-120k (ASP ₹6-8L, not comparable to CV); per-plant utilization |
 | **EV pure-play** | Revenue = Volume × ASP; unit economics negative until scale | cash runway + cell-cost curve | EBITDA/vehicle typically negative; runway in months |
 | **Auto ancillary — Tier-1 (platform-integrated)** | Content-per-vehicle × OEM volume × OEM-share | customer concentration + content-mix | EBITDA margin 10-18%; per-OEM revenue share |
 | **Auto ancillary — Tier-2 / component (commodity-linked)** | Unit volume × spec-linked ASP | pass-through + inventory cycle | EBITDA margin 8-14%; working-capital days |
-| **Battery / cell makers** | Capacity × utilization × price; PLI-linked | cell-chemistry + FAME/PLI rules | ₹/kWh cell cost; plant utilization |
+| **Battery / cell makers** | Capacity × utilization × price; PLI-linked | cell-chemistry + ACC-PLI (₹18,100 Cr) / PM E-DRIVE rules | ₹/kWh cell cost; plant utilization |
 | **Aftermarket — tyres / lubricants / batteries** | Replacement demand × brand realization; channel-led | fleet-on-road + replacement cycle | per-SKU gross margin; distribution depth |
 
 ### Revenue Decomposition — Always (Volume × Realization × Mix), Never a Single Line
@@ -50,6 +50,7 @@ Business-quality stress surfaces earlier than financial-quality stress. Scan for
 - **Rising discount intensity mid-cycle** — discount/vehicle lifting 20-40% YoY when the cycle is supposed to be mid-phase signals demand weakness masked by inventory push.
 - **New-model failure rate** — a failed launch (defined as <50% of internal volume guidance in the first 4 quarters) for a flagship platform is a multi-year drag because capex has been sunk against the platform.
 - **Rising inventory days** — finished-goods inventory drifting from 25-35 days to 45-60 days is a direct demand weakness signal.
+- **Order backlog / cancellation rate (premium SUVs)** — for premium-4W OEMs, the order backlog, waiting periods, and cancellation rates are leading indicators of demand and pricing power; a shrinking backlog or rising cancellations precedes discounting and is an earlier tell than registration data.
 - **EV pure-play with runway <18 months** — ongoing capex combined with quarterly cash burn eating a runway below 18 months flags dilution-imminent; below 12 months flags distress with going-concern risk if market conditions deteriorate.
 - **R&D capitalization ratio rising** — capitalized R&D / gross R&D drifting above 40% flags that accounting, not business economics, is flattering reported EBITDA; the EV-cycle peer that expenses 100% is more conservative.
 

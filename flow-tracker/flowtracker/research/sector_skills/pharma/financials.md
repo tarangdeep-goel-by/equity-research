@@ -2,7 +2,7 @@
 
 ### Geography Mix Drives Everything
 The geography split completely alters margin profile. Extract from `concall_insights` or `sector_kpis`:
-- **US Generics** — high volume, high price erosion (5-15% annually), lumpy (product launches drive revenue steps)
+- **US Generics** — high volume, lumpy (product launches drive revenue steps); price erosion has structurally moderated to low-to-mid single digits (~3-8% currently, with simple oral-solids running higher) from the high-single/double-digit cliff of FY17-22. Do not assume the old double-digit erosion regime for forward base-book modelling
 - **India Branded Formulations** — sticky revenue, high margin (25-30% EBITDA), steady growth
 - **Emerging Markets / API** — moderate margins, FX exposure
 

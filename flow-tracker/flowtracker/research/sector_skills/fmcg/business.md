@@ -5,7 +5,7 @@ FMCG is an umbrella covering at least six economically distinct archetypes. The 
 
 | Subtype | Primary revenue engine | Unit of production | Distribution model |
 | :--- | :--- | :--- | :--- |
-| **Personal care / HPC (home & personal care)** | Volume × realization × premium-mix; soaps, detergents, skin, hair | per-SKU volume; per-outlet throughput | GT-heavy (8-12 lakh outlets for leaders) + rising MT / QC |
+| **Personal care / HPC (home & personal care)** | Volume × realization × premium-mix; soaps, detergents, skin, hair | per-SKU volume; per-outlet throughput | GT-heavy (leaders' total reach ~70-90 lakh outlets, direct reach ~20-35 lakh — e.g. HUL ~90 lakh total / ~35 lakh direct) + rising MT / QC |
 | **Food & beverages (packaged)** | Volume × realization × category-mix; biscuits, dairy, beverages, chocolates | per-SKU volume; per-plant capacity utilisation | GT + MT + HORECA (hotels / restaurants / café — 15-25% of volume for beverage and packaged-food leaders); cold-chain dependency for dairy / chocolates |
 | **Packaged staples — branded / value-added (atta, branded salt, packaged tea)** | Volume × realization × brand-premium; moat is brand + distribution | per-SKU volume; per-plant throughput | GT + MT |
 | **Packaged staples — mass / commodity (edible oil, flour, sugar)** | Volume × realization with thin fixed margin on commodity spread | per-MT processed; per-refinery utilisation | GT + MT; bulk B2B side business |
@@ -17,6 +17,9 @@ State the sub-type in the report's opening paragraph before benchmarking growth,
 
 ### Revenue Decomposition — Volume × Realization × Mix (Nielsen-Style)
 For FMCG, revenue growth is never a single line — it is `Volume growth × Realization growth × Mix shift`. Volume itself decomposes to `underlying demand × distribution reach` (outlets added × throughput per outlet); realization decomposes to `base price × promo intensity`; mix decomposes to `premium-share % × rural-urban split × channel mix (GT / MT / e-comm / QC)`. Call `get_fundamentals(section='revenue_segments')` for the category / geography split and `get_company_context(section='concall_insights', sub_section='operational_metrics')` for the volume / price / mix disclosure. The skip-step surfaced in prior fmcg evals is citing "12% revenue growth" without naming whether it is 4% volume + 8% price, 8% volume + 4% price, or 12% price + 0% volume — the three readings imply radically different demand diagnoses. If volume is not separately disclosed, add the split to Open Questions as the #1 item.
+
+### Seasonality — Benchmark YoY, Not QoQ
+FMCG demand is category-seasonal, so QoQ comparisons are structurally misleading. Beverages, glucose powders, talc, and ice-cream peak in Q1 (Apr-Jun summer); skin-care, balms, and ghee/foods skew to Q3 (winter / festive Oct-Dec); detergents and staples are flatter. A Q1→Q4 sequential read on a summer-beverage-heavy portfolio (e.g. Varun Beverages, Dabur Glucose, talc lines) will show an artificial collapse that is pure seasonality, not demand weakness. Enforce **YoY (same-quarter-last-year) benchmarking** for volume, realization, and margin; only use QoQ when explicitly seasonality-adjusted and label it as such. State each company's seasonal peak/trough quarters before commenting on any sequential move.
 
 ### Moat Typology — Distinct by Sub-type
 Moat lenses differ across FMCG sub-types; enumerate the one that applies before asserting "durable franchise":
@@ -33,14 +36,14 @@ Aggregate EBITDA-margin comparison across FMCG sub-types is misleading; use sub-
 - **Food & beverages** — EBITDA margin 8-15%, gross margin 30-42%, ad-spend 5-9% (lower advertising intensity in biscuits / dairy).
 - **Packaged staples — mass / commodity (edible oil, flour, sugar)** — EBITDA margin 4-8%, gross margin 10-18%; commodity-spread business, not a brand business despite the branded-product optics.
 - **Packaged staples — branded / value-added (atta, branded salt, packaged tea)** — EBITDA margin 12-16%, gross margin 30-45%; brand-premium category that benchmarks closer to food & beverages than to commodity staples. Keep the two sub-tiers separate in peer comps.
-- **Tobacco / alcobev** — EBITDA margin 30-40% (tax-gross), 15-25% (post-excise net); pricing power regulated but persistent.
+- **Tobacco** — EBITDA margin ~35-40% on gross revenue (which already nets out excise under Ind AS), translating to 50-60%+ on net-of-excise sales; pricing power regulated but persistent. **Alcobev** is a different shape — EBITDA margin ~15-18% on net revenue and only single-digit on gross (state-excise dominates the gross price). Do not pool the two into one band.
 - **OTC / wellness** — EBITDA margin 14-20%, gross margin 50-60%; trade-margin heavier than HPC.
 - **D2C** — contribution margin 40-60% (direct), EBITDA typically negative 5-20% while in growth-investment phase; state the burn-runway.
 
 Ad-spend intensity at 8-13% of revenue sustained over 5+ years is the moat signal for HPC; cutting it below 6% to prop EBITDA is a business-quality red flag masquerading as a margin expansion.
 
 ### Capital-Cycle Position — Structural Growth + Short-Cycle Demand
-FMCG is a structural-growth sector (household consumption compounds with nominal GDP) but with three overlapping short-cycle layers: rural demand (2-3Y mini-cycle tied to monsoon, MNREGA wages, agri incomes), urban demand (premiumization trend interrupted by household-budget pressure), and commodity input cycle (palm oil, wheat, milk, crude-derivatives). Current phase (FY24-25): rural recovering from 4-quarter slowdown, urban premiumization intact, palm and wheat stable post-2023 spike. State the phase across all three layers before forecasting near-term volume; the common failure mode is extrapolating a mid-cycle year's margin profile into perpetuity.
+FMCG is a structural-growth sector (household consumption compounds with nominal GDP) but with three overlapping short-cycle layers: rural demand (2-3Y mini-cycle tied to monsoon, MNREGA wages, agri incomes), urban demand (premiumization trend interrupted by household-budget pressure), and commodity input cycle (palm oil, wheat, milk, crude-derivatives). Current phase (FY26): rural has structurally *outpaced* urban for ~6-8 consecutive quarters (e.g. rural ~7-8% vs urban ~3-5% volume growth through 2025, gap narrowing into late-FY26 as urban recovers and post-GST-2.0 demand normalises), urban premiumization intact with smaller towns leading the urban rebound, palm/wheat stable post-2023 spike. Re-verify the current rural-vs-urban delta against the latest NielsenIQ / management commentary rather than assuming rural is the laggard — the old "rural recovering from a slowdown" framing is stale. State the phase across all three layers before forecasting near-term volume; the common failure mode is extrapolating a mid-cycle year's margin profile into perpetuity.
 
 ### Sector-Specific Red Flags for Business Quality
 Business-quality stress shows up earlier in operating telemetry than in the P&L:

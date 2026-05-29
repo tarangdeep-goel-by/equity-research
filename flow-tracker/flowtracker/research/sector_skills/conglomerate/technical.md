@@ -14,6 +14,14 @@ Conglomerate flagships are prone to binary news events (short-seller reports, SE
 - IV near or below HV despite an open binary risk signals complacency — the move, if it comes, is under-hedged
 - Frame the F&O read around the IV/HV gap and the days-to-event, not just open-interest and PCR; for a group-wide governance event, note that the IV spike typically propagates across all liquid group-sibling options, not just the flagship
 
+### MWPL / F&O-Ban Mechanics — Distorted Short-Covering in Stressed Groups
+Conglomerate flagships under governance stress are frequent F&O-ban candidates, and the ban distorts the very price action you are reading. Track this with the **current** rules (effective Oct 2025), not the old notional-OI ones:
+
+- MWPL is now the **lower of 15% of free float or 65× average cash volume** across exchanges — for a low-float promoter-heavy conglomerate the free-float leg binds, so the ban threshold is *smaller* than market cap suggests
+- A stock enters the **F&O ban at FutEq OI ≥ 95% of MWPL** and exits only when it falls **below 80%**. OI is now **Future-Equivalent (FutEq, delta-adjusted)** rather than notional — so deep-OTM option OI no longer inflates a name into ban as easily
+- In ban, no fresh positions are allowed (only reduction), which **chokes short-covering and fresh shorting** — a stressed flagship in ban can see price moves driven by forced unwinds rather than genuine sentiment; read OI-change with this in mind
+- Flag when FutEq-OI utilisation crosses ~80% of MWPL (approaching ban) as an early distortion signal, and note bans typically propagate across liquid group-sibling F&O names in a group-wide stress event
+
 ### Open Questions — Conglomerate Technical-Specific
 - "Is the current move isolated to the flagship, or is it synchronized across listed group siblings (group-wide repricing)?"
 - "What is the IV/HV gap ahead of the next binary catalyst, and does it signal an event premium or complacency?"

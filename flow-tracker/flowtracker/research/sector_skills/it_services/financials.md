@@ -32,13 +32,15 @@ Margins can expand only to the extent there is headroom on the four structural l
 ### Earnings Quality Checks
 - **DSO (Days Sales Outstanding)**: AVAILABLE from `get_quality_scores(section='sector_health')` — returns `dso_days`, `dso_trend`, `dso_yoy_change`. Rising DSO while revenue slows = aggressive revenue recognition / unbilled revenue buildup. Flag if DSO increases >5 days YoY
 - **FCF / PAT conversion**: AVAILABLE from `get_quality_scores(section='capex_cycle')` — returns `fcf_pat_ratio`. Indian IT should convert >80% of PAT to FCF. If below 70%, flag as earnings quality concern
+- **Effective Tax Rate (ETR) drift from SEZ sunset**: Indian IT margins were historically lifted by the SEZ (Section 10AA) income-tax holiday (100% exemption for 5 years, 50% for the next 5, then 50% of ploughed-back profit for 5). New SEZ units commencing after 31-Mar-2020 do NOT qualify, and older units roll off their 15-year benefit one by one — so ETR drifts structurally upward and PAT margin can fall even when EBIT margin is flat. Track the ETR trajectory (and any move to the Section 115BAA concessional regime, as Infosys did from FY25) and model the PAT-margin drag separately from the operating story
+- **Capitalized transition costs on large deals**: Upfront transition / ramp-up costs on large multi-year deals are often capitalized rather than expensed. Aggressive capitalization inflates near-term EBIT and creates future amortization headwinds. Scrutinize the capitalization policy in `notes_to_financials` and adjust EBIT if it looks aggressive relative to peers
 
 ### Margin Drivers
 For IT services, margin moves are driven by:
 1. **Utilization rate** (billable / total employees) — the biggest lever. 82-86% sweet spot
 2. **Onshore/offshore mix** — every 1% shift to offshore improves margin ~30-50bps
 3. **Subcontracting costs** — rises when demand > capacity (positive short-term, margin pressure)
-4. **Wage hikes** — typically Q1 (Apr-Jun) impact, seasonal margin dip
+4. **Wage hikes** — historically a Q1 (Apr-Jun) seasonal margin dip, but post-2023 major players frequently *defer* hikes to Q2/Q3 (or stagger them) to protect margins, so don't assume a fixed Q1 hit — confirm the timing from the concall
 5. **Currency tailwinds/headwinds** — explain cross-currency impact
 
 Use `get_fundamentals(section='cost_structure')` to identify employee cost trends and subcontracting costs.
@@ -46,7 +48,7 @@ Use `get_fundamentals(section='cost_structure')` to identify employee cost trend
 ### FX Impact & Receivables
 - If >30% of revenue is from exports (always true for IT), analyze currency translation impact on margins. Check Other Income for FX gains/losses and hedging gains
 - Track receivables/unbilled revenue as % of revenue — rising ratio = revenue recognition risk
-- DSO >90 days or receivables >20% of revenue needs ageing context
+- DSO >90 days or receivables >25% of revenue needs ageing context (a normal ~75-day DSO already equals ~20.5% of revenue, so the >20% line over-flags routine books — use >25% as the threshold)
 
 ### Revenue Classification
 - Break revenue by **vertical** (BFSI, retail, telecom, manufacturing) and **geography** (Americas, Europe, RoW) if available from concall_insights

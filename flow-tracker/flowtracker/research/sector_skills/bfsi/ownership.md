@@ -7,14 +7,14 @@
 |---|---|---|
 | **Public Sector (PSU) Banks** (bank-nationalisation-act banks) | **20%** aggregate (FII + FDI + NRI combined) | **SBI Act 1955 s.3(3)** for the state-bank-act entity; **Banking Companies (Acquisition and Transfer of Undertakings) Acts 1970/1980** for other PSBs |
 | **Private Sector Banks** (large private banks) | **74%** aggregate (FDI 49% auto + additional with govt approval; FII sub-limit 49%) | RBI Master Direction on FDI in banks |
-| **Insurance companies** (life, general, reinsurance) | **74%** aggregate foreign (Indian owned & controlled required) | **Insurance Act 1938 s.2(7A)** post 2021 amendment |
+| **Insurance companies** (life, general, reinsurance) | **74%** aggregate foreign (the "Indian owned & controlled" requirement was removed by the 2021 amendment; residual safeguards remain — majority-resident board, resident KMPs, profit-retention) | **Insurance Act 1938 s.2(7A)** post 2021 amendment |
 | **NBFCs** | **100%** via automatic route (subject to sectoral caps) | FEMA NDI Rules 2019 |
 | **Asset Management Companies** | **100%** via automatic route | FEMA |
-| **Exchanges, depositories, clearing corps** | **49%** aggregate (FDI 26% + FII 23%) | SEBI SECC Regulations |
+| **Exchanges, depositories, clearing corps** | **49%** composite aggregate foreign (the earlier FDI-26% / FII-23% sub-limit split has been abolished — it is now a single 49% limit) | SEBI SECC Regulations |
 
 **Rule:** Before writing the FII headroom section, state the subtype and the applicable cap. For a PSU bank at 10.34% FII, remaining headroom is **~10pp**, not ~64pp. For a private bank at 28% FII, headroom is ~46pp. Getting this wrong inverts the thesis.
 
-Open question candidates: "Is any individual FPI approaching its 10% per-entity sub-limit on this bank?" "Are NRIs near the aggregate 10% NRI sub-limit inside the overall foreign cap?"
+Open question candidates: "Is any individual FPI approaching its 10% per-entity sub-limit on this bank?" "Are NRIs near the aggregate NRI sub-limit (24% from FY2026-27, previously 10%) inside the overall foreign cap?"
 
 ### PSU Bank — Statutory Minimum Government Floor
 Under the SBI Act (and the equivalent bank-nationalisation acts for other PSBs), **government holding cannot fall below 51%**. This is a floor, not a ceiling — the SEBI 75% MPS cap is non-binding for PSU banks. Practical implications:
@@ -46,12 +46,19 @@ Government divestment is the largest single ownership-risk variable for PSU bank
 
 For banks that recently completed a QIP (i.e. recent large PSU bank QIPs in the last 8 quarters), state the **specific absorption metric** — 4.5x oversubscribed at ₹X price vs current ₹Y tells the story of post-dilution re-rating or pressure.
 
+### Private Bank Promoter Dilution Timeline — Structural Supply Overhang
+For private banks with an identifiable promoter (vs board-managed 0%-promoter banks like HDFCBANK / ICICIBANK), the RBI promoter-shareholding rules are a structural equity-supply overhang that the verdict must track. Under RBI's bank-licensing/ownership norms, promoters face an initial lock-in (minimum 40% for the first 5 years) and a long-run dilution path — the long-run promoter cap was raised to **26% of paid-up voting equity (to be achieved by year 15)** per the RBI Working Group accepted in 2021 (earlier norm: pare to 15% by year 15). Where a promoter still holds above the long-run cap (common for newer / converted banks — e.g. SFBs, recently-licensed private banks, bank-holdco structures), the mandated glide-path implies forced future dilution = a known supply overhang that caps re-rating until cleared.
+
+- State the promoter's current stake, the applicable dilution milestone, and the years-remaining to the 26% (or applicable) cap.
+- Quantify the overhang as the pp of paid-up capital that must still be sold and translate to an approximate share count / market-cap supply.
+- Cross-check any RBI dispensation, extension, or pending working-group implementation status (open question → web research) before treating a milestone as binding.
+
 ### FPI Concentration Norms — Entity + Sector Sub-limits
 On top of the aggregate cap above, SEBI and RBI enforce concentration sub-limits:
 
 - **Per-FPI (entity-level) limit** in a single bank: **10%** of paid-up capital — for all FPI categories combined, a single FPI group cannot exceed this.
-- **NRI aggregate** (subset of foreign holding): **10%** of paid-up capital.
-- **Sectoral investment-cap** reporting: any bank reaching **within 2pp of its aggregate foreign cap** gets onto the RBI's "sector cap list," after which fresh FPI buying requires explicit approval.
+- **NRI aggregate** (subset of foreign holding): **24%** of paid-up capital — raised from 10% to 24% in Union Budget 2026, effective FY2026-27 (individual NRI cap also raised from 5% to 10%). Use 10% only for periods before FY2026-27.
+- **Sectoral investment-cap** monitoring: the foreign-investment-limit monitoring system is run by the **depositories (NSDL/CDSL)**, not the RBI. A **red flag** is activated when foreign investment reaches **within 3% of (or breaches) the aggregate FPI / NRI / sectoral cap**, after which the available headroom is published daily; on an actual breach foreign investors must divest the excess within 5 trading days (to domestic investors only).
 
 For PSU banks at >18% aggregate foreign holding, flag as "approaching cap." For private banks at >72%, flag as "near cap — incremental FII buying requires case-by-case approval."
 

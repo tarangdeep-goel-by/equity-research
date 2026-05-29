@@ -26,7 +26,7 @@ Indian banks compete primarily on deposit cost, not lending rates (which are lar
 Other Income for banks mixes core fee income (processing fees, insurance distribution, wealth management) with volatile treasury gains (bond MTM). If Other Income spiked in a quarter, the spike is likely treasury — don't extrapolate it. Flag when Other Income growth materially exceeds NII growth.
 
 ### Capital Adequacy — Mandatory When Discussing Capital Actions
-Banks are regulated on **CRAR** (Capital to Risk-weighted Assets Ratio, Basel III minimum ~11.5% incl. CCB) and **CET1** (Common Equity Tier-1, minimum ~7-8%). These are non-negotiable regulatory floors; management decisions on lending growth, QIPs, and dividend payouts are constrained by them.
+Banks are regulated on **CRAR** (Capital to Risk-weighted Assets Ratio, Basel III minimum ~11.5% incl. CCB) and **CET1** (Common Equity Tier-1; RBI minimum is 5.5% base, or 8.0% including the 2.5% Capital Conservation Buffer — D-SIBs carry an additional CET1 surcharge). These are non-negotiable regulatory floors; management decisions on lending growth, QIPs, and dividend payouts are constrained by them.
 - Whenever discussing an equity raise (QIP, rights issue), sub-debt issuance, or accelerated credit growth, cite the **pre- and post-action CRAR/CET1**
 - Canonical key via `get_sector_kpis(sub_section='capital_adequacy_ratio_pct')`
 - CET1 compression below ~10% in a growing bank is a warning — either dilution is imminent or growth slows
@@ -43,7 +43,7 @@ Banks are regulated on **CRAR** (Capital to Risk-weighted Assets Ratio, Basel II
 
 ### SMA-1 / SMA-2 — The Leading Indicator That GNPA Misses
 GNPA and NNPA are **lagging** indicators — by the time a loan hits NPA (90+ DPD), the stress has already shown up in earlier buckets for 1-2 quarters. The real leading indicators are the **Special Mention Accounts (SMA)** buckets:
-- **SMA-0** (0-30 DPD), **SMA-1** (31-60 DPD), **SMA-2** (61-90 DPD)
+- **SMA-0** (1-30 DPD), **SMA-1** (31-60 DPD), **SMA-2** (61-90 DPD)
 - **SMA-2 is the most predictive** — accounts here typically slip into NPA next quarter unless restructured/cured
 - Also track the **"BB & below" rated corporate book** — the weakest portion of standard assets that can slip in a credit cycle downturn
 - Extract from `get_company_context(section='concall_insights')` or management presentations. A bank that doesn't disclose SMA buckets in the quarterly deck is hiding the leading signal — flag that
@@ -82,6 +82,6 @@ For private banks with listed/IPO-bound subsidiaries, call `get_valuation(sectio
 - **HDFC Bank**: HDB Financial (IPO-bound, FY26 target), HDFC AMC (listed), HDFC Life Insurance (listed), HDFC ERGO (unlisted, group insurer).
 - **ICICI Bank**: ICICI Prudential Life (listed), ICICI Lombard General Insurance (listed), ICICI Prudential AMC (listed).
 - **Kotak Bank**: Kotak AMC (unlisted, large embedded value), Kotak Life Insurance (unlisted).
-- **Axis Bank**: Axis AMC (unlisted), Max Life JV (complex, re-look after Max Life delisting if material).
+- **Axis Bank**: Axis AMC (unlisted), Axis Max Life Insurance (unlisted; Axis holds a minority ~19% stake). Note the corporate action is the amalgamation of listed holdco Max Financial Services into Axis Max Life to enable Axis Max Life's direct listing (targeted ~FY27) — not a "Max Life delisting"; re-look at the implied insurance-arm value when the merger/listing terms firm up.
 
 When SOTP is material (>15% of standalone bank market cap), present the sub-totals in a separate "SOTP Valuation" subsection with per-sub valuation method disclosed (P/B for AMC, embedded-value multiple for insurance, P/E for NBFC).

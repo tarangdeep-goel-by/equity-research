@@ -6,7 +6,7 @@
 | Sub-type | Primary revenue engine | Unit of production | Typical EBITDA margin |
 | :--- | :--- | :--- | :--- |
 | **Integrated wireless operator** | Subscribers × ARPU × months; data-monetisation overlay | active subscribers × ARPU | 45-55% at scale |
-| **Tower / passive infrastructure** | Tenancies × monthly rent × tenancy ratio (tenancies per tower) | tenancies; tenancy ratio 1.8-2.4× | 70-80% |
+| **Tower / passive infrastructure** | Tenancies × monthly rent × tenancy ratio (tenancies per tower) | tenancies; tenancy ratio ~1.6-1.7× post-consolidation | ~50-55% (post Ind AS 116) |
 | **Wireline / FTTH home broadband** | Subscribers × ARPU; content-bundling overlay | connected homes × broadband ARPU | 35-45% |
 | **Enterprise B2B / connectivity** | ARPU per seat × contracted accounts; data-centre / managed-services overlay | enterprise accounts; seats | 25-35% |
 | **5G FWA / fixed wireless access** | New-home subscribers × broadband-equivalent ARPU | FWA subs net-adds | thin then scaling to 30-40% |
@@ -15,8 +15,8 @@ Conglomerate telecom groups span 3-5 of these at once (wireless + towers + FTTH 
 
 ### Revenue Bridge A × B — Translate to the Right Driver Decomposition
 The revenue bridge differs materially by sub-type and should be shown explicitly rather than collapsed to YoY growth:
-- **Wireless:** `Revenue = Active subscribers × ARPU × months`. Growth levers: subscriber net-adds, tariff hike, post-paid mix-shift, data-usage monetisation. The highest-leverage lever in India today is tariff: ARPU ₹180-220 currently, post-next-tariff-cycle target ₹250-300. Incremental EBITDA per ₹1 of ARPU lift is ~80% given the mostly-fixed cost base.
-- **Tower infra:** `Revenue = Towers × tenancy ratio × rent per tenant × months`. Tenancy ratio is the single most important utility-like KPI — moving from 1.8× to 2.2× lifts tower-level EBITDA disproportionately because the second and third tenants carry minimal incremental opex.
+- **Wireless:** `Revenue = Active subscribers × ARPU × months`. Growth levers: subscriber net-adds, tariff hike, post-paid mix-shift, data-usage monetisation. The highest-leverage lever in India today is tariff: blended ARPU ~₹210-260 currently (Airtel ~₹257, Jio ~₹214 in Q4 FY26; Airtel runs the industry's highest), with ₹300-350 the explicitly stated long-term industry-leader target. Incremental EBITDA per ₹1 of ARPU lift is ~80% given the mostly-fixed cost base.
+- **Tower infra:** `Revenue = Towers × tenancy ratio × rent per tenant × months`. Tenancy ratio is the single most important utility-like KPI — moving from ~1.6× toward ~1.8×+ lifts tower-level EBITDA disproportionately because the second and third tenants carry minimal incremental opex. (Indian tenancy ratios fell to ~1.6× post-consolidation — Indus Towers reported 1.62× in Q4 FY26 — so a back-to-2× assumption is no longer a default base case.)
 - **FTTH:** `Revenue = Homes-passed × activation % × ARPU`; activation % (typically 20-35%) is the saturation lever after the fibre rollout is sunk.
 - **Enterprise:** `Revenue = Accounts × seats per account × ARPU per seat` + `IoT/M2M SIM connections × connection ARPU`; long-tenor contracts, retention-led rather than acquisition-led. IoT/M2M SIM volume is a distinct driver from traditional B2B seats — track the SIM count separately when disclosed.
 
@@ -34,14 +34,15 @@ Do not over-index on brand or loyalty — in Indian telecom these are secondary 
 
 ### Unit Economics — ARPU, Cost-per-GB, Subscriber LTV
 The unit-economics table for a wireless operator is:
-- ARPU ₹180-220 currently; ₹250-300 target post-tariff-cycle. Premium post-paid ARPUs can be 2-3× prepaid.
+- Blended ARPU ~₹210-260 currently (Airtel ~₹257, Jio ~₹214, Q4 FY26); ₹300-350 long-term industry target. Premium post-paid ARPUs can be 2-3× prepaid.
 - Incremental EBITDA per ₹1 ARPU hike: ~80% because network is mostly fixed-cost.
 - Cost per GB: falling structurally as infra capex amortises across rising data usage; this is the deflationary offset to ARPU stagnation.
 - Subscriber acquisition cost (SAC): ₹200-600 per subscriber depending on segment.
 - Subscriber lifetime: 24-36 months average; high-churn segments (student/migrant) shorter, post-paid longer.
-- Data usage per sub: 18-25 GB/month currently, rising.
+- Data usage per sub: crossed ~31 GB/month in 2025 (Nokia MBiT Index 2026), up from ~27.5 GB in 2024 and rising; ~18% 5yr CAGR.
+- **Strip M2M/IoT SIMs from the ARPU denominator.** Airtel began including low-ARPU M2M/IoT connections in its reported wireless base (from ~Dec 2025), which mechanically *depresses blended ARPU* without any change in core human-subscriber monetisation. When computing true core-mobility ARPU, back out M2M/IoT connections from the subscriber denominator (and their revenue from the numerator) — comparing a post-Dec-2025 blended ARPU to a pre-M2M base is an apples-to-oranges decline that misreads a definitional change as monetisation weakness.
 
-For tower infra, the key utility economics: tower EBITDA margin 70-80%; tenancy ratio 1.8-2.2× is normal, >2.4× is premium utilisation; rent escalators are contract-linked, typically CPI + fixed step-ups.
+For tower infra, the key utility economics: tower EBITDA margin ~50-55% post Ind AS 116 (Indus Towers ~55% in FY26); tenancy ratio ~1.6-1.7× is the post-consolidation norm, >1.8× is premium utilisation; rent escalators are contract-linked, typically CPI + fixed step-ups.
 
 ### Capital-Cycle Position — 5G Peak Capex, Tariff-Hike Sequence
 Indian telecom is in a late-stage oligopoly-consolidation cycle — the 2016 new-entrant-led tariff disruption collapsed the industry to three wireless operators. Overlay three concurrent cycles before projecting forward:

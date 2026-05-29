@@ -44,8 +44,8 @@ Quantify each bear-case as a thesis-breaker: the metric threshold beyond which t
 ### Sector-Specific Stress Tests
 Quantify sensitivity, don't just describe it:
 - **USD-revenue -5% sensitivity** — operating leverage is roughly 1.3-1.5× on the downside for tier-1s (22% operating margin, fixed-cost base of rent + tech + management), so PAT -7-8%.
-- **INR 5% move (exporter currency impact)** — roughly 3-4% on the reported margin; CC revenue strips this. Hedging-gain recognition often masks the underlying impact for 2-3 quarters.
-- **Wage inflation +300 bps** — margin hit 200-250 bps at 60% employee-cost-to-revenue ratio, partly offset by pyramid-optimisation (fresher hiring) within 2-3 quarters.
+- **INR 5% move (exporter currency impact)** — every 1% INR move shifts reported operating margin ~20-40 bps, so a 5% move is roughly **100-200 bps (1-2%)** on the reported margin, not 3-4%; CC revenue strips this. Hedging-gain recognition often masks the underlying impact for 2-3 quarters.
+- **Wage inflation +300 bps** — gross margin hit ~180 bps at a 60% employee-cost-to-revenue ratio (300 bps × 60% = 180 bps), partly offset by pyramid-optimisation (fresher hiring), utilisation gains, and offshore mix-shift within 2-3 quarters.
 - **Utilisation -200 bps sustained** — margin -60-100 bps; reversing requires either demand pickup or restructuring charge.
 - **Attrition +500 bps above peer** — hidden replacement-hiring cost typically 30-50% of annual compensation for the replaced role; margin -50-120 bps over 3-4 quarters.
 

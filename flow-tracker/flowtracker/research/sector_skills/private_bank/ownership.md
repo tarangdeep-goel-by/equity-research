@@ -11,6 +11,10 @@ The statutory ceiling on foreign ownership in large private banks is **74% aggre
 
 **Reported FII% alone understates true foreign holdings.** Always combine all four categories and compare to the 74% ceiling. Applying reported-FII% as if it were the aggregate inverts the headroom narrative.
 
+**Voting-rights cap decouples economic ownership from control.** Under the Banking Regulation Act, no single shareholder may exercise more than **26% of voting rights** in a bank regardless of equity stake. So a holder with, say, a 30% economic stake is still legally capped at 26% voting — never infer control from the equity-ownership line alone for a bank.
+
+**FDI vs FPI within the 74% cap is not uniform.** Strategic FDI hits an automatic-route wall at **49%**; foreign direct investment beyond 49% requires explicit government approval. Differentiate the FDI component from FPI when narrating headroom — the route/approval constraint binds FDI well before the 74% aggregate ceiling does.
+
 - When aggregate >65%, headroom is <9pp — flag capacity constraint for incremental FII buying
 - When aggregate >70%, MSCI/FTSE passive rebalance demand already largely met — new FII flow rate plateaus
 - When aggregate >72%, flag "near cap — incremental FII buying requires case-by-case RBI approval"
@@ -34,8 +38,8 @@ Decompose "FII" into archetypes rather than narrating a single aggregate line (T
 3. **Domestic DII** — SBI MF (largest across most private banks), HDFC MF, ICICI Pru MF, UTI MF, Nippon India MF. Track YoY conviction shift at the individual-MF level via `shareholder_detail`
 
 ### Promoter / Sponsor Structure — Bank-by-Bank
-- **HDFCBANK**: Post HDFC Ltd merger (FY23-Q4), the "promoter" category was collapsed. Classify as **"foreign-institution-heavy no-promoter" structure**. The merged entity has no named promoter; all float is institutional + retail. This makes the 74% aggregate foreign cap particularly binding
-- **KOTAKBANK**: Uday Kotak is the named individual promoter. **SEBI-mandated promoter-cap reduction to 26% by 2030 is in progress** — promoter stake must decline each year via OFS / sell-downs. Track every quarter as a structural dilution driver — Tenet 9 does NOT fully apply here because there is a regulator-mandated open-market reduction schedule
+- **HDFCBANK**: Post HDFC Ltd merger (effective 1 July 2023, FY24-Q2), the "promoter" category was collapsed. Classify as **"foreign-institution-heavy no-promoter" structure**. The merged entity has no named promoter; all float is institutional + retail. This makes the 74% aggregate foreign cap particularly binding
+- **KOTAKBANK**: Uday Kotak is the named individual promoter. The **RBI-mandated promoter-cap reduction to 26% was already achieved in August 2020** (promoter stake brought down from ~29.9% to ~26%); there is NO ongoing 2030 glide path. Subsequent declines are voluntary, not a regulator-mandated schedule — so Tenet 9 framing largely applies again (absence of open-market promoter trade is structural). The live residual constraint is the 15%/26% voting-rights cap, not a further mandated stake sell-down
 - **AXISBANK**: No single majority promoter. Specified Undertaking of UTI (SUUTI), LIC, and GIC collectively act as "promoter-like" stable institutional anchors post-promoter dilution era. Track as a pseudo-promoter bloc
 - **INDUSINDBK**: Hinduja Group family promoters hold ~16%. Classic family-group holdco structure — Tenet 9 applies (absence of open-market promoter trade is structural, not informational). Watch for inter-group pledge activity as the real signal
 - **ICICIBANK**: No single promoter — widely held; institutional dominance with LIC and GIC as stable large holders
@@ -47,7 +51,7 @@ LIC holds 3-9% across the top-5 private banks. Treat as sovereign-wealth-style c
 ### FPI Concentration Norms — Entity + Sector Sub-limits
 On top of the aggregate 74%:
 - **Per-FPI (entity-level) limit**: 10% of paid-up for any single FPI group
-- **NRI aggregate**: 10% of paid-up
+- **NRI aggregate**: 10% of paid-up by default, raisable to 24% (or higher) via a special resolution of the company's shareholders — check whether the bank has passed such a resolution before treating 10% as the binding sub-limit
 - **RBI sector-cap list**: triggered when aggregate is within 2pp of the 74% ceiling — fresh FPI buying then requires explicit approval
 - Flag in Open Questions if any individual FPI is approaching the 10% per-entity sub-limit
 
@@ -70,7 +74,7 @@ Before drafting the Institutional Verdict, explicitly confirm each row:
 ### Open Questions — Private-Bank-Specific
 - "What is the current ADR/GDR outstanding as % of paid-up, and combined direct-FPI + ADR + NRI + FDI vs 74% cap?"
 - "Is any individual FPI approaching the per-FPI 10% entity-level sub-limit?"
-- "For KOTAKBANK: what is the trailing 4-quarter pace of promoter-stake reduction, and is the 26%-by-2030 SEBI glide path on schedule?"
+- "For KOTAKBANK: the RBI 26% promoter-cap was met in Aug 2020 — is promoter stake holding near 26%, and is any voluntary further sell-down (OFS / block) underway?"
 - "Is the Hinduja-Group pledged-share ratio in INDUSINDBK within the family-group disclosure norm, or rising?"
 - "Has any recent RBI disclosure moved this bank onto the sector-cap list (<2pp from 74%)?"
 
@@ -79,7 +83,7 @@ Cross-reference the BFSI ADR/GDR 5-source canonical search worked pattern (`bfsi
 
 - **Listing venue:** HDFCBANK and ICICIBANK ADR programmes list on NYSE (not LSE), differentiating them from occasional PSU-bank GDR placements on LSE. Depositary is typically BNY Mellon or Deutsche Bank Trust — surfaces in `shareholder_detail` as the depositary line-item.
 - **Rule 144A vs Reg-S tranches:** Indian private-bank ADR issuance distinguishes Rule 144A placements (QIB-only, US-domiciled, restricted resale) from Reg-S tranches (offshore, non-US investors, freer liquidity). The two tranches have distinct eligible-investor pools and secondary-market liquidity — narrate which tranche dominates when discussing ADR foreign-flow sensitivity.
-- **ADR ratio convention:** HDFCBANK and ICICIBANK both use **1 ADR = 3 underlying Indian shares** as the structural ratio. Apply this when converting ADR outstanding to India-equivalent share count for the 74% aggregate calculation. (Contrast with IT-services peers where INFY uses 1 ADR = 1 share — do NOT assume cross-sector ratio uniformity.)
+- **ADR ratio convention:** the two ratios differ — **HDFCBANK is 1 ADR = 3 underlying Indian shares**, but **ICICIBANK is 1 ADR = 2 underlying shares**. Apply each bank's own ratio when converting ADR outstanding to India-equivalent share count for the 74% aggregate calculation; do NOT assume both are 1:3. (Contrast also with IT-services peers where INFY uses 1 ADR = 1 share — do NOT assume cross-sector ratio uniformity.)
 
 ### ESOP Pool Sizing — Private Bank Baseline
 Indian private banks run structurally leaner ESOP pools than IT services, typically **1-3% of paid-up capital** (vs **5-10%** for large-cap IT services peers). This tightens Tenet 15 (ESOP-dilution tracking) application: quarterly ESOP-vest-linked insider selling is a smaller supply event in private banks, and clusters >50bps in a single quarter warrant narrative treatment rather than being absorbed as routine noise. Peer instances: HDFCBANK, ICICIBANK, KOTAKBANK, AXISBANK, INDUSINDBK. For IDFCFIRSTB (recent PE-backed transition) the pool can be slightly wider — verify via `get_company_context(filings)` before applying the 1-3% baseline.

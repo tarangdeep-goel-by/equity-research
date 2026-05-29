@@ -9,7 +9,7 @@ This is a stockbroking or trading platform company. Apply broker-specific analys
 
 **Primary Metrics:**
 - **ROE / ROA**: valid and important — efficiency of capital deployment
-- **Revenue Quality**: Break down revenue into brokerage, interest on client funds, advisory/distribution fees, proprietary trading. Higher share of recurring/fee income = higher quality
+- **Revenue Quality**: Break down revenue into brokerage, MTF/margin-funding interest, advisory/distribution fees, proprietary trading. Note: traditional float income on idle client funds is now structurally restricted — SEBI's June-2023 EOD upstreaming mandate forces all client funds to Clearing Corporations end-of-day, so model treasury income on pass-through yields, not retained float. Higher share of recurring/fee income = higher quality
 - **Cost-to-Income**: operating efficiency metric, similar to banks
 - **Active Client Growth**: leading indicator — new Demat accounts, monthly active users
 - **AUM Growth**: for brokers with distribution/wealth management arms

@@ -5,13 +5,13 @@ Telecom ownership structures bifurcate strictly by operational layer and soverei
 
 | Sub-type | Typical Promoter Base | Strategic Anchor / FDI Pattern | Pledge & Dilution Risk |
 | --- | --- | --- | --- |
-| **Integrated Wireless Operator** (large private pan-India operators) | 40-60% via complex holding JVs (e.g., dedicated promoter holding entities for the listed operator) | Very high — foreign telecom peers hold 10-30% as strategic co-promoters or legacy JV partners | High — Spectrum/AGR dues force cyclic dilutions; government debt-to-equity conversion possible (precedent in financially stressed operators) |
+| **Integrated Wireless Operator** (large private pan-India operators) | 40-60% via complex holding JVs (e.g., dedicated promoter holding entities for the listed operator) | Very high — foreign telecom peers hold 10-30% as strategic co-promoters or legacy JV partners | High — Spectrum/AGR dues force cyclic dilutions; government debt-to-equity conversion is precedented (GoI now holds ~49% of Vodafone Idea) |
 | **Tower / Passive Infrastructure** (tower companies, passive-infra carve-outs) | 60%+ (often held by telco parents) | Low to medium | Medium — distressed operator parents may pledge/sell infra stakes |
 | **Fibre / Enterprise / DTH** (fibre carriers, enterprise connectivity, DTH operators) | 50-70% (Conglomerate or PSU backed) | Low | Low — cash-flow stable, lower regulatory levies |
 | **PSU Residual / State-Controlled** (listed and unlisted PSU telecom operators) | 70-95% (Govt of India) | None — FDI heavily restricted in practice | Zero pledge; divestment/merger risk is the primary focus |
 
 ### FDI Limits & The National Security Overlay
-Indian telecom is legally open but practically guarded. Per **Press Note 3 of 2021 (DPIIT)**, FDI up to **100%** is permitted via the automatic route for telecom services (up from the prior 74% cap). Do not treat FII/FDI expansion as frictionless:
+Indian telecom is legally open but practically guarded. Per **Press Note 4 of 2021 (DPIIT)** (notified 6 Oct 2021), FDI up to **100%** is permitted via the automatic route for telecom services (up from the prior 74% cap). Do not treat FII/FDI expansion as frictionless:
 - **Security clearance:** significant foreign ownership is subject to Ministry of Home Affairs and National Security Council scrutiny — approval can be withheld or retrospectively reviewed.
 - **Land-border restrictions:** per **Press Note 3 of 2020**, any investment from countries sharing land borders with India requires prior government approval — pre-empts hostile accumulation via the secondary market.
 - **Telecommunications Act 2023:** grants the government sweeping powers to suspend/revoke licenses on national-security grounds; acts as an implicit cap on unregulated foreign accumulation.
@@ -28,7 +28,7 @@ Telecom promoters rarely hold equity directly; they operate through multi-layere
 
 ### The Sovereign Shareholder: Bailouts & PSUs
 The Government of India occupies two distinct roles in telecom ownership:
-- **Distressed private bailouts:** the Ministry of Finance has taken unprecedented equity stakes in private telcos (~33% in the most financially stressed private operator) via debt-to-equity conversion of spectrum and AGR arrears. Treat this MoF stake as a permanent, non-voting overhang — it prevents bankruptcy but suppresses upside until the government defines an exit path.
+- **Distressed private bailouts:** the Government of India has taken unprecedented equity stakes in private telcos via debt-to-equity conversion of spectrum and AGR arrears — the GoI stake in the most financially stressed private operator (Vodafone Idea) rose to **~49% (48.99%)** after a second conversion of ₹36,950 Cr in early 2025, making it the company's largest shareholder. Treat this stake as a permanent, non-voting overhang — it prevents bankruptcy but suppresses upside until the government defines an exit path.
 - **Pure PSUs:** legacy state operators operate with near-total state control. Monitor `get_events_actions(section='corporate_actions')` for merger/delisting timelines driven by DoT.
 
 ### Spectrum Auctions, AGR Dues & Dilution Cycles
@@ -38,6 +38,7 @@ Telecom ownership is violently cyclical, tied directly to regulatory levies and 
 
 ### Pledges, Infra Carve-Outs & DII Conviction
 - **Promoter pledging:** risk varies drastically by company. Conglomerate-backed telcos generally maintain low pledges. Highly leveraged operators may see massive promoter pledging. Track aggregate group-level pledge if the promoter is part of a larger group.
+- **Non-Disposal Undertakings (NDUs):** telecom promoters frequently secure holding-company debt with NDUs rather than formal share pledges. NDUs do not show up in the exchange pledge-disclosure screens but carry the same margin-call / forced-dilution risk as a pledge. Explicitly screen promoter-disclosure footnotes and lender filings for NDUs, encumbrances, and negative-lien covenants in addition to the headline pledge %.
 - **Infra demergers:** passive infrastructure (towers, fibre) is frequently carved out to unlock capital (tower companies historically demerged from integrated-operator-plus-partner infra portfolios). Demergers create abrupt step-changes in holding patterns — treat the post-demerger ownership base as a fresh analytical starting point.
 - **DII accumulation:** use `mf_changes` + `mf_conviction`. Domestic mutual funds typically under-weight distressed telcos; a sustained inflection in DII ownership is the strongest early indicator of a tariff-hike cycle or balance-sheet stabilization.
 
@@ -72,4 +73,4 @@ If sources 1-3 return empty for a cited capital call, raise a SPECIFIC open ques
 *Pattern applies to*: BHARTIARTL (recurring spectrum-linked rights issues), VI / Vodafone Idea (AGR debt-to-equity conversion cycles), Reliance Jio (historical pre-listing capital infusions) — same 5-source path whenever the ownership narrative invokes a spectrum-auction or AGR-linked capital event.
 
 ### Historical-MCAP Discipline for Telecom FII %pt Conversions
-Telecom FII %pt × current mcap is especially distortive for BHARTIARTL given the ~12x mcap expansion 2019-2026; the same %pt in 2020 and 2026 represents vastly different ₹Cr flows. Always pass `inputs_as_of` / `mcap_as_of` to `calculate()` when sourcing pre-2023 %pt changes — the historical-mcap mismatch warning exists precisely for this archetype. See Tenet 16.
+Telecom FII %pt × current mcap is especially distortive for BHARTIARTL given the ~5x mcap expansion 2019-2026 (from ~₹2.3 trillion in 2019 to ~₹11+ trillion by May 2026); the same %pt in 2020 and 2026 represents vastly different ₹Cr flows. Always pass `inputs_as_of` / `mcap_as_of` to `calculate()` when sourcing pre-2023 %pt changes — the historical-mcap mismatch warning exists precisely for this archetype. See Tenet 16.

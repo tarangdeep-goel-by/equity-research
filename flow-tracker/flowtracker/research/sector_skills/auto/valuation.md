@@ -6,14 +6,14 @@ The most common valuation error in auto is defaulting to trailing PE for every s
 | Subtype | Primary multiple | Commonly-misapplied multiples that fail |
 | :--- | :--- | :--- |
 | **Mature ICE OEM — 4W / 2W / CV (cyclical)** | PE on **mid-cycle** EPS + EV/EBITDA on normalized volume | PE on peak-cycle earnings (over-values); DCF without mid-cycle normalization |
-| **OEM — 3W (mature ICE Bajaj/M&M duopoly)** | PE on mid-cycle EPS + EV/EBITDA | PE on peak-cycle; ignoring EV-transition terminal value (EV share already >50%) |
+| **OEM — 3W (ICE led by Bajaj + Piaggio; not a duopoly)** | PE on mid-cycle EPS + EV/EBITDA | PE on peak-cycle; ignoring EV-transition terminal value (3W EV share already ~57% in FY25, with Mahindra leading electric 3W) |
 | **OEM — 3W (pure-EV focused)** | EV/EBITDA on normalized margin + EV/Revenue band; cash runway if loss-making | Trailing PE (EV unit economics still scaling); peer-PE vs mature ICE 3W (wrong cohort) |
 | **Premium 4W / SOTP-heavy OEM** | SOTP (per-business multiple) + holdco discount | Blended PE on consolidated earnings (blurs sub-business quality) |
 | **EV pure-play (loss-making)** | EV/Revenue band + cash runway months | PE (no E); P/B (intangible capex heavy) |
 | **EV pure-play (cash-flow positive, early)** | EV/Revenue + P/S + forward PE on disclosed guidance | Trailing PE on first year of positive E (overstates stability) |
 | **Auto ancillary — Tier-1 (platform-integrated)** | EV/EBITDA + PE | P/B (asset-light, book understated); EV/Revenue (content-per-vehicle noise) |
 | **Auto ancillary — Tier-2 (commodity-linked)** | PE + EV/EBITDA on normalized input costs | PE on a peak-commodity-pass-through quarter |
-| **Battery / cell makers (pre-scale)** | EV/Revenue + runway + forward EV/EBITDA on disclosed capacity | Trailing PE (earnings are noise pre-scale) |
+| **Battery / cell makers (pre-scale)** | EV/Revenue + runway + forward EV/EBITDA on disclosed capacity; model ACC-PLI per-GWh subsidy inflows explicitly | Trailing PE (earnings are noise pre-scale); ignoring ACC-PLI subsidy economics |
 | **Aftermarket (tyres / lubricants / batteries)** | PE + EV/EBITDA; brand-premium justified by ROCE | EV/Revenue (misses margin structure) |
 
 ### Cycle Normalization — PE on Peak EPS Misleads
@@ -51,7 +51,8 @@ If the stock trades at a PE premium or discount vs sub-type peer median via `get
 
 ### Justified PE — Carry g and Payout Through (Sub-type-Calibrated)
 For a mature ICE OEM, the Gordon-derived justified PE is `1 ÷ (CoE − g)` adjusted for payout; for a franchise with stable growth: `Justified PE ≈ payout × (1 + g) / (CoE − g)`. Indian auto `g` in nominal terms sits in the 8-12% range (combination of volume growth, realization lift, and segment-mix premium). **Payout ratio varies sharply by sub-type and is as load-bearing as `g`** — do not default to a single payout assumption across sub-types:
-- **Tier-1 OEMs (mass 4W / 2W / CV)** — payout **30-50%** (tax-heavy PAT with meaningful dividend distribution; mature franchises return cash).
+- **Mass 4W / CV OEMs** — payout **30-50%** (tax-heavy PAT with meaningful dividend distribution; mature franchises return cash).
+- **2W OEMs** — payout **substantially higher** than mass 4W: Hero MotoCorp typically **~65-75%**, and Bajaj Auto supplements a ~40-80% dividend payout with large recurring buybacks (count buybacks in the total-payout view). Do not apply a 30-50% default to 2W names — it understates their cash return and depresses the justified-PE.
 - **EV pure-plays** — payout **0%** (cash-preservation mandatory; any dividend at sub-scale economics is a red flag).
 - **Tier-1 ancillaries** — payout **40-60%** (asset-light, high-ROE, low reinvestment need once platform lock-in is established).
 

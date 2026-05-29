@@ -5,13 +5,13 @@
 
 | Regulated parameter | Binding normative level | Source / rule |
 |---|---|---|
-| **Base ROE on equity** | **15.5%** on regulated equity portion (pre-tax 19.36% grossed up) | **CERC Tariff Regulations** (current 2024-29 block) |
+| **Base ROE on equity** | **15.5% post-tax** on regulated equity (thermal + RoR hydro). Grossed up by the *applicable* effective tax rate, NOT a fixed 19.36%: at MAT incl. surcharge+cess ~17.47% → pre-tax ~18.78%; at full corporate rate ~25.17% → pre-tax ~20.71%. **Transmission ROE was cut to 15.0%; storage/pumped-storage hydro carries 16.5%** | **CERC Tariff Regulations 2024-29** (current block) |
 | **Notional D/E gearing** | **70:30** debt-to-equity project-cost basis | CERC normative — over-equitization drags blended ROE toward debt yields |
-| **Station Heat Rate (SHR)** — thermal | ~2,350–2,450 kcal/kWh (supercritical); ~2,450–2,550 (subcritical) | CERC per plant vintage + fuel type |
+| **Station Heat Rate (SHR)** — thermal | ~2,210–2,250 kcal/kWh (supercritical, per CERC 2024-29 design norms); higher for subcritical/older vintage | CERC per plant vintage + fuel type |
 | **Auxiliary Power Consumption (APC)** | ~5.5-7.5% of gross generation (coal); ~1-2% (hydro) | CERC norms |
 | **Plant Availability Factor (NAPAF)** | ~85% target; incentive above, under-recovery below | CERC |
 | **Return on renewable capacity (solar/wind)** | **bid-tariff-linked** (competitive reverse auctions) — not a cost-plus regime | SERC-approved PPAs |
-| **Working capital normative** | 2 months O&M + 2 months receivables + 15 days fuel | CERC |
+| **Working capital normative** | CERC 2024-29: 1 month O&M + ~45 days receivables + coal stock 20 days (pithead) / 50 days (non-pithead) + maintenance spares ~20% of O&M | CERC 2024-29 |
 
 Rule: state the binding normative value for the plant vintage/fuel type BEFORE claiming incentive or penalty. An SHR of 2,400 is incentive-earning for a subcritical plant and penalty-earning for a supercritical one — same number, opposite conclusion.
 
@@ -57,6 +57,12 @@ Regulated tariffs include normative operating parameters for thermal plants: **S
 - Compare against normative (disclosed by CERC per plant vintage and fuel type) — any breach below normative is a structural margin drag, not a one-time event
 - Benchmark against peer plants via `get_peer_sector(section='benchmarks')` — a plant running 2 kcal/kWh above peer SHR is thermodynamically less efficient and structurally disadvantaged
 - PAF shortfalls specifically cause under-recovery of fixed charges, which compound quarterly — always model the downside on base ROE, not just the upside from PAF incentives
+
+### Environmental Capex (FGD) — RAB Growth Without New MW
+Mandatory **Flue Gas Desulfurization (FGD)** retrofit is a large, ongoing capex cycle that **expands the regulated equity base — and therefore earns incremental ROE — for existing thermal fleets without adding a single MW of capacity.** This is a structurally different earnings driver from greenfield capacity: it grows the book by bolting emission-control assets onto already-commissioned plants.
+- Track **FGD capex spend, installation progress, and COD per unit** from `get_company_context(section='concall_insights')` / `annual_report` — each FGD COD adds to the regulated asset base and steps up the fixed-charge (capacity-charge) recovery
+- Note the **special ROE regime**: CERC determines FGD/emission-control capex ROE at **SBI MCLR + 350 bps, capped at ~14%** — lower than the 15.5% base thermal ROE, so FGD-driven book growth earns a *thinner* spread than core regulated equity. Do not assume FGD capex earns the headline 15.5%.
+- A thermal fleet mid-FGD-cycle has a visible multi-year RAB-growth runway that is easy to miss if the analysis only counts new-MW additions; quantify the FGD-driven equity-base expansion separately from capacity-pipeline growth
 
 ### Material Listed Subsidiaries — Analyze, Don't Just Mention
 When a regulated utility has a material listed (or IPO-bound) subsidiary — e.g. a renewable arm like NTPC Green (NGEL / NTPCGREEN) that can be ~20%+ of group market cap — a one-line "contributes ₹X Cr" is incomplete. Analyze its **operating + under-construction capacity (MW), unit economics (PPA tariff / realisation, plant load factor, EBITDA/MW), funding (debt, equity raises), and growth pipeline**, then state its contribution to consolidated PAT and its standalone value at renewable-IPP peer multiples (which differ sharply from the regulated-thermal parent). Source from `get_company_context(section='concall_insights')` / `annual_report` segmental, and the subsidiary's own `get_valuation(snapshot)` by ticker if listed. A subsidiary at ~20%+ of group value materially drives the growth and re-rating narrative — undersizing it is a completeness gap, not a footnote.

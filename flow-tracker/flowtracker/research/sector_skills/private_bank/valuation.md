@@ -3,7 +3,7 @@
 This file inherits the full BFSI valuation framing (see `bfsi/valuation.md` when merged — PR #20) on sub-type routing, P/ABV with Net NPA deduction, SOTP mechanics, Gordon-framework justified P/B with `g` carried through, and the "what fails" list for deposit-taking entities. Do not duplicate generic BFSI content. This file sharpens the private-bank specifics: primary-multiple calibration, HDFC-merger historical-band adjustments, explicit EV-metric exclusion from the snapshot, and SOTP-component sector multiples for the conglomerate large private banks.
 
 ### Primary Multiple — P/ABV, Cross-Checked by Justified P/B
-The primary valuation multiple for a private bank is **Price-to-Adjusted-Book-Value**: `ABV per share = BVPS − (Net NPA ÷ shares outstanding)`; `P/ABV = CMP ÷ ABV per share`. For large private banks running NNPA 0.3-0.8%, the ABV deduction is 0.5-2% of BVPS; for mid-caps running NNPA 1.5-2.5%, the deduction is 3-5% of BVPS and materially changes the re-rating narrative. Always show the deduction explicitly — quoting P/B on reported BVPS without the Net NPA strip is the skip-step flagged in prior valuation evals.
+The primary valuation multiple for a private bank is **Price-to-Adjusted-Book-Value**: `ABV per share = BVPS − (Net NPA ÷ shares outstanding)`; `P/ABV = CMP ÷ ABV per share`. Critically, NNPA is a % of **advances**, not of BVPS, and banks run ~6-8× leverage (advances ≈ 6-8× equity), so the deduction must be scaled up by that multiple: NNPA-per-share ≈ NNPA% × (advances ÷ equity) × BVPS. For large private banks running NNPA 0.3-0.8% the ABV deduction is roughly 2-6% of BVPS; for mid-caps running NNPA 1.5-2.5% the deduction is roughly 10-18% of BVPS — large enough to materially change the re-rating narrative. Do NOT treat NNPA% as if it were a direct % of BVPS (that understates the strip ~7-8×). Always show the deduction explicitly — quoting P/B on reported BVPS without the Net NPA strip is the skip-step flagged in prior valuation evals.
 
 Route the arithmetic through `calculate` with `shares_out`, `bvps`, and `net_npa_per_share` as named inputs. Compare current P/ABV to the 5Y band via `get_valuation(section='band', metric='pb')`, falling back to `get_chart_data(chart_type='pbv')` for deep-history context.
 
@@ -29,10 +29,10 @@ Indian private-bank ROE typically sits 15-18%, CoE 12-13%, g 10-14% — the just
 EV/EBITDA, EV/Revenue, and EV/EBIT are **structurally invalid** for deposit-taking entities — deposits are raw material, not capital structure, so enterprise value is a meaningless construct. If the tools return these multiples in `get_fundamentals` or `get_valuation` output, caveat and skip. **Do not display them in the snapshot table of the report** — their presence implies they are informative, which is misleading for private-bank analysis. If a reader requires the absolute-number for reference, state them once in the Open Questions section with the explicit caveat "EV metrics are not applicable to deposit-taking entities — shown here only for completeness".
 
 ### HDFC-Merger Historical-Band Adjustments
-For **HDFCBANK** specifically, the HDFC Ltd reverse-merger (effective 1 July 2023, FY24-Q1) issued approximately 37% new shares to HDFC Ltd shareholders and materially enlarged the book value, advances, borrowings, and loan-book mix. The pre-merger and post-merger per-share series are not directly comparable:
+For **HDFCBANK** specifically, the HDFC Ltd reverse-merger (effective 1 July 2023, FY24-Q2) issued approximately 37% new shares (a ~37% increase in share count, equivalent to ~27% dilution on the enlarged base) to HDFC Ltd shareholders and materially enlarged the book value, advances, borrowings, and loan-book mix. The pre-merger and post-merger per-share series are not directly comparable:
 
-- Historical EPS, DPS, and BVPS per-share for pre-FY24-Q1 periods are on the pre-merger share count (~5.55 bn shares).
-- Post-merger share count is approximately 7.6 bn — roughly 37% dilution on the per-share denominator.
+- Historical EPS, DPS, and BVPS per-share for pre-FY24-Q2 periods are on the pre-merger share count (~5.55 bn shares).
+- Post-merger share count is approximately 7.6 bn — a ~37% increase in shares (2.05 bn new / 5.55 bn old), which is ~27% dilution on the enlarged per-share denominator (2.05 / 7.6). Use 27% when scaling per-share metrics down, not 37%.
 - Historical-band comparisons of P/B or P/E using pre-merger per-share series and post-merger CMP produce inverted conclusions (looks much cheaper than reality).
 
 Adjustment approach:
@@ -49,12 +49,12 @@ For HDFCBANK, ICICIBANK, KOTAKBANK, and AXISBANK, SOTP is often the re-rating le
 3. For each **unlisted subsidiary**, apply a sector multiple:
    - Listed AMC subsidiary (HDFC AMC, ICICI Pru AMC): 3-5% of AUM (premier names toward 4-5%).
    - Unlisted AMC (Kotak AMC, Axis AMC): 3-4% of AUM depending on equity-AUM share; apply a discount vs the listed peers given illiquidity.
-   - Listed life insurer (HDFC Life, ICICI Pru Life): 1.5-3× embedded value (growth × VNB-margin premium) — cross-check via `get_peer_sector(section='benchmarks')`.
-   - Unlisted life insurer (Kotak Life, Max Life 20% stake via AXISBANK): 1.5-2.5× VNB-based implied EV.
-   - Listed general insurer (ICICI Lombard): 1.0-2.5× annual Gross Direct Premium Income.
+   - Listed life insurer (HDFC Life, ICICI Pru Life): the multiple is **P/EV (price-to-Embedded-Value), typically 1.5-3× EV** — VNB is a flow metric used to build the appraisal value (EV + VNB × new-business multiple), not something a multiple is applied to directly. Cross-check via `get_peer_sector(section='benchmarks')`.
+   - Unlisted life insurer (Kotak Life, Max Life 20% stake via AXISBANK): 1.5-2.5× Embedded Value (apply the P/EV multiple to EV, not to VNB).
+   - Listed general insurer (ICICI Lombard): value primarily on **P/E or P/B** like the listed comp; the 1.0-2.5× Gross Direct Premium Income heuristic is a stale M&A shorthand — use only as a rough cross-check, not the primary basis.
    - Unlisted general insurer (HDFC ERGO): 1.0-2.0× GDPI depending on combined-ratio trajectory.
-   - Unlisted NBFC (HDB Financial Services — IPO-bound FY26): 1.0-2.5× book, with the IPO-implied valuation as the cleanest anchor once disclosed.
-   - Broking arm (ICICI Securities post-delisting, Kotak Securities unlisted): 10-15× PE on through-cycle active-client monetisation.
+   - Listed NBFC (HDB Financial Services — IPO'd June 2025, listed 2 July 2025): use actual traded market cap × parent stake, not an implied/book multiple.
+   - Broking arm (ICICI Securities — delisted March 2025, now 100% unlisted subsidiary of ICICI Bank; Kotak Securities unlisted): 10-15× PE on through-cycle active-client monetisation, with an illiquidity discount given unlisted status.
 4. Apply **20-25% holding-company discount** to the aggregate sub-value.
 5. Back out implied P/ABV on the **standalone** (ex-SOTP) bank: `standalone_bank_implied_value = current_mcap − subsidiary_SOTP_value`; compute standalone P/ABV using **standalone BVPS** (never consolidated).
 
@@ -82,7 +82,7 @@ When `get_quality_scores(section='bfsi')` returns missing GNPA, NNPA, PCR, CASA,
 
 ### Open Questions — Private-Bank Valuation-Specific
 - "What Net NPA per share was used to compute ABV, and from which quarter's disclosure?"
-- "For HDFCBANK: was the historical P/B band restated for the FY24-Q1 merger share issuance, or is the 5Y median still carrying pre-merger per-share inputs?"
+- "For HDFCBANK: was the historical P/B band restated for the FY24-Q2 merger share issuance, or is the 5Y median still carrying pre-merger per-share inputs?"
 - "For unlisted subsidiaries (HDB Financial Services, Kotak Life, Axis AMC, HDFC ERGO): what sector multiple was applied and what is the sensitivity of SOTP to that assumption?"
 - "Does the current P/ABV premium to sector median reconcile with the NIM + ROA + asset-quality + CASA + fee-income decomposition, or is there a residual multiple gap that the bull-case is relying on?"
 - "What `g` was carried through the justified-P/B math, and what is the sensitivity of the justified multiple to a 1-pp change in `g`?"
