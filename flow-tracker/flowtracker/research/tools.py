@@ -659,6 +659,33 @@ async def get_composite_score(args):
     return _with_dedup("get_composite_score", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
 
 
+# --- US-native metrics (Phase 3.5b, WS-6) ---
+
+
+@tool(
+    "get_rnd_intensity",
+    "US-native: R&D expense as a % of revenue (R&D intensity) over time, with latest value and trend. US-listed companies only (returns not_applicable for India).",
+    {"symbol": str},
+    annotations=READ_ONLY,
+)
+async def get_rnd_intensity(args):
+    with ResearchDataAPI() as api:
+        data = api.get_rnd_intensity(args["symbol"])
+    return _with_dedup("get_rnd_intensity", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+@tool(
+    "get_sbc_dilution",
+    "US-native: stock-based-compensation intensity (% of revenue and net income) plus share-count CAGR as a net-dilution proxy. US-listed companies only (returns not_applicable for India).",
+    {"symbol": str},
+    annotations=READ_ONLY,
+)
+async def get_sbc_dilution(args):
+    with ResearchDataAPI() as api:
+        data = api.get_sbc_dilution(args["symbol"])
+    return _with_dedup("get_sbc_dilution", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
 # --- Peer Benchmarking ---
 
 
@@ -2527,6 +2554,7 @@ FINANCIAL_AGENT_TOOLS = [
     get_chart_data, render_chart, calculate,
     get_annual_report, get_deck_insights,
     get_data_quality_flags,
+    get_rnd_intensity, get_sbc_dilution,  # US-native (n/a for India)
 ]
 
 OWNERSHIP_AGENT_TOOLS = [
@@ -2544,6 +2572,7 @@ VALUATION_AGENT_TOOLS = [
     get_chart_data, render_chart, calculate,
     get_annual_report, get_deck_insights,
     get_data_quality_flags,
+    get_rnd_intensity, get_sbc_dilution,  # US-native (n/a for India)
 ]
 
 RISK_AGENT_TOOLS = [

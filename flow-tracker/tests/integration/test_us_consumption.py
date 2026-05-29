@@ -615,3 +615,47 @@ class TestWS4IndiaStillRoutes:
         # India rf comes from gsec_10y (seeded), not the US Treasury fallback.
         assert w.get("ke") is not None
         assert "rf_default" not in w.get("reliability_flags", [])
+
+
+# --------------------------------------------------------------------------- #
+# WS-6 — US-native functions (R&D intensity, SBC dilution)
+# --------------------------------------------------------------------------- #
+
+
+class TestWS6USNativeFunctions:
+    def test_rnd_intensity_routes_for_us(self, db):
+        with ResearchDataAPI() as api:
+            data = api.get_rnd_intensity(US_SYMBOL)
+        assert data.get("status") != "not_applicable"
+        assert data["series"], "expected an R&D intensity series for US"
+        latest = data["series"][0]
+        assert latest["rnd_intensity_pct"] is not None and latest["rnd_intensity_pct"] > 0
+        assert data["latest_rnd_intensity_pct"] is not None
+
+    def test_sbc_dilution_routes_for_us(self, db):
+        with ResearchDataAPI() as api:
+            data = api.get_sbc_dilution(US_SYMBOL)
+        assert data.get("status") != "not_applicable"
+        assert data["series"], "expected an SBC series for US"
+        assert data["latest_sbc_pct_revenue"] is not None
+        # num_shares grows in the seed -> net dilution proxy present.
+        assert "share_count_cagr_pct" in data
+
+    def test_rnd_intensity_na_for_india(self, db):
+        with ResearchDataAPI() as api:
+            data = api.get_rnd_intensity("SBIN")
+        assert data.get("status") == "not_applicable"
+
+    def test_sbc_dilution_na_for_india(self, db):
+        with ResearchDataAPI() as api:
+            data = api.get_sbc_dilution("SBIN")
+        assert data.get("status") == "not_applicable"
+
+    def test_rnd_intensity_tool_us(self, db):
+        payload = _call(t.get_rnd_intensity, {"symbol": US_SYMBOL})
+        assert not _is_not_applicable(payload)
+        assert payload["series"]
+
+    def test_sbc_dilution_tool_india_na(self, db):
+        payload = _call(t.get_sbc_dilution, {"symbol": "SBIN"})
+        assert _is_not_applicable(payload)

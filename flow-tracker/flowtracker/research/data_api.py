@@ -1230,6 +1230,90 @@ class ResearchDataAPI:
         mapped["headline_revenue"] = mapped["revenue"]
         return mapped
 
+    # --- US-native functions (Phase 3.5b, WS-6; additive over the rich US data) ---
+
+    def _non_us_not_applicable(self, symbol: str, concept: str) -> dict:
+        """Inverse of the India-only marker: a US-native metric has no India
+        analog, so India symbols get an explicit not_applicable envelope."""
+        return {
+            "status": "not_applicable",
+            "market": self._market_of(symbol),
+            "symbol": symbol,
+            "reason": (
+                f"{concept} is a US-native metric (the underlying line item is "
+                f"not separately disclosed in Indian filings); not applicable for "
+                f"non-US {symbol}."
+            ),
+        }
+
+    def get_rnd_intensity(self, symbol: str) -> dict:
+        """US-native: R&D expense as a % of revenue (R&D intensity) over time + trend.
+
+        Reads the WS-2 ``rnd_expense`` column (surfaced via the WS-3 adapter).
+        Not applicable for India — R&D is not a separately-tracked line item.
+        """
+        if not self._is_us(symbol):
+            return self._non_us_not_applicable(symbol, "R&D intensity")
+        annuals = self.get_annual_financials(symbol, years=10)
+        series = []
+        for a in annuals:
+            rev = a.get("revenue")
+            rnd = a.get("rnd_expense")
+            intensity = round(rnd / rev * 100, 2) if (rnd is not None and rev) else None
+            series.append({
+                "fiscal_year_end": a.get("fiscal_year_end"),
+                "rnd_expense": rnd,
+                "revenue": rev,
+                "rnd_intensity_pct": intensity,
+            })
+        vals = [s["rnd_intensity_pct"] for s in series if s["rnd_intensity_pct"] is not None]
+        latest = vals[0] if vals else None
+        trend = None
+        if len(vals) >= 2:
+            trend = "rising" if vals[0] > vals[-1] else "falling" if vals[0] < vals[-1] else "flat"
+        return {
+            "symbol": symbol, "currency": "USD", "metric": "rnd_intensity",
+            "series": series, "latest_rnd_intensity_pct": latest, "trend": trend,
+        }
+
+    def get_sbc_dilution(self, symbol: str) -> dict:
+        """US-native: stock-based-compensation intensity (% of revenue and net
+        income) plus share-count CAGR as a net-dilution proxy.
+
+        Reads the WS-2 ``stock_based_comp`` + ``num_shares`` columns (surfaced
+        via the WS-3 adapter). Not applicable for India.
+        """
+        if not self._is_us(symbol):
+            return self._non_us_not_applicable(symbol, "Stock-based-comp dilution")
+        annuals = self.get_annual_financials(symbol, years=10)
+        series = []
+        for a in annuals:
+            rev = a.get("revenue")
+            ni = a.get("net_income")
+            sbc = a.get("stock_based_comp")
+            series.append({
+                "fiscal_year_end": a.get("fiscal_year_end"),
+                "stock_based_comp": sbc,
+                "sbc_pct_revenue": round(sbc / rev * 100, 2) if (sbc is not None and rev) else None,
+                "sbc_pct_net_income": round(sbc / ni * 100, 2) if (sbc is not None and ni) else None,
+                "num_shares": a.get("num_shares"),
+            })
+        latest_pct = series[0]["sbc_pct_revenue"] if series else None
+        # Share-count CAGR (oldest -> latest); >0 = net dilution, <0 = buybacks.
+        share_cagr = None
+        net_dilution = None
+        shares = [s["num_shares"] for s in series if s["num_shares"]]
+        if len(shares) >= 2 and shares[-1] and shares[-1] > 0:
+            latest_sh, oldest_sh = shares[0], shares[-1]
+            yrs = len(shares) - 1
+            share_cagr = round(((latest_sh / oldest_sh) ** (1 / yrs) - 1) * 100, 2)
+            net_dilution = latest_sh > oldest_sh
+        return {
+            "symbol": symbol, "currency": "USD", "metric": "sbc_dilution",
+            "series": series, "latest_sbc_pct_revenue": latest_pct,
+            "share_count_cagr_pct": share_cagr, "net_dilution": net_dilution,
+        }
+
     def get_data_quality_flags(
         self, symbol: str, min_severity: str = "MEDIUM"
     ) -> list[dict]:
