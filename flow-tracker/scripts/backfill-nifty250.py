@@ -36,6 +36,24 @@ def get_nifty_stocks() -> list[str]:
     return [r[0] for r in rows]
 
 
+def get_universe_stocks(min_turnover_cr: float = 1.0, min_days: int = 100) -> list[str]:
+    """Full liquid NSE universe (~2,000+ symbols): traded since 2024-01-01,
+    >= min_days trading days, >= min_turnover_cr avg daily turnover. Superset of
+    the index. Shared 'liquid' definition with backfill_universe_fundamentals."""
+    from flowtracker.store import FlowStore
+    with FlowStore() as store:
+        rows = store._conn.execute(
+            """SELECT symbol FROM (
+                   SELECT symbol, COUNT(*) AS d,
+                          AVG(close * COALESCE(volume, 0)) / 1e7 AS turn_cr
+                   FROM daily_stock_data WHERE date >= '2024-01-01'
+                   GROUP BY symbol
+               ) WHERE d >= ? AND turn_cr >= ? ORDER BY symbol""",
+            (min_days, min_turnover_cr),
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
 def step_valuation(symbols: list[str], sleep: float = 0.5):
     """Fetch yfinance valuation snapshot for all stocks."""
     from flowtracker.fund_client import FundClient
@@ -306,12 +324,13 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Limit to first N stocks (0=all)")
     parser.add_argument("--step", choices=list(STEPS.keys()), help="Run single step")
     parser.add_argument("--sleep", type=float, default=None, help="Override sleep between requests")
+    parser.add_argument("--universe", action="store_true", help="Full liquid NSE universe (~2000) instead of index constituents")
     args = parser.parse_args()
 
-    symbols = get_nifty_stocks()
+    symbols = get_universe_stocks() if args.universe else get_nifty_stocks()
     if args.limit:
         symbols = symbols[:args.limit]
-    console.print(f"[bold]Nifty Backfill — {len(symbols)} stocks[/]")
+    console.print(f"[bold]{'Universe' if args.universe else 'Nifty'} Backfill — {len(symbols)} stocks[/]")
 
     if args.step:
         fn = STEPS[args.step]
