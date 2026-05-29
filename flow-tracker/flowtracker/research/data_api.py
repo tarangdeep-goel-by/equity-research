@@ -1092,6 +1092,11 @@ class ResearchDataAPI:
         """
         if self._is_us(symbol):
             rows = self._store.get_us_annual_financials(symbol, self._market_of(symbol))
+            # Drop phantom annual rows that carry only balance-sheet (instant)
+            # values and no P&L — these arise when a recent interim 10-Q instant
+            # seeds a calendar year with no matching annual 10-K. A real annual
+            # row has revenue or net_income.
+            rows = [r for r in rows if r.get("revenue") is not None or r.get("net_income") is not None]
             # Store returns latest-first (fiscal_year DESC) — match India order.
             mapped = [self._us_annual_to_india(r) for r in rows[:years]]
             return _clean(mapped)
@@ -1312,6 +1317,54 @@ class ResearchDataAPI:
             "symbol": symbol, "currency": "USD", "metric": "sbc_dilution",
             "series": series, "latest_sbc_pct_revenue": latest_pct,
             "share_count_cagr_pct": share_cagr, "net_dilution": net_dilution,
+        }
+
+    def _us_dupont_decomposition(self, symbol: str) -> dict:
+        """ROE = net-margin × asset-turnover × equity-multiplier from the
+        WS-3-adapted US annuals (WS-7). Net worth = equity_capital + reserves
+        (the reconciled US total_equity). Returns the same envelope shape as the
+        India path's pure-Screener branch (years[] + effective_window)."""
+        annuals = self.get_annual_financials(symbol, years=10)  # latest-first dicts
+        years: list[dict] = []
+        for i, a in enumerate(annuals):
+            rev = a.get("revenue")
+            ni = a.get("net_income")
+            ta = a.get("total_assets")
+            eq = (a.get("equity_capital") or 0) + (a.get("reserves") or 0)
+            # Average T and T-1 balance-sheet items (T-1 = next, older row).
+            if i + 1 < len(annuals):
+                prev = annuals[i + 1]
+                p_ta = prev.get("total_assets") or 0
+                p_eq = (prev.get("equity_capital") or 0) + (prev.get("reserves") or 0)
+                avg_ta = (ta + p_ta) / 2 if (ta and p_ta > 0) else ta
+                avg_eq = (eq + p_eq) / 2 if p_eq > 0 else eq
+            else:
+                avg_ta, avg_eq = ta, eq
+            if rev and rev > 0 and ni is not None and avg_ta and avg_ta > 0 and avg_eq and avg_eq > 0:
+                npm = ni / rev
+                at = rev / avg_ta
+                em = avg_ta / avg_eq
+                years.append({
+                    "fiscal_year_end": a.get("fiscal_year_end"),
+                    "net_profit_margin": round(npm, 4),
+                    "asset_turnover": round(at, 4),
+                    "equity_multiplier": round(em, 4),
+                    "roe_dupont": round(npm * at * em, 4),
+                    "source": "us_annual",
+                })
+        if not years:
+            return {"source": "us_annual", "data_source": "us_annual", "years": [],
+                    "note": f"No US annual financials available to decompose for {symbol}."}
+        return {
+            "source": "us_annual",
+            "data_source": "us_annual",
+            "years": years,
+            "effective_window": {
+                "start_fy": years[-1]["fiscal_year_end"],
+                "end_fy": years[0]["fiscal_year_end"],
+                "n_years": len(years),
+                "narrowed_due_to": [],
+            },
         }
 
     def get_data_quality_flags(
@@ -4856,6 +4909,13 @@ class ResearchDataAPI:
         Hybrid windows (AR covers part, Screener covers older years)
         annotate `data_source: 'mixed'` with `source_per_year`.
         """
+        # US: the AR-five-year / Screener-narrowing machinery below is
+        # India-specific (and self._store.get_annual_financials is the India
+        # table — empty for US). Compute DuPont directly from the WS-3-adapted
+        # US annuals instead.
+        if self._is_us(symbol):
+            return self._us_dupont_decomposition(symbol)
+
         from flowtracker.data_quality import longest_unflagged_window
 
         # Strategy 2: try AR-restated highlights first.

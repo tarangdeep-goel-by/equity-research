@@ -659,3 +659,37 @@ class TestWS6USNativeFunctions:
     def test_sbc_dilution_tool_india_na(self, db):
         payload = _call(t.get_sbc_dilution, {"symbol": "SBIN"})
         assert _is_not_applicable(payload)
+
+
+# --------------------------------------------------------------------------- #
+# WS-7 — live-data fixes (no phantom latest annual row; US DuPont branch)
+# --------------------------------------------------------------------------- #
+
+
+class TestWS7LiveDataFixes:
+    def test_no_phantom_latest_annual_row(self, db):
+        # Every US annual row must carry P&L (revenue or net_income) — a row with
+        # only balance-sheet values is a phantom from an interim instant.
+        with ResearchDataAPI() as api:
+            annuals = api.get_annual_financials(US_SYMBOL, years=12)
+        assert annuals
+        for a in annuals:
+            assert a.get("revenue") is not None or a.get("net_income") is not None, \
+                f"phantom annual row (no P&L): {a.get('fiscal_year_end')}"
+
+    def test_us_dupont_decomposition_non_empty(self, db):
+        with ResearchDataAPI() as api:
+            d = api.get_dupont_decomposition(US_SYMBOL)
+        assert d.get("data_source") == "us_annual"
+        assert d.get("years"), "expected a US DuPont year series"
+        row = d["years"][0]
+        assert row["roe_dupont"] is not None
+        # ROE ≈ net_profit_margin × asset_turnover × equity_multiplier.
+        approx = row["net_profit_margin"] * row["asset_turnover"] * row["equity_multiplier"]
+        assert abs(approx - row["roe_dupont"]) < 1e-3
+
+    def test_india_dupont_unchanged(self, db):
+        with ResearchDataAPI() as api:
+            d = api.get_dupont_decomposition("SBIN")
+        # India never takes the us_annual branch.
+        assert d.get("data_source") != "us_annual"

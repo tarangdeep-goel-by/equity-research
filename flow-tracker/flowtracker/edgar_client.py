@@ -469,7 +469,14 @@ class EdgarClient(SecEdgarBase):
         """
         for tag in tags:
             best: dict[int, dict] = {}  # fy → {val, end, filed}
-            for f in self._units(gaap, tag):
+            facts = self._units(gaap, tag)
+            # Prefer balance sheets reported in ANNUAL filings (10-K/20-F) so the
+            # instant anchors to the fiscal year-end, not a later interim 10-Q
+            # quarter-end (which both mis-dates the FY-end and fabricates a phantom
+            # latest fiscal year from the most recent quarter). Fall back to all
+            # facts only when a tag carries no annual-form instants.
+            annual_facts = [f for f in facts if f.get("form") in _ANNUAL_FORMS]
+            for f in (annual_facts or facts):
                 end = f.get("end")
                 if not end:
                     continue
@@ -493,7 +500,12 @@ class EdgarClient(SecEdgarBase):
         """
         for tag in tags:
             best: dict[int, dict] = {}  # fy → {end, filed}
-            for f in self._units(gaap, tag):
+            facts = self._units(gaap, tag)
+            # Same annual-form preference as _pick_annual_instant so the
+            # fiscal_year_end is the 10-K balance-sheet date, not an interim
+            # quarter-end.
+            annual_facts = [f for f in facts if f.get("form") in _ANNUAL_FORMS]
+            for f in (annual_facts or facts):
                 end = f.get("end")
                 if not end:
                     continue
