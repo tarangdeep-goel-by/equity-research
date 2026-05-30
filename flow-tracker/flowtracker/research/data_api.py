@@ -2014,6 +2014,20 @@ class ResearchDataAPI:
         rows = self._store.get_us_institutional_holdings(symbol, self._market_of(symbol))
         return _clean(rows[:top_n] if top_n else rows)
 
+    def get_short_interest(self, symbol: str, periods: int = 12) -> list[dict]:
+        """Bi-monthly short-interest history (US-only) — shares sold short, avg
+        daily volume, and days-to-cover, most-recent settlement first.
+
+        US add-on (#19 ownership depth). India has no short-interest disclosure,
+        so India symbols return an empty list gracefully (no fabrication).
+        ``periods`` caps the number of settlement dates returned (default 12 ≈
+        6 months of bi-monthly data).
+        """
+        if not self._is_us(symbol):
+            return []
+        rows = self._store.get_us_short_interest(symbol, self._market_of(symbol))
+        return _clean(rows[:periods] if periods else rows)
+
     def get_us_price_series(self, symbol: str, days: int = 365) -> list[dict]:
         """Daily OHLCV price series for a US listing (us_daily_prices).
 

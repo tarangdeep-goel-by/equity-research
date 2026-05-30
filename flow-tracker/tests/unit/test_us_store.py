@@ -25,6 +25,7 @@ US_TABLES = [
     "us_consensus_estimates",
     "us_insider_transactions",
     "us_institutional_holdings",
+    "us_short_interest",
 ]
 
 
@@ -59,7 +60,8 @@ def test_us_tables_have_market_default(store: FlowStore) -> None:
 def test_us_monetary_tables_have_currency_default(store: FlowStore) -> None:
     for t in ["us_annual_financials", "us_quarterly_financials",
               "us_valuation_snapshot", "us_consensus_estimates",
-              "us_insider_transactions", "us_institutional_holdings"]:
+              "us_insider_transactions", "us_institutional_holdings",
+              "us_short_interest"]:
         cols = {r[1]: r for r in store._conn.execute(f"PRAGMA table_info({t})")}
         assert "currency" in cols, f"{t} missing currency"
         assert "USD" in str(cols["currency"][4]), f"{t} currency default wrong"
@@ -202,3 +204,30 @@ def test_inr_crore_bounds_unchanged(store: FlowStore) -> None:
     row = {"market_cap": 300_000_000}
     warnings = _validate_row("valuation_snapshot", row, market="NSE", currency="INR")
     assert any("market_cap" in w for w in warnings), warnings
+
+
+def test_short_interest_round_trip(store: FlowStore) -> None:
+    """us_short_interest upsert+get round-trips, most-recent settlement first,
+    and the (symbol, market, settlement_date) conflict key updates in place."""
+    store.upsert_us_short_interest([
+        {"symbol": "AAPL", "settlement_date": "2026-04-30",
+         "short_interest": 134_675_274.0, "avg_daily_volume": 45_944_025.0,
+         "days_to_cover": 2.93},
+        {"symbol": "AAPL", "settlement_date": "2026-05-15",
+         "short_interest": 138_782_718.0, "avg_daily_volume": 50_565_316.0,
+         "days_to_cover": 2.74},
+    ])
+    rows = store.get_us_short_interest("AAPL")
+    assert len(rows) == 2
+    assert rows[0]["settlement_date"] == "2026-05-15"  # DESC
+    assert rows[0]["market"] == "NASDAQ" and rows[0]["currency"] == "USD"
+
+    # Same settlement_date → update in place (no duplicate row).
+    store.upsert_us_short_interest([
+        {"symbol": "AAPL", "settlement_date": "2026-05-15",
+         "short_interest": 140_000_000.0, "avg_daily_volume": 50_000_000.0,
+         "days_to_cover": 2.80},
+    ])
+    rows = store.get_us_short_interest("AAPL")
+    assert len(rows) == 2
+    assert rows[0]["short_interest"] == 140_000_000.0

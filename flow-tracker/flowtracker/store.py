@@ -1744,6 +1744,20 @@ CREATE TABLE IF NOT EXISTS us_institutional_holdings (
 CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_symbol ON us_institutional_holdings(symbol, market);
 CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_cik ON us_institutional_holdings(manager_cik);
 
+CREATE TABLE IF NOT EXISTS us_short_interest (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    settlement_date TEXT NOT NULL,           -- bi-monthly short-interest settlement date (YYYY-MM-DD)
+    short_interest REAL,                      -- shares sold short as of settlement_date
+    avg_daily_volume REAL,                    -- avg daily share volume over the reporting period
+    days_to_cover REAL,                       -- short_interest / avg_daily_volume (short-squeeze pressure)
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, settlement_date)
+);
+CREATE INDEX IF NOT EXISTS idx_us_short_interest_symbol ON us_short_interest(symbol, market);
+
 -- Denormalized per-company snapshot for US listings — the single source of
 -- truth for US peers / benchmarks / valuation-matrix, mirroring the market-
 -- relevant subset of the India `company_snapshot` table plus market/currency.

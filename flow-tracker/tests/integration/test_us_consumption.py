@@ -121,6 +121,14 @@ def _seed_us(store: FlowStore) -> None:
          "date": "2025-05-29", "target_mean": 230.0, "target_high": 300.0,
          "target_low": 170.0, "num_analysts": 40, "eps_next_year": 7.50},
     ])
+    store.upsert_us_short_interest([
+        {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
+         "settlement_date": "2026-05-15", "short_interest": 138_782_718.0,
+         "avg_daily_volume": 50_565_316.0, "days_to_cover": 2.744623},
+        {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
+         "settlement_date": "2026-04-30", "short_interest": 134_675_274.0,
+         "avg_daily_volume": 45_944_025.0, "days_to_cover": 2.931290},
+    ])
     # ~60 daily bars so technicals (MACD/BB/ADX need 30+) + price-perf + WACC
     # beta have something to read (WS-4).
     rows = []
@@ -189,6 +197,15 @@ class TestRoutedToolsServeUS:
         names = json.dumps(payload["holdings"])
         assert "VANGUARD GROUP INC" in names and "BLACKROCK INC" in names
 
+    def test_short_interest_us(self, db):
+        payload = _call(t.get_short_interest, {"symbol": US_SYMBOL})
+        assert payload["symbol"] == US_SYMBOL
+        rows = payload["short_interest"]
+        assert len(rows) == 2
+        # most-recent settlement first, days-to-cover surfaced
+        assert rows[0]["settlement_date"] == "2026-05-15"
+        assert rows[0]["days_to_cover"] == 2.744623
+
 
 # --------------------------------------------------------------------------- #
 # 2. India-only tools degrade for US, still serve India (regression)
@@ -228,6 +245,11 @@ class TestIndiaOnlyDegradesForUS:
 
     def test_institutional_ownership_na_for_india(self, db):
         payload = _call(t.get_institutional_ownership, {"symbol": "SBIN"})
+        assert _is_not_applicable(payload)
+        assert payload["market"] == "NSE"
+
+    def test_short_interest_na_for_india(self, db):
+        payload = _call(t.get_short_interest, {"symbol": "SBIN"})
         assert _is_not_applicable(payload)
         assert payload["market"] == "NSE"
 

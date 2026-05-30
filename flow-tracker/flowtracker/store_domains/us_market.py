@@ -249,6 +249,30 @@ class UsMarketMixin:
             "us_institutional_holdings", symbol, market, "value_usd DESC",
         )
 
+    # -- us_short_interest --
+
+    _US_SHORT_INTEREST_COLS = (
+        "symbol", "market", "currency", "settlement_date", "short_interest",
+        "avg_daily_volume", "days_to_cover",
+    )
+
+    def upsert_us_short_interest(self, rows: list[dict]) -> int:
+        """Batch upsert bi-monthly short-interest rows (Nasdaq/FINRA).
+
+        Conflict: (symbol, market, settlement_date) — one position per
+        settlement date per listing.
+        """
+        return self._us_upsert(
+            "us_short_interest", rows, self._US_SHORT_INTEREST_COLS,
+            ("symbol", "market", "settlement_date"),
+        )
+
+    def get_us_short_interest(self, symbol: str, market: str = "NASDAQ") -> list[dict]:
+        """Short-interest history for a symbol, most recent settlement first."""
+        return self._us_get(
+            "us_short_interest", symbol, market, "settlement_date DESC",
+        )
+
     # -- us_macro_daily (market-wide; symbol-less) --
 
     _US_MACRO_DAILY_COLS = (
