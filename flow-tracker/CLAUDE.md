@@ -205,18 +205,25 @@ research/sector_skills/
 
 ### AutoEval Loop
 
-Iterative prompt optimization: run agent → grade with Gemini → fix prompt → re-run. One agent at a time, sector by sector, until all reach A-.
+Iterative prompt optimization: run agent → grade with Gemini → fix prompt → re-run, until all reach A-.
+
+**Default eval = parallel worker pool.** Whenever you eval more than one sector, use the resumable queue — never a sequential single process. It's faster (N sectors run concurrently) and crash-safe (atomic claims, resumable; a killed worker's sector is reclaimed, not lost). `uv sync --extra test --extra autoeval` first (the `autoeval` extra ships `google-genai` for the grader; syncing only `--extra test` silently drops it and grading fails).
 
 ```bash
-uv sync --extra autoeval
+# THE DEFAULT: N self-balancing workers over a sector list (own tmux session, resumable)
+scripts/eval_parallel.sh 3 textiles,building_materials,packaging,media,hospitality,logistics
+AGENTS=sector,valuation scripts/eval_parallel.sh 2 metals,fmcg   # scope specialists
+SKIP_RUN=1               scripts/eval_parallel.sh 4 bfsi,telecom  # grade existing reports only
+#   monitor:  tmux attach -t eval_<ts>   ·   ls run_logs/evalq_<ts>/done
+
+# Single-sector / single-agent (no pool needed):
 uv run flowtrack research autoeval -a business --sectors bfsi      # run + grade
-uv run flowtrack research autoeval -a business --sectors bfsi --skip-run  # grade only
+uv run flowtrack research autoeval -s metals --skip-run            # grade existing reports
 uv run flowtrack research autoeval --progress                      # progress chart
 uv run flowtrack research autoeval-macro --note baseline           # macro grader (flat date matrix)
-uv run flowtrack research analog-backtest --n 20 --seed 42 --note baseline  # analog calibration backtest (~3hr)
 ```
 
-Key files in `research/autoeval/`: `evaluate.py` (harness), `eval_matrix.yaml` (14 sectors × test stocks), `fix_tracker.md` (Gemini-recommended fixes), `results.tsv` (grades), `evaluate_macro.py` + `eval_matrix_macro.yaml` (macro grader), `backtest_historical_analog.py` (analog calibration backtest). See `research/autoeval/README.md` for full workflow.
+Key files in `research/autoeval/`: `evaluate.py` (harness), `eval_matrix.yaml` (sectors × test stocks), `fix_tracker.md` (Gemini-recommended fixes), `results.tsv` (grades), `evaluate_macro.py` + `eval_matrix_macro.yaml` (macro grader). Parallel runner: `scripts/eval_parallel.sh` (launcher) + `scripts/eval_queue.sh` (per-worker loop). See `research/autoeval/README.md` for full workflow.
 
 ### Buy-Side Decision Framework
 
