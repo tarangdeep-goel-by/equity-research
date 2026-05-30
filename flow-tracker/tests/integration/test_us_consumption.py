@@ -361,8 +361,18 @@ class TestWS5DegradesForUS:
     def test_annual_report_na_for_us(self, db):
         assert _is_not_applicable(_call(t.get_annual_report, {"symbol": US_SYMBOL}))
 
-    def test_historical_analogs_na_for_us(self, db):
-        assert _is_not_applicable(_call(t.get_historical_analogs, {"symbol": US_SYMBOL}))
+    def test_historical_analogs_supported_for_us(self, db):
+        # #17: US analogs are now SUPPORTED (market-aware cohort), not n/a.
+        # No US cohort is seeded here, so the cohort is empty — but the tool
+        # returns a real structure (target fingerprint + empty analogs), not
+        # the not_applicable envelope.
+        payload = _call(t.get_historical_analogs, {"symbol": US_SYMBOL})
+        assert not _is_not_applicable(payload)
+        assert payload["symbol"] == US_SYMBOL
+        assert "target_features" in payload
+        # US fingerprint: ownership/flow dims are null for a US listing.
+        assert payload["target_features"]["fii_pct"] is None
+        assert payload["target_features"]["pledge_pct"] is None
 
     def test_company_context_documents_na_for_us(self, db):
         assert _is_not_applicable(

@@ -524,7 +524,9 @@ class ResearchDataAPI:
         """
         from flowtracker.research.analog_builder import compute_feature_vector
         as_of_date = self._default_as_of(as_of_date)
-        return compute_feature_vector(self._store, symbol, as_of_date)
+        return compute_feature_vector(
+            self._store, symbol, as_of_date, market=self._market_of(symbol),
+        )
 
     def get_historical_analogs(
         self, symbol: str, k: int = 20, as_of_date: str | None = None,
@@ -541,10 +543,11 @@ class ResearchDataAPI:
             compute_feature_vector, retrieve_top_k_analogs,
         )
         as_of_date = self._default_as_of(as_of_date)
-        target_vec = compute_feature_vector(self._store, symbol, as_of_date)
+        market = self._market_of(symbol)
+        target_vec = compute_feature_vector(self._store, symbol, as_of_date, market=market)
         retrieval = retrieve_top_k_analogs(
             self._store, target_symbol=symbol, target_date=as_of_date,
-            target_features=target_vec, k=k,
+            target_features=target_vec, k=k, market=market,
         )
         analogs = retrieval["analogs"]
         return {
