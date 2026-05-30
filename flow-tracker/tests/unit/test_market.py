@@ -109,6 +109,24 @@ class TestInferMarket:
     def test_bare_defaults_to_nse(self):
         assert infer_market("MSFT") == DEFAULT_MARKET == Market.NSE
 
+    def test_infer_market_registry_lookup(self):
+        # registry resolves a bare US ticker to its real venue (string coerced)
+        assert infer_market("MSFT", registry_lookup=lambda t: "NASDAQ") == Market.NASDAQ
+        # lookup miss -> default (NSE)
+        assert infer_market("RELIANCE", registry_lookup=lambda t: None) == Market.NSE
+        # explicit suffix wins over the registry hook
+        assert (
+            infer_market("RELIANCE.NS", registry_lookup=lambda t: "NASDAQ") == Market.NSE
+        )
+        # lookup may return a Market directly (idempotent coercion)
+        assert infer_market("MSFT", registry_lookup=lambda t: Market.NYSE) == Market.NYSE
+
+        # a broken lookup must not propagate -> falls back to DEFAULT_MARKET
+        def _boom(t):
+            raise RuntimeError("registry exploded")
+
+        assert infer_market("MSFT", registry_lookup=_boom) == DEFAULT_MARKET == Market.NSE
+
 
 class TestMarketConfig:
     def test_nse_is_inr_crores(self):

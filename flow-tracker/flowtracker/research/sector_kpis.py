@@ -538,6 +538,151 @@ SECTOR_KPI_CONFIG: dict[str, dict] = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# US KPI overlays (roadmap #11) — keyed by the SAME sector key.
+# ---------------------------------------------------------------------------
+# The India `SECTOR_KPI_CONFIG.kpis` above are framed around India-specific
+# disclosures: CASA/PSL/RIDF (banks), SIP flows (AMCs), ANDA-to-USFDA + India
+# branded formulations (pharma), offshore mix/attrition (IT services), AT&C
+# losses / CERC-RoE (power). Those are wrong vocabulary for a US listing.
+#
+# When a KPI lookup resolves to a US market (NASDAQ/NYSE) AND its sector has an
+# entry here, this US set REPLACES the India set. Sectors absent here fall back
+# to the India `kpis` because their metrics are largely universal (capital-goods
+# order book, hospital rev-per-bed, logistics tonnage, auto volumes). This is
+# the *config* half of #11 — sourcing these from EDGAR 10-K/10-Q is #18.
+#
+# Units mirror the India convention: `usd` per-share/absolute dollar figures,
+# `usd_mn` for aggregates (US aggregates are stored in USD millions), `pct`,
+# `bps`, `x` (a multiple/ratio), `number`, plus a few domain units (mboed, mw).
+SECTOR_KPI_CONFIG_US: dict[str, list[dict]] = {
+    "banks": [
+        {"key": "net_interest_margin_pct", "label": "NIM %", "unit": "pct", "description": "Net interest income / average earning assets (FTE basis)", "aliases": ["nim_pct", "nim", "net_interest_margin"]},
+        {"key": "efficiency_ratio_pct", "label": "Efficiency Ratio %", "unit": "pct", "description": "Noninterest expense / (net interest income + noninterest income) — US analog of cost-to-income; LOWER is better", "aliases": ["cost_to_income_ratio_pct", "efficiency_ratio"]},
+        {"key": "net_charge_off_rate_pct", "label": "NCO Rate %", "unit": "pct", "description": "Annualized net charge-offs as % of average loans — the realized credit-loss run-rate", "aliases": ["nco_rate_pct", "net_charge_offs_pct", "ncos_pct"]},
+        {"key": "nonperforming_assets_pct", "label": "NPA / NPL %", "unit": "pct", "description": "Nonperforming loans (or assets) as % of total loans", "aliases": ["npl_ratio_pct", "npa_pct", "nonperforming_loans_pct"]},
+        {"key": "allowance_for_credit_losses_pct", "label": "ACL / Loans %", "unit": "pct", "description": "CECL allowance for credit losses as % of total loans — reserve coverage", "aliases": ["acl_pct", "allowance_coverage_pct", "reserve_to_loans_pct"]},
+        {"key": "cet1_pct", "label": "CET-1 %", "unit": "pct", "description": "Common Equity Tier 1 capital ratio (Basel III)", "aliases": ["cet_1_pct", "cet1", "common_equity_tier_1_pct"]},
+        {"key": "return_on_tangible_common_equity_pct", "label": "ROTCE %", "unit": "pct", "description": "Return on tangible common equity — the headline US bank profitability metric", "aliases": ["rotce_pct", "rotce", "return_on_tce_pct"]},
+        {"key": "return_on_assets_pct", "label": "ROA %", "unit": "pct", "description": "Annualized net income / average total assets", "aliases": ["roa_pct", "roa"]},
+        {"key": "tangible_book_value_per_share_usd", "label": "TBVPS", "unit": "usd", "description": "Tangible book value per share (US$) — the key bank valuation anchor", "aliases": ["tbvps_usd", "tbvps", "tangible_book_per_share"]},
+        {"key": "loan_growth_pct", "label": "Loan Growth %", "unit": "pct", "description": "YoY growth in total loans / average loans", "aliases": ["total_loan_growth_pct"]},
+        {"key": "deposit_growth_pct", "label": "Deposit Growth %", "unit": "pct", "description": "YoY growth in total deposits — funding-cost & franchise signal", "aliases": ["total_deposit_growth_pct"]},
+        {"key": "noninterest_income_pct", "label": "Fee Income %", "unit": "pct", "description": "Noninterest (fee) income as % of total revenue — revenue diversification", "aliases": ["fee_income_pct", "noninterest_income_mix_pct"]},
+        {"key": "cost_of_deposits_pct", "label": "Cost of Deposits %", "unit": "pct", "description": "Average rate paid on interest-bearing deposits — deposit-beta / funding-pressure proxy", "aliases": ["deposit_cost_pct", "cost_of_funds_pct"]},
+    ],
+    "it_services": [
+        {"key": "arr_usd_mn", "label": "ARR", "unit": "usd_mn", "description": "Annual Recurring Revenue in USD Millions — the core SaaS scale metric", "aliases": ["annual_recurring_revenue_usd_mn", "arr"]},
+        {"key": "net_revenue_retention_pct", "label": "Net Revenue Retention %", "unit": "pct", "description": "Net dollar retention / NRR — revenue from the prior-year cohort incl. expansion & churn; >100% = land-and-expand working", "aliases": ["ndr_pct", "nrr_pct", "net_dollar_retention_pct"]},
+        {"key": "gross_revenue_retention_pct", "label": "Gross Revenue Retention %", "unit": "pct", "description": "GRR — retention before upsell; isolates churn", "aliases": ["grr_pct", "gross_retention_pct"]},
+        {"key": "rule_of_40_pct", "label": "Rule of 40", "unit": "pct", "description": "Revenue growth % + FCF (or operating) margin % — the SaaS growth-vs-profit balance test; ≥40 is healthy", "aliases": ["rule_of_forty_pct", "rule_of_40"]},
+        {"key": "calculated_billings_usd_mn", "label": "Billings", "unit": "usd_mn", "description": "Calculated billings (revenue + change in deferred revenue) — leading indicator of bookings", "aliases": ["billings_usd_mn", "calculated_billings"]},
+        {"key": "remaining_performance_obligations_usd_mn", "label": "RPO / cRPO", "unit": "usd_mn", "description": "Remaining (and current) performance obligations — contracted backlog", "aliases": ["rpo_usd_mn", "crpo_usd_mn", "rpo"]},
+        {"key": "non_gaap_operating_margin_pct", "label": "Non-GAAP Op Margin %", "unit": "pct", "description": "Non-GAAP operating margin (the metric US software guides to)", "aliases": ["non_gaap_operating_margin", "adjusted_operating_margin_pct"]},
+        {"key": "fcf_margin_pct", "label": "FCF Margin %", "unit": "pct", "description": "Free cash flow / revenue — true cash profitability under heavy SBC", "aliases": ["free_cash_flow_margin_pct", "fcf_margin"]},
+        {"key": "stock_based_comp_pct_revenue", "label": "SBC % Revenue", "unit": "pct", "description": "Stock-based compensation as % of revenue — dilution drag; rising = GAAP-to-cash gap widening", "aliases": ["sbc_pct_revenue", "sbc_pct", "stock_comp_pct"]},
+        {"key": "revenue_growth_cc_pct", "label": "Revenue Growth (cc) %", "unit": "pct", "description": "Constant-currency total revenue growth", "aliases": ["constant_currency_revenue_growth_pct", "cc_revenue_growth_pct"]},
+        {"key": "gross_margin_pct", "label": "Gross Margin %", "unit": "pct", "description": "GAAP (or non-GAAP) gross margin", "aliases": ["gross_margin"]},
+        {"key": "customers_over_100k_arr_number", "label": "Customers >$100k ARR", "unit": "number", "description": "Count of customers contributing >$100k ARR — large-customer expansion proxy", "aliases": ["customers_over_100k_number", "large_customers_number"]},
+    ],
+    "amc_capital_markets": [
+        {"key": "assets_under_management_usd_mn", "label": "AUM", "unit": "usd_mn", "description": "Total assets under management (USD Millions)", "aliases": ["aum_usd_mn", "aum"]},
+        {"key": "net_flows_usd_mn", "label": "Net Flows", "unit": "usd_mn", "description": "Net client inflows minus outflows — the single biggest driver of asset-manager economics", "aliases": ["net_new_flows_usd_mn", "net_flows", "net_client_flows_usd_mn"]},
+        {"key": "organic_growth_rate_pct", "label": "Organic Growth %", "unit": "pct", "description": "Annualized net flows / beginning-of-period AUM — flow momentum ex-market", "aliases": ["organic_flow_rate_pct", "net_flow_rate_pct"]},
+        {"key": "effective_fee_rate_bps", "label": "Effective Fee Rate", "unit": "bps", "description": "Management fees / average AUM, in basis points — captures fee compression", "aliases": ["fee_rate_bps", "average_fee_bps"]},
+        {"key": "average_aum_usd_mn", "label": "Average AUM", "unit": "usd_mn", "description": "Average AUM over the period (fees accrue on average, not period-end, balances)", "aliases": ["avg_aum_usd_mn"]},
+        {"key": "adjusted_operating_margin_pct", "label": "Adj. Operating Margin %", "unit": "pct", "description": "Adjusted operating margin — asset-manager operating leverage", "aliases": ["operating_margin_pct", "adj_operating_margin_pct"]},
+        {"key": "performance_fees_usd_mn", "label": "Performance Fees", "unit": "usd_mn", "description": "Performance / incentive fees in the period (volatile)", "aliases": ["incentive_fees_usd_mn", "performance_fees"]},
+        {"key": "passive_aum_mix_pct", "label": "Passive AUM Mix %", "unit": "pct", "description": "Passive (index/ETF) AUM as % of total — structural fee-pressure signal", "aliases": ["passive_mix_pct", "index_aum_pct"]},
+    ],
+    "insurance": [
+        {"key": "combined_ratio_pct", "label": "Combined Ratio %", "unit": "pct", "description": "(P&C) Loss ratio + expense ratio — <100% = underwriting profit", "aliases": ["combined_ratio"]},
+        {"key": "loss_ratio_pct", "label": "Loss Ratio %", "unit": "pct", "description": "(P&C) Incurred losses / net earned premium", "aliases": ["loss_ratio"]},
+        {"key": "expense_ratio_pct", "label": "Expense Ratio %", "unit": "pct", "description": "(P&C) Underwriting expenses / net written (or earned) premium", "aliases": ["underwriting_expense_ratio_pct"]},
+        {"key": "net_premiums_written_usd_mn", "label": "Net Premiums Written", "unit": "usd_mn", "description": "NPW — top-line growth driver", "aliases": ["npw_usd_mn", "net_written_premium_usd_mn"]},
+        {"key": "net_premiums_earned_usd_mn", "label": "Net Premiums Earned", "unit": "usd_mn", "description": "NPE — recognized premium revenue", "aliases": ["npe_usd_mn", "net_earned_premium_usd_mn"]},
+        {"key": "prior_year_reserve_development_usd_mn", "label": "PY Reserve Development", "unit": "usd_mn", "description": "Favorable (negative) or adverse (positive) prior-year reserve development — reserving discipline signal", "aliases": ["reserve_development_usd_mn", "py_development_usd_mn"]},
+        {"key": "catastrophe_losses_usd_mn", "label": "Catastrophe Losses", "unit": "usd_mn", "description": "Pre-tax cat losses in the period", "aliases": ["cat_losses_usd_mn", "catastrophe_losses"]},
+        {"key": "return_on_equity_pct", "label": "ROE %", "unit": "pct", "description": "Return on equity (often operating ROE)", "aliases": ["roe_pct", "operating_roe_pct"]},
+        {"key": "book_value_per_share_usd", "label": "BVPS", "unit": "usd", "description": "Book value per share (US$), often ex-AOCI — the insurer valuation anchor", "aliases": ["bvps_usd", "book_value_per_share"]},
+        {"key": "net_investment_income_usd_mn", "label": "Net Investment Income", "unit": "usd_mn", "description": "NII on the investment portfolio (float) — rate-sensitive earnings", "aliases": ["nii_usd_mn", "net_investment_income"]},
+    ],
+    "pharma": [
+        {"key": "rd_expense_pct_revenue", "label": "R&D % Revenue", "unit": "pct", "description": "Research & development expense as % of revenue — pipeline-investment intensity", "aliases": ["rd_intensity_pct", "research_development_pct_revenue"]},
+        {"key": "pipeline_phase3_assets_number", "label": "Phase 3 Assets", "unit": "number", "description": "Count of programs in Phase 3 (registration-enabling) development", "aliases": ["phase3_programs_number", "late_stage_assets_number"]},
+        {"key": "pivotal_catalysts_number", "label": "Pivotal Catalysts (NTM)", "unit": "number", "description": "Count of upcoming pivotal readouts / PDUFA decision dates in the next ~12 months", "aliases": ["pdufa_dates_number", "upcoming_catalysts_number"]},
+        {"key": "gross_to_net_pct", "label": "Gross-to-Net %", "unit": "pct", "description": "GTN deduction (rebates, chargebacks, 340B, returns) as % of gross sales", "aliases": ["gtn_pct", "gross_to_net_deduction_pct"]},
+        {"key": "us_net_price_change_pct", "label": "US Net Price Δ %", "unit": "pct", "description": "YoY change in US net realized price — IRA / payer pricing pressure", "aliases": ["net_price_change_pct", "us_price_change_pct"]},
+        {"key": "patent_cliff_revenue_at_risk_usd_mn", "label": "LOE Revenue at Risk", "unit": "usd_mn", "description": "Revenue exposed to loss-of-exclusivity over the forecast horizon", "aliases": ["loe_exposure_usd_mn", "patent_cliff_usd_mn"]},
+        {"key": "new_drug_approvals_number", "label": "FDA Approvals", "unit": "number", "description": "NDA/BLA (or sNDA) approvals received this period", "aliases": ["fda_approvals_number", "approvals_number"]},
+        {"key": "top_product_revenue_concentration_pct", "label": "Top-Product Concentration %", "unit": "pct", "description": "% of revenue from the single largest product — concentration / cliff risk", "aliases": ["top_product_pct", "lead_product_concentration_pct"]},
+        {"key": "operating_cash_flow_usd_mn", "label": "Operating Cash Flow", "unit": "usd_mn", "description": "Cash from operations — esp. critical as biotech runway", "aliases": ["ocf_usd_mn", "cash_from_operations_usd_mn"]},
+    ],
+    "oil_and_gas": [
+        {"key": "total_production_mboed", "label": "Production", "unit": "mboed", "description": "Total production in thousand barrels of oil-equivalent per day (MBOE/d)", "aliases": ["production_mboed", "total_production_boed"]},
+        {"key": "realized_price_per_boe_usd", "label": "Realized Price /BOE", "unit": "usd", "description": "Average realized price per BOE (blended oil/gas/NGL)", "aliases": ["realized_price_boe_usd", "average_realized_price_usd"]},
+        {"key": "finding_development_cost_per_boe_usd", "label": "F&D Cost /BOE", "unit": "usd", "description": "Finding & development cost per BOE — capital efficiency of reserve adds", "aliases": ["fd_cost_per_boe_usd", "finding_dev_cost_usd"]},
+        {"key": "reserve_replacement_ratio_pct", "label": "Reserve Replacement %", "unit": "pct", "description": "Reserves added / production — >100% = growing the resource base", "aliases": ["rrr_pct", "reserve_replacement_pct"]},
+        {"key": "lifting_cost_per_boe_usd", "label": "Lifting Cost /BOE", "unit": "usd", "description": "Cash production (lifting) cost per BOE — opex breakeven", "aliases": ["production_cost_per_boe_usd", "opex_per_boe_usd"]},
+        {"key": "free_cash_flow_usd_mn", "label": "Free Cash Flow", "unit": "usd_mn", "description": "FCF — the shareholder-return-era headline for US E&P/integrateds", "aliases": ["fcf_usd_mn", "free_cash_flow"]},
+        {"key": "net_debt_to_ebitda_x", "label": "Net Debt / EBITDA", "unit": "x", "description": "Leverage multiple — balance-sheet resilience to commodity cycles", "aliases": ["net_debt_ebitda_x", "leverage_x"]},
+        {"key": "capital_expenditure_usd_mn", "label": "Capex", "unit": "usd_mn", "description": "Capital expenditure in the period (capital discipline signal)", "aliases": ["capex_usd_mn", "capital_expenditure"]},
+    ],
+    "power_and_utilities": [
+        {"key": "rate_base_usd_mn", "label": "Rate Base", "unit": "usd_mn", "description": "Regulated rate base (USD Millions) — the asset base the utility earns its allowed return on", "aliases": ["regulated_rate_base_usd_mn", "rate_base"]},
+        {"key": "allowed_roe_pct", "label": "Allowed ROE %", "unit": "pct", "description": "Authorized return on equity from rate cases", "aliases": ["authorized_roe_pct", "allowed_return_pct"]},
+        {"key": "rate_base_growth_pct", "label": "Rate Base Growth %", "unit": "pct", "description": "Projected rate-base CAGR — the EPS-growth engine for regulated utilities", "aliases": ["rate_base_cagr_pct"]},
+        {"key": "earned_roe_pct", "label": "Earned ROE %", "unit": "pct", "description": "Actually earned ROE vs allowed — regulatory-lag / under-earning signal", "aliases": ["realized_roe_pct"]},
+        {"key": "renewables_capacity_mw", "label": "Renewables Capacity", "unit": "mw", "description": "Installed (or contracted) renewable generation capacity in MW", "aliases": ["renewable_capacity_mw", "clean_capacity_mw"]},
+        {"key": "capital_plan_usd_mn", "label": "Capex Plan", "unit": "usd_mn", "description": "Capital investment plan in the period/horizon — drives rate-base growth", "aliases": ["capex_usd_mn", "capital_expenditure_usd_mn"]},
+        {"key": "ffo_to_debt_pct", "label": "FFO / Debt %", "unit": "pct", "description": "Funds from operations / debt — the credit metric utilities are rated on", "aliases": ["ffo_debt_pct"]},
+        {"key": "retail_load_growth_pct", "label": "Load Growth %", "unit": "pct", "description": "Retail electricity load/demand growth (data-center demand is the current theme)", "aliases": ["load_growth_pct", "demand_growth_pct"]},
+    ],
+    "fmcg": [
+        {"key": "organic_sales_growth_pct", "label": "Organic Sales Growth %", "unit": "pct", "description": "Organic net sales growth (ex-FX, ex-M&A) — the headline US staples metric", "aliases": ["organic_growth_pct", "organic_net_sales_growth_pct"]},
+        {"key": "volume_growth_pct", "label": "Volume Growth %", "unit": "pct", "description": "Volume/mix component of organic growth — real demand vs pricing", "aliases": ["volume_growth", "organic_volume_growth_pct"]},
+        {"key": "price_mix_growth_pct", "label": "Price/Mix Growth %", "unit": "pct", "description": "Price + mix component of organic growth", "aliases": ["pricing_growth_pct", "price_growth_pct"]},
+        {"key": "gross_margin_pct", "label": "Gross Margin %", "unit": "pct", "description": "Gross margin — input-cost & pricing leverage", "aliases": ["gross_margin"]},
+        {"key": "operating_margin_pct", "label": "Operating Margin %", "unit": "pct", "description": "Adjusted operating (segment) margin", "aliases": ["adjusted_operating_margin_pct", "ebit_margin_pct"]},
+        {"key": "advertising_promotion_pct_sales", "label": "A&P % Sales", "unit": "pct", "description": "Advertising & promotion spend as % of sales — brand investment", "aliases": ["ap_pct_sales", "marketing_pct_sales"]},
+        {"key": "north_america_sales_growth_pct", "label": "N. America Sales Growth %", "unit": "pct", "description": "Organic growth in the (typically largest) North America segment", "aliases": ["na_sales_growth_pct"]},
+        {"key": "market_share_change_bps", "label": "Market Share Δ", "unit": "bps", "description": "Change in category market share, in basis points (share gains/losses)", "aliases": ["share_change_bps", "market_share_delta_bps"]},
+    ],
+    "retail": [
+        {"key": "comparable_store_sales_pct", "label": "Comp Sales %", "unit": "pct", "description": "Comparable / same-store sales growth — the single most-watched US retail metric", "aliases": ["comps_pct", "same_store_sales_pct", "sss_pct"]},
+        {"key": "ecommerce_sales_growth_pct", "label": "E-commerce Growth %", "unit": "pct", "description": "Digital/e-commerce sales growth", "aliases": ["digital_sales_growth_pct", "online_sales_growth_pct"]},
+        {"key": "ecommerce_penetration_pct", "label": "E-commerce Penetration %", "unit": "pct", "description": "Online sales as % of total — channel-shift progress", "aliases": ["digital_penetration_pct", "online_mix_pct"]},
+        {"key": "gross_margin_pct", "label": "Gross Margin %", "unit": "pct", "description": "Merchandise gross margin (markdown / freight pressure signal)", "aliases": ["gross_margin"]},
+        {"key": "operating_margin_pct", "label": "Operating Margin %", "unit": "pct", "description": "Operating (EBIT) margin", "aliases": ["ebit_margin_pct"]},
+        {"key": "inventory_growth_pct", "label": "Inventory Growth %", "unit": "pct", "description": "YoY inventory growth vs sales growth — glut / markdown-risk signal", "aliases": ["inventory_growth"]},
+        {"key": "traffic_growth_pct", "label": "Traffic Growth %", "unit": "pct", "description": "Store/site traffic (transaction count) growth", "aliases": ["transaction_growth_pct", "footfall_growth_pct"]},
+        {"key": "average_ticket_growth_pct", "label": "Avg Ticket Growth %", "unit": "pct", "description": "Average transaction value growth (price/mix per basket)", "aliases": ["average_transaction_growth_pct", "ticket_growth_pct"]},
+    ],
+}
+
+# Markets whose KPI lookups should prefer the US overlay above.
+_US_MARKETS = frozenset({"NASDAQ", "NYSE", "AMEX", "US"})
+
+
+def _is_us_market(market: str | None) -> bool:
+    """True when ``market`` is a US listing venue (case-insensitive)."""
+    return bool(market) and str(market).upper() in _US_MARKETS
+
+
+def _kpis_for_sector(sector: str, market: str | None = None) -> list[dict]:
+    """Resolve the KPI list for a sector, market-aware.
+
+    US markets get the ``SECTOR_KPI_CONFIG_US`` overlay when one exists for the
+    sector; everything else (incl. ``market=None``) gets the India ``kpis`` so
+    existing behavior is byte-identical.
+    """
+    if _is_us_market(market):
+        us = SECTOR_KPI_CONFIG_US.get(sector)
+        if us:
+            return us
+    return SECTOR_KPI_CONFIG[sector]["kpis"]
+
+
 # --- Lookup helpers ---
 
 # De-alias map: yfinance/Yahoo industry label → an EXISTING sector key. Built from
@@ -634,25 +779,30 @@ def get_sector_for_symbol(symbol: str, industry: str | None = None) -> str | Non
     return get_sector_for_industry(industry or "")
 
 
-def get_kpis_for_industry(industry: str) -> list[dict] | None:
-    """Get canonical KPI definitions for a given industry."""
+def get_kpis_for_industry(industry: str, market: str | None = None) -> list[dict] | None:
+    """Get canonical KPI definitions for a given industry.
+
+    ``market`` (e.g. "NASDAQ"/"NYSE") selects the US KPI overlay where one
+    exists for the resolved sector. ``market=None`` (the default) preserves the
+    India KPI set byte-identically.
+    """
     sector = get_sector_for_industry(industry)
     if sector is None:
         return None
-    return SECTOR_KPI_CONFIG[sector]["kpis"]
+    return _kpis_for_sector(sector, market)
 
 
-def get_kpi_keys_for_industry(industry: str) -> list[str] | None:
+def get_kpi_keys_for_industry(industry: str, market: str | None = None) -> list[str] | None:
     """Get just the canonical KPI key names for a given industry."""
-    kpis = get_kpis_for_industry(industry)
+    kpis = get_kpis_for_industry(industry, market)
     if kpis is None:
         return None
     return [k["key"] for k in kpis]
 
 
-def build_extraction_hint(industry: str) -> str:
+def build_extraction_hint(industry: str, market: str | None = None) -> str:
     """Build the sector-specific extraction hint for the concall extraction prompt."""
-    kpis = get_kpis_for_industry(industry)
+    kpis = get_kpis_for_industry(industry, market)
     if not kpis:
         return ""
     sector = get_sector_for_industry(industry)
@@ -681,14 +831,15 @@ def build_extraction_hint(industry: str) -> str:
 # warning so ops can see it happened.
 
 
-def get_alias_map_for_industry(industry: str) -> dict[str, str]:
+def get_alias_map_for_industry(industry: str, market: str | None = None) -> dict[str, str]:
     """Return {alias_key -> canonical_key} for the industry's sector.
 
     Cross-sector collisions are not possible within a single call because
     this map is scoped to one industry/sector. Returns {} if no sector
-    matches the industry (generic/unknown cases).
+    matches the industry (generic/unknown cases). ``market`` selects the US
+    overlay's aliases when applicable.
     """
-    kpis = get_kpis_for_industry(industry)
+    kpis = get_kpis_for_industry(industry, market)
     if not kpis:
         return {}
     mapping: dict[str, str] = {}
@@ -706,6 +857,7 @@ def canonicalize_operational_metrics(
     ops: dict,
     industry: str,
     *,
+    market: str | None = None,
     logger=None,
 ) -> tuple[dict, list[str]]:
     """Collapse alias-keyed entries in `ops` to their canonical key form.
@@ -724,7 +876,7 @@ def canonicalize_operational_metrics(
     """
     if not isinstance(ops, dict):
         return ops, []
-    alias_map = get_alias_map_for_industry(industry)
+    alias_map = get_alias_map_for_industry(industry, market)
     if not alias_map:
         return ops, []
 
