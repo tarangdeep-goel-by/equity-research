@@ -74,6 +74,7 @@ HELP_COMMANDS = [
     # macro
     ["macro", "--help"],
     ["macro", "fetch", "--help"],
+    ["macro", "fetch-us", "--help"],
     ["macro", "summary", "--help"],
     ["macro", "trend", "--help"],
     ["macro", "wss-fetch", "--help"],

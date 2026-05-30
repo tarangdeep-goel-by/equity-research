@@ -3190,16 +3190,30 @@ class ResearchDataAPI:
         return _clean(result)
 
     def _get_us_macro_indicators(self, months: int = 24) -> dict:
-        """US run-market macro time-series from ``us_macro_daily``.
+        """US run-market macro time-series.
 
-        Returns a ``yield_curve`` block (latest UST 3M/5Y/10Y/30Y) and a
-        ``vix_dxy_crude`` block (latest VIX / DXY / WTI / Brent / gold). CPI /
-        IIP / PMI are India-only and set null for US.
+        CPI / IIP come from the monthly ``us_macro_monthly`` table (FRED
+        ``CPIAUCSL`` / ``INDPRO``), shaped as ``{"latest": {...}|None,
+        "trend": [...]}`` to match the India ``get_macro_indicators`` cpi/iip
+        contract. ``yield_curve`` (latest UST 3M/5Y/10Y/30Y) and
+        ``vix_dxy_crude`` come from the daily ``us_macro_daily`` snapshot.
+
+        PMI is left null: ISM has no clean free API (out of scope).
         """
+        months = max(1, int(months))
+        cpi_latest = self._store.get_us_macro_monthly_latest("cpi")
+        iip_latest = self._store.get_us_macro_monthly_latest("iip")
         snap = self._get_us_macro_snapshot()
         return _clean({
-            "cpi": None,
-            "iip": None,
+            "cpi": {
+                "latest": cpi_latest,
+                "trend": self._store.get_us_macro_monthly_trend("cpi", months),
+            },
+            "iip": {
+                "latest": iip_latest,
+                "trend": self._store.get_us_macro_monthly_trend("iip", months),
+            },
+            # PMI: ISM has no clean free API — out of scope, left null for US.
             "pmi": None,
             "yield_curve": {
                 "latest": {
