@@ -284,3 +284,33 @@ class TestCapitalAllocationUsDividends:
         assert "dividends_not_tracked" not in ca
         # cumulative dividends is a number (possibly 0.0), never None for India.
         assert isinstance(ca["cumulative"]["dividends"], (int, float))
+
+
+# ---------------------------------------------------------------------------
+# #11 — get_sector_kpis surfaces the US KPI overlay for US listings
+# ---------------------------------------------------------------------------
+class TestUsSectorKpis:
+    """A US symbol (AAPL → Technology → it_services) must get US SaaS-framed
+    canonical KPIs, not the India IT-services offshore/attrition set."""
+
+    def test_us_symbol_gets_us_kpi_keys(self, us_api: ResearchDataAPI):
+        result = us_api.get_sector_kpis("AAPL")
+        # No concall data in the test store → the method returns the expected
+        # canonical-key list (which is what we assert is now US-framed).
+        expected = result.get("kpis_expected") or [
+            k for k in result.get("kpis", {})
+        ]
+        assert "net_revenue_retention_pct" in expected
+        assert "rule_of_40_pct" in expected
+        # India offshore/attrition vocabulary must NOT appear for a US listing.
+        assert "offshore_revenue_mix_pct" not in expected
+        assert "ltm_attrition_pct" not in expected
+
+    def test_india_symbol_unchanged(self, us_api: ResearchDataAPI):
+        """SBIN (India bank) must still resolve to the India bank KPI set."""
+        result = us_api.get_sector_kpis("SBIN")
+        expected = result.get("kpis_expected") or list(result.get("kpis", {}))
+        # SBIN industry in fixtures may not map to banks; if it resolves to a
+        # sector at all, it must be the India set (no US-only keys leak in).
+        assert "return_on_tangible_common_equity_pct" not in expected
+        assert "rule_of_40_pct" not in expected

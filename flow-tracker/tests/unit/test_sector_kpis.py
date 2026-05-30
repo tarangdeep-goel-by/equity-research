@@ -204,6 +204,8 @@ class TestBfsiFinancialMetricsFallback:
 
         api = ResearchDataAPI.__new__(ResearchDataAPI)
         api._get_industry = MagicMock(return_value="Public Sector Bank")
+        # India bank → NSE market so KPI selection uses the India set.
+        api._market_of = MagicMock(return_value="NSE")
 
         def _fake_insights(symbol, section_filter=None, **kw):  # noqa: ARG001
             if section_filter == "operational_metrics":
@@ -736,3 +738,93 @@ class TestPharmaWave45KPIs:
         assert "usfda_observations_count" in out
         assert "form_483_count" not in out
         assert "form_483_count" in renamed
+
+
+# ---------------------------------------------------------------------------
+# #11 — US KPI overlay (market-aware routing). India must stay byte-identical;
+# US markets get the SECTOR_KPI_CONFIG_US set for sectors that have one.
+# ---------------------------------------------------------------------------
+class TestUsKpiOverlay:
+    """Market-aware KPI selection: US listings get US-framed KPIs, India is
+    unchanged, and sectors without a US overlay fall back to India."""
+
+    def test_india_unchanged_without_market(self):
+        """No `market` arg → India set byte-identical (CASA present, no ROTCE)."""
+        from flowtracker.research.sector_kpis import get_kpi_keys_for_industry
+
+        keys = get_kpi_keys_for_industry("Private Sector Bank")
+        assert "casa_ratio_pct" in keys
+        assert "return_on_tangible_common_equity_pct" not in keys
+
+    def test_us_market_gets_us_bank_kpis(self):
+        from flowtracker.research.sector_kpis import get_kpi_keys_for_industry
+
+        keys = get_kpi_keys_for_industry("Banks - Regional", market="NASDAQ")
+        assert "return_on_tangible_common_equity_pct" in keys
+        assert "efficiency_ratio_pct" in keys
+        # India-only bank vocabulary must be gone for US.
+        assert "casa_ratio_pct" not in keys
+        assert "ridf_shortfall_cr" not in keys
+
+    def test_us_software_saas_kpis(self):
+        from flowtracker.research.sector_kpis import get_kpi_keys_for_industry
+
+        keys = get_kpi_keys_for_industry("Software - Infrastructure", market="NYSE")
+        for k in ("arr_usd_mn", "net_revenue_retention_pct", "rule_of_40_pct",
+                  "stock_based_comp_pct_revenue"):
+            assert k in keys
+        # India IT-services offshore framing must be gone.
+        assert "offshore_revenue_mix_pct" not in keys
+
+    def test_us_industry_without_market_falls_back_to_india(self):
+        """A US-style industry label but no `market` → India set (back-compat)."""
+        from flowtracker.research.sector_kpis import get_kpi_keys_for_industry
+
+        india = get_kpi_keys_for_industry("Private Sector Bank")
+        assert get_kpi_keys_for_industry("Banks - Regional") == india
+
+    def test_sector_without_us_overlay_falls_back(self):
+        """capital_goods has no US overlay → India KPIs even for a US market."""
+        from flowtracker.research.sector_kpis import get_kpis_for_industry
+
+        assert (get_kpis_for_industry("Engineering & Construction", market="NASDAQ")
+                == get_kpis_for_industry("Engineering & Construction"))
+
+    def test_us_alias_canonicalization(self):
+        from flowtracker.research.sector_kpis import canonicalize_operational_metrics
+
+        ops_in = {"nim": {"value": 3.1}, "rotce_pct": {"value": 15.0}}
+        out, renamed = canonicalize_operational_metrics(
+            ops_in, "Banks - Regional", market="NASDAQ")
+        assert "net_interest_margin_pct" in out
+        assert "return_on_tangible_common_equity_pct" in out
+        assert "nim" not in out and "rotce_pct" not in out
+        assert set(renamed) == {"nim", "rotce_pct"}
+
+    def test_us_extraction_hint_uses_us_keys(self):
+        from flowtracker.research.sector_kpis import build_extraction_hint
+
+        hint = build_extraction_hint("Banks - Regional", market="NASDAQ")
+        assert "return_on_tangible_common_equity_pct" in hint
+        assert "casa_ratio_pct" not in hint
+
+    def test_us_overlay_integrity(self):
+        """Every US overlay sector key exists in the India config, has no
+        duplicate canonical keys, and no alias collides with another canonical
+        key in the same sector."""
+        from flowtracker.research.sector_kpis import (
+            SECTOR_KPI_CONFIG,
+            SECTOR_KPI_CONFIG_US,
+        )
+
+        for sector, kpis in SECTOR_KPI_CONFIG_US.items():
+            assert sector in SECTOR_KPI_CONFIG, f"{sector} not a known sector"
+            keys = [k["key"] for k in kpis]
+            assert len(keys) == len(set(keys)), f"dup canonical key in {sector}"
+            canon = set(keys)
+            for k in kpis:
+                for field in ("key", "label", "unit", "description"):
+                    assert field in k, f"{sector}/{k.get('key')} missing {field}"
+                for alias in k.get("aliases") or []:
+                    assert not (alias in canon and alias != k["key"]), \
+                        f"alias {alias} collides with a canonical key in {sector}"

@@ -6623,6 +6623,7 @@ class ResearchDataAPI:
         """
         from flowtracker.research.sector_kpis import (
             SECTOR_KPI_CONFIG,
+            _kpis_for_sector,
             get_sector_for_symbol,
         )
 
@@ -6633,7 +6634,10 @@ class ResearchDataAPI:
         if sector is None or sector not in SECTOR_KPI_CONFIG:
             return {"error": f"No sector KPI framework for industry '{industry}'"}
 
-        kpi_defs = SECTOR_KPI_CONFIG[sector]["kpis"]
+        # Market-aware: US listings get the US KPI overlay (NIM/ROTCE/NCO,
+        # ARR/NRR/Rule-of-40, combined ratio, …) instead of the India set
+        # (CASA/PSL/RIDF, SIP flows, ANDA-to-USFDA). India is byte-identical.
+        kpi_defs = _kpis_for_sector(sector, self._market_of(symbol))
         canonical_keys = {k["key"] for k in kpi_defs}
         key_labels = {k["key"]: k["label"] for k in kpi_defs}
         # Alias table: canonical_key -> list of accepted source-field variants.

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable
 
 
 class Market(str, Enum):
@@ -119,14 +120,41 @@ def fmt_monetary(value: float | None, market: Market = DEFAULT_MARKET) -> str:
     return f"{cfg.currency_symbol}{value:,.2f} {cfg.magnitude_label}"
 
 
-def infer_market(ticker: str) -> Market:
-    """Reverse-detect the market from a ticker suffix. Bare tickers (no known
-    suffix) default to NSE — preserving today's India-only assumption until
-    call sites pass an explicit market."""
+def infer_market(
+    ticker: str,
+    *,
+    registry_lookup: "Callable[[str], str | Market | None] | None" = None,
+) -> Market:
+    """Reverse-detect the market for a ticker.
+
+    Detection order:
+      1. Explicit yfinance suffix — ``.NS`` → NSE, ``.BO`` → BSE. A suffix is
+         unambiguous, so it **always wins** over the registry hook.
+      2. Optional ``registry_lookup`` hook — a caller-supplied callable that maps
+         a bare ticker to its venue (a ``Market`` or a market string like
+         ``"NASDAQ"``). This lets bare US tickers (e.g. ``MSFT``) resolve to
+         their real venue instead of silently defaulting to NSE. The hook is
+         INJECTED by the caller so this module stays store-free (no FlowStore /
+         data_api import) and the market dimension keeps its low-level layering.
+         A truthy result is coerced via ``Market(...)`` (idempotent for an
+         already-``Market`` value). The call is wrapped in ``try/except`` so a
+         broken lookup never crashes inference — on error we fall through.
+      3. Default — when no suffix matches and no lookup is supplied (or it
+         misses / errors), bare tickers default to ``DEFAULT_MARKET`` (NSE),
+         preserving today's India-only assumption. Backward compatible: callers
+         that omit ``registry_lookup`` see identical behavior.
+    """
     if ticker.endswith(".NS"):
         return Market.NSE
     if ticker.endswith(".BO"):
         return Market.BSE
+    if registry_lookup is not None:
+        try:
+            m = registry_lookup(ticker)
+        except Exception:
+            m = None
+        if m:
+            return Market(m)
     return DEFAULT_MARKET
 
 
