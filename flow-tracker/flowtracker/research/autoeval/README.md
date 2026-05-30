@@ -17,23 +17,40 @@ Autoresearch-style eval loop that iteratively improves specialist agent prompts 
 ```bash
 cd flow-tracker
 
-# Install Gemini dependency (first time)
-uv sync --extra autoeval
+# Install deps (first time). BOTH extras — `autoeval` ships google-genai for the
+# grader; syncing only `--extra test` later silently drops it and grading fails.
+uv sync --extra test --extra autoeval
 
 # Gemini API key at ~/.config/flowtracker/gemini.env:
 # GEMINI_API_KEY=your-key-here
+```
 
-# Run agent + eval for one sector
-uv run flowtrack research autoeval -a business --sectors bfsi
+### Default: parallel worker pool (any multi-sector run)
 
-# Grade existing reports without re-running agent
-uv run flowtrack research autoeval -a business --sectors bfsi --skip-run
+`scripts/eval_parallel.sh <N_workers> <sectors>` is the default eval process. It seeds
+a shared work-queue, opens its own tmux session, and runs N **self-balancing** workers —
+a worker that finishes a sector grabs the next pending one. Atomic claims make it fully
+**resumable**: a killed/crashed worker's sector is reclaimed, never lost. Always prefer
+this over a sequential single process for >1 sector.
 
-# Run agent + eval for multiple sectors
-uv run flowtrack research autoeval -a business --sectors bfsi,it_services,metals
+```bash
+# 3 workers over 6 sectors (full sector-first: all 8 agents per sector)
+scripts/eval_parallel.sh 3 textiles,building_materials,packaging,media,hospitality,logistics
 
-# Show progress chart
-uv run flowtrack research autoeval --progress
+AGENTS=sector,valuation scripts/eval_parallel.sh 2 metals,fmcg    # scope which specialists run
+SKIP_RUN=1               scripts/eval_parallel.sh 4 bfsi,telecom   # grade existing reports only
+
+# monitor:  tmux attach -t eval_<ts>   ·   ls run_logs/evalq_<ts>/done   ·   logs in .../logs/<sector>.log
+# add capacity mid-run: start another worker with the same QDIR (see scripts/eval_queue.sh)
+```
+
+### Single sector / single agent (no pool needed)
+
+```bash
+uv run flowtrack research autoeval -a business --sectors bfsi            # one agent, one sector
+uv run flowtrack research autoeval -a business --sectors bfsi --skip-run # grade existing report
+uv run flowtrack research autoeval -s metals --agents sector,valuation   # subset of agents, one sector
+uv run flowtrack research autoeval --progress                            # progress chart
 ```
 
 ## Macro autoeval

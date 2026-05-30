@@ -2875,6 +2875,34 @@ _INDUSTRY_SECTOR_MAP: dict[str, str] = {
     "electrical equipment": "capital_goods", "engineering": "capital_goods",
     "construction vehicle": "capital_goods", "compressor": "capital_goods",
     "aerospace": "capital_goods", "defence": "capital_goods", "defense": "capital_goods",
+    # Capital Goods — backfill aliases (Tier-1: route to existing skill)
+    "industrial machinery": "capital_goods", "metal fabrication": "capital_goods",
+    "tools & accessories": "capital_goods", "construction machinery": "capital_goods",
+    "electronic component": "capital_goods",
+    # IT services (yfinance: "Software - Application", "Information Technology Services")
+    "software": "it_services", "information technology": "it_services",
+    # Agri inputs → chemicals (fertilizers/agrochem: Coromandel, UPL, Rallis)
+    "agricultural input": "chemicals",
+    # FMCG aliases (Confectioners; Farm Products: Avanti, Godrej Agrovet, KRBL)
+    "confectioner": "fmcg", "farm product": "fmcg",
+    # Regulated utilities (yfinance: "Utilities - Regulated Electric/Gas")
+    "utilities - regulated": "regulated_power",
+    # ---- New Tier-2 sector skills (authored 2026-05-30) ----
+    # Textiles & Apparel
+    "textile": "textiles", "apparel": "textiles", "footwear": "textiles",
+    "luxury goods": "textiles",
+    # Building Materials (cement, tiles, pipes, boards)
+    "building material": "building_materials", "building products": "building_materials",
+    # Packaging & Paper
+    "packaging": "packaging", "paper": "packaging", "lumber & wood": "packaging",
+    # Media (broadcast, entertainment, publishing, advertising)
+    "entertainment": "media", "broadcasting": "media", "publishing": "media",
+    "advertising": "media",
+    # Hospitality (hotels, QSR, travel)
+    "lodging": "hospitality", "restaurant": "hospitality", "travel service": "hospitality",
+    # Logistics (express, rail, shipping, trucking)
+    "freight & logistics": "logistics", "marine shipping": "logistics",
+    "railroad": "logistics", "trucking": "logistics",
 }
 
 

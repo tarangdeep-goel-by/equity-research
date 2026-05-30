@@ -138,3 +138,34 @@ sectors:
     stock: HDFCLIFE
     type: Life insurance
     why: "autoagent-pilot widened — 2nd insurance stock for L3/L4 overfitting guard vs POLICYBZR"
+
+  # ---- New Tier-2 sectors (authored 2026-05-30, backfill coverage gap) ----
+  textiles:
+    stock: PAGEIND
+    type: Textiles / branded apparel
+    why: "new-sector coverage — branded-apparel exemplar (exercises commodity-vs-branded bifurcation)"
+
+  building_materials:
+    stock: ULTRACEMCO
+    type: Cement / building materials
+    why: "new-sector coverage — cement exemplar (EV/tonne, EBITDA/tonne, regional cyclical)"
+
+  packaging:
+    stock: EPL
+    type: Packaging
+    why: "new-sector coverage — laminated-tubes converter (value-added vs commodity, polymer pass-through)"
+
+  media:
+    stock: SUNTV
+    type: Media / broadcast
+    why: "new-sector coverage — broadcaster (subscription vs ad mix, content library)"
+
+  hospitality:
+    stock: INDHOTEL
+    type: Hotels / hospitality
+    why: "new-sector coverage — hotels exemplar (RevPAR/ARR/occupancy, Ind AS 116, asset-light mix)"
+
+  logistics:
+    stock: CONCOR
+    type: Logistics
+    why: "new-sector coverage — rail/CFS exemplar (volume vs yield, asset-heavy, DFC transition)"
