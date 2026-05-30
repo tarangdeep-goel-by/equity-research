@@ -66,6 +66,8 @@ def view() -> None:
             console.print("[yellow]No holdings. Use 'flowtrack portfolio add' to start.[/]")
             raise typer.Exit(1)
 
+        from flowtracker.research.data_api import _registry_market_of
+
         enriched = []
         for h in holdings:
             row = store._conn.execute(
@@ -77,6 +79,7 @@ def view() -> None:
                 "quantity": h.quantity,
                 "avg_cost": h.avg_cost,
                 "cmp": row["price"] if row else None,
+                "market": _registry_market_of(h.symbol, store),
             })
 
     display_portfolio_view(enriched)
@@ -128,9 +131,12 @@ def summary() -> None:
             console.print("[yellow]No holdings.[/]")
             raise typer.Exit(1)
 
+        from flowtracker.research.data_api import _registry_market_of
+
         total_invested = 0.0
         total_value = 0.0
         stock_pnls: list[dict] = []
+        markets = {_registry_market_of(h.symbol, store) for h in holdings}
 
         for h in holdings:
             invested = h.quantity * h.avg_cost
@@ -149,12 +155,16 @@ def summary() -> None:
             else:
                 total_value += invested
 
+    # Homogeneous-market portfolios stamp the totals' currency; mixed (or all
+    # India) default to NSE (₹) since cross-currency totals aren't summable.
+    portfolio_market = next(iter(markets)) if len(markets) == 1 else "NSE"
     result: dict = {
         "num_holdings": len(holdings),
         "total_invested": total_invested,
         "total_value": total_value,
         "total_pnl": total_value - total_invested,
         "total_pnl_pct": ((total_value - total_invested) / total_invested * 100) if total_invested > 0 else 0,
+        "market": portfolio_market,
     }
 
     if stock_pnls:

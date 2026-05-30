@@ -273,6 +273,42 @@ class TestFundDisplay:
         out = buf.getvalue()
         assert "No quarterly" in out
 
+    def test_display_live_snapshot_us_uses_dollar(self, monkeypatch):
+        """US symbol → price/MCap/FCF render with $ (mn), not ₹/Cr."""
+        from flowtracker import fund_display as mod
+        from flowtracker.fund_models import LiveSnapshot
+
+        con, buf = _make_console()
+        monkeypatch.setattr(mod, "console", con)
+        monkeypatch.setattr(mod, "_market_of", lambda s: "NASDAQ")
+        snap = LiveSnapshot(
+            symbol="MSFT", company_name="Microsoft",
+            price=420.0, market_cap=3_100_000.0, free_cash_flow=65_000.0,
+        )
+        mod.display_live_snapshot(snap)
+        out = buf.getvalue()
+        assert "$" in out
+        assert "₹" not in out
+        assert "mn" in out  # FCF / MCap magnitude label
+
+    def test_display_live_snapshot_india_byte_identical(self, monkeypatch):
+        """India symbol keeps ₹ / Cr — no $ leakage."""
+        from flowtracker import fund_display as mod
+        from flowtracker.fund_models import LiveSnapshot
+
+        con, buf = _make_console()
+        monkeypatch.setattr(mod, "console", con)
+        monkeypatch.setattr(mod, "_market_of", lambda s: "NSE")
+        snap = LiveSnapshot(
+            symbol="SBIN", company_name="State Bank",
+            price=820.0, market_cap=730_000.0, free_cash_flow=12_000.0,
+        )
+        mod.display_live_snapshot(snap)
+        out = buf.getvalue()
+        assert "₹" in out
+        assert "$" not in out
+        assert "Cr" in out
+
 
 # ---------------------------------------------------------------------------
 # 8. holding_display.py — shareholding patterns + changes
@@ -435,6 +471,48 @@ class TestPortfolioDisplay:
         mod.display_portfolio_view([])
         out = buf.getvalue()
         assert "No holdings" in out
+
+    def test_display_portfolio_view_per_row_market(self, monkeypatch):
+        """US row prefixes '$'; India row stays a bare number (byte-identical)."""
+        from flowtracker import portfolio_display as mod
+
+        con, buf = _make_console()
+        monkeypatch.setattr(mod, "console", con)
+        rows = [
+            {"symbol": "AAPL", "quantity": 10, "avg_cost": 150.0, "cmp": 180.0, "market": "NASDAQ"},
+            {"symbol": "SBIN", "quantity": 5, "avg_cost": 800.0, "cmp": 820.0, "market": "NSE"},
+        ]
+        mod.display_portfolio_view(rows)
+        out = buf.getvalue()
+        assert "$" in out          # US row carries a dollar prefix
+        assert "AAPL" in out and "SBIN" in out
+
+    def test_display_portfolio_summary_us_dollar(self, monkeypatch):
+        from flowtracker import portfolio_display as mod
+
+        con, buf = _make_console()
+        monkeypatch.setattr(mod, "console", con)
+        mod.display_portfolio_summary({
+            "num_holdings": 2, "total_invested": 1500.0, "total_value": 1800.0,
+            "total_pnl": 300.0, "total_pnl_pct": 20.0, "market": "NASDAQ",
+        })
+        out = buf.getvalue()
+        assert "$" in out
+        assert "₹" not in out
+
+    def test_display_portfolio_summary_india_default(self, monkeypatch):
+        """No market key → defaults to ₹ (byte-identical to legacy)."""
+        from flowtracker import portfolio_display as mod
+
+        con, buf = _make_console()
+        monkeypatch.setattr(mod, "console", con)
+        mod.display_portfolio_summary({
+            "num_holdings": 1, "total_invested": 1000.0, "total_value": 1100.0,
+            "total_pnl": 100.0, "total_pnl_pct": 10.0,
+        })
+        out = buf.getvalue()
+        assert "₹" in out
+        assert "$" not in out
 
 
 # ---------------------------------------------------------------------------

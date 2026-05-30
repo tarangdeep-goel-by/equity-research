@@ -1428,3 +1428,111 @@ class TestRenderChartDispatcher:
         out = render_chart("SBIN", "revenue_profit", data=bogus)
         assert "error" in out
         assert "No data" in out["error"]
+
+
+# ---------------------------------------------------------------------------
+# Currency-aware money formatting (US vs India) — charts.py
+# ---------------------------------------------------------------------------
+
+class TestMoneyFormatterCurrency:
+    def test_money_fmt_india_uses_rupee(self):
+        from flowtracker.research.charts import _money_fmt
+
+        fmt = _money_fmt("NSE")
+        assert fmt(1234, None) == "₹1,234"
+        assert fmt(12.5, None) == "₹12.5"
+
+    def test_money_fmt_us_uses_dollar(self):
+        from flowtracker.research.charts import _money_fmt
+
+        fmt = _money_fmt("NASDAQ")
+        assert fmt(1234, None) == "$1,234"
+        assert fmt(12.5, None) == "$12.5"
+        assert "₹" not in fmt(9999, None)
+
+    def test_money_units_india_byte_identical(self):
+        from flowtracker.research.charts import _money_units
+
+        # Legacy hardcoded strings must be preserved exactly for India.
+        assert _money_units("NSE") == ("₹ Cr", "₹ Crores")
+
+    def test_money_units_us_dollar_millions(self):
+        from flowtracker.research.charts import _money_units
+
+        assert _money_units("NASDAQ") == ("$ mn", "$ mn")
+        assert _money_units("NYSE") == ("$ mn", "$ mn")
+
+    def test_money_symbol(self):
+        from flowtracker.research.charts import _money_symbol
+
+        assert _money_symbol("NSE") == "₹"
+        assert _money_symbol("NASDAQ") == "$"
+        assert _money_symbol("NYSE") == "$"
+
+
+class TestUSChartRenders:
+    """US market render path: must not crash and must emit a PNG. Currency text
+    is asserted via the formatter helpers above (axis text is baked into the
+    saved PNG and not re-inspectable post-close)."""
+
+    def test_revenue_profit_us_renders(self, tmp_path):
+        from flowtracker.research.charts import render_revenue_profit_chart
+
+        data = [
+            {"fiscal_year_end": "2023-12-31", "revenue": 5000.0, "net_income": 800.0},
+            {"fiscal_year_end": "2024-12-31", "revenue": 6000.0, "net_income": 950.0},
+        ]
+        path = render_revenue_profit_chart("MSFT", data, market="NASDAQ")
+        _assert_png(path)
+
+    def test_price_us_renders(self, tmp_path):
+        from flowtracker.research.charts import render_price_chart
+
+        data = [{
+            "metric": "Price",
+            "values": [
+                {"date": "2024-01-01", "value": 100.0},
+                {"date": "2024-06-01", "value": 120.0},
+            ],
+        }]
+        path = render_price_chart("AAPL", data, market="NYSE")
+        _assert_png(path)
+
+    def test_sector_mcap_us_label_uses_dollar_mn(self, tmp_path):
+        """US mcap labels use '$... mn', never the India 'L Cr' lakh-crore form."""
+        from flowtracker.research.charts import render_sector_mcap_bar
+
+        ranked = [
+            {"symbol": "MSFT", "mcap_cr": 3_000_000.0},
+            {"symbol": "AAPL", "mcap_cr": 2_500_000.0},
+        ]
+        path = render_sector_mcap_bar("MSFT", ranked, market="NASDAQ")
+        _assert_png(path)
+
+    def test_render_chart_dispatcher_threads_us_market(self, tmp_path, monkeypatch):
+        """generate_chart resolves market via api._market_of and threads it."""
+        from flowtracker.research import charts as mod
+
+        captured = {}
+
+        def _spy(symbol, data, market="NSE"):
+            captured["market"] = market
+            return ""  # short-circuit; we only care about the threaded market
+
+        class _StubAPI:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def _market_of(self, symbol):
+                return "NASDAQ"
+
+            def get_annual_financials(self, symbol, years=10):
+                return [{"fiscal_year_end": "2024-12-31", "revenue": 1.0, "net_income": 1.0}]
+
+        monkeypatch.setattr("flowtracker.research.data_api.ResearchDataAPI", _StubAPI)
+        monkeypatch.setattr(mod, "render_revenue_profit_chart", _spy)
+        mod.render_chart("MSFT", "revenue_profit")
+        assert captured["market"] == "NASDAQ"

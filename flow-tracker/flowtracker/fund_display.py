@@ -12,13 +12,45 @@ from flowtracker.fund_models import LiveSnapshot, QuarterlyResult, ValuationBand
 console = Console()
 
 
-def _fmt_cr(value: float | None) -> str:
-    """Format value in crores with appropriate suffix."""
+def _market_of(symbol: str) -> str:
+    """Resolve a symbol's listing market ("NSE"/"NASDAQ"/"NYSE") for display.
+
+    Short-lived registry lookup — US listings (NASDAQ/NYSE) resolve to their
+    market, everything else defaults to NSE so India output is unchanged. Failures
+    (no DB, offline) fall back to NSE so display never crashes.
+    """
+    try:
+        from flowtracker.research.data_api import ResearchDataAPI
+
+        with ResearchDataAPI() as api:
+            return api._market_of(symbol)
+    except Exception:  # noqa: BLE001 — display must never crash on resolution
+        return "NSE"
+
+
+def _fmt_cr(value: float | None, market: str = "NSE") -> str:
+    """Format an aggregate value with the market's currency symbol + magnitude.
+
+    India (NSE/BSE) keeps the legacy ``₹...L Cr`` / ``₹... Cr`` text byte-for-byte.
+    US markets render ``$... mn`` (stored in USD millions).
+    """
     if value is None:
         return "—"
-    if abs(value) >= 100_000:  # 1 lakh crore+
-        return f"₹{value / 100_000:.1f}L Cr"
-    return f"₹{value:,.0f} Cr"
+    from flowtracker.market import MARKETS, Market
+
+    cfg = MARKETS[Market(market)]
+    if cfg.code in (Market.NSE, Market.BSE):
+        if abs(value) >= 100_000:  # 1 lakh crore+
+            return f"₹{value / 100_000:.1f}L Cr"
+        return f"₹{value:,.0f} Cr"
+    return f"{cfg.currency_symbol}{value:,.0f} {cfg.magnitude_label}"
+
+
+def _price_symbol(market: str = "NSE") -> str:
+    """Currency symbol for per-share price display (``₹``/``$``)."""
+    from flowtracker.market import MARKETS, Market
+
+    return MARKETS[Market(market)].currency_symbol
 
 
 def _fmt_pct(value: float | None, multiply: bool = False) -> str:
@@ -47,6 +79,7 @@ def _color_change(value: float | None) -> str:
 
 def display_live_snapshot(snap: LiveSnapshot) -> None:
     """Display current fundamentals snapshot for a stock."""
+    market = _market_of(snap.symbol)
     # Build a panel with three columns: Valuation | Profitability | Health
     table = Table(show_header=True, box=None, padding=(0, 2))
     table.add_column("Valuation", style="bold")
@@ -72,7 +105,7 @@ def display_live_snapshot(snap: LiveSnapshot) -> None:
     table.add_row(
         "P/B", _fmt_ratio(snap.pb_ratio),
         "NPM", _fmt_pct(snap.net_margin),
-        "FCF", _fmt_cr(snap.free_cash_flow),
+        "FCF", _fmt_cr(snap.free_cash_flow, market),
     )
     # Row 4
     table.add_row(
@@ -97,8 +130,8 @@ def display_live_snapshot(snap: LiveSnapshot) -> None:
         growth_text += f"Earnings {_color_change(snap.earnings_growth)} YoY"
 
     # Header line
-    price_str = f"₹{snap.price:,.2f}" if snap.price else "—"
-    mcap_str = _fmt_cr(snap.market_cap)
+    price_str = f"{_price_symbol(market)}{snap.price:,.2f}" if snap.price else "—"
+    mcap_str = _fmt_cr(snap.market_cap, market)
     sector_str = snap.sector or ""
     header = f"Price: {price_str}  |  MCap: {mcap_str}  |  {sector_str}"
 
@@ -167,10 +200,13 @@ def display_peer_comparison(
     for s in snapshots:
         table.add_column(s.symbol, justify="right")
 
+    # Per-symbol market (peers may span markets) — resolved once each.
+    markets = {s.symbol: _market_of(s.symbol) for s in snapshots}
+
     # Valuation metrics
     metrics = [
-        ("Price", lambda s: f"₹{s.price:,.0f}" if s.price else "—"),
-        ("MCap", lambda s: _fmt_cr(s.market_cap)),
+        ("Price", lambda s: f"{_price_symbol(markets[s.symbol])}{s.price:,.0f}" if s.price else "—"),
+        ("MCap", lambda s: _fmt_cr(s.market_cap, markets[s.symbol])),
         ("P/E", lambda s: _fmt_ratio(s.pe_trailing)),
         ("EV/EBITDA", lambda s: _fmt_ratio(s.ev_ebitda)),
         ("P/B", lambda s: _fmt_ratio(s.pb_ratio)),
