@@ -619,6 +619,44 @@ _SYMBOL_SECTOR_OVERRIDES: dict[str, str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Coarse sector "family" sets — single source of truth for the legacy boolean
+# helpers on ResearchDataAPI (`_is_bfsi`, `_is_metals`, `_is_conglomerate`,
+# `_is_insurance`). Each set contains ONLY canonical sector keys that exist in
+# SECTOR_KPI_CONFIG above. The booleans OR these against their legacy substring
+# checks, so membership here is strictly additive — it only ever adds new True
+# cases (industries that resolve to a family sector but lack the substring),
+# and can never remove a previously-True case.
+# ---------------------------------------------------------------------------
+
+# Banking / financial-services family. There is no single "bfsi" sector key —
+# the BFSI universe is split across these canonical sectors. NOTE: "insurance"
+# is deliberately EXCLUDED — the legacy data_api split keeps insurance separate
+# (`_INSURANCE_INDUSTRIES`, surfaced by `_is_insurance`), and several downstream
+# gates branch on bfsi-vs-insurance. Folding insurance into BFSI here would make
+# `_is_bfsi` True for insurers — a non-additive behavior change. `_is_insurance`
+# (via INSURANCE_SECTORS) covers the insurance family.
+BFSI_SECTORS: set[str] = {"banks", "nbfcs", "amc_capital_markets"}
+
+# The canonical metals sector key is "metals_and_mining".
+METALS_SECTORS: set[str] = {"metals_and_mining"}
+
+CONGLOMERATE_SECTORS: set[str] = {"conglomerate"}
+
+INSURANCE_SECTORS: set[str] = {"insurance"}
+
+
+def industry_in_family(industry: str | None, family: set[str]) -> bool:
+    """True iff the canonical sector for ``industry`` is in ``family``.
+
+    Resolves ``industry`` via :func:`get_sector_for_industry` and checks family
+    membership. Returns False for empty / unmappable industries.
+    """
+    if not industry:
+        return False
+    return get_sector_for_industry(industry) in family
+
+
 def get_sector_for_industry(industry: str) -> str | None:
     """Map an NSE/Screener/yfinance industry name to a sector key."""
     return _INDUSTRY_TO_SECTOR.get(industry)

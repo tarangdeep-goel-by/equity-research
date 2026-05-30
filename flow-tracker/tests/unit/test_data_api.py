@@ -830,7 +830,15 @@ class TestFairValue:
 
 class TestForensicChecks:
     def test_returns_data_for_sbin(self, api: ResearchDataAPI):
-        """SBIN not tagged as BFSI in test fixture (no industry data) — returns data."""
+        """Forensic checks apply only to non-BFSI/insurance issuers. Seed SBIN
+        as a generic (non-financial) issuer so the data path is exercised — its
+        fixture industry ('Banks') now correctly resolves to BFSI via the
+        canonical sector resolver and would otherwise be skipped."""
+        api._store._conn.execute(
+            "INSERT OR REPLACE INTO company_snapshot (symbol, industry) VALUES (?, ?)",
+            ("SBIN", "IT - Software"),
+        )
+        api._store._conn.commit()
         data = api.get_forensic_checks("SBIN")
         assert isinstance(data, dict)
         assert "years" in data
@@ -927,7 +935,14 @@ class TestImprovementMetrics:
 
 class TestCapitalDiscipline:
     def test_returns_data_for_sbin(self, api: ResearchDataAPI):
-        """SBIN not tagged as BFSI in test fixture (no industry data) — returns data."""
+        """Capital-discipline metrics apply only to non-BFSI/insurance issuers.
+        Seed SBIN as a generic (non-financial) issuer (its fixture industry
+        'Banks' now correctly resolves to BFSI via the canonical resolver)."""
+        api._store._conn.execute(
+            "INSERT OR REPLACE INTO company_snapshot (symbol, industry) VALUES (?, ?)",
+            ("SBIN", "IT - Software"),
+        )
+        api._store._conn.commit()
         data = api.get_capital_discipline("SBIN")
         assert isinstance(data, dict)
         assert "roce_reinvestment" in data
