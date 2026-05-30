@@ -316,6 +316,26 @@ CREATE TABLE IF NOT EXISTS macro_daily (
     UNIQUE(date)
 );
 
+-- US daily macro snapshot (US add-on). ALL-NEW table — India ``macro_daily``
+-- is untouched. Treasury yields stored in percent (4.44 = 4.44%). Populated
+-- from yfinance (^VIX, DX-Y.NYB, ^IRX/^FVX/^TNX/^TYX, CL=F/BZ=F/GC=F).
+CREATE TABLE IF NOT EXISTS us_macro_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    vix REAL,
+    dxy REAL,
+    ust_3m REAL,
+    ust_5y REAL,
+    ust_10y REAL,
+    ust_30y REAL,
+    wti_crude REAL,
+    brent_crude REAL,
+    gold REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date)
+);
+CREATE INDEX IF NOT EXISTS idx_us_macro_daily_date ON us_macro_daily(date);
+
 -- Daily index-level valuation snapshots (PE / PB / Dividend Yield) sourced
 -- from niftyindices.com. Populated by `flowtrack indexpe fetch|backfill`.
 -- Used by the `percentile` command to answer regime questions like
@@ -1819,6 +1839,7 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         self._migrate_us_registry()
         self._migrate_us_annual_financials()
         self._migrate_us_consensus_estimates()
+        self._migrate_us_macro_daily()
 
         # Additive domain namespaces (refactor P1.4): store.portfolio.<method>()
         # works alongside the flat store.<method>() API.
@@ -2085,6 +2106,32 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
             if col_name not in existing:
                 self._conn.execute(
                     f"ALTER TABLE us_consensus_estimates ADD COLUMN {col_name} REAL"
+                )
+        self._conn.commit()
+
+    def _migrate_us_macro_daily(self) -> None:
+        """Ensure us_macro_daily has the full column set (US add-on).
+
+        The CREATE TABLE IF NOT EXISTS in _SCHEMA handles brand-new DBs; this
+        idempotent PRAGMA-guarded ALTER exists for parity with the other
+        _migrate_us_* methods and to backfill columns onto any pre-existing
+        partial table. US-only table — India macro_daily is untouched.
+        """
+        existing = {
+            row[1] for row in
+            self._conn.execute("PRAGMA table_info(us_macro_daily)").fetchall()
+        }
+        if not existing:
+            return  # table not yet created (shouldn't happen post-_SCHEMA); no-op
+        new_cols = {
+            "vix": "REAL", "dxy": "REAL", "ust_3m": "REAL", "ust_5y": "REAL",
+            "ust_10y": "REAL", "ust_30y": "REAL", "wti_crude": "REAL",
+            "brent_crude": "REAL", "gold": "REAL",
+        }
+        for col_name, col_type in new_cols.items():
+            if col_name not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE us_macro_daily ADD COLUMN {col_name} {col_type}"
                 )
         self._conn.commit()
 

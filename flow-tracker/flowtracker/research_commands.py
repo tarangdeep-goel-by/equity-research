@@ -316,8 +316,15 @@ def thesis(
     #   - Phase 0 (data refresh): per-stock DB writes; Phase 0b depends on it
     #   - Phase 0c (macro anchors): India-wide vault writes; fully independent
     # Phase 0b runs after both because AR downloader reads URLs from Phase 0's DB writes.
-    from flowtracker.research.data_api import ResearchDataAPI
+    from flowtracker.research.data_api import ResearchDataAPI, resolve_run_market
     from flowtracker.research.macro_anchors import ensure_macro_anchors
+
+    # Resolve the run market ONCE (same hybrid as run_all_agents: --market flag →
+    # registry US row → NSE default). Map to the anchor-pipeline market: US-listed
+    # runs (NASDAQ/NYSE) fetch Fed anchors; everything else fetches India anchors
+    # exactly as before (default path is byte-identical to pre-US behavior).
+    _run_market = resolve_run_market(symbol, market)
+    _anchor_market = "US" if _run_market in ("NASDAQ", "NYSE") else "NSE"
 
     async def _run_phase_0_data_refresh():
         if skip_fetch:
@@ -339,7 +346,7 @@ def thesis(
         p0c = PhaseEvent(phase="macro_anchors", started_at=_dt.now(_tz.utc).isoformat())
         t0 = _time.monotonic()
         try:
-            result = await asyncio.to_thread(ensure_macro_anchors)
+            result = await asyncio.to_thread(ensure_macro_anchors, market=_anchor_market)
             _available = result.get("anchors_available", [])
             _missing = result.get("anchors_missing", [])
             _new = result.get("newly_extracted", 0)

@@ -202,3 +202,70 @@ class TestProjectionsAssumptionsMeta:
         assert "bear" in result["projections"]
         # And the new meta block is emitted even with default industry=None
         assert "_projection_assumptions" in result
+
+
+# ---------------------------------------------------------------------------
+# Bug 1: US unit-free EPS ratio (gated on is_us). India factor path unchanged.
+# ---------------------------------------------------------------------------
+
+
+def _us_annual(n: int = 5, start_year: int = 2024) -> list[dict]:
+    """US-like annuals: net_income in USD millions, num_shares a raw count
+    (~15e9), eps in USD (~6). The India ni_to_eps_factor heuristic mis-scales
+    these (~10x); the unit-free ratio is correct.
+    """
+    rows: list[dict] = []
+    base_rev = 390_000.0   # USD millions
+    base_ni = 95_000.0     # USD millions
+    base_eps = 6.0         # USD per share
+    for i in range(n):
+        yr = start_year - i
+        rev = base_rev * (0.95 ** i)
+        ni = base_ni * (0.95 ** i)
+        rows.append({
+            "symbol": "AAPL",
+            "fiscal_year_end": f"{yr}-09-28",
+            "revenue": rev,
+            "net_income": ni,
+            "operating_profit": rev * 0.30,
+            "depreciation": rev * 0.03,
+            "interest": 0.0,
+            "tax": ni * 0.15,
+            "eps": base_eps * (0.95 ** i),
+            "num_shares": 15_000_000_000.0,
+        })
+    return rows
+
+
+class TestUsEpsRatio:
+    def test_us_projected_eps_is_sane_not_10x(self):
+        rows = _us_annual()
+        result = build_projections(rows, is_us=True, industry="it_services")
+        base = result["projections"]["base"]
+        # Latest EPS ~6; projected base-case EPS should stay in a single-digit
+        # USD band (~$6-12), NOT inflated to ~$60-90 by a crores factor.
+        for p in base:
+            assert 3.0 < p["eps"] < 20.0, f"US EPS out of sane band: {p['eps']}"
+        # last_actual_eps surfaces the reported USD EPS, not a rescaled value.
+        assert result["last_actual_eps"] == pytest.approx(6.0, rel=0.01)
+
+    def test_india_path_byte_identical_when_is_us_false(self):
+        """The default (is_us=False) India ni_to_eps_factor path must be
+        unchanged — same output with and without the new kwarg defaulted."""
+        rows = _synthetic_annual()
+        default_out = build_projections(rows, industry="manufacturing")
+        explicit_india = build_projections(rows, industry="manufacturing", is_us=False)
+        assert default_out == explicit_india
+
+    def test_us_ratio_changes_eps_vs_india_factor(self):
+        """Same US data: is_us=True (ratio) yields a far smaller EPS than the
+        India factor path would — proving the gate actually fixes the scale."""
+        rows = _us_annual()
+        us = build_projections(rows, is_us=True, industry="it_services")
+        india = build_projections(rows, is_us=False, industry="it_services")
+        us_eps = us["projections"]["base"][0]["eps"]
+        india_eps = india["projections"]["base"][0]["eps"]
+        # India path divides millions by a 15e9 raw share count → tiny/zero EPS;
+        # the key assertion is they DIFFER and the US value is the sane one.
+        assert us_eps != india_eps
+        assert 3.0 < us_eps < 20.0

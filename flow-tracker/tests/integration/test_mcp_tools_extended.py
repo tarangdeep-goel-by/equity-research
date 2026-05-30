@@ -731,6 +731,125 @@ class TestSectionEnumValidation:
 
 
 # ---------------------------------------------------------------------------
+# Macro anchor tools — market routing (US Fed vs India)
+# ---------------------------------------------------------------------------
+
+class TestMacroAnchorMarketRouting:
+    @pytest.mark.asyncio
+    async def test_india_run_routes_to_india_anchors(self, db_env, monkeypatch):
+        from flowtracker.research import tools as t
+        from flowtracker.research.data_api import _run_market
+
+        captured = {}
+
+        def fake_get(doc_type, section, market="NSE"):
+            captured["doc_type"] = doc_type
+            captured["market"] = market
+            return {"status": "ok", "doc_type": doc_type}
+
+        monkeypatch.setattr(t, "get_anchor_content", fake_get)
+        tok = _run_market.set(None)  # India default
+        try:
+            result = await t.get_macro_anchor.handler({"doc_type": "economic_survey"})
+        finally:
+            _run_market.reset(tok)
+        data = _parse_tool_result(result)
+        assert data["status"] == "ok"
+        assert captured["market"] == "NSE"
+        assert captured["doc_type"] == "economic_survey"
+
+    @pytest.mark.asyncio
+    async def test_us_run_routes_to_fed_anchors(self, db_env, monkeypatch):
+        from flowtracker.research import tools as t
+        from flowtracker.research.data_api import _run_market
+
+        captured = {}
+
+        def fake_get(doc_type, section, market="NSE"):
+            captured["market"] = market
+            return {"status": "ok", "doc_type": doc_type}
+
+        monkeypatch.setattr(t, "get_anchor_content", fake_get)
+        tok = _run_market.set("NASDAQ")
+        try:
+            result = await t.get_macro_anchor.handler({"doc_type": "fomc_statement"})
+        finally:
+            _run_market.reset(tok)
+        data = _parse_tool_result(result)
+        assert data["status"] == "ok"
+        assert captured["market"] == "US"
+
+    @pytest.mark.asyncio
+    async def test_us_run_rejects_india_doc_type(self, db_env, monkeypatch):
+        from flowtracker.research import tools as t
+        from flowtracker.research.data_api import _run_market
+
+        tok = _run_market.set("NYSE")
+        try:
+            # economic_survey is an India doc_type — invalid under a US run.
+            result = await t.get_macro_anchor.handler({"doc_type": "economic_survey"})
+        finally:
+            _run_market.reset(tok)
+        data = _parse_tool_result(result)
+        assert "error" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_india_run_rejects_us_doc_type(self, db_env, monkeypatch):
+        from flowtracker.research import tools as t
+        from flowtracker.research.data_api import _run_market
+
+        tok = _run_market.set(None)
+        try:
+            result = await t.get_macro_anchor.handler({"doc_type": "fomc_statement"})
+        finally:
+            _run_market.reset(tok)
+        data = _parse_tool_result(result)
+        assert "error" in data
+        assert result.get("is_error") is True
+
+    @pytest.mark.asyncio
+    async def test_us_catalog_lists_fed_anchors(self, db_env, monkeypatch):
+        from flowtracker.research import tools as t
+        from flowtracker.research.data_api import _run_market
+
+        captured = {}
+
+        def fake_list(market="NSE"):
+            captured["market"] = market
+            return {"anchors": {"fomc_statement": {"title": "FOMC", "status": "complete"}}}
+
+        monkeypatch.setattr(t, "list_current_anchors", fake_list)
+        tok = _run_market.set("NASDAQ")
+        try:
+            result = await t.get_macro_catalog.handler({})
+        finally:
+            _run_market.reset(tok)
+        data = _parse_tool_result(result)
+        assert captured["market"] == "US"
+        assert data["anchors"][0]["doc_type"] == "fomc_statement"
+
+    @pytest.mark.asyncio
+    async def test_india_catalog_lists_india_anchors(self, db_env, monkeypatch):
+        from flowtracker.research import tools as t
+        from flowtracker.research.data_api import _run_market
+
+        captured = {}
+
+        def fake_list(market="NSE"):
+            captured["market"] = market
+            return {"anchors": {}}
+
+        monkeypatch.setattr(t, "list_current_anchors", fake_list)
+        tok = _run_market.set(None)
+        try:
+            await t.get_macro_catalog.handler({})
+        finally:
+            _run_market.reset(tok)
+        assert captured["market"] == "NSE"
+
+
+# ---------------------------------------------------------------------------
 # Phase 1-B: standalone vocab tools — enum schema + did-you-mean validation on
 # render_chart / get_chart_data / calculate / get_data_quality_flags /
 # get_shareholder_detail / get_company_documents / get_sector_benchmarks /

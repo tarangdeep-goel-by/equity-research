@@ -160,6 +160,7 @@ def build_projections(
     shares_override: float | None = None,
     pe_multiples: dict | None = None,
     industry: str | None = None,
+    is_us: bool = False,
 ) -> dict:
     """Build 3-year bear/base/bull projections from historical annual data.
 
@@ -169,6 +170,12 @@ def build_projections(
         shares_override: Override shares outstanding (post-adjustment)
         industry: Optional industry classification (e.g. 'platform', 'bfsi', 'manufacturing')
             used for sector-aware D&A routing. Plan v2 §7 E12.
+        is_us: When True (US listings), project EPS via the unit-free ratio
+            ``latest_eps * (ni_proj / latest_ni)`` instead of the India
+            crores→rupees ``ni_to_eps_factor`` heuristic. US net_income is in
+            USD millions, num_shares is a raw count, and eps is USD — the
+            India heuristic mis-scales those and inflates EPS ~10x. The India
+            path is left byte-identical.
 
     Returns:
         Dict with actuals summary, assumptions, and 3 scenarios x 3 years of projections.
@@ -199,6 +206,10 @@ def build_projections(
     # Derive the NI-to-EPS conversion by comparing Screener's known EPS against NI/shares.
     # If NI is in crores, we need to multiply by 1e7 before dividing by shares.
     screener_eps = latest.get("eps")
+    # US: project EPS via the unit-free ratio eps_proj = latest_eps * (ni_proj / latest_ni).
+    # Avoids the crores/millions ni_to_eps_factor heuristic entirely (correct for both
+    # markets, but GATED to US so the India path stays byte-identical).
+    us_eps_ratio = bool(is_us) and screener_eps is not None and latest_ni not in (None, 0)
     ni_to_eps_factor = 1.0  # default: NI is in rupees, EPS = NI / shares
     if screener_eps and shares and latest_ni and abs(screener_eps) > 0.01:
         raw_eps = latest_ni / shares
@@ -330,8 +341,11 @@ def build_projections(
             pbt = ebitda - dep - interest
             tax = pbt * avg_tax_rate if pbt > 0 else 0
             ni = pbt - tax
-            # Convert NI to per-share EPS using detected scale factor
-            eps = (ni * ni_to_eps_factor / shares) if shares else 0
+            # Convert NI to per-share EPS. US: unit-free ratio off latest EPS.
+            if us_eps_ratio:
+                eps = screener_eps * (ni / latest_ni)
+            else:
+                eps = (ni * ni_to_eps_factor / shares) if shares else 0
             # Convert to crores-friendly rounding
             fy_label = f"FY{str(fy_label_base + yr)[2:]}"
             projections.append({
@@ -360,7 +374,10 @@ def build_projections(
 
     # Implied fair values at different PE multiples
     # Use trailing PE from latest data if available
-    latest_eps_adj = (latest_ni * ni_to_eps_factor / shares) if shares and latest_ni else 0
+    latest_eps_adj = (
+        screener_eps if us_eps_ratio
+        else ((latest_ni * ni_to_eps_factor / shares) if shares and latest_ni else 0)
+    )
 
     # Use year-3 EPS for terminal valuation
     bear_terminal_eps = bear[-1]["eps"]

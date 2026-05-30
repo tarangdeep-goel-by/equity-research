@@ -35,6 +35,10 @@ _RAW_DIR = _VAULT_MACRO / "raw"
 _EXTRACTED_DIR = _VAULT_MACRO / "extracted"
 _META_DIR = _VAULT_MACRO / "meta"
 _CATALOG_PATH = _META_DIR / "catalog.json"
+# US (Fed) catalog lives in a SEPARATE file so the India catalog.json layout is
+# never touched. US cache dirs/files are namespaced with a `us_` prefix (see
+# `_cache_names`), so India and US never collide in raw/ or extracted/.
+_CATALOG_US_PATH = _META_DIR / "catalog_us.json"
 
 # Browser UA needed — indiabudget.gov.in and imf.org block default clients.
 _BROWSER_HEADERS = {
@@ -54,6 +58,7 @@ class AnchorSpec:
     scraper: str | None = None           # landing-page scraper name (Class B)
     period_hint: str = "current"
     min_bytes: int = 100_000             # sanity floor
+    market: str = "NSE"                  # "NSE" (India, default) | "US" (Fed)
 
 
 # Class A — stable overwrite-in-place URLs. Hardcoded.
@@ -132,19 +137,19 @@ _ANCHORS: list[AnchorSpec] = [
 ]
 
 
-def _load_catalog() -> dict[str, Any]:
-    if not _CATALOG_PATH.exists():
+def _load_catalog(catalog_path: Path = _CATALOG_PATH) -> dict[str, Any]:
+    if not catalog_path.exists():
         return {"anchors": {}}
     try:
-        return json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+        return json.loads(catalog_path.read_text(encoding="utf-8"))
     except Exception:
-        logger.warning("catalog.json corrupt, resetting")
+        logger.warning("%s corrupt, resetting", catalog_path.name)
         return {"anchors": {}}
 
 
-def _save_catalog(cat: dict) -> None:
+def _save_catalog(cat: dict, catalog_path: Path = _CATALOG_PATH) -> None:
     _META_DIR.mkdir(parents=True, exist_ok=True)
-    _CATALOG_PATH.write_text(json.dumps(cat, indent=2), encoding="utf-8")
+    catalog_path.write_text(json.dumps(cat, indent=2), encoding="utf-8")
 
 
 def _download_pdf(url: str, dest: Path, min_bytes: int = 100_000) -> bool:
@@ -364,11 +369,242 @@ _SCRAPERS = {
 
 
 # ---------------------------------------------------------------------------
+# US (Fed) Class-B scrapers — federalreserve.gov landing pages → latest PDF URL
+# ---------------------------------------------------------------------------
+# Every Fed anchor doc is published as a stable, free PDF on federalreserve.gov.
+# URLs are date-stamped (YYYYMMDD = the meeting / publication date), so we scrape
+# the landing/calendar page for the newest date and build the PDF URL. FOMC
+# calendars list FUTURE meetings whose statement/minutes/SEP PDFs don't exist
+# yet, so we probe candidate dates newest-first and return the first that
+# actually resolves (HTTP 200 + non-trivial size) via `_url_exists`.
+
+_FED_BASE = "https://www.federalreserve.gov"
+_FOMC_CALENDAR_URL = f"{_FED_BASE}/monetarypolicy/fomccalendars.htm"
+_BEIGE_BOOK_URL = f"{_FED_BASE}/monetarypolicy/beige-book-default.htm"
+_FED_MPR_URL = f"{_FED_BASE}/monetarypolicy/publications/mpr_default.htm"
+
+
+def _url_exists(url: str, min_bytes: int = 50_000) -> bool:
+    """True if a Fed PDF URL resolves to a real, non-trivial PDF.
+
+    Used to skip future-dated FOMC meetings (calendar lists them before the
+    statement/minutes/SEP PDFs are published).
+    """
+    try:
+        with httpx.Client(follow_redirects=True, timeout=60, headers=_BROWSER_HEADERS) as client:
+            # Range request keeps the probe cheap — we only need the status +
+            # a content-length signal, not the whole PDF.
+            resp = client.get(url, headers={**_BROWSER_HEADERS, "Range": "bytes=0-1023"})
+            if resp.status_code not in (200, 206):
+                return False
+            ctype = resp.headers.get("content-type", "").lower()
+            if "pdf" not in ctype and "octet-stream" not in ctype:
+                return False
+            # content-range total (for 206) or content-length (for 200).
+            cr = resp.headers.get("content-range", "")
+            if "/" in cr:
+                try:
+                    total = int(cr.rsplit("/", 1)[1])
+                    return total >= min_bytes
+                except ValueError:
+                    pass
+            cl = resp.headers.get("content-length")
+            if cl and cl.isdigit():
+                return int(cl) >= min_bytes
+            # No size signal but 200/206 PDF → accept.
+            return True
+    except Exception as e:
+        logger.warning("Fed URL probe failed %s: %s", url, e)
+        return False
+
+
+def _fomc_meeting_dates() -> list[str]:
+    """Return FOMC meeting dates (YYYYMMDD) newest-first from the calendar page.
+
+    Dates are parsed from the `monetary<YYYYMMDD>a.htm` statement links the
+    calendar renders for each past/scheduled meeting.
+    """
+    import re as _re
+    html = _scrape_landing(_FOMC_CALENDAR_URL)
+    if not html:
+        return []
+    dates = _re.findall(r"/newsevents/pressreleases/monetary(\d{8})a\.htm", html)
+    # De-dup preserving order, then sort newest-first.
+    uniq = sorted(set(dates), reverse=True)
+    return uniq
+
+
+def _scrape_fomc_statement() -> str | None:
+    """Latest published FOMC post-meeting statement PDF.
+
+    URL form: /monetarypolicy/files/monetary<YYYYMMDD>a1.pdf
+    """
+    for d in _fomc_meeting_dates():
+        url = f"{_FED_BASE}/monetarypolicy/files/monetary{d}a1.pdf"
+        if _url_exists(url, min_bytes=50_000):
+            return url
+    return None
+
+
+def _scrape_fomc_minutes() -> str | None:
+    """Latest published FOMC minutes PDF.
+
+    Minutes lag the statement by ~3 weeks; URL form:
+    /monetarypolicy/files/fomcminutes<YYYYMMDD>.pdf
+    """
+    for d in _fomc_meeting_dates():
+        url = f"{_FED_BASE}/monetarypolicy/files/fomcminutes{d}.pdf"
+        if _url_exists(url, min_bytes=80_000):
+            return url
+    return None
+
+
+def _scrape_fomc_sep() -> str | None:
+    """Latest Summary of Economic Projections (dot-plot) PDF.
+
+    SEP is published only at the 4 projection meetings (Mar/Jun/Sep/Dec); the
+    other FOMC meetings have no SEP. URL form:
+    /monetarypolicy/files/fomcprojtabl<YYYYMMDD>.pdf
+    """
+    for d in _fomc_meeting_dates():
+        url = f"{_FED_BASE}/monetarypolicy/files/fomcprojtabl{d}.pdf"
+        if _url_exists(url, min_bytes=80_000):
+            return url
+    return None
+
+
+def _scrape_beige_book() -> str | None:
+    """Latest Beige Book PDF.
+
+    The beige-book landing page lists each release as
+    /monetarypolicy/files/BeigeBook_<YYYYMMDD>.pdf — newest first. We pick the
+    newest whose PDF resolves.
+    """
+    import re as _re
+    html = _scrape_landing(_BEIGE_BOOK_URL)
+    if not html:
+        return None
+    dates = _re.findall(r"/monetarypolicy/files/BeigeBook_(\d{8})\.pdf", html)
+    for d in sorted(set(dates), reverse=True):
+        url = f"{_FED_BASE}/monetarypolicy/files/BeigeBook_{d}.pdf"
+        if _url_exists(url, min_bytes=80_000):
+            return url
+    return None
+
+
+def _scrape_fed_mpr() -> str | None:
+    """Latest Fed Monetary Policy Report (semiannual) full-report PDF.
+
+    URL form: /monetarypolicy/files/<YYYYMMDD>_mprfullreport.pdf — the landing
+    page lists the report dates; pick the newest that resolves.
+    """
+    import re as _re
+    html = _scrape_landing(_FED_MPR_URL)
+    if not html:
+        return None
+    dates = _re.findall(r"/monetarypolicy/files/(\d{8})_mprfullreport\.pdf", html)
+    for d in sorted(set(dates), reverse=True):
+        url = f"{_FED_BASE}/monetarypolicy/files/{d}_mprfullreport.pdf"
+        if _url_exists(url, min_bytes=100_000):
+            return url
+    return None
+
+
+_US_SCRAPERS = {
+    "_scrape_fomc_statement": _scrape_fomc_statement,
+    "_scrape_fomc_minutes": _scrape_fomc_minutes,
+    "_scrape_fomc_sep": _scrape_fomc_sep,
+    "_scrape_beige_book": _scrape_beige_book,
+    "_scrape_fed_mpr": _scrape_fed_mpr,
+}
+
+
+# US Fed anchor docs (market="US"). All federalreserve.gov, free, PDF — Docling
+# extracts them like any India PDF. Statements are short; SEP is a table PDF, so
+# we keep min_bytes modest. Each is Class-B (date-stamped URL via scraper).
+_US_ANCHORS: list[AnchorSpec] = [
+    AnchorSpec(
+        doc_type="fomc_statement",
+        title="FOMC Post-Meeting Statement",
+        scraper="_scrape_fomc_statement",
+        period_hint="latest_meeting",
+        min_bytes=50_000,
+        market="US",
+    ),
+    AnchorSpec(
+        doc_type="fomc_minutes",
+        title="FOMC Meeting Minutes",
+        scraper="_scrape_fomc_minutes",
+        period_hint="latest_meeting",
+        min_bytes=80_000,
+        market="US",
+    ),
+    AnchorSpec(
+        doc_type="beige_book",
+        title="Federal Reserve Beige Book",
+        scraper="_scrape_beige_book",
+        period_hint="latest_release",
+        min_bytes=80_000,
+        market="US",
+    ),
+    AnchorSpec(
+        doc_type="fed_mpr",
+        title="Federal Reserve Monetary Policy Report",
+        scraper="_scrape_fed_mpr",
+        period_hint="latest_semiannual",
+        min_bytes=100_000,
+        market="US",
+    ),
+    AnchorSpec(
+        doc_type="fomc_sep",
+        title="FOMC Summary of Economic Projections (Dot Plot)",
+        scraper="_scrape_fomc_sep",
+        period_hint="latest_projection_meeting",
+        min_bytes=80_000,
+        market="US",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Market routing — selects anchor set, scraper registry, catalog path, and the
+# per-doc cache name. India (market="NSE") is the unchanged default everywhere.
+# ---------------------------------------------------------------------------
+
+def _market_config(market: str) -> tuple[list[AnchorSpec], dict, Path]:
+    """Return (anchor_list, scraper_registry, catalog_path) for a market.
+
+    Unknown markets fall back to India (NSE) so callers can't accidentally write
+    to the wrong catalog.
+    """
+    if (market or "").upper() == "US":
+        return _US_ANCHORS, _US_SCRAPERS, _CATALOG_US_PATH
+    return _ANCHORS, _SCRAPERS, _CATALOG_PATH
+
+
+def _cache_names(doc_type: str, market: str) -> tuple[Path, Path]:
+    """Return (extracted_dir, raw_pdf_path) for a (doc_type, market).
+
+    India keeps its existing un-prefixed paths (`extracted/<doc_type>`,
+    `raw/<doc_type>.pdf`). US is namespaced with a `us_` prefix so the two
+    markets never collide in the shared raw/ and extracted/ trees.
+    """
+    if (market or "").upper() == "US":
+        return _EXTRACTED_DIR / f"us_{doc_type}", _RAW_DIR / f"us_{doc_type}.pdf"
+    return _EXTRACTED_DIR / doc_type, _RAW_DIR / f"{doc_type}.pdf"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def ensure_macro_anchors(force_refresh: bool = False) -> dict:
+def ensure_macro_anchors(force_refresh: bool = False, market: str = "NSE") -> dict:
     """Download + extract all anchor docs. Skips entries already complete unless force_refresh.
+
+    ``market`` selects the anchor set + cache namespace + catalog:
+      - "NSE" (default) → India anchors, ``catalog.json``, un-prefixed cache dirs
+        (UNCHANGED from before this param existed).
+      - "US"            → Fed anchors, ``catalog_us.json``, ``us_<doc_type>`` cache.
 
     Returns summary dict:
       {
@@ -377,18 +613,20 @@ def ensure_macro_anchors(force_refresh: bool = False) -> dict:
         "newly_extracted": int,
       }
     """
+    anchors, scrapers, catalog_path = _market_config(market)
+
     _RAW_DIR.mkdir(parents=True, exist_ok=True)
     _EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
     _META_DIR.mkdir(parents=True, exist_ok=True)
 
-    catalog = _load_catalog()
+    catalog = _load_catalog(catalog_path)
     available: list[str] = []
     missing: list[str] = []
     newly_extracted = 0
 
-    for spec in _ANCHORS:
+    for spec in anchors:
         entry = catalog["anchors"].get(spec.doc_type, {})
-        extracted_dir = _EXTRACTED_DIR / spec.doc_type
+        extracted_dir, pdf_path = _cache_names(spec.doc_type, market)
         md_path = extracted_dir / "_docling.md"
 
         if not force_refresh and entry.get("status") == "complete" and md_path.exists():
@@ -397,7 +635,7 @@ def ensure_macro_anchors(force_refresh: bool = False) -> dict:
 
         url = spec.url
         if not url and spec.scraper:
-            scraper = _SCRAPERS.get(spec.scraper)
+            scraper = scrapers.get(spec.scraper)
             if scraper:
                 url = scraper()
 
@@ -411,7 +649,6 @@ def ensure_macro_anchors(force_refresh: bool = False) -> dict:
             missing.append(spec.doc_type)
             continue
 
-        pdf_path = _RAW_DIR / f"{spec.doc_type}.pdf"
         ok = _download_pdf(url, pdf_path, min_bytes=spec.min_bytes)
         if not ok:
             catalog["anchors"][spec.doc_type] = {
@@ -448,7 +685,7 @@ def ensure_macro_anchors(force_refresh: bool = False) -> dict:
             }
             missing.append(spec.doc_type)
 
-    _save_catalog(catalog)
+    _save_catalog(catalog, catalog_path)
     return {
         "anchors_available": available,
         "anchors_missing": missing,
@@ -456,9 +693,11 @@ def ensure_macro_anchors(force_refresh: bool = False) -> dict:
     }
 
 
-def list_current_anchors() -> dict:
-    """Return the catalog for inspection."""
-    return _load_catalog()
+def list_current_anchors(market: str = "NSE") -> dict:
+    """Return the catalog for inspection (India ``catalog.json`` by default,
+    US ``catalog_us.json`` when ``market='US'``)."""
+    _, _, catalog_path = _market_config(market)
+    return _load_catalog(catalog_path)
 
 
 # ---------------------------------------------------------------------------
@@ -703,7 +942,7 @@ def _body_text_anchor(md: str, headings: list[dict], query: str) -> dict | None:
     }
 
 
-def get_anchor_content(doc_type: str, section: str | None = None) -> dict:
+def get_anchor_content(doc_type: str, section: str | None = None, market: str = "NSE") -> dict:
     """Fetch extracted content for a doc_type.
 
     - section=None → returns TOC: heading list + metadata (compact ~2-5KB)
@@ -711,8 +950,12 @@ def get_anchor_content(doc_type: str, section: str | None = None) -> dict:
       Matching is fuzzy (case-insensitive, tolerant of section-prefix
       numbering, dashes, trailing punctuation, word-order variations) and
       falls back to a body-text anchor when no heading matches.
+
+    ``market`` reads from the market-namespaced catalog + cache ("NSE" India
+    default = unchanged paths; "US" = ``catalog_us.json`` + ``us_<doc_type>``).
     """
-    catalog = _load_catalog()
+    _, _, catalog_path = _market_config(market)
+    catalog = _load_catalog(catalog_path)
     entry = catalog["anchors"].get(doc_type)
     if not entry or entry.get("status") != "complete":
         return {
@@ -722,7 +965,7 @@ def get_anchor_content(doc_type: str, section: str | None = None) -> dict:
             "fallback": "Use WebFetch/WebSearch against T2 sources (PIB, PRS, Reuters, Mint).",
         }
 
-    extracted_dir = _EXTRACTED_DIR / doc_type
+    extracted_dir, _ = _cache_names(doc_type, market)
     md_path = extracted_dir / "_docling.md"
     idx_path = extracted_dir / "_heading_index.json"
     if not md_path.exists() or not idx_path.exists():

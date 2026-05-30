@@ -120,6 +120,25 @@ def refresh_us(
         except Exception as e:  # pragma: no cover — registration is best-effort
             logger.warning("[us_refresh] %s: registry upsert failed: %s", symbol, e)
 
+        # Capture the GICS-style sector from yfinance and persist it on the
+        # registry so data_api._us_industry_from_registry can map it to a
+        # sector_kpis industry (e.g. 'Technology' → 'IT - Software'). Without
+        # this, industry resolves to "Unknown" live, breaking D&A defaults and
+        # sector_kpis. Non-fatal like every other source. COALESCE-safe upsert.
+        try:
+            from flowtracker.fund_client import FundClient
+            from flowtracker.market import Market
+
+            info = FundClient()._info(symbol, Market(market))
+            sector = (info.get("sector") or "").strip() or None
+            if sector:
+                store.upsert_symbol_registry(symbol, market, sector=sector, gics=sector)
+                _ok("registry_sector", 1)
+            else:
+                _skip("registry_sector", "no sector in yfinance info")
+        except Exception as e:  # pragma: no cover — best-effort, non-fatal
+            _skip("registry_sector", str(e))
+
         # --- 1. EDGAR fundamentals (annual + quarterly) ---
         try:
             if not cik:

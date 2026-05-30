@@ -25,6 +25,27 @@ class MacroSnapshot(BaseModel):
     gsec_30y: float | None = None     # 30Y G-sec yield %
 
 
+class USMacroSnapshot(BaseModel):
+    """Daily US macro indicator snapshot (US add-on).
+
+    Mirrors ``MacroSnapshot`` for the US market. Treasury yields are stored
+    in percent (4.44 = 4.44%, not 0.0444), matching how India ``gsec_*`` are
+    stored — CBOE yield indices (^IRX/^FVX/^TNX/^TYX) already publish their
+    Close as the yield in percent. ``dxy`` is the US Dollar Index level;
+    crude/gold are USD/barrel and USD/oz respectively.
+    """
+    date: str          # "2026-05-29"
+    vix: float | None = None          # CBOE Volatility Index
+    dxy: float | None = None          # US Dollar Index level
+    ust_3m: float | None = None       # 3M T-bill yield % (^IRX)
+    ust_5y: float | None = None       # 5Y Treasury yield % (^FVX)
+    ust_10y: float | None = None      # 10Y Treasury yield % (^TNX)
+    ust_30y: float | None = None      # 30Y Treasury yield % (^TYX)
+    wti_crude: float | None = None    # WTI crude USD/barrel (CL=F)
+    brent_crude: float | None = None  # Brent crude USD/barrel (BZ=F)
+    gold: float | None = None         # Gold USD/oz (GC=F)
+
+
 class MacroSystemCredit(BaseModel):
     """Weekly system credit/deposit snapshot from RBI WSS.
 
