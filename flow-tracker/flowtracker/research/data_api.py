@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 
+from flowtracker.research import sector_kpis
 from flowtracker.store import FlowStore
 from flowtracker.utils import _clean, derive_dii
 
@@ -1022,16 +1023,28 @@ class ResearchDataAPI:
         return sorted(out, key=lambda s: s["symbol"])
 
     def _is_bfsi(self, symbol: str) -> bool:
-        return self._get_industry(symbol) in _BFSI_INDUSTRIES
+        industry = self._get_industry(symbol)
+        return (
+            sector_kpis.industry_in_family(industry, sector_kpis.BFSI_SECTORS)
+            or industry in _BFSI_INDUSTRIES
+        )
 
     def _is_insurance(self, symbol: str) -> bool:
-        return self._get_industry(symbol) in _INSURANCE_INDUSTRIES
+        industry = self._get_industry(symbol)
+        return (
+            sector_kpis.industry_in_family(industry, sector_kpis.INSURANCE_SECTORS)
+            or industry in _INSURANCE_INDUSTRIES
+        )
 
     def _is_realestate(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _REALESTATE_INDUSTRIES
 
     def _is_metals(self, symbol: str) -> bool:
-        return self._get_industry(symbol) in _METALS_INDUSTRIES
+        industry = self._get_industry(symbol)
+        return (
+            sector_kpis.industry_in_family(industry, sector_kpis.METALS_SECTORS)
+            or industry in _METALS_INDUSTRIES
+        )
 
     def _is_telecom(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _TELECOM_INDUSTRIES
@@ -1080,6 +1093,8 @@ class ResearchDataAPI:
 
     def _is_conglomerate(self, symbol: str) -> bool:
         industry = self._get_industry(symbol)
+        if sector_kpis.industry_in_family(industry, sector_kpis.CONGLOMERATE_SECTORS):
+            return True
         if industry in _CONGLOMERATE_INDUSTRIES:
             return True
         name = self.get_company_info(symbol).get("company_name", "").lower()

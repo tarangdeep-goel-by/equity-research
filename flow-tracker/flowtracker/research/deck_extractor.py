@@ -34,6 +34,7 @@ from claude_agent_sdk import (
     query,
 )
 
+from flowtracker.research import sector_kpis as sector_kpis_mod
 from flowtracker.research.heading_toc import deck_slide_index
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,12 @@ def build_extraction_hint(industry: str | None) -> str:
     """
     if not industry:
         return ""
+    # Canonicalize the free-text industry through the shared sector resolver so
+    # the deck pipeline routes sector hints consistently with the rest of the
+    # pipeline (e.g. "Textile Manufacturing" -> "textiles", "Integrated Freight
+    # & Logistics" -> "logistics"). Fall back to the raw industry when the
+    # resolver finds no canonical match, so nothing is lost.
+    industry = sector_kpis_mod.get_sector_for_industry(industry) or industry
     ind = industry.lower()
 
     if "bank" in ind or "financial" in ind:
