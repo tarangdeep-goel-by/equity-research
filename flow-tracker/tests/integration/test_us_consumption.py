@@ -402,6 +402,10 @@ class TestWS5IndiaStillWorks:
 
     def test_macro_tools_india_run(self, db):
         # No run-market set (India default) → macro tools return real data.
+        # Reset the cross-call dedup cache so a same-args ({}) macro call earlier
+        # in the suite doesn't return the "[Identical to previous call]" stub
+        # (not JSON → breaks _payload). Matches test_macro_tools_na_for_us_run.
+        t._tool_result_cache.set({})
         assert not _is_not_applicable(_call(t.get_macro_catalog, {}))
         assert not _is_not_applicable(_call(t.get_macro_indicators, {}))
         assert not _is_not_applicable(_call(t.get_fii_derivative_flow, {}))
