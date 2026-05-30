@@ -120,22 +120,26 @@ def refresh_us(
         except Exception as e:  # pragma: no cover — registration is best-effort
             logger.warning("[us_refresh] %s: registry upsert failed: %s", symbol, e)
 
-        # Capture the GICS-style sector from yfinance and persist it on the
-        # registry so data_api._us_industry_from_registry can map it to a
-        # sector_kpis industry (e.g. 'Technology' → 'IT - Software'). Without
-        # this, industry resolves to "Unknown" live, breaking D&A defaults and
-        # sector_kpis. Non-fatal like every other source. COALESCE-safe upsert.
+        # Capture the GICS-style sector AND the granular yfinance industry from
+        # yfinance and persist both on the registry. The granular industry (e.g.
+        # 'Banks - Diversified', 'REIT - Retail', 'Semiconductors') is what
+        # data_api._us_industry_from_registry prefers — it routes through the same
+        # industry→sector sets as India ('Banks - Diversified' ∈ _BFSI_INDUSTRIES),
+        # which the coarse sector map ('Financials' → 'Banks') cannot. Sector is
+        # kept as a fallback when industry is absent. Non-fatal; COALESCE-safe.
         try:
             from flowtracker.fund_client import FundClient
             from flowtracker.market import Market
 
             info = FundClient()._info(symbol, Market(market))
             sector = (info.get("sector") or "").strip() or None
-            if sector:
-                store.upsert_symbol_registry(symbol, market, sector=sector, gics=sector)
+            industry = (info.get("industry") or "").strip() or None
+            if sector or industry:
+                store.upsert_symbol_registry(
+                    symbol, market, sector=sector, gics=sector, industry=industry)
                 _ok("registry_sector", 1)
             else:
-                _skip("registry_sector", "no sector in yfinance info")
+                _skip("registry_sector", "no sector/industry in yfinance info")
         except Exception as e:  # pragma: no cover — best-effort, non-fatal
             _skip("registry_sector", str(e))
 

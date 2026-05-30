@@ -587,8 +587,16 @@ _INDUSTRY_ALIASES: dict[str, str] = {
     "Oil & Gas Equipment & Services": "oil_and_gas",
     # metals & mining
     "Coking Coal": "metals_and_mining", "Other Precious Metals & Mining": "metals_and_mining",
-    # real estate
+    # real estate — US REITs (the dominant US real-estate classification)
     "Real Estate - Diversified": "real_estate",
+    "REIT - Diversified": "real_estate", "REIT - Healthcare Facilities": "real_estate",
+    "REIT - Hotel & Motel": "real_estate", "REIT - Industrial": "real_estate",
+    "REIT - Mortgage": "real_estate", "REIT - Office": "real_estate",
+    "REIT - Residential": "real_estate", "REIT - Retail": "real_estate",
+    "REIT - Specialty": "real_estate",
+    # US semiconductors (NVDA/AVGO/etc.) — route to IT for tech-sector KPI hints
+    # (semi-specific KPIs are a US sector-KPI follow-on).
+    "Semiconductors": "it_services",
 }
 
 # Flat mapping: industry name → sector key (config industries first, then aliases)

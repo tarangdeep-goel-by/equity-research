@@ -9,6 +9,28 @@ from rich.table import Table
 console = Console()
 
 
+def _market_of(symbol: str) -> str:
+    """Resolve a holding's listing market ("NSE"/"NASDAQ"/"NYSE") for display.
+
+    US listings resolve to their market; everything else defaults to NSE so
+    India output is unchanged. Resolution failures fall back to NSE.
+    """
+    try:
+        from flowtracker.research.data_api import ResearchDataAPI
+
+        with ResearchDataAPI() as api:
+            return api._market_of(symbol)
+    except Exception:  # noqa: BLE001 — display must never crash on resolution
+        return "NSE"
+
+
+def _cur(market: str) -> str:
+    """Currency symbol for a market (``₹``/``$``)."""
+    from flowtracker.market import MARKETS, Market
+
+    return MARKETS[Market(market)].currency_symbol
+
+
 def display_portfolio_view(holdings: list[dict]) -> None:
     """Show all holdings with current value and P&L."""
     if not holdings:
@@ -34,6 +56,12 @@ def display_portfolio_view(holdings: list[dict]) -> None:
         cost = h["avg_cost"]
         invested = qty * cost
 
+        # Per-row market: India ("NSE") stays a bare number (byte-identical);
+        # US rows prefix "$" so mixed portfolios disambiguate currency. Prefer a
+        # market already attached to the row, else resolve from the symbol.
+        market = h.get("market") or _market_of(h["symbol"])
+        sym = "" if market in ("NSE", "BSE") else _cur(market)
+
         if cmp:
             value = qty * cmp
             pnl = value - invested
@@ -42,17 +70,17 @@ def display_portfolio_view(holdings: list[dict]) -> None:
             table.add_row(
                 h["symbol"],
                 str(qty),
-                f"{cost:,.2f}",
-                f"{cmp:,.2f}",
-                f"{value:,.2f}",
-                f"[{color}]{pnl:+,.2f}[/{color}]",
+                f"{sym}{cost:,.2f}",
+                f"{sym}{cmp:,.2f}",
+                f"{sym}{value:,.2f}",
+                f"[{color}]{sym}{pnl:+,.2f}[/{color}]",
                 f"[{color}]{pnl_pct:+.1f}%[/{color}]",
             )
         else:
             table.add_row(
                 h["symbol"],
                 str(qty),
-                f"{cost:,.2f}",
+                f"{sym}{cost:,.2f}",
                 "—",
                 "—",
                 "—",
@@ -90,17 +118,22 @@ def display_portfolio_concentration(sectors: list[dict]) -> None:
 
 
 def display_portfolio_summary(summary: dict) -> None:
-    """Show portfolio-level summary."""
+    """Show portfolio-level summary.
+
+    ``summary["market"]`` (optional) sets the currency symbol on the totals;
+    absent it defaults to NSE (``₹``) so India output is byte-identical.
+    """
+    cur = _cur(summary.get("market", "NSE"))
     lines: list[str] = []
     lines.append(f"Holdings: {summary.get('num_holdings', 0)}")
-    lines.append(f"Total Invested: ₹{summary.get('total_invested', 0):,.2f}")
+    lines.append(f"Total Invested: {cur}{summary.get('total_invested', 0):,.2f}")
 
     if summary.get("total_value"):
-        lines.append(f"Current Value: ₹{summary['total_value']:,.2f}")
+        lines.append(f"Current Value: {cur}{summary['total_value']:,.2f}")
         pnl = summary.get("total_pnl", 0)
         pnl_pct = summary.get("total_pnl_pct", 0)
         color = "green" if pnl >= 0 else "red"
-        lines.append(f"P&L: [{color}]₹{pnl:+,.2f} ({pnl_pct:+.1f}%)[/{color}]")
+        lines.append(f"P&L: [{color}]{cur}{pnl:+,.2f} ({pnl_pct:+.1f}%)[/{color}]")
 
     if summary.get("top_gainer"):
         g = summary["top_gainer"]
@@ -118,8 +151,9 @@ def display_portfolio_summary(summary: dict) -> None:
 
 def display_portfolio_add(symbol: str, qty: int, cost: float) -> None:
     """Show confirmation after adding a holding."""
+    cur = _cur(_market_of(symbol))
     console.print(Panel(
-        f"Added {symbol}: {qty} shares @ ₹{cost:,.2f}",
+        f"Added {symbol}: {qty} shares @ {cur}{cost:,.2f}",
         title="Holding Added",
         border_style="green",
     ))

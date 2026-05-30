@@ -54,10 +54,51 @@ def _chart_dir(symbol: str) -> Path:
 
 
 def _crore_fmt(x, _):
-    """Format y-axis values in crores."""
+    """Format y-axis values in crores (NSE/₹ default — kept for callers that
+    don't thread a market). Use :func:`_money_fmt` for market-aware axes."""
     if abs(x) >= 100:
         return f"₹{x:,.0f}"
     return f"₹{x:,.1f}"
+
+
+def _money_fmt(market: str = "NSE"):
+    """Build a market-aware y-axis FuncFormatter callable.
+
+    Prefixes the market's currency symbol (``₹``/``$``); the value is already
+    in the stored aggregate magnitude (₹Cr / USD-mn), so only the symbol text
+    differs by market. NSE output is byte-identical to :func:`_crore_fmt`.
+    """
+    from flowtracker.market import MARKETS, Market
+
+    sym = MARKETS[Market(market)].currency_symbol
+
+    def _fmt(x, _):
+        if abs(x) >= 100:
+            return f"{sym}{x:,.0f}"
+        return f"{sym}{x:,.1f}"
+
+    return _fmt
+
+
+def _money_symbol(market: str = "NSE") -> str:
+    """Currency symbol for a market (``₹``/``$``)."""
+    from flowtracker.market import MARKETS, Market
+
+    return MARKETS[Market(market)].currency_symbol
+
+
+def _money_units(market: str = "NSE") -> tuple[str, str]:
+    """Return ``(title_unit, axis_unit)`` strings for money axes/titles.
+
+    NSE is byte-identical to the legacy hardcoded text — title ``"₹ Cr"`` and
+    axis ``"₹ Crores"``. US markets use ``"$ mn"`` for both (USD millions).
+    """
+    from flowtracker.market import MARKETS, Market
+
+    cfg = MARKETS[Market(market)]
+    if cfg.code in (Market.NSE, Market.BSE):
+        return "₹ Cr", "₹ Crores"
+    return f"{cfg.currency_symbol} {cfg.magnitude_label}", f"{cfg.currency_symbol} {cfg.magnitude_label}"
 
 
 def _pct_fmt(x, _):
@@ -83,12 +124,14 @@ def _fy_label(yr_str: str) -> str:
     return s[-7:]
 
 
-def render_price_chart(symbol: str, chart_data: list[dict]) -> str:
+def render_price_chart(symbol: str, chart_data: list[dict], market: str = "NSE") -> str:
     """Render price + SMA50 + SMA200 chart from get_chart_data('price') output.
 
     Args:
         symbol: Stock symbol
         chart_data: List of {metric, values: [{date, value}]} from get_chart_data
+        market: Listing market ("NSE"/"NASDAQ"/"NYSE") — drives the currency
+            symbol on the price axis. Defaults to NSE (India byte-identical).
 
     Returns: Absolute file path to the PNG.
     """
@@ -113,8 +156,8 @@ def render_price_chart(symbol: str, chart_data: list[dict]) -> str:
                 alpha=1.0 if metric == "Price" else 0.7)
 
     ax.set_title(f"{symbol} — Price & Moving Averages", fontsize=14, fontweight="bold", pad=12)
-    ax.set_ylabel("Price (₹)")
-    ax.yaxis.set_major_formatter(FuncFormatter(_crore_fmt))
+    ax.set_ylabel(f"Price ({_money_symbol(market)})")
+    ax.yaxis.set_major_formatter(FuncFormatter(_money_fmt(market)))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
     fig.autofmt_xdate(rotation=30)
@@ -198,7 +241,7 @@ def render_delivery_chart(symbol: str, delivery_data: list[dict]) -> str:
     return str(path)
 
 
-def render_revenue_profit_chart(symbol: str, annual_data: list[dict]) -> str:
+def render_revenue_profit_chart(symbol: str, annual_data: list[dict], market: str = "NSE") -> str:
     """Render 10-year revenue & profit bar chart from annual financials."""
     if not annual_data:
         return ""
@@ -230,9 +273,10 @@ def render_revenue_profit_chart(symbol: str, annual_data: list[dict]) -> str:
     ax.bar([i - width / 2 for i in x], revenues, width, label="Revenue", color=_ACCENT_2, alpha=0.85)
     ax.bar([i + width / 2 for i in x], profits, width, label="Net Profit", color=_GREEN, alpha=0.85)
 
-    ax.set_title(f"{symbol} — Revenue & Net Profit (₹ Cr)", fontsize=14, fontweight="bold", pad=12)
-    ax.set_ylabel("₹ Crores")
-    ax.yaxis.set_major_formatter(FuncFormatter(_crore_fmt))
+    _title_unit, _axis_unit = _money_units(market)
+    ax.set_title(f"{symbol} — Revenue & Net Profit ({_title_unit})", fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel(_axis_unit)
+    ax.yaxis.set_major_formatter(FuncFormatter(_money_fmt(market)))
     ax.set_xticks(list(x))
     ax.set_xticklabels(years, rotation=45, ha="right")
     ax.legend(loc="upper left", framealpha=0.8)
@@ -302,7 +346,7 @@ def render_shareholding_chart(symbol: str, shareholding_data: list[dict]) -> str
     return str(path)
 
 
-def render_quarterly_chart(symbol: str, quarterly_data: list[dict]) -> str:
+def render_quarterly_chart(symbol: str, quarterly_data: list[dict], market: str = "NSE") -> str:
     """Render 12-quarter revenue + profit bar chart with YoY growth line."""
     if not quarterly_data:
         return ""
@@ -343,8 +387,8 @@ def render_quarterly_chart(symbol: str, quarterly_data: list[dict]) -> str:
 
     ax1.bar([i - width / 2 for i in x], revenues, width, label="Revenue", color=_ACCENT_2, alpha=0.85)
     ax1.bar([i + width / 2 for i in x], profits, width, label="Net Profit", color=_GREEN, alpha=0.85)
-    ax1.set_ylabel("₹ Crores")
-    ax1.yaxis.set_major_formatter(FuncFormatter(_crore_fmt))
+    ax1.set_ylabel(_money_units(market)[1])
+    ax1.yaxis.set_major_formatter(FuncFormatter(_money_fmt(market)))
     ax1.set_xticks(list(x))
     ax1.set_xticklabels(quarters, rotation=45, ha="right", fontsize=9)
     ax1.legend(loc="upper left", framealpha=0.8)
@@ -535,7 +579,7 @@ def render_dupont_chart(symbol: str, dupont_data: list[dict] | dict) -> str:
     return str(path)
 
 
-def render_cashflow_chart(symbol: str, annual_data: list[dict]) -> str:
+def render_cashflow_chart(symbol: str, annual_data: list[dict], market: str = "NSE") -> str:
     """Render CFO, CapEx, FCF bar chart over 10 years."""
     if not annual_data:
         return ""
@@ -570,9 +614,10 @@ def render_cashflow_chart(symbol: str, annual_data: list[dict]) -> str:
     ax.bar([i + width / 2 for i in x], fcfs, width, label="Free Cash Flow", color=_GREEN, alpha=0.85)
     ax.axhline(y=0, color=_TEXT, linewidth=0.5)
 
-    ax.set_title(f"{symbol} — Cash Flow (₹ Cr)", fontsize=14, fontweight="bold", pad=12)
-    ax.set_ylabel("₹ Crores")
-    ax.yaxis.set_major_formatter(FuncFormatter(_crore_fmt))
+    _title_unit, _axis_unit = _money_units(market)
+    ax.set_title(f"{symbol} — Cash Flow ({_title_unit})", fontsize=14, fontweight="bold", pad=12)
+    ax.set_ylabel(_axis_unit)
+    ax.yaxis.set_major_formatter(FuncFormatter(_money_fmt(market)))
     ax.set_xticks(list(x))
     ax.set_xticklabels(years, rotation=45, ha="right")
     ax.legend(loc="upper left", framealpha=0.8)
@@ -584,7 +629,7 @@ def render_cashflow_chart(symbol: str, annual_data: list[dict]) -> str:
     return str(path)
 
 
-def render_fair_value_range(symbol: str, fair_value_data: dict) -> str:
+def render_fair_value_range(symbol: str, fair_value_data: dict, market: str = "NSE") -> str:
     """Render horizontal bar showing bear/base/bull fair value vs current price."""
     if not fair_value_data:
         return ""
@@ -611,23 +656,25 @@ def render_fair_value_range(symbol: str, fair_value_data: dict) -> str:
     ax.barh(0, bull - bear, left=bear, height=0.4, color=_ACCENT_2, alpha=0.3, label="Fair Value Range")
     ax.barh(0, base - bear, left=bear, height=0.4, color=_ACCENT_2, alpha=0.5)
 
+    _cur = _money_symbol(market)
+
     # Markers
-    ax.plot(current, 0, "D", color=_ACCENT_1, markersize=15, zorder=5, label=f"Current: ₹{current:,.0f}")
+    ax.plot(current, 0, "D", color=_ACCENT_1, markersize=15, zorder=5, label=f"Current: {_cur}{current:,.0f}")
     ax.plot(bear, 0, "|", color=_RED, markersize=20, markeredgewidth=3, zorder=5)
     ax.plot(base, 0, "|", color=_GREEN, markersize=20, markeredgewidth=3, zorder=5)
     ax.plot(bull, 0, "|", color=_ACCENT_2, markersize=20, markeredgewidth=3, zorder=5)
 
     # Labels
-    ax.annotate(f"Bear\n₹{bear:,.0f}", (bear, -0.35), ha="center", fontsize=10, color=_RED)
-    ax.annotate(f"Base\n₹{base:,.0f}", (base, -0.35), ha="center", fontsize=10, color=_GREEN)
-    ax.annotate(f"Bull\n₹{bull:,.0f}", (bull, -0.35), ha="center", fontsize=10, color=_ACCENT_2)
+    ax.annotate(f"Bear\n{_cur}{bear:,.0f}", (bear, -0.35), ha="center", fontsize=10, color=_RED)
+    ax.annotate(f"Base\n{_cur}{base:,.0f}", (base, -0.35), ha="center", fontsize=10, color=_GREEN)
+    ax.annotate(f"Bull\n{_cur}{bull:,.0f}", (bull, -0.35), ha="center", fontsize=10, color=_ACCENT_2)
 
     margin = fair_value_data.get("margin_of_safety_pct", 0)
     signal = fair_value_data.get("signal", "")
     ax.set_title(f"{symbol} — Fair Value Range | {signal} | Margin of Safety: {margin:.0f}%",
                   fontsize=13, fontweight="bold", pad=12)
     ax.set_yticks([])
-    ax.set_xlabel("Price (₹)")
+    ax.set_xlabel(f"Price ({_cur})")
     ax.legend(loc="upper right", framealpha=0.8)
     ax.grid(True, axis="x", alpha=0.3)
 
@@ -772,7 +819,7 @@ def render_composite_radar(symbol: str, score_data: dict) -> str:
 # --- Sector-level charts ---
 
 
-def render_sector_mcap_bar(symbol: str, ranked_data: list[dict]) -> str:
+def render_sector_mcap_bar(symbol: str, ranked_data: list[dict], market: str = "NSE") -> str:
     """Horizontal bar chart of all stocks in the sector ranked by market cap.
 
     Highlights the subject stock in accent color.
@@ -797,12 +844,16 @@ def render_sector_mcap_bar(symbol: str, ranked_data: list[dict]) -> str:
     bars = ax.barh(symbols, mcaps, color=colors, edgecolor=_GRID, linewidth=0.5)
 
     # Add value labels
+    from flowtracker.market import MARKETS, Market
+
+    _cfg = MARKETS[Market(market)]
+    _is_india = _cfg.code in (Market.NSE, Market.BSE)
     max_mcap = max(mcaps) if mcaps else 1
     for bar, val in zip(bars, mcaps):
-        if val >= 100_000:  # 1 lakh crore+
+        if _is_india and val >= 100_000:  # 1 lakh crore+ (India-only L-notation)
             label = f"₹{val / 100_000:.1f}L Cr"
         else:
-            label = f"₹{val:,.0f} Cr"
+            label = f"{_cfg.currency_symbol}{val:,.0f} {_cfg.magnitude_label}"
         ax.text(bar.get_width() + max_mcap * 0.01, bar.get_y() + bar.get_height() / 2,
                 label, va="center", fontsize=9, color=_TEXT)
 
@@ -1501,7 +1552,7 @@ def render_comparison_margins(symbols: list[str], annual_data_map: dict[str, lis
     return str(path)
 
 
-def render_dividend_history(symbol: str, annual_data: list[dict]) -> str:
+def render_dividend_history(symbol: str, annual_data: list[dict], market: str = "NSE") -> str:
     """Dividend payout ratio and yield over time from annual financials."""
     if not annual_data:
         return ""
@@ -1548,9 +1599,10 @@ def render_dividend_history(symbol: str, annual_data: list[dict]) -> str:
 
     # DPS line on secondary axis
     ax2 = ax1.twinx()
+    _cur = _money_symbol(market)
     ax2.plot(list(x), div_per_share, color=_GREEN, linewidth=2, marker="o",
-             markersize=5, label="Dividend / Share (₹)")
-    ax2.set_ylabel("Dividend per Share (₹)", color=_GREEN)
+             markersize=5, label=f"Dividend / Share ({_cur})")
+    ax2.set_ylabel(f"Dividend per Share ({_cur})", color=_GREEN)
     ax2.tick_params(axis="y", labelcolor=_GREEN)
 
     ax1.set_title(f"{symbol} — Dividend History", fontsize=14, fontweight="bold", pad=12)
@@ -1685,18 +1737,23 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
                     }
 
     with ResearchDataAPI() as api:
+        # Resolve the listing market ONCE so money axes/labels render in the
+        # symbol's native currency ($ mn for US, ₹ Cr for India). India default;
+        # tolerant of stubbed APIs that don't expose the resolver.
+        _resolve = getattr(api, "_market_of", None)
+        market = _resolve(symbol) if callable(_resolve) else "NSE"
         if chart_type == "price":
-            path = render_price_chart(symbol, data or api.get_chart_data(symbol, "price"))
+            path = render_price_chart(symbol, data or api.get_chart_data(symbol, "price"), market)
         elif chart_type == "pe":
             path = render_pe_chart(symbol, data or api.get_chart_data(symbol, "pe"))
         elif chart_type == "delivery":
             path = render_delivery_chart(symbol, data or api.get_delivery_trend(symbol, days=90))
         elif chart_type == "revenue_profit":
-            path = render_revenue_profit_chart(symbol, data or api.get_annual_financials(symbol, years=10))
+            path = render_revenue_profit_chart(symbol, data or api.get_annual_financials(symbol, years=10), market)
         elif chart_type == "shareholding":
             path = render_shareholding_chart(symbol, data or api.get_shareholding(symbol, quarters=12))
         elif chart_type == "quarterly":
-            path = render_quarterly_chart(symbol, data or api.get_quarterly_results(symbol, quarters=12))
+            path = render_quarterly_chart(symbol, data or api.get_quarterly_results(symbol, quarters=12), market)
         elif chart_type == "margin_trend":
             path = render_margin_trend(symbol, data or api.get_annual_financials(symbol, years=10))
         elif chart_type == "roce_trend":
@@ -1704,9 +1761,9 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
         elif chart_type == "dupont":
             path = render_dupont_chart(symbol, data or api.get_dupont_decomposition(symbol))
         elif chart_type == "cashflow":
-            path = render_cashflow_chart(symbol, data or api.get_annual_financials(symbol, years=10))
+            path = render_cashflow_chart(symbol, data or api.get_annual_financials(symbol, years=10), market)
         elif chart_type == "fair_value_range":
-            path = render_fair_value_range(symbol, data or api.get_fair_value(symbol))
+            path = render_fair_value_range(symbol, data or api.get_fair_value(symbol), market)
         elif chart_type == "expense_pie":
             slices = data if data is not None else _build_expense_slices(api, symbol)
             if isinstance(slices, list) and len(slices) < 2:
@@ -1728,7 +1785,7 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
 
         # Existing sector charts
         elif chart_type == "sector_mcap":
-            path = render_sector_mcap_bar(symbol, data or api.get_sector_valuations(symbol))
+            path = render_sector_mcap_bar(symbol, data or api.get_sector_valuations(symbol), market)
         elif chart_type == "sector_valuation_scatter":
             path = render_sector_valuation_scatter(symbol, data or api.get_sector_valuations(symbol))
         elif chart_type == "sector_ownership_flow":
@@ -1766,7 +1823,7 @@ def render_chart(symbol: str, chart_type: str, data: list | dict | None = None) 
 
         # Other
         elif chart_type == "dividend_history":
-            path = render_dividend_history(symbol, data or api.get_annual_financials(symbol, years=10))
+            path = render_dividend_history(symbol, data or api.get_annual_financials(symbol, years=10), market)
         else:
             path = ""
 

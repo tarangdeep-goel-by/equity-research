@@ -1109,6 +1109,7 @@
       'currency',
       'fiscal_year_system',
       'gics',
+      'industry',
       'isin',
       'market',
       'sector',
