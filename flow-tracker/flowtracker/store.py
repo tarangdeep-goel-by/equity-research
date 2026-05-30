@@ -2049,6 +2049,13 @@ class FlowStore(PortfolioMixin, FlowsMixin, MacroMixin, DerivativesMixin, Market
         }
         if "cik" not in existing:
             self._conn.execute("ALTER TABLE symbol_registry ADD COLUMN cik TEXT")
+        # industry: the GRANULAR yfinance industry label (e.g. 'Banks - Diversified',
+        # 'REIT - Retail', 'Semiconductors') captured for US symbols so sector
+        # classification routes through the same industry→sector sets as India,
+        # instead of the coarse GICS-sector map ('Financials'→'Banks'). India rows
+        # leave it NULL (they resolve industry via company_snapshot/index_constituents).
+        if "industry" not in existing:
+            self._conn.execute("ALTER TABLE symbol_registry ADD COLUMN industry TEXT")
         self._conn.commit()
 
     def _migrate_us_annual_financials(self) -> None:

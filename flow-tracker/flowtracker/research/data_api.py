@@ -327,8 +327,12 @@ _INSURANCE_INDUSTRIES = {
 }
 
 _REALESTATE_INDUSTRIES = {
-    # yfinance
+    # yfinance (India)
     "Real Estate - Development", "Real Estate - Diversified", "Real Estate Services",
+    # yfinance (US REITs — the dominant US real-estate classification)
+    "REIT - Diversified", "REIT - Healthcare Facilities", "REIT - Hotel & Motel",
+    "REIT - Industrial", "REIT - Mortgage", "REIT - Office", "REIT - Residential",
+    "REIT - Retail", "REIT - Specialty",
     # Screener
     "Residential Commercial Projects",
 }
@@ -928,17 +932,26 @@ class ResearchDataAPI:
         return info.get("industry") or "Unknown"
 
     def _us_industry_from_registry(self, symbol: str) -> str | None:
-        """Map a US symbol's registry sector/gics to a sector_kpis industry string.
+        """Resolve a US symbol's industry label for sector classification.
 
-        FMP/yfinance emit GICS-style sector labels ('Technology', 'Financials',
-        'Health Care', etc.). _US_GICS_TO_INDUSTRY maps each to an industry name
-        already present in SECTOR_KPI_CONFIG so get_sector_for_industry resolves
-        a sector key. Returns the raw registry sector string as a last resort.
+        Preference order:
+          1. The GRANULAR yfinance ``industry`` captured on the registry
+             (e.g. 'Banks - Diversified', 'REIT - Retail', 'Semiconductors').
+             These already live in the India industry→sector sets, so
+             ``get_sector_for_industry`` / ``_is_bfsi`` / etc. resolve directly.
+          2. The coarse GICS ``sector``/``gics`` mapped via ``_US_GICS_TO_INDUSTRY``
+             (e.g. 'Technology' → 'IT - Software') when no granular industry is on
+             file — a lossy fallback (e.g. 'Financials' → 'Banks' won't match the
+             BFSI set, but at least resolves a sector key for KPI hints).
+          3. The raw sector/gics string as a last resort.
         """
         entry = (
             self._store.get_symbol_registry_entry(symbol, self._market_of(symbol))
             or {}
         )
+        granular = (entry.get("industry") or "").strip()
+        if granular:
+            return granular
         for raw in (entry.get("sector"), entry.get("gics")):
             if not raw:
                 continue
