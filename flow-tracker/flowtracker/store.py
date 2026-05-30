@@ -1576,6 +1576,27 @@ CREATE TABLE IF NOT EXISTS us_daily_prices (
 CREATE INDEX IF NOT EXISTS idx_us_daily_prices_symbol ON us_daily_prices(symbol, market);
 CREATE INDEX IF NOT EXISTS idx_us_daily_prices_date ON us_daily_prices(date);
 
+-- US market breadth (US add-on, Phase 3). Mirrors `market_breadth_daily` over
+-- the US universe in `us_daily_prices`, grouped by GICS sector. `index_name`
+-- is "US 500" (whole US universe) or "US <sector_key>" (e.g. "US banks").
+-- Computed by `us_breadth_compute.py`; India breadth is untouched.
+CREATE TABLE IF NOT EXISTS us_market_breadth_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    index_name TEXT NOT NULL,
+    total INTEGER NOT NULL,
+    pct_above_200dma REAL,
+    advance INTEGER NOT NULL,
+    decline INTEGER NOT NULL,
+    unchanged INTEGER NOT NULL,
+    new_52w_highs INTEGER NOT NULL,
+    new_52w_lows INTEGER NOT NULL,
+    ad_ratio REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, index_name)
+);
+CREATE INDEX IF NOT EXISTS idx_us_market_breadth_date ON us_market_breadth_daily(date);
+
 CREATE TABLE IF NOT EXISTS us_annual_financials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT NOT NULL,
@@ -1722,6 +1743,46 @@ CREATE TABLE IF NOT EXISTS us_institutional_holdings (
 );
 CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_symbol ON us_institutional_holdings(symbol, market);
 CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_cik ON us_institutional_holdings(manager_cik);
+
+-- Denormalized per-company snapshot for US listings — the single source of
+-- truth for US peers / benchmarks / valuation-matrix, mirroring the market-
+-- relevant subset of the India `company_snapshot` table plus market/currency.
+-- India-only fields (promoter_holding/pledge/sales_qtr/qtr_var) are omitted.
+-- Built by research/us_snapshot_builder.py from us_valuation_snapshot +
+-- yfinance .info + us_annual_financials. Monetary aggregates are USD millions;
+-- margins/returns/growth are percent form; ratios (pe/pb/peg/beta/d-e) are raw.
+CREATE TABLE IF NOT EXISTS us_company_snapshot (
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    name TEXT,
+    industry TEXT,
+    cmp REAL,
+    market_cap REAL,
+    pe_trailing REAL,
+    pe_forward REAL,
+    pb REAL,
+    ev_ebitda REAL,
+    peg REAL,
+    div_yield REAL,
+    operating_margin REAL,
+    net_margin REAL,
+    roe REAL,
+    roa REAL,
+    roce REAL,
+    roic REAL,
+    fcf_yield REAL,
+    revenue_growth REAL,
+    earnings_growth REAL,
+    beta REAL,
+    debt_to_equity REAL,
+    current_ratio REAL,
+    high_52w REAL,
+    low_52w REAL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY(symbol, market)
+);
+CREATE INDEX IF NOT EXISTS idx_us_company_snapshot_market ON us_company_snapshot(market);
 """
 
 

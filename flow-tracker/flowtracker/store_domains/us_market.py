@@ -353,3 +353,136 @@ class UsMarketMixin:
             (series, int(months)),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # -- us_company_snapshot (denormalized peers/benchmarks source of truth) --
+
+    _US_COMPANY_SNAPSHOT_COLS = (
+        "symbol", "market", "currency", "name", "industry", "cmp", "market_cap",
+        "pe_trailing", "pe_forward", "pb", "ev_ebitda", "peg", "div_yield",
+        "operating_margin", "net_margin", "roe", "roa", "roce", "roic",
+        "fcf_yield", "revenue_growth", "earnings_growth", "beta",
+        "debt_to_equity", "current_ratio", "high_52w", "low_52w",
+    )
+
+    def upsert_us_company_snapshot(
+        self, symbol: str, market: str, fields: dict,
+    ) -> int:
+        """Insert or update the US company snapshot for (symbol, market).
+
+        COALESCE-safe: any column omitted from ``fields`` (or passed as None)
+        preserves the existing stored value rather than nulling it, so partial
+        re-builds never clobber a previously-populated metric. ``symbol`` is
+        upper-cased; ``currency`` defaults to 'USD'.
+        """
+        sym = symbol.upper()
+        currency = fields.get("currency") or "USD"
+        # Value columns are everything except the (symbol, market) PK.
+        value_cols = [
+            c for c in self._US_COMPANY_SNAPSHOT_COLS if c not in ("symbol", "market")
+        ]
+        col_sql = ", ".join(self._US_COMPANY_SNAPSHOT_COLS)
+        placeholders = ", ".join(["?"] * len(self._US_COMPANY_SNAPSHOT_COLS))
+        # COALESCE(excluded.col, us_company_snapshot.col) keeps the old value
+        # when the new one is NULL.
+        set_sql = ", ".join(
+            f"{c}=COALESCE(excluded.{c}, us_company_snapshot.{c})" for c in value_cols
+        )
+        sql = (
+            f"INSERT INTO us_company_snapshot ({col_sql}) "
+            f"VALUES ({placeholders}) "
+            f"ON CONFLICT(symbol, market) DO UPDATE SET {set_sql}, "
+            f"updated_at=datetime('now')"
+        )
+        row = {**fields, "symbol": sym, "market": market, "currency": currency}
+        self._conn.execute(
+            sql, tuple(row.get(c) for c in self._US_COMPANY_SNAPSHOT_COLS)
+        )
+        self._conn.commit()
+        return 1
+
+    def get_us_company_snapshot(
+        self, symbol: str, market: str = "NASDAQ",
+    ) -> dict | None:
+        """Return the US company snapshot for (symbol, market), or None."""
+        row = self._conn.execute(
+            "SELECT * FROM us_company_snapshot WHERE symbol = ? AND market = ?",
+            (symbol.upper(), market),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_us_company_snapshots(
+        self, symbols: list[str], market: str = "NASDAQ",
+    ) -> list[dict]:
+        """Return US snapshots for the given symbols in one market. Only existing rows."""
+        if not symbols:
+            return []
+        placeholders = ",".join("?" * len(symbols))
+        rows = self._conn.execute(
+            f"SELECT * FROM us_company_snapshot "  # noqa: S608
+            f"WHERE market = ? AND symbol IN ({placeholders}) ORDER BY symbol",
+            [market, *[s.upper() for s in symbols]],
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # -- us_market_breadth_daily (market-wide; symbol-less, index-keyed) --
+    #
+    # Mirrors the India `market_breadth_daily` surface but over the US universe
+    # in `us_daily_prices`, grouped by GICS sector. `index_name` is "US 500"
+    # (whole US universe) or "US <sector_key>". Computed by us_breadth_compute.py.
+    # India breadth tables and read paths are untouched.
+
+    def upsert_us_breadth(self, snapshots: list) -> int:
+        """Insert or replace US market-breadth snapshots.
+
+        Accepts a list of ``BreadthSnapshot`` instances (the same model India
+        breadth uses). UNIQUE(date, index_name) — re-running for the same date
+        overwrites (idempotent recompute).
+        """
+        cursor = self._conn.cursor()
+        count = 0
+        for s in snapshots:
+            cursor.execute(
+                "INSERT OR REPLACE INTO us_market_breadth_daily "
+                "(date, index_name, total, pct_above_200dma, advance, decline, "
+                " unchanged, new_52w_highs, new_52w_lows, ad_ratio) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    s.date, s.index_name, s.total, s.pct_above_200dma,
+                    s.advance, s.decline, s.unchanged,
+                    s.new_52w_highs, s.new_52w_lows, s.ad_ratio,
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_us_breadth_latest(self) -> list:
+        """Return all index_name rows for the most recent US breadth date.
+
+        Returns a list of ``BreadthSnapshot`` ordered by index_name (empty list
+        when no US breadth has been computed yet).
+        """
+        from flowtracker.store import _row_to_breadth
+
+        row = self._conn.execute(
+            "SELECT MAX(date) AS d FROM us_market_breadth_daily"
+        ).fetchone()
+        if not row or row["d"] is None:
+            return []
+        rows = self._conn.execute(
+            "SELECT * FROM us_market_breadth_daily WHERE date = ? "
+            "ORDER BY index_name",
+            (row["d"],),
+        ).fetchall()
+        return [_row_to_breadth(r) for r in rows]
+
+    def get_us_breadth_history(self, index_name: str, days: int = 30) -> list:
+        """Last ``days`` US breadth snapshots for one index_name, newest first."""
+        from flowtracker.store import _row_to_breadth
+
+        rows = self._conn.execute(
+            "SELECT * FROM us_market_breadth_daily WHERE index_name = ? "
+            "ORDER BY date DESC LIMIT ?",
+            (index_name, days),
+        ).fetchall()
+        return [_row_to_breadth(r) for r in rows]

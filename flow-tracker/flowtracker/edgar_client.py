@@ -56,6 +56,12 @@ _ANNUAL_DURATION_TAGS: dict[str, list[str]] = {
     ],
     "net_income": ["NetIncomeLoss"],
     "eps": ["EarningsPerShareDiluted", "EarningsPerShareBasic"],
+    # Weighted-average diluted shares (matches diluted EPS); basic as fallback.
+    # Duration concept — see the _INSTANT_TAGS note.
+    "num_shares": [
+        "WeightedAverageNumberOfDilutedSharesOutstanding",
+        "WeightedAverageNumberOfSharesOutstandingBasic",
+    ],
     "operating_cash_flow": [
         "NetCashProvidedByUsedInOperatingActivities",
         "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
@@ -114,7 +120,9 @@ _INSTANT_TAGS: dict[str, list[str]] = {
     "receivables": ["AccountsReceivableNetCurrent"],
     "inventory": ["InventoryNet"],
     "other_liabilities": ["OtherLiabilitiesNoncurrent", "OtherLiabilities"],
-    "num_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"],
+    # NOTE: num_shares is a DURATION concept (weighted-avg shares over the period),
+    # NOT an instant — it lives in _ANNUAL_DURATION_TAGS, not here. Picking it as an
+    # instant produced garbage values (e.g. 406 for a ~290M-share filer).
 }
 # equity_capital = CommonStockValue + AdditionalPaidInCapital (summed when both
 # present, else whichever is present). Picked component-wise (instant facts).
@@ -311,6 +319,12 @@ class EdgarClient(SecEdgarBase):
             i = instant.get(fy, {})
             ocf = d.get("operating_cash_flow")
             cap = capex.get(fy)
+            # Weighted-avg diluted shares (duration). Guard against an implausibly
+            # small parse (<1000) — a real share count is millions+; a tiny value
+            # is a malformed/segmented fact, not a usable denominator.
+            num_shares = d.get("num_shares")
+            if num_shares is not None and num_shares < 1000:
+                num_shares = None
             fcf = (ocf - cap) if (ocf is not None and cap is not None) else None
 
             # Profit-before-tax / tax derivations (fall back when a tag is absent).
@@ -361,7 +375,7 @@ class EdgarClient(SecEdgarBase):
                 "tax": self._to_millions(tax),
                 "operating_profit": self._to_millions(d.get("operating_profit")),
                 "depreciation": self._to_millions(d.get("depreciation")),
-                "num_shares": i.get("num_shares"),  # raw count, not scaled
+                "num_shares": num_shares,  # weighted-avg diluted (duration), raw count
                 "net_block": self._to_millions(i.get("net_block")),
                 "cwip": self._to_millions(i.get("cwip")),
                 "cash_and_bank": self._to_millions(i.get("total_cash")),

@@ -129,7 +129,7 @@ def test_refresh_us_pulls_every_source_and_persists(store):
     assert set(summary) == {
         "annual_financials", "quarterly_financials", "daily_prices",
         "valuation_snapshot", "consensus_estimates", "insider_transactions",
-        "institutional_13f", "registry_sector",
+        "institutional_13f", "registry_sector", "company_snapshot",
     }
     assert summary["annual_financials"] == 2
     assert summary["quarterly_financials"] == 1
@@ -139,6 +139,10 @@ def test_refresh_us_pulls_every_source_and_persists(store):
     assert summary["insider_transactions"] == 1
     # 13F skipped by default (manager-indexed)
     assert summary["institutional_13f"] == 0
+    # denormalized snapshot built from the valuation + annual rows just fetched
+    assert summary["company_snapshot"] == 1
+    snap = store.get_us_company_snapshot("AAPL", "NASDAQ")
+    assert snap is not None and snap["currency"] == "USD"
 
     # each source called once with the resolved ticker
     edgar.fetch_company_facts.assert_called_once()

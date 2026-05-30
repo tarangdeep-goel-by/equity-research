@@ -223,6 +223,21 @@ def refresh_us(
         except Exception as e:
             _skip("insider_transactions", str(e))
 
+        # --- 5b. Denormalized company snapshot (peers/benchmarks source) ---
+        # Built from the us_valuation_snapshot + us_annual_financials just
+        # fetched above plus yfinance .info. Non-fatal like every other source.
+        try:
+            from flowtracker.research.us_snapshot_builder import (
+                build_us_company_snapshot,
+            )
+
+            if build_us_company_snapshot(symbol, store):
+                _ok("company_snapshot", 1)
+            else:
+                _skip("company_snapshot", "no data to assemble")
+        except Exception as e:
+            _skip("company_snapshot", str(e))
+
         # --- 6. 13F institutional holdings (manager-indexed) ---
         # 13F is filed by the MANAGER; there is no free issuer→managers reverse
         # index (out of scope per P3.3). Skip unless explicit manager CIKs are

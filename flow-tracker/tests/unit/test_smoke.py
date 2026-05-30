@@ -198,6 +198,8 @@ HELP_COMMANDS = [
     ["breadth", "backfill", "--help"],
     ["breadth", "latest", "--help"],
     ["breadth", "trend", "--help"],
+    ["breadth", "recompute-us", "--help"],
+    ["breadth", "us-latest", "--help"],
 
     # indexpe (added 2026-05-26)
     ["indexpe", "--help"],
