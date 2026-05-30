@@ -1576,6 +1576,27 @@ CREATE TABLE IF NOT EXISTS us_daily_prices (
 CREATE INDEX IF NOT EXISTS idx_us_daily_prices_symbol ON us_daily_prices(symbol, market);
 CREATE INDEX IF NOT EXISTS idx_us_daily_prices_date ON us_daily_prices(date);
 
+-- US market breadth (US add-on, Phase 3). Mirrors `market_breadth_daily` over
+-- the US universe in `us_daily_prices`, grouped by GICS sector. `index_name`
+-- is "US 500" (whole US universe) or "US <sector_key>" (e.g. "US banks").
+-- Computed by `us_breadth_compute.py`; India breadth is untouched.
+CREATE TABLE IF NOT EXISTS us_market_breadth_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    index_name TEXT NOT NULL,
+    total INTEGER NOT NULL,
+    pct_above_200dma REAL,
+    advance INTEGER NOT NULL,
+    decline INTEGER NOT NULL,
+    unchanged INTEGER NOT NULL,
+    new_52w_highs INTEGER NOT NULL,
+    new_52w_lows INTEGER NOT NULL,
+    ad_ratio REAL,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, index_name)
+);
+CREATE INDEX IF NOT EXISTS idx_us_market_breadth_date ON us_market_breadth_daily(date);
+
 CREATE TABLE IF NOT EXISTS us_annual_financials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT NOT NULL,

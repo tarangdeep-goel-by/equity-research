@@ -24,6 +24,7 @@ from flowtracker.breadth_display import (
     display_recompute_result,
 )
 from flowtracker.store import FlowStore
+from flowtracker.us_breadth_compute import compute_us_breadth
 
 app = typer.Typer(
     name="breadth",
@@ -121,6 +122,38 @@ def latest() -> None:
             snap for idx in DEFAULT_INDICES
             if (snap := store.get_breadth_latest(idx)) is not None
         ]
+    display_breadth_latest(snapshots)
+    if not snapshots:
+        raise typer.Exit(1)
+
+
+@app.command(name="recompute-us")
+def recompute_us(
+    target_date: Annotated[
+        str | None,
+        typer.Option("--date", help="YYYY-MM-DD; default = latest US trading day in DB"),
+    ] = None,
+) -> None:
+    """Recompute US market breadth (US 500 + per-GICS-sector) for one date."""
+    with FlowStore() as store:
+        snapshots = compute_us_breadth(store, as_of=target_date)
+        if not snapshots:
+            console.print(
+                "[red]No US breadth produced — check that us_daily_prices and "
+                "the US symbol_registry are populated.[/]"
+            )
+            raise typer.Exit(1)
+        written = store.upsert_us_breadth(snapshots)
+
+    dates = len({s.date for s in snapshots})
+    display_recompute_result(written, dates=dates, indices=len(snapshots))
+
+
+@app.command(name="us-latest")
+def us_latest() -> None:
+    """Show the latest US market breadth (US 500 + per-GICS-sector)."""
+    with FlowStore() as store:
+        snapshots = store.get_us_breadth_latest()
     display_breadth_latest(snapshots)
     if not snapshots:
         raise typer.Exit(1)
