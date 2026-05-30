@@ -321,14 +321,277 @@ def _listed_days(store: FlowStore, symbol: str, as_of: str) -> int | None:
 _BACKFILL_LISTED_DAYS_THRESHOLD = 1500
 
 
-def compute_feature_vector(store: FlowStore, symbol: str, as_of_date: str) -> dict[str, Any]:
+# ---------------------------------------------------------------------------
+# US feature helpers (#17 — market-aware fingerprint)
+# ---------------------------------------------------------------------------
+# US listings lack the India ownership/flow signal (FII/pledge/MF/delivery are
+# India-only; 13F/short-interest/activist are sparse historically), so the US
+# fingerprint is valuation + quality + momentum + size + industry. All inputs
+# come from us_daily_prices + us_annual_financials + us_company_snapshot +
+# symbol_registry. PE history is computed (no stored US PE series) from close /
+# annual EPS. India helpers above are untouched (byte-identical India path).
+
+_US_MARKETS = frozenset({"NASDAQ", "NYSE", "AMEX", "US"})
+
+
+def _resolve_market(store: FlowStore, symbol: str) -> str:
+    """Resolve a symbol's market from the registry (US wins, else NSE)."""
+    for m in ("NASDAQ", "NYSE"):
+        try:
+            if store.get_symbol_registry_entry(symbol.upper(), m):
+                return m
+        except Exception:  # noqa: BLE001 — registry/DB hiccup → India default
+            break
+    return "NSE"
+
+
+def _us_close_at_or_before(store: FlowStore, symbol: str, as_of: str) -> float | None:
+    row = store._conn.execute(
+        "SELECT COALESCE(adj_close, close) AS px FROM us_daily_prices "
+        "WHERE symbol = ? AND date <= ? ORDER BY date DESC LIMIT 1",
+        (symbol.upper(), as_of),
+    ).fetchone()
+    return row["px"] if row and row["px"] else None
+
+
+def _us_pe_series(store: FlowStore, symbol: str, as_of: str, years: int = 10) -> list[float]:
+    """Annual PE series = close near each fiscal-year-end / that FY's EPS.
+
+    First-cut TTM proxy uses annual EPS (densification #5 upgrades to quarterly
+    rolling TTM). Skips non-positive EPS. Strictly <= as_of."""
+    cutoff = (date.fromisoformat(as_of) - timedelta(days=years * 365)).isoformat()
+    rows = store._conn.execute(
+        "SELECT fiscal_year_end, eps FROM us_annual_financials "
+        "WHERE symbol = ? AND fiscal_year_end <= ? AND fiscal_year_end >= ? "
+        "AND eps IS NOT NULL AND eps > 0 ORDER BY fiscal_year_end",
+        (symbol.upper(), as_of, cutoff),
+    ).fetchall()
+    series: list[float] = []
+    for r in rows:
+        close = _us_close_at_or_before(store, symbol, r["fiscal_year_end"])
+        if close is not None and r["eps"]:
+            series.append(round(close / r["eps"], 4))
+    return series
+
+
+def _us_pe_trailing_at(store: FlowStore, symbol: str, as_of: str) -> float | None:
+    """Latest close <= as_of divided by the most recent annual EPS."""
+    close = _us_close_at_or_before(store, symbol, as_of)
+    if close is None:
+        return None
+    row = store._conn.execute(
+        "SELECT eps FROM us_annual_financials WHERE symbol = ? AND fiscal_year_end <= ? "
+        "AND eps IS NOT NULL AND eps > 0 ORDER BY fiscal_year_end DESC LIMIT 1",
+        (symbol.upper(), as_of),
+    ).fetchone()
+    if not row or not row["eps"]:
+        return None
+    return round(close / row["eps"], 2)
+
+
+def _us_pe_percentile(store: FlowStore, symbol: str, as_of: str, years: int = 10) -> float | None:
+    series = _us_pe_series(store, symbol, as_of, years)
+    if len(series) < 8:
+        return None
+    current = series[-1]
+    below = sum(1 for v in series if v <= current)
+    return round(below / len(series) * 100, 2)
+
+
+def _us_roce_at(store: FlowStore, symbol: str, as_of: str, years_back: int = 0) -> float | None:
+    """ROCE = net_income / (total_equity + total_debt) from us_annual_financials."""
+    target = (date.fromisoformat(as_of) - timedelta(days=years_back * 365)).isoformat()
+    row = store._conn.execute(
+        "SELECT net_income, total_equity, total_debt FROM us_annual_financials "
+        "WHERE symbol = ? AND fiscal_year_end <= ? ORDER BY fiscal_year_end DESC LIMIT 1",
+        (symbol.upper(), target),
+    ).fetchone()
+    if not row or row["net_income"] is None:
+        return None
+    cap = (row["total_equity"] or 0) + (row["total_debt"] or 0)
+    if cap <= 0:
+        return None
+    return round(row["net_income"] / cap * 100, 2)
+
+
+def _us_revenue_cagr_3yr(store: FlowStore, symbol: str, as_of: str) -> float | None:
+    rows = store._conn.execute(
+        "SELECT revenue FROM us_annual_financials WHERE symbol = ? "
+        "AND fiscal_year_end <= ? AND revenue IS NOT NULL "
+        "ORDER BY fiscal_year_end DESC LIMIT 4",
+        (symbol.upper(), as_of),
+    ).fetchall()
+    if len(rows) < 4:
+        return None
+    latest, earliest = rows[0]["revenue"], rows[3]["revenue"]
+    if earliest is None or earliest <= 0 or latest is None:
+        return None
+    return round(((latest / earliest) ** (1 / 3) - 1) * 100, 2)
+
+
+def _us_opm_trend(store: FlowStore, symbol: str, as_of: str) -> float | None:
+    """Annual operating-margin slope (pp/yr) over the last 4 FYs.
+
+    US first cut uses annual cadence (vs India's 8-quarter slope) since
+    us_quarterly_financials carries no operating_profit. Densification can move
+    to quarterly once that lands."""
+    rows = store._conn.execute(
+        "SELECT operating_profit, revenue FROM us_annual_financials "
+        "WHERE symbol = ? AND fiscal_year_end <= ? AND operating_profit IS NOT NULL "
+        "AND revenue IS NOT NULL AND revenue > 0 ORDER BY fiscal_year_end DESC LIMIT 4",
+        (symbol.upper(), as_of),
+    ).fetchall()
+    if len(rows) < 3:
+        return None
+    ys = [(r["operating_profit"] / r["revenue"]) * 100 for r in reversed(rows)]
+    n = len(ys)
+    xs = list(range(n))
+    mean_x, mean_y = sum(xs) / n, sum(ys) / n
+    den = sum((xs[i] - mean_x) ** 2 for i in range(n))
+    if not den:
+        return None
+    num = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n))
+    return round(num / den, 3)
+
+
+def _us_price_vs_sma200(store: FlowStore, symbol: str, as_of: str) -> float | None:
+    rows = store._conn.execute(
+        "SELECT COALESCE(adj_close, close) AS px FROM us_daily_prices "
+        "WHERE symbol = ? AND date <= ? ORDER BY date DESC LIMIT 200",
+        (symbol.upper(), as_of),
+    ).fetchall()
+    if len(rows) < 200:
+        return None
+    closes = [r["px"] for r in rows]
+    sma200 = sum(closes) / 200
+    return round(closes[0] / sma200, 3) if sma200 > 0 else None
+
+
+def _us_rsi_14(store: FlowStore, symbol: str, as_of: str) -> float | None:
+    rows = store._conn.execute(
+        "SELECT COALESCE(adj_close, close) AS px FROM us_daily_prices "
+        "WHERE symbol = ? AND date <= ? ORDER BY date DESC LIMIT 15",
+        (symbol.upper(), as_of),
+    ).fetchall()
+    if len(rows) < 15:
+        return None
+    closes = [r["px"] for r in rows]
+    gains, losses = [], []
+    for i in range(14):
+        diff = closes[i] - closes[i + 1]
+        gains.append(max(diff, 0.0))
+        losses.append(max(-diff, 0.0))
+    avg_g, avg_l = sum(gains) / 14, sum(losses) / 14
+    if avg_l == 0:
+        return 100.0
+    rs = avg_g / avg_l
+    return round(100 - (100 / (1 + rs)), 2)
+
+
+def _us_mcap_bucket(store: FlowStore, symbol: str, as_of: str) -> str | None:
+    """USD size bucket from close × shares_outstanding (USD millions).
+    largecap >= $10bn, midcap >= $2bn, else smallcap."""
+    close = _us_close_at_or_before(store, symbol, as_of)
+    if close is None:
+        return None
+    row = store._conn.execute(
+        "SELECT shares_outstanding FROM us_annual_financials "
+        "WHERE symbol = ? AND fiscal_year_end <= ? AND shares_outstanding IS NOT NULL "
+        "AND shares_outstanding > 0 ORDER BY fiscal_year_end DESC LIMIT 1",
+        (symbol.upper(), as_of),
+    ).fetchone()
+    if not row or not row["shares_outstanding"]:
+        return None
+    mcap_mn = (close * row["shares_outstanding"]) / 1e6
+    if mcap_mn >= 10_000:
+        return "largecap"
+    if mcap_mn >= 2_000:
+        return "midcap"
+    return "smallcap"
+
+
+def _us_industry(store: FlowStore, symbol: str, market: str) -> str | None:
+    entry = store.get_symbol_registry_entry(symbol.upper(), market) or {}
+    ind = (entry.get("industry") or "").strip()
+    return ind or None
+
+
+def _us_listed_days(store: FlowStore, symbol: str, as_of: str) -> int | None:
+    row = store._conn.execute(
+        "SELECT MIN(date) AS first_date FROM us_daily_prices WHERE symbol = ?",
+        (symbol.upper(),),
+    ).fetchone()
+    if not row or not row["first_date"]:
+        return None
+    try:
+        delta = (date.fromisoformat(as_of) - date.fromisoformat(row["first_date"])).days
+    except (ValueError, TypeError):
+        return None
+    return delta if delta >= 0 else None
+
+
+def _compute_us_feature_vector(store: FlowStore, symbol: str, as_of_date: str, market: str) -> dict[str, Any]:
+    """US fingerprint: valuation + quality + momentum + size + industry.
+
+    India-only ownership/flow dims (promoter/fii/mf/pledge/delivery) are None —
+    ``feature_distance`` skips None dims, so US analogs match on the dims that
+    actually carry. Same dict shape as the India vector for a uniform consumer."""
+    symbol = symbol.upper()
+    roce_now = _us_roce_at(store, symbol, as_of_date, years_back=0)
+    roce_3yr = _us_roce_at(store, symbol, as_of_date, years_back=3)
+    roce_3yr_delta = (roce_now - roce_3yr) if (roce_now is not None and roce_3yr is not None) else None
+    listed_days = _us_listed_days(store, symbol, as_of_date)
+    is_backfilled = (
+        listed_days is not None
+        and listed_days < _BACKFILL_LISTED_DAYS_THRESHOLD
+        and roce_3yr_delta is not None
+    )
+    industry = _us_industry(store, symbol, market)
+    return {
+        "pe_trailing": _us_pe_trailing_at(store, symbol, as_of_date),
+        "pe_percentile_10y": _us_pe_percentile(store, symbol, as_of_date),
+        "roce_current": roce_now,
+        "roce_3yr_delta": roce_3yr_delta,
+        "revenue_cagr_3yr": _us_revenue_cagr_3yr(store, symbol, as_of_date),
+        "opm_trend": _us_opm_trend(store, symbol, as_of_date),
+        # India-only ownership/flow dims — absent for US listings.
+        "promoter_pct": None,
+        "fii_pct": None,
+        "fii_delta_2q": None,
+        "mf_pct": None,
+        "mf_delta_2q": None,
+        "pledge_pct": None,
+        "price_vs_sma200": _us_price_vs_sma200(store, symbol, as_of_date),
+        "delivery_pct_6m": None,
+        "rsi_14": _us_rsi_14(store, symbol, as_of_date),
+        "industry": industry,
+        "mcap_bucket": _us_mcap_bucket(store, symbol, as_of_date),
+        "listed_days": listed_days,
+        "is_backfilled": is_backfilled,
+        "industry_as_of_date": as_of_date if industry is not None else None,
+        "industry_source": "current_fallback" if industry is not None else None,
+    }
+
+
+def compute_feature_vector(
+    store: FlowStore, symbol: str, as_of_date: str, *, market: str | None = None,
+) -> dict[str, Any]:
     """Build the 16-feature vector for (symbol, as_of_date).
 
     Strict temporal cutoff: every query uses `<= as_of_date`. Any field that
     can't be computed (missing data) is None; consumers handle None as
     "feature unavailable" rather than failing.
+
+    ``market`` selects the fingerprint source. When None it is resolved from the
+    registry. US listings (NASDAQ/NYSE) use the US fingerprint (valuation +
+    quality + momentum + size + industry; ownership dims None). India is
+    byte-identical to before.
     """
     symbol = symbol.upper()
+    if market is None:
+        market = _resolve_market(store, symbol)
+    if market in _US_MARKETS:
+        return _compute_us_feature_vector(store, symbol, as_of_date, market)
 
     promoter = _pct_at_or_before(store, symbol, "Promoter", as_of_date)
     fii_now = _pct_at_or_before(store, symbol, "FII", as_of_date)
@@ -390,9 +653,16 @@ def compute_feature_vector(store: FlowStore, symbol: str, as_of_date: str) -> di
 # ---------------------------------------------------------------------------
 
 
-def _price_at_or_before(store: FlowStore, symbol: str, target_date: str) -> float | None:
+def _price_table(market: str) -> str:
+    """The daily-price table for a market: us_daily_prices for US, else India."""
+    return "us_daily_prices" if market in _US_MARKETS else "daily_stock_data"
+
+
+def _price_at_or_before(
+    store: FlowStore, symbol: str, target_date: str, *, market: str = "NSE",
+) -> float | None:
     row = store._conn.execute(
-        "SELECT COALESCE(adj_close, close) AS px FROM daily_stock_data "
+        f"SELECT COALESCE(adj_close, close) AS px FROM {_price_table(market)} "
         "WHERE symbol = ? AND date <= ? ORDER BY date DESC LIMIT 1",
         (symbol.upper(), target_date),
     ).fetchone()
@@ -401,6 +671,7 @@ def _price_at_or_before(store: FlowStore, symbol: str, target_date: str) -> floa
 
 def _price_at_or_after(
     store: FlowStore, symbol: str, target_date: str, max_gap_days: int = 30,
+    *, market: str = "NSE",
 ) -> float | None:
     """First adj_close at or after ``target_date``, capped at ``+max_gap_days``.
 
@@ -415,7 +686,7 @@ def _price_at_or_after(
         date.fromisoformat(target_date) + timedelta(days=max_gap_days)
     ).isoformat()
     row = store._conn.execute(
-        "SELECT COALESCE(adj_close, close) AS px FROM daily_stock_data "
+        f"SELECT COALESCE(adj_close, close) AS px FROM {_price_table(market)} "
         "WHERE symbol = ? AND date >= ? AND date <= ? ORDER BY date ASC LIMIT 1",
         (symbol.upper(), target_date, upper),
     ).fetchone()
@@ -423,11 +694,11 @@ def _price_at_or_after(
 
 
 def _fwd_return(
-    store: FlowStore, symbol: str, from_date: str, days: int,
+    store: FlowStore, symbol: str, from_date: str, days: int, *, market: str = "NSE",
 ) -> float | None:
-    start = _price_at_or_before(store, symbol, from_date)
+    start = _price_at_or_before(store, symbol, from_date, market=market)
     target_date = (date.fromisoformat(from_date) + timedelta(days=days)).isoformat()
-    end = _price_at_or_after(store, symbol, target_date)
+    end = _price_at_or_after(store, symbol, target_date, market=market)
     if start is None or end is None or start <= 0:
         return None
     return round((end - start) / start * 100, 2)
@@ -448,24 +719,33 @@ def compute_forward_returns(
     store: FlowStore, symbol: str, as_of_date: str,
     sector_proxy_symbol: str | None = None,
     nifty_proxy_symbol: str = "NIFTY",
+    *, market: str | None = None,
 ) -> dict[str, Any]:
     """Compute 3m/6m/12m forward returns + excess vs sector + excess vs Nifty.
-    Reads adj_close so splits/bonuses after as_of_date don't phantom-distort."""
-    r3 = _fwd_return(store, symbol, as_of_date, 90)
-    r6 = _fwd_return(store, symbol, as_of_date, 180)
-    r12 = _fwd_return(store, symbol, as_of_date, 365)
+    Reads adj_close so splits/bonuses after as_of_date don't phantom-distort.
+
+    ``market`` selects the price table (us_daily_prices for US). For US the
+    excess-vs-sector / vs-index columns are left None in this first cut — US
+    sector/index benchmarks land with #14/#16 (densification #4). India is
+    byte-identical."""
+    if market is None:
+        market = _resolve_market(store, symbol)
+    is_us = market in _US_MARKETS
+    r3 = _fwd_return(store, symbol, as_of_date, 90, market=market)
+    r6 = _fwd_return(store, symbol, as_of_date, 180, market=market)
+    r12 = _fwd_return(store, symbol, as_of_date, 365, market=market)
 
     excess_12m_vs_nifty = None
-    if r12 is not None:
-        nifty_r12 = _fwd_return(store, nifty_proxy_symbol, as_of_date, 365)
+    if r12 is not None and not is_us:
+        nifty_r12 = _fwd_return(store, nifty_proxy_symbol, as_of_date, 365, market=market)
         if nifty_r12 is not None:
             excess_12m_vs_nifty = round(r12 - nifty_r12, 2)
 
     excess_3m_vs_sector = None
     excess_12m_vs_sector = None
-    if sector_proxy_symbol:
-        sec_r3 = _fwd_return(store, sector_proxy_symbol, as_of_date, 90)
-        sec_r12 = _fwd_return(store, sector_proxy_symbol, as_of_date, 365)
+    if sector_proxy_symbol and not is_us:
+        sec_r3 = _fwd_return(store, sector_proxy_symbol, as_of_date, 90, market=market)
+        sec_r12 = _fwd_return(store, sector_proxy_symbol, as_of_date, 365, market=market)
         if r3 is not None and sec_r3 is not None:
             excess_3m_vs_sector = round(r3 - sec_r3, 2)
         if r12 is not None and sec_r12 is not None:
@@ -526,12 +806,15 @@ def feature_distance(
     return math.sqrt(sq_sum / contributing * len(_CONT_FEATURES))
 
 
-def _industry_medians(store: FlowStore, industry: str | None) -> dict[str, float]:
-    """Per-feature median across historical_states. When ``industry`` is given
-    and contains at least 8 rows, medians are computed within that industry;
-    otherwise the universe-wide median is used (broader signal, noisier
-    feature-level values).
+def _industry_medians(
+    store: FlowStore, industry: str | None, *, market: str = "NSE",
+) -> dict[str, float]:
+    """Per-feature median across historical_states FOR ``market``. When
+    ``industry`` is given and contains at least 8 rows, medians are computed
+    within that industry; otherwise the market-wide median is used (broader
+    signal, noisier feature-level values).
 
+    Market-scoped so India rows never impute US positions (and vice-versa).
     Used by ``retrieve_top_k_analogs`` to impute NULL positions in
     ``feature_distance`` so sparse candidates don't surface as false-positive
     top analogs under the skip-on-None bias.
@@ -542,14 +825,16 @@ def _industry_medians(store: FlowStore, industry: str | None) -> dict[str, float
         if industry is not None:
             row = store._conn.execute(
                 f"SELECT {feat} AS v FROM historical_states "
-                f"WHERE industry = ? AND {feat} IS NOT NULL",
-                (industry,),
+                f"WHERE market = ? AND industry = ? AND {feat} IS NOT NULL",
+                (market, industry),
             ).fetchall()
             if len(row) < 8:
                 row = None
         if row is None:
             row = store._conn.execute(
-                f"SELECT {feat} AS v FROM historical_states WHERE {feat} IS NOT NULL",
+                f"SELECT {feat} AS v FROM historical_states "
+                f"WHERE market = ? AND {feat} IS NOT NULL",
+                (market,),
             ).fetchall()
         vals = [r["v"] for r in row]
         if vals:
@@ -560,14 +845,17 @@ def _industry_medians(store: FlowStore, industry: str | None) -> dict[str, float
     return medians
 
 
-def _universe_stds(store: FlowStore) -> dict[str, float]:
-    """Per-feature stdev across the whole historical_states table.
+def _universe_stds(store: FlowStore, *, market: str = "NSE") -> dict[str, float]:
+    """Per-feature stdev across historical_states FOR ``market``.
     Used to z-score the distance metric so pe_trailing (wide range) doesn't
-    dominate pledge_pct (narrow range)."""
+    dominate pledge_pct (narrow range). Market-scoped so US/India z-scores stay
+    independent (and the India universe stays byte-identical pre-US-data)."""
     stds: dict[str, float] = {}
     for feat in _CONT_FEATURES:
         rows = store._conn.execute(
-            f"SELECT {feat} AS v FROM historical_states WHERE {feat} IS NOT NULL"
+            f"SELECT {feat} AS v FROM historical_states "
+            f"WHERE market = ? AND {feat} IS NOT NULL",
+            (market,),
         ).fetchall()
         vals = [r["v"] for r in rows]
         if len(vals) >= 2:
@@ -596,6 +884,7 @@ def _run_retrieval_query(
     mcap_bucket: str | None,
     use_industry: bool,
     use_mcap: bool,
+    market: str = "NSE",
 ) -> list[dict[str, Any]]:
     sql = """
         SELECT
@@ -613,9 +902,10 @@ def _run_retrieval_query(
         FROM historical_states hs
         LEFT JOIN analog_forward_returns afr
           ON afr.symbol = hs.symbol AND afr.as_of_date = hs.quarter_end
-        WHERE 1=1
+          AND afr.market = hs.market
+        WHERE hs.market = ?
     """
-    args: list[Any] = []
+    args: list[Any] = [market]
     if use_industry and industry is not None:
         sql += " AND hs.industry = ?"
         args.append(industry)
@@ -635,6 +925,8 @@ def retrieve_top_k_analogs(
     k: int = 20,
     exclusion_years: int = 2,
     min_unique_symbols: int = 5,
+    *,
+    market: str | None = None,
 ) -> dict[str, Any]:
     """Retrieve top-K analogs with a similarity-ring fallback.
 
@@ -658,13 +950,15 @@ def retrieve_top_k_analogs(
     """
     industry = target_features.get("industry")
     mcap_bucket = target_features.get("mcap_bucket")
+    if market is None:
+        market = _resolve_market(store, target_symbol)
 
     cutoff_date = (
         date.fromisoformat(target_date) - timedelta(days=exclusion_years * 365)
     ).isoformat()
 
-    stds = _universe_stds(store)
-    medians = _industry_medians(store, industry)
+    stds = _universe_stds(store, market=market)
+    medians = _industry_medians(store, industry, market=market)
 
     last_scored: list[dict[str, Any]] = []
     last_level = 0
@@ -678,6 +972,7 @@ def retrieve_top_k_analogs(
             mcap_bucket=mcap_bucket,
             use_industry=use_industry,
             use_mcap=use_mcap,
+            market=market,
         )
         scored: list[dict[str, Any]] = []
         for row in rows:

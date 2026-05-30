@@ -2740,8 +2740,9 @@ MACRO_AGENT_TOOLS = [
     annotations=READ_ONLY,
 )
 async def get_setup_feature_vector(args):
-    if _is_us_symbol(args["symbol"]):
-        return _us_not_applicable("get_setup_feature_vector", "India historical-analog cohort", args["symbol"], args)
+    # US listings use a market-aware fingerprint (valuation + quality + momentum +
+    # size + industry; ownership/flow dims are null — no US equivalent of
+    # FII/pledge/MF/delivery). India is unchanged.
     with ResearchDataAPI() as api:
         data = api.get_setup_feature_vector(args["symbol"], args.get("as_of_date"))
     return _with_dedup("get_setup_feature_vector",
@@ -2767,8 +2768,9 @@ async def get_historical_analogs(args):
     ``analog_count``, ``relaxation_level`` (0/1/2), ``relaxation_label``
     (strict/industry_only/mcap_only), ``unique_symbols``, ``gross_count``.
     """
-    if _is_us_symbol(args["symbol"]):
-        return _us_not_applicable("get_historical_analogs", "India historical-analog cohort", args["symbol"], args)
+    # Market-aware: US targets retrieve from the US cohort (market-isolated
+    # z-scores); US analogs carry absolute forward returns (excess-vs-sector/
+    # index is India-only until US benchmarks land). India is unchanged.
     with ResearchDataAPI() as api:
         data = api.get_historical_analogs(
             args["symbol"], args.get("k", 20), args.get("as_of_date"),
@@ -2790,8 +2792,7 @@ async def get_historical_analogs(args):
     annotations=READ_ONLY,
 )
 async def get_analog_cohort_stats(args):
-    if _is_us_symbol(args["symbol"]):
-        return _us_not_applicable("get_analog_cohort_stats", "India historical-analog cohort", args["symbol"], args)
+    # Market-aware: US targets aggregate over the US cohort. India unchanged.
     with ResearchDataAPI() as api:
         data = api.get_analog_cohort_stats(
             args["symbol"], args.get("k", 50), args.get("as_of_date"),
