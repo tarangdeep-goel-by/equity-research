@@ -71,6 +71,7 @@ def refresh_us(
     console: Console | None = None,
     *,
     manager_ciks: list[str] | None = None,
+    skip_insider: bool = False,
 ) -> dict[str, int]:
     """Fetch fresh US data for ``symbol`` into the ``us_*`` tables.
 
@@ -210,18 +211,25 @@ def refresh_us(
             _skip("consensus_estimates", str(e))
 
         # --- 5. Insider transactions (EDGAR Form 4) ---
-        try:
-            from flowtracker.edgar_ownership import EdgarOwnershipClient
+        # Form 4 pulls dozens of individual archive XMLs per symbol — the slowest
+        # source and the main EDGAR-throttle pressure. skip_insider=True (bulk
+        # universe backfill) drops it so workers can scale; insider depth is not
+        # used by snapshots/peers/breadth and can be backfilled separately.
+        if skip_insider:
+            _skip("insider_transactions", "skipped (skip_insider)")
+        else:
+            try:
+                from flowtracker.edgar_ownership import EdgarOwnershipClient
 
-            with EdgarOwnershipClient() as oc:
-                trades = oc.fetch_insider_transactions(symbol, cik=cik, market=market)
-            if trades:
-                store.upsert_us_insider_transactions(trades)
-                _ok("insider_transactions", len(trades))
-            else:
-                _skip("insider_transactions", "no data")
-        except Exception as e:
-            _skip("insider_transactions", str(e))
+                with EdgarOwnershipClient() as oc:
+                    trades = oc.fetch_insider_transactions(symbol, cik=cik, market=market)
+                if trades:
+                    store.upsert_us_insider_transactions(trades)
+                    _ok("insider_transactions", len(trades))
+                else:
+                    _skip("insider_transactions", "no data")
+            except Exception as e:
+                _skip("insider_transactions", str(e))
 
         # --- 5b. Denormalized company snapshot (peers/benchmarks source) ---
         # Built from the us_valuation_snapshot + us_annual_financials just

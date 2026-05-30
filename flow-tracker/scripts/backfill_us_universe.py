@@ -126,7 +126,7 @@ def _process(symbol: str, total: int) -> None:
                 _counts["skipped"] += 1
                 _counts["n"] += 1
             return
-        summary = refresh_us(symbol, store=store)
+        summary = refresh_us(symbol, store=store, skip_insider=True)
         got = {k: v for k, v in summary.items() if v}
         with _lock:
             _counts["built"] += 1
