@@ -15,6 +15,16 @@ import pytest
 from flowtracker.research.us_refresh import refresh_us
 
 
+@pytest.fixture(autouse=True)
+def _stub_short_interest():
+    """Default-stub the Nasdaq short-interest fetch to [] so no test in this
+    module touches the network. The happy-path test overrides this with its own
+    `with patch(...)` (which takes precedence inside its block)."""
+    with patch("flowtracker.us_short_interest_client.fetch_us_short_interest",
+               return_value=[]):
+        yield
+
+
 # --------------------------------------------------------------------------- #
 # Canned rows (keyed for the us_* upserts)
 # --------------------------------------------------------------------------- #
@@ -79,6 +89,17 @@ def _13f_rows() -> list[dict]:
     ]
 
 
+def _short_interest_rows() -> list[dict]:
+    return [
+        {"symbol": "AAPL", "market": "NASDAQ", "currency": "USD",
+         "settlement_date": "2026-05-15", "short_interest": 138_782_718.0,
+         "avg_daily_volume": 50_565_316.0, "days_to_cover": 2.74},
+        {"symbol": "AAPL", "market": "NASDAQ", "currency": "USD",
+         "settlement_date": "2026-04-30", "short_interest": 134_675_274.0,
+         "avg_daily_volume": 45_944_025.0, "days_to_cover": 2.93},
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Patch helpers
 # --------------------------------------------------------------------------- #
@@ -122,7 +143,8 @@ def test_refresh_us_pulls_every_source_and_persists(store):
          patch("flowtracker.fund_client.FundClient._info", return_value={"sector": "Technology"}), \
          patch("flowtracker.us_ingest.fetch_us_daily_prices", return_value=_price_rows()), \
          patch("flowtracker.us_ingest.fetch_us_valuation_snapshot", return_value=_valuation_row()), \
-         patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()):
+         patch("flowtracker.us_ingest.fetch_us_consensus_estimates", return_value=_consensus_row()), \
+         patch("flowtracker.us_short_interest_client.fetch_us_short_interest", return_value=_short_interest_rows()):
         summary = refresh_us("AAPL", store=store)
 
     # summary dict carries the expected source keys
@@ -130,6 +152,7 @@ def test_refresh_us_pulls_every_source_and_persists(store):
         "annual_financials", "quarterly_financials", "daily_prices",
         "valuation_snapshot", "consensus_estimates", "insider_transactions",
         "institutional_13f", "registry_sector", "company_snapshot",
+        "short_interest",
     }
     assert summary["annual_financials"] == 2
     assert summary["quarterly_financials"] == 1
@@ -141,6 +164,9 @@ def test_refresh_us_pulls_every_source_and_persists(store):
     assert summary["institutional_13f"] == 0
     # denormalized snapshot built from the valuation + annual rows just fetched
     assert summary["company_snapshot"] == 1
+    # short interest persisted (2 settlement dates)
+    assert summary["short_interest"] == 2
+    assert len(store.get_us_short_interest("AAPL")) == 2
     snap = store.get_us_company_snapshot("AAPL", "NASDAQ")
     assert snap is not None and snap["currency"] == "USD"
 

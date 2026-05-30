@@ -72,6 +72,7 @@ def refresh_us(
     *,
     manager_ciks: list[str] | None = None,
     skip_insider: bool = False,
+    skip_short_interest: bool = False,
 ) -> dict[str, int]:
     """Fetch fresh US data for ``symbol`` into the ``us_*`` tables.
 
@@ -268,6 +269,25 @@ def refresh_us(
                     _skip("institutional_13f", f"no {symbol} holdings in {len(manager_ciks)} manager(s)")
             except Exception as e:
                 _skip("institutional_13f", str(e))
+
+        # --- 7. Short interest (Nasdaq, bi-monthly) ---
+        # One lightweight JSON call per symbol → full settlement-date history of
+        # shares short + days-to-cover. Cheap enough to run on every research
+        # refresh; skip_short_interest lets the bulk universe backfill opt out.
+        if skip_short_interest:
+            _skip("short_interest", "skipped (skip_short_interest)")
+        else:
+            try:
+                from flowtracker.us_short_interest_client import fetch_us_short_interest
+
+                si_rows = fetch_us_short_interest(symbol, market=market)
+                if si_rows:
+                    store.upsert_us_short_interest(si_rows)
+                    _ok("short_interest", len(si_rows))
+                else:
+                    _skip("short_interest", "no data")
+            except Exception as e:
+                _skip("short_interest", str(e))
     finally:
         if own_store:
             store.close()

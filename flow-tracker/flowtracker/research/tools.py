@@ -2039,6 +2039,60 @@ def _india_not_applicable_13f(symbol: str, args: dict) -> dict:
     )
 
 
+@tool(
+    "get_short_interest",
+    "US short interest — bi-monthly settlement-date history of shares sold short, "
+    "average daily share volume, and days-to-cover (short_interest / avg_daily_volume), "
+    "most-recent settlement first. Rising short interest + high days-to-cover signals "
+    "bearish positioning / short-squeeze potential. This is a US ownership-depth metric "
+    "with no India analogue (FINRA/Nasdaq disclosure); for an India (NSE) symbol it "
+    "returns status='not_applicable'. Optional: periods (default 12 settlement dates ≈ 6 months).",
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "US ticker (NASDAQ/NYSE), uppercase."},
+            "periods": {"type": "integer", "description": "Cap on settlement dates returned (default 12)."},
+        },
+        "required": ["symbol"],
+    },
+    annotations=READ_ONLY,
+)
+async def get_short_interest(args):
+    symbol = args["symbol"].upper()
+    if not _is_us_symbol(symbol):
+        return _india_not_applicable_short_interest(symbol, args)
+    with ResearchDataAPI() as api:
+        rows = api.get_short_interest(symbol, args.get("periods", 12))
+    data = {"symbol": symbol, "short_interest": rows}
+    return _with_dedup("get_short_interest", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+def _india_not_applicable_short_interest(symbol: str, args: dict) -> dict:
+    """'n/a for India' envelope for the US-only short-interest tool."""
+    from datetime import date
+    payload = {
+        "status": "not_applicable",
+        "market": "NSE",
+        "symbol": symbol,
+        "reason": (
+            "Short interest is a US FINRA/Nasdaq disclosure with no India equivalent; "
+            f"not applicable for NSE-listed {symbol}. India short positioning is only "
+            "observable indirectly (F&O OI / delivery %)."
+        ),
+        "_meta": {
+            "as_of_date": str(date.today()),
+            "status": "not_applicable",
+            "count": 0,
+            "data_freshness": None,
+        },
+    }
+    return _with_dedup(
+        "get_short_interest",
+        {"content": [{"type": "text", "text": json.dumps(payload, default=str)}]},
+        args,
+    )
+
+
 def _get_company_context_section(api, symbol, section, args, is_us=False):
     """Route a single section for get_company_context.
 
@@ -2570,6 +2624,7 @@ OWNERSHIP_AGENT_TOOLS = [
     get_fundamentals, render_chart, calculate,
     get_annual_report,
     get_institutional_ownership,  # US 13F ownership (n/a for India)
+    get_short_interest,           # US short interest / days-to-cover (n/a for India)
 ]
 
 VALUATION_AGENT_TOOLS = [
