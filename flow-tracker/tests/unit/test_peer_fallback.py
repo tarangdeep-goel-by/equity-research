@@ -6,6 +6,10 @@ from flowtracker.research.data_api import ResearchDataAPI
 def _make_api(subject_snap, peer_links, peer_snaps, screener_peers, screener_snaps):
     """Build a ResearchDataAPI with a mocked store for fallback tests."""
     store = MagicMock()
+    # No registry entry → _market_of resolves NSE (these are India symbols), matching
+    # production. Without this the bare MagicMock returns a truthy entry, so _is_us
+    # would mis-route to the US peer path.
+    store.get_symbol_registry_entry.return_value = None
     store.get_company_snapshot.return_value = subject_snap
     store.get_peer_links.return_value = peer_links
     store.get_peers.return_value = screener_peers

@@ -1722,6 +1722,46 @@ CREATE TABLE IF NOT EXISTS us_institutional_holdings (
 );
 CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_symbol ON us_institutional_holdings(symbol, market);
 CREATE INDEX IF NOT EXISTS idx_us_institutional_holdings_cik ON us_institutional_holdings(manager_cik);
+
+-- Denormalized per-company snapshot for US listings — the single source of
+-- truth for US peers / benchmarks / valuation-matrix, mirroring the market-
+-- relevant subset of the India `company_snapshot` table plus market/currency.
+-- India-only fields (promoter_holding/pledge/sales_qtr/qtr_var) are omitted.
+-- Built by research/us_snapshot_builder.py from us_valuation_snapshot +
+-- yfinance .info + us_annual_financials. Monetary aggregates are USD millions;
+-- margins/returns/growth are percent form; ratios (pe/pb/peg/beta/d-e) are raw.
+CREATE TABLE IF NOT EXISTS us_company_snapshot (
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    name TEXT,
+    industry TEXT,
+    cmp REAL,
+    market_cap REAL,
+    pe_trailing REAL,
+    pe_forward REAL,
+    pb REAL,
+    ev_ebitda REAL,
+    peg REAL,
+    div_yield REAL,
+    operating_margin REAL,
+    net_margin REAL,
+    roe REAL,
+    roa REAL,
+    roce REAL,
+    roic REAL,
+    fcf_yield REAL,
+    revenue_growth REAL,
+    earnings_growth REAL,
+    beta REAL,
+    debt_to_equity REAL,
+    current_ratio REAL,
+    high_52w REAL,
+    low_52w REAL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY(symbol, market)
+);
+CREATE INDEX IF NOT EXISTS idx_us_company_snapshot_market ON us_company_snapshot(market);
 """
 
 

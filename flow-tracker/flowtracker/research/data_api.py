@@ -960,6 +960,64 @@ class ResearchDataAPI:
                 return mapped
         return (entry.get("sector") or entry.get("gics") or "").strip() or None
 
+    def _us_peer_symbols(self, symbol: str) -> list[str]:
+        """US peer universe: other registered US listings in the SAME sector.
+
+        The peer set is every ``symbol_registry`` row whose market is NASDAQ or
+        NYSE and whose resolved sector matches the subject's, excluding the
+        subject itself. Sector is resolved via ``get_sector_for_symbol`` over the
+        granular registry industry (``_get_industry``) — the same routing India
+        uses — so 'Semiconductors' and 'Software - Infrastructure' both bucket
+        into the 'tech' sector key. The universe grows as more US symbols are
+        registered/backfilled. India is never reached (caller gates on _is_us).
+        """
+        from flowtracker.research.sector_kpis import get_sector_for_symbol
+
+        subject_sector = get_sector_for_symbol(symbol, self._get_industry(symbol))
+
+        peers: list[str] = []
+        for market in ("NASDAQ", "NYSE"):
+            for entry in self._store.get_symbol_registry(market=market):
+                cand = (entry.get("symbol") or "").upper()
+                if not cand or cand == symbol.upper():
+                    continue
+                cand_industry = (
+                    self._us_industry_from_registry(cand)
+                    or entry.get("industry")
+                    or entry.get("sector")
+                    or entry.get("gics")
+                )
+                cand_sector = get_sector_for_symbol(cand, cand_industry)
+                # When neither side resolves to a known sector key, fall back to
+                # a case-insensitive industry-string match so an all-unknown
+                # cohort (e.g. an industry sector_kpis doesn't map) still buckets.
+                if subject_sector is not None or cand_sector is not None:
+                    if cand_sector == subject_sector:
+                        peers.append(cand)
+                elif (cand_industry or "").strip().lower() == (
+                    self._get_industry(symbol) or ""
+                ).strip().lower():
+                    peers.append(cand)
+        return peers
+
+    def _us_peer_snapshots(self, peer_syms: list[str]) -> list[dict]:
+        """Read us_company_snapshot rows for the given peers across both US markets.
+
+        Peers may straddle NASDAQ and NYSE, so query each market and merge (a
+        symbol resolves to exactly one (symbol, market) row). Returns rows sorted
+        by symbol for determinism.
+        """
+        if not peer_syms:
+            return []
+        out: list[dict] = []
+        seen: set[str] = set()
+        for market in ("NASDAQ", "NYSE"):
+            for snap in self._store.get_us_company_snapshots(peer_syms, market):
+                if snap["symbol"] not in seen:
+                    seen.add(snap["symbol"])
+                    out.append(snap)
+        return sorted(out, key=lambda s: s["symbol"])
+
     def _is_bfsi(self, symbol: str) -> bool:
         return self._get_industry(symbol) in _BFSI_INDUSTRIES
 
@@ -3503,6 +3561,11 @@ class ResearchDataAPI:
         still {subject, peers, peer_count, source}. Peers from the fallback
         path have `screener_fallback=true` and no `yahoo_score`.
         """
+        # US add-on: same-sector US peers from us_company_snapshot. India path
+        # (Yahoo peer_links + Screener fallback) is byte-identical below.
+        if self._is_us(symbol):
+            return self._us_peer_comparison(symbol)
+
         subject = self._store.get_company_snapshot(symbol) or {"symbol": symbol}
         subject_industry = (subject.get("industry") or "").strip().lower()
 
@@ -3550,6 +3613,43 @@ class ResearchDataAPI:
             "peers": _clean(peer_snapshots),
             "peer_count": len(peer_snapshots),
             "source": "yahoo_recommendations",
+        }
+
+    def _us_peer_comparison(self, symbol: str) -> dict:
+        """Peer comparison for a US listing vs same-sector US peers.
+
+        Peer universe is every registered US listing in the subject's resolved
+        sector (``_us_peer_symbols``); their data comes from us_company_snapshot.
+        Returns the same {subject, peers, peer_count, source} shape as India when
+        >=2 peers have snapshots. With <2, returns a graceful
+        ``{"status": "insufficient_peers", ...}`` payload (NOT an India empty
+        payload, NOT an error) — the US peer universe grows as more US symbols
+        are registered/backfilled.
+        """
+        market = self._market_of(symbol)
+        subject = self._store.get_us_company_snapshot(symbol, market) or {"symbol": symbol}
+        peer_syms = self._us_peer_symbols(symbol)
+        peer_snapshots = self._us_peer_snapshots(peer_syms)
+
+        if len(peer_snapshots) < 2:
+            return {
+                "status": "insufficient_peers",
+                "subject": _clean(subject),
+                "peers": _clean(peer_snapshots),
+                "peer_count": len(peer_snapshots),
+                "source": "us_registry_sector",
+                "reason": (
+                    f"Only {len(peer_snapshots)} same-sector US peer(s) with a "
+                    f"company snapshot are registered — need >=2 for comparison. "
+                    f"The US peer universe grows as more symbols are backfilled."
+                ),
+            }
+
+        return {
+            "subject": _clean(subject),
+            "peers": _clean(peer_snapshots),
+            "peer_count": len(peer_snapshots),
+            "source": "us_registry_sector",
         }
 
     def _screener_peer_fallback(self, symbol: str, subject: dict, reason: str) -> dict:
@@ -5659,6 +5759,11 @@ class ResearchDataAPI:
 
     def get_valuation_matrix(self, symbol: str) -> dict:
         """Multi-metric valuation matrix: subject vs Yahoo peers, using company_snapshot."""
+        # US add-on: subject + US peers (same sector) from us_company_snapshot.
+        # India path (Yahoo peer_links + company_snapshot) is byte-identical below.
+        if self._is_us(symbol):
+            return self._us_valuation_matrix(symbol)
+
         peer_links = self._store.get_peer_links(symbol)
         peer_syms = [p["peer_symbol"] for p in peer_links if p.get("peer_symbol") != symbol]
 
@@ -5713,8 +5818,71 @@ class ResearchDataAPI:
             "peer_count": len(peer_data),
         }
 
+    def _us_valuation_matrix(self, symbol: str) -> dict:
+        """US valuation matrix: subject + same-sector US peers from us_company_snapshot.
+
+        Same return shape and metric set (``_MATRIX_METRICS``, all of which are
+        us_company_snapshot columns) as the India path. Values are USD millions
+        (market_cap) / percent (margins/returns/growth) / raw ratios.
+        """
+        market = self._market_of(symbol)
+        peer_syms = self._us_peer_symbols(symbol)
+
+        subject_snap = self._store.get_us_company_snapshot(symbol, market) or {}
+        subject_data: dict = {
+            k: subject_snap.get(k)
+            for k in self._MATRIX_METRICS
+            if subject_snap.get(k) is not None
+        }
+        subject_data["symbol"] = symbol
+
+        peer_snaps = self._us_peer_snapshots(peer_syms)
+        peer_data: list[dict] = []
+        for snap in peer_snaps:
+            row = {k: snap.get(k) for k in self._MATRIX_METRICS if snap.get(k) is not None}
+            if not row:
+                continue
+            row["symbol"] = snap.get("symbol")
+            peer_data.append(row)
+
+        all_entries = [subject_data] + peer_data
+        sector_stats: dict = {}
+        subject_percentiles: dict = {}
+        for metric in self._MATRIX_METRICS:
+            values = [
+                float(e[metric])
+                for e in all_entries
+                if metric in e and isinstance(e[metric], (int, float))
+            ]
+            if len(values) < 2:
+                continue
+            quantiles = statistics.quantiles(values, n=4)
+            sector_stats[metric] = {
+                "median": quantiles[1],
+                "p25": quantiles[0],
+                "p75": quantiles[2],
+                "min": min(values),
+                "max": max(values),
+            }
+            subj_val = subject_data.get(metric)
+            if subj_val is not None:
+                subject_percentiles[metric] = _percentile_rank(values, subj_val)
+
+        return {
+            "subject": subject_data,
+            "peers": peer_data,
+            "sector_stats": sector_stats,
+            "subject_percentiles": subject_percentiles,
+            "peer_count": len(peer_data),
+        }
+
     def get_company_snapshot(self, symbol: str) -> dict:
         """Unified company fundamentals from snapshot cache."""
+        # US add-on: read the denormalized us_company_snapshot. India path
+        # (company_snapshot) is byte-identical below.
+        if self._is_us(symbol):
+            snap = self._store.get_us_company_snapshot(symbol, self._market_of(symbol))
+            return _clean(snap) if snap else {}
         snap = self._store.get_company_snapshot(symbol)
         return _clean(snap) if snap else {}
 
@@ -7216,10 +7384,95 @@ class ResearchDataAPI:
 
     def get_sector_benchmarks(self, symbol: str, metric: str | None = None) -> list[dict] | dict:
         """Sector benchmark statistics — single metric or all."""
+        # US add-on: compute benchmarks on the fly over the same-sector US peer
+        # set from us_company_snapshot. India path (precomputed sector_benchmarks
+        # table) is byte-identical below.
+        if self._is_us(symbol):
+            return self._us_sector_benchmarks(symbol, metric)
         if metric:
             result = self._store.get_sector_benchmark(symbol, metric)
             return _clean(result) if result else {}
         return _clean(self._store.get_all_sector_benchmarks(symbol))
+
+    def _us_sector_benchmarks(
+        self, symbol: str, metric: str | None = None,
+    ) -> list[dict] | dict:
+        """US sector benchmarks computed over same-sector US peers (us_company_snapshot).
+
+        Mirrors the India ``sector_benchmarks`` row shape (subject_value,
+        peer_count, sector_median/p25/p75/min/max, percentile) per metric, over
+        the same ``peer_refresh._BENCHMARK_METRICS`` columns. With <2 peers,
+        returns a graceful ``{"status": "insufficient_peers", ...}`` payload (for
+        the all-metrics call) or {} (for a single metric) rather than an error.
+        """
+        import statistics as _stats
+
+        from flowtracker.research.peer_refresh import _BENCHMARK_METRICS
+
+        market = self._market_of(symbol)
+        subject = self._store.get_us_company_snapshot(symbol, market) or {}
+        peer_syms = self._us_peer_symbols(symbol)
+        peer_snaps = self._us_peer_snapshots(peer_syms)
+
+        if len(peer_snaps) < 2:
+            insufficient = {
+                "status": "insufficient_peers",
+                "subject_symbol": symbol.upper(),
+                "peer_count": len(peer_snaps),
+                "source": "us_registry_sector",
+                "reason": (
+                    f"Only {len(peer_snaps)} same-sector US peer(s) with a company "
+                    f"snapshot are registered — need >=2 to compute benchmarks. "
+                    f"The US peer universe grows as more symbols are backfilled."
+                ),
+            }
+            return insufficient if metric is None else {}
+
+        def _num(val) -> float | None:
+            try:
+                f = float(val)
+                return f if f == f else None  # drop NaN
+            except (TypeError, ValueError):
+                return None
+
+        def _bench(m: str) -> dict | None:
+            subject_value = _num(subject.get(m))
+            peer_values = [v for v in (_num(s.get(m)) for s in peer_snaps) if v is not None]
+            if not peer_values and subject_value is None:
+                return None
+            peer_count = len(peer_values)
+            if peer_count == 0:
+                row = {
+                    "subject_symbol": symbol.upper(), "metric": m,
+                    "subject_value": subject_value, "peer_count": 0,
+                    "sector_median": None, "sector_p25": None, "sector_p75": None,
+                    "sector_min": None, "sector_max": None, "percentile": None,
+                }
+            else:
+                sorted_vals = sorted(peer_values)
+                quantiles = (
+                    _stats.quantiles(sorted_vals, n=4)
+                    if peer_count >= 2 else [sorted_vals[0]] * 3
+                )
+                percentile = (
+                    sum(1 for v in peer_values if v <= subject_value) / peer_count * 100
+                    if subject_value is not None else None
+                )
+                row = {
+                    "subject_symbol": symbol.upper(), "metric": m,
+                    "subject_value": subject_value, "peer_count": peer_count,
+                    "sector_median": _stats.median(sorted_vals),
+                    "sector_p25": quantiles[0], "sector_p75": quantiles[-1],
+                    "sector_min": sorted_vals[0], "sector_max": sorted_vals[-1],
+                    "percentile": percentile,
+                }
+            return row
+
+        if metric:
+            result = _bench(metric)
+            return _clean(result) if result else {}
+        rows = [r for r in (_bench(m) for m in _BENCHMARK_METRICS) if r is not None]
+        return _clean(rows)
 
     def get_sector_overview_metrics(self, symbol: str) -> dict:
         """Industry-level overview: stock count, total market cap, median PE/PB/ROCE, valuation range, top stocks."""
