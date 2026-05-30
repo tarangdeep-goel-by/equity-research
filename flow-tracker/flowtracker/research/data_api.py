@@ -882,6 +882,17 @@ class ResearchDataAPI:
         """True when the symbol is a US listing (NASDAQ / NYSE)."""
         return self._market_of(symbol) in ("NASDAQ", "NYSE")
 
+    def _agg_per_share_factor(self, symbol: str) -> float:
+        """Factor converting a stored monetary AGGREGATE to per-share base currency.
+
+        Stored aggregates differ by market: India in **crores** (×1e7 → rupees);
+        US in **USD millions** (×1e6 → dollars). ``num_shares`` is a raw count in
+        both, so ``per_share = aggregate * factor / num_shares`` is unit-correct
+        once the right factor is used. Applying the India ×1e7 to US data inflates
+        every per-share figure ~10x (BVPS, reverse-DCF implied price, adjusted BV).
+        """
+        return 1e6 if self._is_us(symbol) else 1e7
+
     def _is_us_run(self) -> bool:
         """True when the current run market is US (NASDAQ / NYSE).
 
@@ -9246,6 +9257,8 @@ class ResearchDataAPI:
         current_ebitda_margin = round(current_ebitda / current_revenue, 4) if current_revenue > 0 else 0
         num_shares = latest.get("num_shares", 0) or 0
         current_price = valuation.get("price")
+        # Aggregate→per-share factor: ×1e7 (Cr→Rs) for India, ×1e6 ($mn→$) for US.
+        per_share_factor = self._agg_per_share_factor(symbol)
 
         implied_margin = None
         hist_g = cagr_3y or cagr_5y or 0.10  # fallback 10%
@@ -9301,7 +9314,7 @@ class ResearchDataAPI:
                     terminal = cf * (1 + g) ** 10 * (1 + terminal_g) / eff_discount
                     pv += terminal / (1 + discount_rate) ** 10
                     implied_mcap = pv + cash - borrowings
-                    implied_price = round(implied_mcap * 1e7 / num_shares, 2) if num_shares > 0 else None
+                    implied_price = round(implied_mcap * per_share_factor / num_shares, 2) if num_shares > 0 else None
                     sensitivity.append({"growth": g, "margin": m, "implied_price": implied_price})
         elif is_bfsi:
             # BFSI: use book_value × ROE × payout_ratio as FCFE
@@ -9325,7 +9338,7 @@ class ResearchDataAPI:
                     eff_discount = max(discount_rate - terminal_g, 0.001)
                     terminal = terminal_cf * (1 + terminal_g) / eff_discount
                     pv += terminal / (1 + discount_rate) ** 10
-                    implied_price = round(pv * 1e7 / num_shares, 2) if num_shares > 0 else None
+                    implied_price = round(pv * per_share_factor / num_shares, 2) if num_shares > 0 else None
                     sensitivity.append({"growth": g, "roe": roe, "implied_price": implied_price})
 
         # --- 4. Enhanced Assessment ---
@@ -9825,9 +9838,10 @@ class ResearchDataAPI:
             if operating_income > 0:
                 entry["cost_to_income_pct"] = round((employee_cost + other_exp) / operating_income * 100, 2)
 
-            # Book Value / Share (net_worth is in Cr, convert to Rs for per-share)
+            # Book Value / Share. net_worth is an aggregate (Cr for India, $mn for
+            # US); ×1e7 → Rs or ×1e6 → $ per the market, then ÷ raw share count.
             if num_shares > 0:
-                bvps = net_worth * 1e7 / num_shares
+                bvps = net_worth * self._agg_per_share_factor(symbol) / num_shares
                 entry["book_value_per_share"] = round(bvps, 2)
                 # P/B (use current price if available)
                 if current_price and current_price > 0:
@@ -10039,7 +10053,7 @@ class ResearchDataAPI:
 
             entry["net_worth"] = round(net_worth, 2)
             if num_shares > 0:
-                bvps = net_worth * 1e7 / num_shares
+                bvps = net_worth * self._agg_per_share_factor(symbol) / num_shares
                 entry["book_value_per_share"] = round(bvps, 2)
                 if current_price and current_price > 0:
                     entry["pb_ratio"] = round(current_price / bvps, 2)
@@ -10172,9 +10186,10 @@ class ResearchDataAPI:
             net_worth = equity_capital + reserves
             entry = {"fiscal_year": row.get("fiscal_year_end", "")}
 
-            # Adjusted Book Value per share (NOT true NAV — no land revaluation)
+            # Adjusted Book Value per share (NOT true NAV — no land revaluation).
+            # ×1e7 (Cr→Rs) for India, ×1e6 ($mn→$) for US; ÷ raw share count.
             if num_shares > 0:
-                adjusted_bv = (total_assets - borrowings - other_liabilities) / num_shares * 1e7
+                adjusted_bv = (total_assets - borrowings - other_liabilities) / num_shares * self._agg_per_share_factor(symbol)
                 entry["adjusted_bv_per_share"] = round(adjusted_bv, 2)
                 if current_price and current_price > 0 and adjusted_bv > 0:
                     entry["p_adjusted_bv"] = round(current_price / adjusted_bv, 2)
