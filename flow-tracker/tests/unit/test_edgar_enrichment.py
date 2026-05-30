@@ -143,3 +143,53 @@ def test_quarterly_fiscal_year_from_original_filing():
     assert row["fiscal_year"] == 2025, "fy must come from the original 10-Q, not the comparative"
     assert row["fiscal_period"] == "Q1"
     assert row["revenue"] == 124_350.0, "value should be the freshest (restated) figure"
+
+
+def _annual_facts(num_shares_facts: list[dict]) -> dict:
+    """Minimal FY2024 companyfacts with a revenue duration (so the row emits)
+    plus a configurable WeightedAverageNumberOfDilutedSharesOutstanding series."""
+    return {"facts": {"us-gaap": {
+        "Revenues": {"units": {"USD": [
+            {"form": "10-K", "fp": "FY", "fy": 2024,
+             "start": "2023-11-01", "end": "2024-10-31",
+             "val": 6_510_000_000, "filed": "2024-12-15"},
+        ]}},
+        "WeightedAverageNumberOfDilutedSharesOutstanding": {
+            "units": {"shares": num_shares_facts}},
+    }}}
+
+
+def test_num_shares_picked_from_duration_not_instant_garbage():
+    """num_shares is a weighted-avg (DURATION) concept. A correct full-year
+    duration fact must win over a stray instant-looking fact (no `start`) — the
+    instant-pick previously grabbed the garbage (e.g. 406 for a ~290M filer)."""
+    from flowtracker.edgar_client import EdgarClient
+
+    facts = _annual_facts([
+        # Correct full-year duration — ~290M diluted shares.
+        {"form": "10-K", "fp": "FY", "fy": 2024,
+         "start": "2023-11-01", "end": "2024-10-31", "val": 290_000_000,
+         "filed": "2024-12-15"},
+        # Instant-looking garbage (no `start`) the old instant-pick latched onto.
+        {"form": "10-K", "fp": "FY", "fy": 2024, "end": "2024-10-31", "val": 406,
+         "filed": "2024-12-15"},
+    ])
+    ec = EdgarClient.__new__(EdgarClient)
+    rows = ec.normalize_annual(facts, "A", market="NYSE")
+    fy = next(r for r in rows if (r.get("fiscal_year_end") or "").startswith("2024"))
+    assert fy["num_shares"] == 290_000_000.0
+
+
+def test_num_shares_implausibly_small_value_guarded_to_none():
+    """A sub-1000 share count is a malformed fact, not a usable denominator."""
+    from flowtracker.edgar_client import EdgarClient
+
+    facts = _annual_facts([
+        {"form": "10-K", "fp": "FY", "fy": 2024,
+         "start": "2023-11-01", "end": "2024-10-31", "val": 406,
+         "filed": "2024-12-15"},
+    ])
+    ec = EdgarClient.__new__(EdgarClient)
+    rows = ec.normalize_annual(facts, "A", market="NYSE")
+    fy = next(r for r in rows if (r.get("fiscal_year_end") or "").startswith("2024"))
+    assert fy["num_shares"] is None
