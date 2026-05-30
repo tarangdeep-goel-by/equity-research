@@ -129,6 +129,14 @@ def _seed_us(store: FlowStore) -> None:
          "settlement_date": "2026-04-30", "short_interest": 134_675_274.0,
          "avg_daily_volume": 45_944_025.0, "days_to_cover": 2.931290},
     ])
+    store.upsert_us_activist_holdings([
+        {"symbol": US_SYMBOL, "market": US_MARKET, "currency": "USD",
+         "filing_type": "SCHEDULE 13G", "accession": "0002100119-26-000139",
+         "filing_date": "2026-04-29", "event_date": "2026-03-31",
+         "reporting_person": "Vanguard Capital Management",
+         "type_of_reporting_person": "IA", "shares": 1_099_168_953.0,
+         "percent_of_class": 7.48, "is_activist": 0},
+    ])
     # ~60 daily bars so technicals (MACD/BB/ADX need 30+) + price-perf + WACC
     # beta have something to read (WS-4).
     rows = []
@@ -206,6 +214,15 @@ class TestRoutedToolsServeUS:
         assert rows[0]["settlement_date"] == "2026-05-15"
         assert rows[0]["days_to_cover"] == 2.744623
 
+    def test_activist_ownership_us(self, db):
+        payload = _call(t.get_activist_ownership, {"symbol": US_SYMBOL})
+        assert payload["symbol"] == US_SYMBOL
+        rows = payload["beneficial_ownership"]
+        assert len(rows) == 1
+        assert rows[0]["reporting_person"] == "Vanguard Capital Management"
+        assert rows[0]["percent_of_class"] == 7.48
+        assert rows[0]["is_activist"] == 0  # 13G = passive
+
 
 # --------------------------------------------------------------------------- #
 # 2. India-only tools degrade for US, still serve India (regression)
@@ -250,6 +267,11 @@ class TestIndiaOnlyDegradesForUS:
 
     def test_short_interest_na_for_india(self, db):
         payload = _call(t.get_short_interest, {"symbol": "SBIN"})
+        assert _is_not_applicable(payload)
+        assert payload["market"] == "NSE"
+
+    def test_activist_ownership_na_for_india(self, db):
+        payload = _call(t.get_activist_ownership, {"symbol": "SBIN"})
         assert _is_not_applicable(payload)
         assert payload["market"] == "NSE"
 

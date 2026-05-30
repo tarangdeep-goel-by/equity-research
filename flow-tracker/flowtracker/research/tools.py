@@ -2093,6 +2093,61 @@ def _india_not_applicable_short_interest(symbol: str, args: dict) -> dict:
     )
 
 
+@tool(
+    "get_activist_ownership",
+    "US beneficial-ownership filings — SEC Schedule 13D/13G >5% holders, most-recent "
+    "filing first. Each row carries reporting_person, shares, percent_of_class, "
+    "filing_type, filing_date, event_date, and is_activist (1 = 13D activist intent to "
+    "influence control; 0 = 13G passive holder). A 13D from a known activist is a strong "
+    "catalyst signal. This is a US SEC disclosure with no India analogue; for an India "
+    "(NSE) symbol it returns status='not_applicable' (use get_ownership shareholding / "
+    "promoter_pledge for India). Optional: top_n (default 30 filings).",
+    {
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "US ticker (NASDAQ/NYSE), uppercase."},
+            "top_n": {"type": "integer", "description": "Cap on filings returned (default 30)."},
+        },
+        "required": ["symbol"],
+    },
+    annotations=READ_ONLY,
+)
+async def get_activist_ownership(args):
+    symbol = args["symbol"].upper()
+    if not _is_us_symbol(symbol):
+        return _india_not_applicable_activist(symbol, args)
+    with ResearchDataAPI() as api:
+        rows = api.get_activist_holdings(symbol, args.get("top_n", 30))
+    data = {"symbol": symbol, "beneficial_ownership": rows}
+    return _with_dedup("get_activist_ownership", {"content": [{"type": "text", "text": json.dumps(data, default=str)}]}, args)
+
+
+def _india_not_applicable_activist(symbol: str, args: dict) -> dict:
+    """'n/a for India' envelope for the US-only 13D/13G ownership tool."""
+    from datetime import date
+    payload = {
+        "status": "not_applicable",
+        "market": "NSE",
+        "symbol": symbol,
+        "reason": (
+            "Schedule 13D/13G beneficial-ownership filings are a US SEC concept with no "
+            f"India equivalent; not applicable for NSE-listed {symbol}. Use get_ownership "
+            "(shareholding / promoter_pledge / shareholder_detail) for India ownership."
+        ),
+        "_meta": {
+            "as_of_date": str(date.today()),
+            "status": "not_applicable",
+            "count": 0,
+            "data_freshness": None,
+        },
+    }
+    return _with_dedup(
+        "get_activist_ownership",
+        {"content": [{"type": "text", "text": json.dumps(payload, default=str)}]},
+        args,
+    )
+
+
 def _get_company_context_section(api, symbol, section, args, is_us=False):
     """Route a single section for get_company_context.
 
@@ -2625,6 +2680,7 @@ OWNERSHIP_AGENT_TOOLS = [
     get_annual_report,
     get_institutional_ownership,  # US 13F ownership (n/a for India)
     get_short_interest,           # US short interest / days-to-cover (n/a for India)
+    get_activist_ownership,       # US Schedule 13D/13G >5% holders (n/a for India)
 ]
 
 VALUATION_AGENT_TOOLS = [

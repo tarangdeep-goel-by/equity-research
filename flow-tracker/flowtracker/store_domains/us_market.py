@@ -273,6 +273,40 @@ class UsMarketMixin:
             "us_short_interest", symbol, market, "settlement_date DESC",
         )
 
+    # -- us_activist_holdings (Schedule 13D/13G) --
+
+    _US_ACTIVIST_COLS = (
+        "symbol", "market", "currency", "filing_type", "accession",
+        "filing_date", "event_date", "filer_cik", "reporting_person",
+        "type_of_reporting_person", "shares", "percent_of_class",
+        "sole_voting", "shared_voting", "sole_dispositive", "shared_dispositive",
+        "is_activist",
+    )
+
+    def upsert_us_activist_holdings(self, rows: list[dict]) -> int:
+        """Batch upsert Schedule 13D/13G beneficial-ownership rows.
+
+        Conflict: (symbol, market, accession, reporting_person) — one row per
+        reporting person per filing. ``reporting_person`` defaults to '' so the
+        unique key never sees NULL.
+        """
+        normed = []
+        for r in rows:
+            r2 = dict(r)
+            r2.setdefault("reporting_person", "")
+            normed.append(r2)
+        return self._us_upsert(
+            "us_activist_holdings", normed, self._US_ACTIVIST_COLS,
+            ("symbol", "market", "accession", "reporting_person"),
+        )
+
+    def get_us_activist_holdings(self, symbol: str, market: str = "NASDAQ") -> list[dict]:
+        """Schedule 13D/13G holdings for a symbol, most recent filing first."""
+        return self._us_get(
+            "us_activist_holdings", symbol, market,
+            "filing_date DESC, percent_of_class DESC",
+        )
+
     # -- us_macro_daily (market-wide; symbol-less) --
 
     _US_MACRO_DAILY_COLS = (

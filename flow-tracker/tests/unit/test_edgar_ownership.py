@@ -189,3 +189,62 @@ def test_institutional_upsert_readback(tmp_db) -> None:
         ally = store.get_us_institutional_holdings("02005N100")
         assert len(ally) == 1
         assert ally[0]["cusip"] == "02005N100"
+
+
+# --------------------------------------------------------------------------- #
+# Schedule 13D / 13G parsing (#19 beneficial ownership)
+# --------------------------------------------------------------------------- #
+
+def test_parse_13g_happy_path() -> None:
+    from flowtracker.edgar_ownership import parse_schedule_13dg
+    rows = parse_schedule_13dg(
+        _xml("sc_13g_aapl.xml"), symbol="AAPL",
+        filing_date="2026-04-29", accession="0002100119-26-000139",
+    )
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["symbol"] == "AAPL"
+    assert r["filing_type"] == "SCHEDULE 13G"
+    assert r["is_activist"] == 0          # 13G = passive
+    assert r["reporting_person"] == "Vanguard Capital Management"
+    assert r["type_of_reporting_person"] == "IA"
+    assert r["shares"] == 1_099_168_953.0
+    assert r["percent_of_class"] == 7.48
+    assert r["sole_voting"] == 145_321_305.0
+    assert r["event_date"] == "2026-03-31"   # MM/DD/YYYY → ISO
+    assert r["accession"] == "0002100119-26-000139"
+    assert r["filing_date"] == "2026-04-29"
+
+
+def test_parse_13d_marks_activist() -> None:
+    """A SCHEDULE 13D submission type → is_activist=1."""
+    from flowtracker.edgar_ownership import parse_schedule_13dg
+    xml = _xml("sc_13g_aapl.xml").replace("SCHEDULE 13G", "SCHEDULE 13D")
+    rows = parse_schedule_13dg(xml, symbol="AAPL")
+    assert rows and rows[0]["is_activist"] == 1
+    assert rows[0]["filing_type"] == "SCHEDULE 13D"
+
+
+def test_parse_13dg_rejects_non_schedule_xml() -> None:
+    from flowtracker.edgar_ownership import parse_schedule_13dg
+    assert parse_schedule_13dg("<foo/>", symbol="X") == []
+    assert parse_schedule_13dg("not xml at all", symbol="X") == []
+    # A valid edgarSubmission that isn't 13D/13G is rejected.
+    other = ('<edgarSubmission xmlns="http://www.sec.gov/edgar/x">'
+             '<headerData><submissionType>4</submissionType></headerData></edgarSubmission>')
+    assert parse_schedule_13dg(other, symbol="X") == []
+
+
+def test_parse_13dg_multiple_reporting_persons() -> None:
+    """Group filings list several coverPageHeaderReportingPersonDetails → one row each."""
+    from flowtracker.edgar_ownership import parse_schedule_13dg
+    raw = _xml("sc_13g_aapl.xml")
+    # Duplicate the reporting-person block to simulate a group filing.
+    start = raw.index("<coverPageHeaderReportingPersonDetails>")
+    end = raw.index("</coverPageHeaderReportingPersonDetails>") + len("</coverPageHeaderReportingPersonDetails>")
+    block = raw[start:end]
+    second = block.replace("Vanguard Capital Management", "Vanguard Group Inc")
+    raw2 = raw[:end] + second + raw[end:]
+    rows = parse_schedule_13dg(raw2, symbol="AAPL", accession="acc1")
+    names = {r["reporting_person"] for r in rows}
+    assert names == {"Vanguard Capital Management", "Vanguard Group Inc"}

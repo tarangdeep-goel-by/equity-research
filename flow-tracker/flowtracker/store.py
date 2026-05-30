@@ -1758,6 +1758,30 @@ CREATE TABLE IF NOT EXISTS us_short_interest (
 );
 CREATE INDEX IF NOT EXISTS idx_us_short_interest_symbol ON us_short_interest(symbol, market);
 
+CREATE TABLE IF NOT EXISTS us_activist_holdings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'NASDAQ',
+    currency TEXT NOT NULL DEFAULT 'USD',
+    filing_type TEXT NOT NULL,                -- 'SCHEDULE 13D' / 'SCHEDULE 13G' (+ '/A' amendments)
+    accession TEXT NOT NULL,                   -- EDGAR accession (one filing)
+    filing_date TEXT,                          -- filed date (YYYY-MM-DD)
+    event_date TEXT,                           -- event triggering the filing (YYYY-MM-DD)
+    filer_cik TEXT,                            -- reporting person's CIK
+    reporting_person TEXT NOT NULL DEFAULT '', -- beneficial owner name (group filings list several)
+    type_of_reporting_person TEXT,             -- IA / CO / IN / etc.
+    shares REAL,                               -- aggregate shares beneficially owned
+    percent_of_class REAL,                     -- % of class (classPercent)
+    sole_voting REAL,
+    shared_voting REAL,
+    sole_dispositive REAL,
+    shared_dispositive REAL,
+    is_activist INTEGER NOT NULL DEFAULT 0,    -- 1 = 13D (activist intent); 0 = 13G (passive)
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(symbol, market, accession, reporting_person)
+);
+CREATE INDEX IF NOT EXISTS idx_us_activist_holdings_symbol ON us_activist_holdings(symbol, market);
+
 -- Denormalized per-company snapshot for US listings — the single source of
 -- truth for US peers / benchmarks / valuation-matrix, mirroring the market-
 -- relevant subset of the India `company_snapshot` table plus market/currency.

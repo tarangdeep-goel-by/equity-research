@@ -26,6 +26,7 @@ US_TABLES = [
     "us_insider_transactions",
     "us_institutional_holdings",
     "us_short_interest",
+    "us_activist_holdings",
 ]
 
 
@@ -61,7 +62,7 @@ def test_us_monetary_tables_have_currency_default(store: FlowStore) -> None:
     for t in ["us_annual_financials", "us_quarterly_financials",
               "us_valuation_snapshot", "us_consensus_estimates",
               "us_insider_transactions", "us_institutional_holdings",
-              "us_short_interest"]:
+              "us_short_interest", "us_activist_holdings"]:
         cols = {r[1]: r for r in store._conn.execute(f"PRAGMA table_info({t})")}
         assert "currency" in cols, f"{t} missing currency"
         assert "USD" in str(cols["currency"][4]), f"{t} currency default wrong"
@@ -231,3 +232,34 @@ def test_short_interest_round_trip(store: FlowStore) -> None:
     rows = store.get_us_short_interest("AAPL")
     assert len(rows) == 2
     assert rows[0]["short_interest"] == 140_000_000.0
+
+
+def test_activist_holdings_round_trip(store: FlowStore) -> None:
+    """us_activist_holdings upsert+get round-trips; (symbol, market, accession,
+    reporting_person) conflict updates in place; group filings keep distinct rows."""
+    store.upsert_us_activist_holdings([
+        {"symbol": "AAPL", "filing_type": "SCHEDULE 13G", "accession": "acc-1",
+         "filing_date": "2026-04-29", "event_date": "2026-03-31",
+         "reporting_person": "Vanguard Capital Management", "shares": 1_099_168_953.0,
+         "percent_of_class": 7.48, "is_activist": 0},
+        {"symbol": "AAPL", "filing_type": "SCHEDULE 13D", "accession": "acc-2",
+         "filing_date": "2026-02-10", "event_date": "2026-02-01",
+         "reporting_person": "Activist Capital LP", "shares": 80_000_000.0,
+         "percent_of_class": 5.2, "is_activist": 1},
+    ])
+    rows = store.get_us_activist_holdings("AAPL")
+    assert len(rows) == 2
+    assert rows[0]["filing_date"] == "2026-04-29"  # filing_date DESC
+    assert rows[0]["market"] == "NASDAQ" and rows[0]["currency"] == "USD"
+    assert any(r["is_activist"] == 1 for r in rows)
+
+    # Same (accession, reporting_person) → update in place.
+    store.upsert_us_activist_holdings([
+        {"symbol": "AAPL", "filing_type": "SCHEDULE 13G", "accession": "acc-1",
+         "reporting_person": "Vanguard Capital Management", "percent_of_class": 7.55,
+         "is_activist": 0},
+    ])
+    rows = store.get_us_activist_holdings("AAPL")
+    assert len(rows) == 2
+    vg = [r for r in rows if r["reporting_person"] == "Vanguard Capital Management"][0]
+    assert vg["percent_of_class"] == 7.55

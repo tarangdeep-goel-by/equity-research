@@ -73,6 +73,7 @@ def refresh_us(
     manager_ciks: list[str] | None = None,
     skip_insider: bool = False,
     skip_short_interest: bool = False,
+    skip_beneficial_ownership: bool = False,
 ) -> dict[str, int]:
     """Fetch fresh US data for ``symbol`` into the ``us_*`` tables.
 
@@ -288,6 +289,27 @@ def refresh_us(
                     _skip("short_interest", "no data")
             except Exception as e:
                 _skip("short_interest", str(e))
+
+        # --- 8. Beneficial ownership (Schedule 13D/13G, issuer-indexed) ---
+        # 13D/13G are filed under the ISSUER's CIK (unlike 13F), so a direct
+        # issuer lookup works. One submissions call + a handful of structured
+        # primary_doc.xml fetches. skip_beneficial_ownership lets the bulk
+        # universe backfill opt out.
+        if skip_beneficial_ownership:
+            _skip("beneficial_ownership", "skipped (skip_beneficial_ownership)")
+        else:
+            try:
+                from flowtracker.edgar_ownership import EdgarOwnershipClient
+
+                with EdgarOwnershipClient() as oc:
+                    bo_rows = oc.fetch_beneficial_ownership(symbol, cik=cik, market=market)
+                if bo_rows:
+                    store.upsert_us_activist_holdings(bo_rows)
+                    _ok("beneficial_ownership", len(bo_rows))
+                else:
+                    _skip("beneficial_ownership", "no data")
+            except Exception as e:
+                _skip("beneficial_ownership", str(e))
     finally:
         if own_store:
             store.close()
