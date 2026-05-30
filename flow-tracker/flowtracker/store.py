@@ -336,6 +336,26 @@ CREATE TABLE IF NOT EXISTS us_macro_daily (
 );
 CREATE INDEX IF NOT EXISTS idx_us_macro_daily_date ON us_macro_daily(date);
 
+-- US monthly macro economic series (US add-on). ALL-NEW table — mirrors the
+-- India ``cpi_monthly`` / ``iip_monthly`` pattern but unifies both series in
+-- one table keyed by (series, period). ``series`` is 'cpi' or 'iip'. Sourced
+-- from FRED (keyless fredgraph.csv): CPI = ``CPIAUCSL`` (CPI-U all items, SA,
+-- 1982-84=100), Industrial Production = ``INDPRO`` (index 2017=100). ``period``
+-- is 'YYYY-MM-01'; ``yoy_pct`` is computed locally (idx_t / idx_{t-12} - 1)*100.
+CREATE TABLE IF NOT EXISTS us_macro_monthly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period TEXT NOT NULL,
+    series TEXT NOT NULL,
+    index_value REAL,
+    yoy_pct REAL,
+    source TEXT NOT NULL DEFAULT 'FRED',
+    source_url TEXT,
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(series, period)
+);
+CREATE INDEX IF NOT EXISTS idx_us_macro_monthly_series_period
+    ON us_macro_monthly(series, period DESC);
+
 -- Daily index-level valuation snapshots (PE / PB / Dividend Yield) sourced
 -- from niftyindices.com. Populated by `flowtrack indexpe fetch|backfill`.
 -- Used by the `percentile` command to answer regime questions like

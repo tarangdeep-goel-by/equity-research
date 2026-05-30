@@ -290,3 +290,66 @@ class UsMarketMixin:
             (days,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # -- us_macro_monthly (market-wide; symbol-less) --
+    #
+    # Monthly CPI / Industrial Production from FRED. Mirrors the India
+    # ``cpi_monthly`` / ``iip_monthly`` store surface but keyed by
+    # (series, period) so both series share one table. India CPI/IIP tables
+    # and read paths are untouched.
+
+    def upsert_us_macro_monthly(self, rows: list[dict]) -> int:
+        """Insert-or-replace a batch of US monthly macro rows.
+
+        Each row is a plain dict exposing ``series`` ('cpi'|'iip'),
+        ``period`` ('YYYY-MM-01'), ``index_value``, ``yoy_pct``, ``source``,
+        ``source_url``. Returns the count of rows touched. Idempotent on the
+        ``UNIQUE(series, period)`` key.
+        """
+        if not rows:
+            return 0
+        cursor = self._conn.cursor()
+        count = 0
+        for r in rows:
+            cursor.execute(
+                "INSERT OR REPLACE INTO us_macro_monthly "
+                "(period, series, index_value, yoy_pct, source, source_url, "
+                "fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                (
+                    r.get("period"),
+                    r.get("series"),
+                    r.get("index_value"),
+                    r.get("yoy_pct"),
+                    r.get("source", "FRED"),
+                    r.get("source_url"),
+                ),
+            )
+            count += cursor.rowcount
+        self._conn.commit()
+        return count
+
+    def get_us_macro_monthly_latest(self, series: str) -> dict | None:
+        """Return the most-recent row for ``series`` ('cpi'|'iip') as a dict."""
+        row = self._conn.execute(
+            "SELECT period, series, index_value, yoy_pct, source, source_url "
+            "FROM us_macro_monthly WHERE series = ? "
+            "ORDER BY period DESC LIMIT 1",
+            (series,),
+        ).fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    def get_us_macro_monthly_trend(self, series: str, months: int) -> list[dict]:
+        """Return the last ``months`` rows for ``series`` as dicts, newest first."""
+        if months < 1:
+            return []
+        rows = self._conn.execute(
+            "SELECT period, series, index_value, yoy_pct, source, source_url, "
+            "fetched_at "
+            "FROM us_macro_monthly WHERE series = ? "
+            "ORDER BY period DESC LIMIT ?",
+            (series, int(months)),
+        ).fetchall()
+        return [dict(r) for r in rows]

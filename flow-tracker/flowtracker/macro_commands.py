@@ -67,6 +67,35 @@ def fetch(
     display_macro_fetch_result(count)
 
 
+@app.command("fetch-us")
+def fetch_us() -> None:
+    """Fetch US monthly CPI + Industrial Production from FRED (keyless).
+
+    Pulls the full ``CPIAUCSL`` (CPI-U) and ``INDPRO`` (Industrial Production)
+    series and upserts them into ``us_macro_monthly`` (series='cpi'/'iip').
+    YoY% is computed locally. These feed the US run-market macro agent.
+    """
+    from flowtracker.us_macro_econ_client import (
+        USMacroEconClientError,
+        fetch_us_cpi,
+        fetch_us_iip,
+    )
+
+    with FlowStore() as store:
+        total = 0
+        for label, fetcher in (("CPI", fetch_us_cpi), ("IIP", fetch_us_iip)):
+            try:
+                rows = fetcher()
+            except USMacroEconClientError as exc:
+                console.print(f"[red]US {label} fetch failed: {exc}[/red]")
+                continue
+            count = store.upsert_us_macro_monthly(rows)
+            total += count
+            console.print(f"[green]Upserted {count} US {label} month(s)[/green]")
+    if total == 0:
+        raise typer.Exit(1)
+
+
 @app.command()
 def fetch_index(
     period: str = typer.Option("5d", help="yfinance period (e.g. '5d', '1mo', '3y')"),
