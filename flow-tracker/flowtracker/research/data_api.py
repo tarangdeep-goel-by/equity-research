@@ -2028,6 +2028,20 @@ class ResearchDataAPI:
         rows = self._store.get_us_short_interest(symbol, self._market_of(symbol))
         return _clean(rows[:periods] if periods else rows)
 
+    def get_activist_holdings(self, symbol: str, top_n: int = 30) -> list[dict]:
+        """Schedule 13D/13G beneficial-ownership filings (US-only) — >5% holders,
+        most recent filing first. ``is_activist`` flags 13D (activist intent) vs
+        13G (passive). Each row carries reporting_person, shares,
+        percent_of_class, filing_type, and filing/event dates.
+
+        US add-on (#19 ownership depth). India has no 13D/13G concept, so India
+        symbols return an empty list gracefully (no fabrication).
+        """
+        if not self._is_us(symbol):
+            return []
+        rows = self._store.get_us_activist_holdings(symbol, self._market_of(symbol))
+        return _clean(rows[:top_n] if top_n else rows)
+
     def get_us_price_series(self, symbol: str, days: int = 365) -> list[dict]:
         """Daily OHLCV price series for a US listing (us_daily_prices).
 

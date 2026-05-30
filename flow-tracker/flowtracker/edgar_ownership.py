@@ -288,6 +288,99 @@ def _normalize_13f_value(raw: float | None, in_thousands: bool) -> float | None:
 
 
 # --------------------------------------------------------------------------- #
+# Schedule 13D / 13G parsing (beneficial-ownership / activist stakes)
+# --------------------------------------------------------------------------- #
+# Since 2024 the SEC requires Schedule 13D/13G filings in a structured
+# ``primary_doc.xml`` (schemas ``schedule13d`` / ``schedule13g``). A 13D signals
+# an ACTIVIST >5% holder (intent to influence control); a 13G is a PASSIVE >5%
+# holder. Each filing carries one or more reporting persons on the cover page.
+
+def _iso_date(val: str | None) -> str | None:
+    """``MM/DD/YYYY`` → ``YYYY-MM-DD``; pass through ISO/unparseable/None."""
+    if not val:
+        return None
+    parts = val.strip().split("/")
+    if len(parts) == 3 and len(parts[2]) == 4:
+        mm, dd, yyyy = parts
+        return f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+    return val.strip()
+
+
+# All Schedule 13D/13G form-type variants as they appear in EDGAR submissions.
+SC13_FORM_TYPES = frozenset({
+    "SCHEDULE 13D", "SCHEDULE 13D/A", "SC 13D", "SC 13D/A",
+    "SCHEDULE 13G", "SCHEDULE 13G/A", "SC 13G", "SC 13G/A",
+})
+
+
+def parse_schedule_13dg(
+    xml: str | bytes,
+    *,
+    symbol: str | None = None,
+    market: str = "NASDAQ",
+    filing_date: str | None = None,
+    accession: str | None = None,
+) -> list[dict]:
+    """Parse a structured Schedule 13D/13G ``primary_doc.xml`` into rows.
+
+    One row per ``coverPageHeaderReportingPersonDetails`` block (group filings
+    list several reporting persons). Returns ``[]`` for any non-13D/G XML
+    (e.g. a legacy free-text filing or unrelated document) so callers can skip
+    gracefully. ``filing_date``/``accession`` (from the submissions index) are
+    carried onto every row. ``is_activist`` is 1 for 13D, 0 for 13G.
+
+    Returns a list of dicts keyed for ``upsert_us_activist_holdings``.
+    """
+    try:
+        root = ET.fromstring(xml.encode() if isinstance(xml, str) else xml)
+    except ET.ParseError:
+        return []
+    if _local(root.tag) != "edgarSubmission":
+        return []
+
+    header = _find_local(root, "headerData")
+    submission_type = (_text(_find_local(header, "submissionType")) or "").strip()
+    if "13D" not in submission_type.upper() and "13G" not in submission_type.upper():
+        return []
+    filer_cik = _text(_find_local(
+        header, "filerInfo", "filer", "filerCredentials", "cik"))
+    is_activist = 1 if "13D" in submission_type.upper() else 0
+
+    form_data = _find_local(root, "formData")
+    cover = _find_local(form_data, "coverPageHeader") if form_data is not None else None
+    event_date = _iso_date(_text(_find_local(cover, "eventDateRequiresFilingThisStatement")))
+
+    rows: list[dict] = []
+    if form_data is None:
+        return rows
+    for rp in form_data:
+        if _local(rp.tag) != "coverPageHeaderReportingPersonDetails":
+            continue
+        powers = _find_local(rp, "reportingPersonBeneficiallyOwnedNumberOfShares")
+        rows.append({
+            "symbol": (symbol or "").upper(),
+            "market": market,
+            "currency": "USD",
+            "filing_type": submission_type,
+            "accession": accession,
+            "filing_date": filing_date,
+            "event_date": event_date,
+            "filer_cik": str(filer_cik) if filer_cik else None,
+            "reporting_person": _text(_find_local(rp, "reportingPersonName")),
+            "type_of_reporting_person": _text(_find_local(rp, "typeOfReportingPerson")),
+            "shares": _to_float(_text(_find_local(
+                rp, "reportingPersonBeneficiallyOwnedAggregateNumberOfShares"))),
+            "percent_of_class": _to_float(_text(_find_local(rp, "classPercent"))),
+            "sole_voting": _to_float(_text(_find_local(powers, "soleVotingPower"))),
+            "shared_voting": _to_float(_text(_find_local(powers, "sharedVotingPower"))),
+            "sole_dispositive": _to_float(_text(_find_local(powers, "soleDispositivePower"))),
+            "shared_dispositive": _to_float(_text(_find_local(powers, "sharedDispositivePower"))),
+            "is_activist": is_activist,
+        })
+    return rows
+
+
+# --------------------------------------------------------------------------- #
 # Fetch helpers (live EDGAR)
 # --------------------------------------------------------------------------- #
 
@@ -462,4 +555,48 @@ class EdgarOwnershipClient(SecEdgarBase):
                 all_rows.extend(rows)
             except Exception as e:
                 logger.warning("EDGAR 13F parse failed for %s: %s", url, e)
+        return all_rows
+
+    def fetch_beneficial_ownership(
+        self,
+        symbol: str,
+        cik: str | None = None,
+        limit: int = 20,
+        *,
+        market: str = "NASDAQ",
+    ) -> list[dict]:
+        """Fetch + parse an issuer's Schedule 13D/13G beneficial-ownership filings.
+
+        Unlike 13F (manager-indexed), 13D/13G are ISSUER-indexed: EDGAR lists
+        them under the subject company's CIK. Lists recent 13D/13G filings
+        (+ amendments), fetches each structured ``primary_doc.xml``, and parses
+        the reporting persons. ``limit`` caps filings (default 20, newest first).
+
+        Legacy free-text filings (pre-2024, no ``primary_doc.xml``) are skipped
+        gracefully — only the structured filings are parsed.
+
+        Returns rows keyed for ``upsert_us_activist_holdings``.
+        """
+        cik10 = self.pad_cik(cik) if cik else self.cik_for(symbol)
+        if not cik10:
+            logger.warning("EDGAR 13D/G: no CIK for ticker %s", symbol)
+            return []
+        filings = self._list_filings(cik10, set(SC13_FORM_TYPES), limit)
+        all_rows: list[dict] = []
+        for f in filings:
+            primary = f.get("primaryDocument") or ""
+            # Only structured filings carry primary_doc.xml; skip legacy docs.
+            if "primary_doc.xml" not in primary and "SCHEDULE_13" not in primary:
+                continue
+            xml_name = self._primary_xml_name(primary)
+            url = f"{self._filing_dir(cik10, f['accession'])}/{xml_name}"
+            try:
+                xml = self._get_text(url)
+                rows = parse_schedule_13dg(
+                    xml, symbol=symbol, market=market,
+                    filing_date=f.get("filingDate"), accession=f.get("accession"),
+                )
+                all_rows.extend(rows)
+            except Exception as e:  # noqa: BLE001 — best-effort source
+                logger.warning("EDGAR 13D/G parse failed for %s: %s", url, e)
         return all_rows

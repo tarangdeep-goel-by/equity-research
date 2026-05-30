@@ -122,7 +122,21 @@ def _ownership_client_mock() -> MagicMock:
     inst.__exit__.return_value = False
     inst.fetch_insider_transactions.return_value = _insider_rows()
     inst.fetch_13f_for_manager.return_value = _13f_rows()
+    inst.fetch_beneficial_ownership.return_value = _activist_rows()
     return inst
+
+
+def _activist_rows() -> list[dict]:
+    return [
+        {"symbol": "AAPL", "market": "NASDAQ", "currency": "USD",
+         "filing_type": "SCHEDULE 13G", "accession": "0002100119-26-000139",
+         "filing_date": "2026-04-29", "event_date": "2026-03-31",
+         "filer_cik": "0002100119", "reporting_person": "Vanguard Capital Management",
+         "type_of_reporting_person": "IA", "shares": 1_099_168_953.0,
+         "percent_of_class": 7.48, "sole_voting": 145_321_305.0, "shared_voting": 0.0,
+         "sole_dispositive": 1_099_168_953.0, "shared_dispositive": 0.0,
+         "is_activist": 0},
+    ]
 
 
 def _seed_registry(store) -> None:
@@ -152,7 +166,7 @@ def test_refresh_us_pulls_every_source_and_persists(store):
         "annual_financials", "quarterly_financials", "daily_prices",
         "valuation_snapshot", "consensus_estimates", "insider_transactions",
         "institutional_13f", "registry_sector", "company_snapshot",
-        "short_interest",
+        "short_interest", "beneficial_ownership",
     }
     assert summary["annual_financials"] == 2
     assert summary["quarterly_financials"] == 1
@@ -167,6 +181,10 @@ def test_refresh_us_pulls_every_source_and_persists(store):
     # short interest persisted (2 settlement dates)
     assert summary["short_interest"] == 2
     assert len(store.get_us_short_interest("AAPL")) == 2
+    # 13D/13G beneficial ownership persisted
+    assert summary["beneficial_ownership"] == 1
+    bo = store.get_us_activist_holdings("AAPL")
+    assert len(bo) == 1 and bo[0]["reporting_person"] == "Vanguard Capital Management"
     snap = store.get_us_company_snapshot("AAPL", "NASDAQ")
     assert snap is not None and snap["currency"] == "USD"
 
